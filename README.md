@@ -141,16 +141,22 @@ This repository contains the following VanillaBP functionality:
       `deployResources` → `startWorkflowProcessing`) for every configured adapter and
       [extension](https://github.com/vanillabp/adapter-platform-integration/wiki/Extensions). BPMN only — there is
       no DMN model type yet.
-   4. Detecting services annotated with [@WorkflowService](https://github.com/vanillabp/spi-for-java#wire-up-a-process).
-   5. Building a [ProcessService](https://github.com/vanillabp/spi-for-java#start-a-workflow) for each deployed process, to be used by workflow services.
-   6. Executing [@WorkflowTask](https://github.com/vanillabp/spi-for-java#wire-up-a-task) methods on behalf of the
+   4. Ending the start with `DeploymentService#endOfStartup()`. A platform integration owes the core the
+      order deploy, check, close: `deployResources`, then the checks which only work once an adapter has
+      deployed (today the election capability of the prioritized adapters), then `endOfStartup()`. Miss the
+      last call and the application boots as if the start had found nothing: no block in the log and no
+      collected refusal. When that moment falls is the platform's own answer, and the two say it differently
+      (see the javadoc of `endOfStartup()`). `TheOrderOfAStartTest` of each platform pins the order.
+   5. Detecting services annotated with [@WorkflowService](https://github.com/vanillabp/spi-for-java#wire-up-a-process).
+   6. Building a [ProcessService](https://github.com/vanillabp/spi-for-java#start-a-workflow) for each deployed process, to be used by workflow services.
+   7. Executing [@WorkflowTask](https://github.com/vanillabp/spi-for-java#wire-up-a-task) methods on behalf of the
       adapters: resolving the handler, loading the workflow aggregate, binding the parameters, running the method in
       a transaction, saving the aggregate and mapping the outcome (completed / BPMN error / left open).
-   7. Turning a workflow aggregate into the values a BPMS gets to see
+   8. Turning a workflow aggregate into the values a BPMS gets to see
       (`@SyncWithBPMS`/`@NoSyncWithBPMS`) — one model, used by every adapter.
-   8. Reliable second phases for remote BPMS: the transaction outbox, its idempotency contract and the dispatch
+   9. Reliable second phases for remote BPMS: the transaction outbox, its idempotency contract and the dispatch
       router.
-   9. The read-only viewer/history API across all BPMS, incl. namespacing process-definition ids per adapter.
+   10. The read-only viewer/history API across all BPMS, incl. namespacing process-definition ids per adapter.
 2. Support for migration across BPMS:
    1. Migrating within the same BPMS:
       1. From on-premise to SaaS.
