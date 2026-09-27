@@ -1015,12 +1015,13 @@ public class DeploymentService {
   }
 
   /**
-   * Starts to running the workflows of the given BPMN processes, and closes the start
-   * with what it found.
+   * Starts to running the workflows of the given BPMN processes.
    * <p>
-   * Nothing a start can notice comes later than this, so the box of
+   * This does not close the start. The box of
    * {@link io.vanillabp.integration.adapter.migration.startup.StartupFindings} is written
-   * here and a start which has to be refused ends here.
+   * by {@link #endOfStartup()}, which the platform integration calls at the moment its
+   * own start is complete. On Quarkus that is right after this call, on Spring Boot it is
+   * earlier: see {@link #endOfStartup()}.
    *
    * @param workflowModuleIds The workflow module IDs to deploy
    * @param <BPMN> The BPMN model type. No model is read here: the parameter carries the type
@@ -1046,8 +1047,7 @@ public class DeploymentService {
 
   /**
    * Starting the workflow processing itself, the way
-   * {@link #startWorkflowProcessing(List)} describes it, closed by the box and by the
-   * collected refusal.
+   * {@link #startWorkflowProcessing(List)} describes it.
    *
    * @param workflowModuleIds The workflow module IDs to start
    * @param <BPMN> The BPMN model type an extension's wiring service is cast to
@@ -1105,10 +1105,31 @@ public class DeploymentService {
               });
         });
 
-    // everything a start can find has been found by now: the checks of the configuration
-    // binding, of the deployment and of the hooks both platforms run once every bean
-    // exists. So this is where the whole start says what it noticed, in one block, and
-    // where it ends if something has to change first
+  }
+
+  /**
+   * The end of the start: the whole start says what it noticed, in one block, and ends
+   * here if something has to change first.
+   * <p>
+   * The platform integration calls this once its start is complete, and the two platforms
+   * do not reach that moment at the same place:
+   * <ul>
+   *   <li>Quarkus deploys and starts the workflow processing in one observer of the
+   *       startup event, so the end of the start is right after
+   *       {@link #startWorkflowProcessing(List)};</li>
+   *   <li>Spring Boot deploys while the context is refreshed and starts the workflow
+   *       processing once the application is ready, which is a moment a context that is
+   *       only refreshed never reaches. So the end of the start is the end of the
+   *       deployment there, and what the start of the workflow processing notices
+   *       afterwards is a late finding.</li>
+   * </ul>
+   * Called a second time it does nothing, so a platform which starts several groups of
+   * modules does not get several boxes.
+   *
+   * @throws IllegalStateException Carrying every reason the start cannot go on
+   */
+  public void endOfStartup() {
+
     properties
         .startupFindings()
         .endOfStartup();

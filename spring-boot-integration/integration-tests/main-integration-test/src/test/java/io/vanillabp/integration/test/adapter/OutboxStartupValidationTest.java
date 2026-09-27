@@ -9,6 +9,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import io.vanillabp.bpmsdouble.springboot.DummyAdapterConfiguration;
 import io.vanillabp.bpmsdouble.springboot.DummyAdapterProcessServiceConfiguration;
+import io.vanillabp.integration.deployment.DeploymentAutoConfiguration;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
@@ -38,16 +39,16 @@ public class OutboxStartupValidationTest {
         .withPropertyValues("spring.config.location=classpath:application.yaml")
         .withInitializer(new ConfigDataApplicationContextInitializer())
         .withUserConfiguration(
-            WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class, SampleWorkflowService.class,
-            // brings the deployment service: a reason not to start is collected and
-            // ends the start where the deployment would begin, so a context without
-            // one never reaches the moment this test is about
-            io.vanillabp.integration.test.deployment.DeploymentTest.TestConfig.class)
+            WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class, SampleWorkflowService.class)
         .withConfiguration(
             AutoConfigurations.of(
                 DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,
                 WorkflowModuleAutoConfiguration.class,
-                SpringBootMigrationAdapterAutoConfiguration.class))
+                SpringBootMigrationAdapterAutoConfiguration.class,
+                // the lifecycle bean which ends the start: a collected refusal is thrown
+                // there, and a context without that bean never reaches the moment this
+                // test is about
+                DeploymentAutoConfiguration.class))
         .run(context -> {
 
           Assertions.assertNotNull(context.getStartupFailure(), "boot has to fail with a guiding message");
@@ -85,13 +86,13 @@ public class OutboxStartupValidationTest {
         .withUserConfiguration(
             WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class,
             TestPhaseTwoOutboxConfiguration.class, TestTransactionRunnerConfiguration.class,
-            SampleWorkflowService.class,
-            io.vanillabp.integration.test.deployment.DeploymentTest.TestConfig.class)
+            SampleWorkflowService.class)
         .withConfiguration(
             AutoConfigurations.of(
                 DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,
                 WorkflowModuleAutoConfiguration.class,
-                SpringBootMigrationAdapterAutoConfiguration.class))
+                SpringBootMigrationAdapterAutoConfiguration.class,
+                DeploymentAutoConfiguration.class))
         .run(context -> {
 
           Assertions.assertNull(context.getStartupFailure(), "context should start");

@@ -29,13 +29,21 @@ import io.vanillabp.spi.process.ProcessService;
  * <ul>
  *   <li>{@link #start()} loads and deploys all BPMN resources - during context
  *       refresh, after all singletons were created but before the application is
- *       marked as started;</li>
- *   <li>{@code startWorkflowProcessing} is triggered by
+ *       marked as started - and ends the start there;</li>
+ *   <li>{@link #startProcessingOfWorkflows()} is triggered by
  *       {@link ApplicationReadyEvent} (i.e. only once the application is fully
  *       ready to process workflows);</li>
  *   <li>{@link #stop()} stops workflow processing of adapters/extensions and all
  *       {@link ProcessServiceSpringBean}s on graceful shutdown.</li>
  * </ul>
+ * <b>Two moments, not one:</b> the end of the start and the start of the workflow
+ * processing are deliberately kept apart. The end of the start writes the block of
+ * everything the start noticed and throws what was refused, and it has to happen on
+ * every start, which includes a context that is only refreshed and never fires
+ * {@link ApplicationReadyEvent}. Handing out work to the application, on the other
+ * hand, must wait until the application is ready to take it. So the first hangs on the
+ * lifecycle, which runs in both worlds, and the second stays on the event.
+ * <p>
  * <b>Phase:</b> {@link SmartLifecycle#DEFAULT_PHASE} ({@code Integer.MAX_VALUE}) is
  * used deliberately: on shutdown, lifecycle beans are stopped in descending phase
  * order, so workflow processing stops in the very first group - before Spring
@@ -92,7 +100,19 @@ public class SpringBootDeploymentService implements SmartLifecycle {
 
   /**
    * Triggers loading of all resources of the workflow modules - their BPMN files and
-   * their decision tables - and deployment of them.
+   * their decision tables - and deployment of them, and ends the start afterwards.
+   * <p>
+   * The election capability of the prioritized adapters is checked in between: an adapter
+   * only knows what its BPMS can do once it deployed, and nothing has touched a workflow
+   * yet at this point.
+   * <p>
+   * Ending the start here and not in {@link #startProcessingOfWorkflows()} is what makes
+   * the block and the collected refusals reach a context which is only refreshed. Every
+   * check of the platform has reported by now: they run while the beans are built and
+   * while the resources are deployed. What the start of the workflow processing notices
+   * afterwards is a late finding and goes into the log where it was found, the way
+   * {@link io.vanillabp.integration.adapter.migration.startup.StartupFindings} describes
+   * it.
    */
   @Override
   public void start() {
@@ -100,6 +120,18 @@ public class SpringBootDeploymentService implements SmartLifecycle {
     deploymentService.deployResources(
         getWorkflowModuleIds(),
         this::resourcesLoader);
+
+    processServices
+        .stream()
+        .filter(ProcessServiceSpringBean.class::isInstance)
+        .map(processService -> (ProcessServiceSpringBean<?>) processService)
+        // per DECLARED BPMN process id: which adapters serve a workflow is configurable per
+        // workflow, so a secondary or declared-only id may be the one whose combination
+        // cannot locate its workflows
+        .flatMap(processService -> processService.getProcessServicesOfDeclaredIds().stream())
+        .forEach(processService -> processService.validateElectionCapabilityAfterDeployment());
+
+    deploymentService.endOfStartup();
 
     running = true;
 
@@ -143,27 +175,18 @@ public class SpringBootDeploymentService implements SmartLifecycle {
   }
 
   /**
-   * Start processing of workflows one the application started. Ordered BEFORE the
+   * Start processing of workflows once the application started. Ordered BEFORE the
    * phase-two outbox dispatchers' listeners (see
    * {@link #START_PROCESSING_LISTENER_ORDER}).
    * <p>
-   * The election capability of the prioritized adapters is checked right before that:
-   * an adapter only knows what its BPMS can do once it deployed, and nothing has
-   * touched a workflow yet at this point.
+   * This waits for {@link ApplicationReadyEvent} and not for the lifecycle, because from
+   * here on the adapters hand tasks to the application: a worker must not deliver into an
+   * application whose web server and listener containers are still coming up. The end of
+   * the start is the earlier moment and sits in {@link #start()}.
    */
   @Order(START_PROCESSING_LISTENER_ORDER)
   @EventListener(ApplicationReadyEvent.class)
   public void startProcessingOfWorkflows() {
-
-    processServices
-        .stream()
-        .filter(ProcessServiceSpringBean.class::isInstance)
-        .map(processService -> (ProcessServiceSpringBean<?>) processService)
-        // per DECLARED BPMN process id: which adapters serve a workflow is configurable per
-        // workflow, so a secondary or declared-only id may be the one whose combination
-        // cannot locate its workflows
-        .flatMap(processService -> processService.getProcessServicesOfDeclaredIds().stream())
-        .forEach(processService -> processService.validateElectionCapabilityAfterDeployment());
 
     deploymentService.startWorkflowProcessing(
         getWorkflowModuleIds());

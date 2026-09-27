@@ -11,11 +11,13 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
 import io.vanillabp.bpmsdouble.springboot.DummyAdapterConfiguration;
 import io.vanillabp.bpmsdouble.springboot.DummyAdapterProcessServiceConfiguration;
+import io.vanillabp.integration.deployment.DeploymentAutoConfiguration;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
 import io.vanillabp.integration.test.TestPersistenceConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.sample.Aggregate;
 import io.vanillabp.integration.test.sample.SampleWorkflowService;
+import io.vanillabp.integration.test.utils.CapturedOutput;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
@@ -25,6 +27,10 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
  * outbox a missing store does NOT fail the boot - without it VanillaBP behaves as it did
  * before the feature existed - so what is pinned here is the WARNING naming both ways
  * out, and that switching the feature off silences it.
+ * <p>
+ * The warning is read where a developer reads it: in the block the start writes at its
+ * end. Writing that block takes the lifecycle bean which ends the start, so the
+ * platform's deployment auto-configuration is part of every context here.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TaskDeliveryLogStartupValidationTest {
@@ -107,31 +113,15 @@ public class TaskDeliveryLogStartupValidationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner();
 
   /**
-   * What the started application reported, filled while the context of {@link #bootWith}
-   * is up. A check no longer writes a line of its own: it reports, and the whole start
-   * says it once at its end, so this is where the test reads what it said.
+   * Boots an application and returns the block its start wrote.
+   *
+   * @param output What the test printed so far, which is where the block lands
+   * @param userConfigurations What this application brings besides the common beans
+   * @param properties The properties this application is configured with
+   * @return Everything printed by this test, the block included
    */
-  private final List<String> reportedByCore = new java.util.ArrayList<>();
-
-  private List<String> loggedByCore(
-      final Runnable work) {
-
-    reportedByCore.clear();
-    work.run();
-    return List.copyOf(reportedByCore);
-
-  }
-
-  private void bootWith(
-      final Runnable assertions,
-      final String... properties) {
-
-    bootWith(assertions, new Class<?>[0], properties);
-
-  }
-
-  private void bootWith(
-      final Runnable assertions,
+  private String theBlockOf(
+      final CapturedOutput output,
       final Class<?>[] userConfigurations,
       final String... properties) {
 
@@ -153,117 +143,105 @@ public class TaskDeliveryLogStartupValidationTest {
             AutoConfigurations.of(
                 DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,
                 WorkflowModuleAutoConfiguration.class,
-                SpringBootMigrationAdapterAutoConfiguration.class))
-        .run(context -> {
-          Assertions.assertNull(
-              context.getStartupFailure(),
-              "a missing delivery log must never fail the boot");
-          context
-              .getBean(io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties.class)
-              .startupFindings()
-              .findings()
-              .stream()
-              .filter(
-                  finding -> finding
-                      .severity() != io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severity.NOTICE)
-              .map(finding -> "%s: %s".formatted(finding.scope(), finding.message()))
-              .forEach(reportedByCore::add);
-          assertions.run();
-        });
+                SpringBootMigrationAdapterAutoConfiguration.class,
+                DeploymentAutoConfiguration.class))
+        .run(context -> Assertions.assertNull(
+            context.getStartupFailure(),
+            "a missing delivery log must never fail the boot"));
+
+    final var printed = output.getAllOfThisTest();
+    // an assertion about something the block does NOT say is worth nothing where no block
+    // was written at all
+    Assertions.assertTrue(
+        printed.contains("looked at this application and found"),
+        "the start has to write its block, printed: "
+            + printed);
+    return printed;
 
   }
 
   @Test
-  public void anAdapterRepeatingDeliveriesWithoutAStoreIsReported() {
+  public void anAdapterRepeatingDeliveriesWithoutAStoreIsReported(
+      final CapturedOutput output) {
 
     // the dummy adapter stands in for a remote BPMS: it may deliver a task more than
     // once. There is no data source in this context, so no delivery log can be resolved
-    final var messages = loggedByCore(
-        () -> bootWith(
-            () -> {
-            },
-            "dummy-adapter.at-least-once-delivery=true"));
+    final var block = theBlockOf(
+        output,
+        new Class<?>[0],
+        "dummy-adapter.at-least-once-delivery=true");
 
-    // one warning per BPMN process, each naming its own aggregate - the test application
-    // has several, so the one of this assertion is picked by the aggregate it names
-    final var message = messages
-        .stream()
-        .filter(candidate -> candidate.contains("more than once"))
-        .filter(candidate -> candidate.contains(Aggregate.class.getName()))
-        .findFirst()
-        .orElseThrow(() -> new AssertionError("no warning about repeated deliveries, logged: "
-            + messages));
-    // it names the BPMS, the SPI to implement and the property to set instead
-    Assertions.assertTrue(message.contains("adapter 'test'"), message);
-    Assertions.assertTrue(message.contains("TaskDeliveryLog"));
-    Assertions.assertTrue(message.contains("TaskDeliveryLogAware"));
-    Assertions.assertTrue(message.contains("vanillabp.adapters.test.deduplicate-deliveries"));
+    // the warning names the aggregate it is about...
+    Assertions.assertTrue(
+        block.contains("more than once, but no TaskDeliveryLog is available for aggregate '"
+            + Aggregate.class.getName()),
+        "no warning about repeated deliveries, printed: "
+            + block);
+    // ...and stands under the process and the adapter it belongs to
+    Assertions.assertTrue(
+        block.contains("process 'SampleWorkflowService' of workflow module 'test-module', adapter 'test'"),
+        block);
+    // it names the SPI to implement and the property to set instead
+    Assertions.assertTrue(block.contains("TaskDeliveryLogAware"), block);
+    Assertions.assertTrue(block.contains("vanillabp.adapters.test.deduplicate-deliveries"), block);
 
   }
 
   @Test
-  public void aStoreWithoutTheReleaseIsReportedWhereTheReleaseIsSwitchedOn() {
+  public void aStoreWithoutTheReleaseIsReportedWhereTheReleaseIsSwitchedOn(
+      final CapturedOutput output) {
 
     // The application asked for records to disappear when a workflow ends, and
     // its own store cannot do it - which is a misconfiguration, not a missing feature
-    final var messages = loggedByCore(
-        () -> bootWith(
-            () -> {
-            },
-            new Class<?>[]{
-                LegacyDeliveryLogConfiguration.class
-            },
-            "dummy-adapter.at-least-once-delivery=true",
-            "vanillabp.delivery.release-on-workflow-end=true"));
+    final var block = theBlockOf(
+        output,
+        new Class<?>[]{
+            LegacyDeliveryLogConfiguration.class
+        },
+        "dummy-adapter.at-least-once-delivery=true",
+        "vanillabp.delivery.release-on-workflow-end=true");
 
-    final var message = messages
-        .stream()
-        .filter(candidate -> candidate.contains("releaseRecordsOf"))
-        .findFirst()
-        .orElseThrow(
-            () -> new AssertionError("no warning about the missing release, logged: "
-                + messages));
-    Assertions.assertTrue(message.contains("TaskDeliveryLog"), message);
-    Assertions
-        .assertTrue(
-            message.contains("delivery.release-on-workflow-end"),
-            message);
+    Assertions.assertTrue(
+        block.contains("does not implement 'releaseRecordsOf'"),
+        "no warning about the missing release, printed: "
+            + block);
+    Assertions.assertTrue(block.contains("TaskDeliveryLog"), block);
+    Assertions.assertTrue(block.contains("delivery.release-on-workflow-end"), block);
 
   }
 
   @Test
-  public void aStoreWithoutTheReleaseIsSilentWhereNobodyAskedForIt() {
+  public void aStoreWithoutTheReleaseIsSilentWhereNobodyAskedForIt(
+      final CapturedOutput output) {
 
-    final var messages = loggedByCore(
-        () -> bootWith(
-            () -> {
-            },
-            new Class<?>[]{
-                LegacyDeliveryLogConfiguration.class
-            },
-            "dummy-adapter.at-least-once-delivery=true"));
+    final var block = theBlockOf(
+        output,
+        new Class<?>[]{
+            LegacyDeliveryLogConfiguration.class
+        },
+        "dummy-adapter.at-least-once-delivery=true");
 
-    Assertions.assertTrue(
-        messages.stream().noneMatch(message -> message.contains("releaseRecordsOf")),
-        "an application which did not ask for the release must not be told about it, logged: "
-            + messages);
+    Assertions.assertFalse(
+        block.contains("releaseRecordsOf"),
+        "an application which did not ask for the release must not be told about it, printed: "
+            + block);
 
   }
 
   @Test
-  public void switchingTheFeatureOffSilencesTheReport() {
+  public void switchingTheFeatureOffSilencesTheReport(
+      final CapturedOutput output) {
 
-    final var messages = loggedByCore(
-        () -> bootWith(
-            () -> {
-            },
-            "dummy-adapter.at-least-once-delivery=true",
-            "vanillabp.adapters.test.deduplicate-deliveries=false"));
+    final var block = theBlockOf(
+        output,
+        new Class<?>[0],
+        "dummy-adapter.at-least-once-delivery=true",
+        "vanillabp.adapters.test.deduplicate-deliveries=false");
 
-    Assertions.assertTrue(
-        messages.stream().noneMatch(message -> message.contains("more than once")),
-        "an application stating that its handlers are idempotent is not warned, logged: "
-            + messages);
+    Assertions.assertFalse(
+        block.contains("more than once"),
+        "an application stating that its handlers are idempotent is not warned, printed: "
+            + block);
 
   }
 

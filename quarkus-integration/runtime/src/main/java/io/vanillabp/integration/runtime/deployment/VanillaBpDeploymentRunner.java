@@ -34,7 +34,10 @@ import lombok.extern.slf4j.Slf4j;
  * starts workflow processing on <code>ApplicationReadyEvent</code>, i.e. after the
  * web server started serving. Quarkus' idiomatic hook is the {@link StartupEvent},
  * which fires before the application accepts traffic - so on Quarkus both
- * deployment and start of workflow processing happen <i>before</i> serving. The
+ * deployment and start of workflow processing happen <i>before</i> serving, and the
+ * end of the start (the block of everything the start noticed, and the collected
+ * refusals) is the end of this one observer. Spring has to end its start earlier, see
+ * <code>SpringBootDeploymentService</code>. The
  * invariant shared by both platforms: the phase-two outbox dispatchers only start
  * dispatching (including crash recovery) <i>after</i> workflow processing started -
  * enforced by {@link #STARTUP_PRIORITY} vs.
@@ -212,6 +215,12 @@ public class VanillaBpDeploymentRunner {
         .forEach(processService -> processService.validateElectionCapabilityAfterDeployment());
 
     deploymentService.startWorkflowProcessing(workflowModuleIds);
+
+    // the end of the start, which on Quarkus is right here: deployment and start of the
+    // workflow processing happen in one observer, so nothing a start can notice comes
+    // later. On Spring Boot the two are split over the lifecycle and the ready event, and
+    // the end of the start is the earlier of them
+    deploymentService.endOfStartup();
 
     running = true;
 

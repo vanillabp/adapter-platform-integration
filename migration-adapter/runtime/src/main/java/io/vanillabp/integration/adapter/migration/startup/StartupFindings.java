@@ -337,6 +337,13 @@ public class StartupFindings implements StartupReport {
    * on the way does not become less true when a later check ends the start.
    * <p>
    * Called a second time it does nothing: a start ends once.
+   * <p>
+   * The platform integration says when that moment has come, through
+   * {@code DeploymentService#endOfStartup}, and the two platforms do not reach it at the
+   * same place. Quarkus deploys and starts the workflow processing in one observer of its
+   * startup event and ends the start after both. Spring Boot ends it with the deployment,
+   * inside the lifecycle, because the start of the workflow processing waits for the
+   * application to be ready and a context which is only refreshed never gets there.
    *
    * @throws IllegalStateException Carrying every reason the start cannot go on, grouped
    *           the way the box is grouped
