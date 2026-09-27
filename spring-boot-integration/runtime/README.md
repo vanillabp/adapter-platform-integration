@@ -337,8 +337,13 @@ disable an unwanted default via its `enabled` flag:
    decided against. What this store costs next to the JDBC one is in
    `migration-adapter/README.md` and on the wiki: a dispatched entry deleted to free
    its key, a re-dispatch after a hard crash which carries no attempt count, one fixed
-   retry distance, one dispatching thread, and a stale adapter id named at the first
-   dispatch instead of at the start. VanillaBP's own tables are checked by
+   retry distance, no dispatch lanes, and a stale adapter id named at the first
+   dispatch instead of at the start. No lanes also means that two operations of one
+   workflow are not kept in the order they were planned, which the two stores VanillaBP
+   writes itself do keep. gruelbox submits an entry the moment its transaction commits
+   while a flush carries the rest, and a failed attempt moves the column a flush orders
+   by. That is the promise the wiki makes to an application, so nothing is broken here;
+   see `DECISIONS.pending/542.md`. VanillaBP's own tables are checked by
    `JdbcTaskDeliveryStore#validateSchemaExists` respectively the JDBC outbox, all through
    `io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema#tableExists`. This store's beans
    reference each other BY NAME (`vanillaBpTransactionOutbox`), so additional

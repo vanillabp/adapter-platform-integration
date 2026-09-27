@@ -86,6 +86,14 @@ import lombok.extern.slf4j.Slf4j;
  * per adapter id, whatever the backlog. Decision 47 in the repository's DECISIONS.md says
  * why that is the answer and what the alternatives would have cost.
  * <p>
+ * <strong>Two operations of one workflow are not kept in order here</strong>, which is
+ * what the dispatch lanes of the stores VanillaBP writes itself do. There are no lanes
+ * around gruelbox: it submits an entry the moment the scheduling transaction commits
+ * while a flush carries whatever else is due, so the two race, and a failed attempt moves
+ * the column a flush orders by. The promise an application is given is the weaker one
+ * (give an operation which has to go first a transaction of its own), so this store keeps
+ * it; see {@code DECISIONS.pending/542.md} in the repository.
+ * <p>
  * {@link PhaseTwoOutbox#ageOfOldestPendingCall()} is the other question this store
  * leaves unanswered, and this one it cannot answer at all. gruelbox keeps no moment of
  * writing: it puts that moment into <code>nextAttemptTime</code> and overwrites it the
