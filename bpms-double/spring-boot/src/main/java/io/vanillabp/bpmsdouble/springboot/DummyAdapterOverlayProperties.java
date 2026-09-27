@@ -5,8 +5,6 @@ import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import lombok.Getter;
-import lombok.Setter;
 
 /**
  * The dummy adapter's OVERLAY of the shared <code>vanillabp.*</code> configuration
@@ -23,8 +21,6 @@ import lombok.Setter;
  * materialize phantom map entries in the overlay).
  */
 @ConfigurationProperties(MigrationAdapterProperties.PREFIX)
-@Getter
-@Setter
 public class DummyAdapterOverlayProperties {
 
   /**
@@ -102,11 +98,55 @@ public class DummyAdapterOverlayProperties {
   }
 
   /**
+   * The adapter sections of the shared tree, keyed by adapter id
+   *
+   * @return The dummy adapter's keys per adapter id
+   */
+  public Map<String, DummyAdapterConfig> getAdapters() {
+
+    return adapters;
+
+  }
+
+  /**
+   * The workflow-module sections of the shared tree, keyed by workflow module id
+   *
+   * @return The overlay per workflow module
+   */
+  public Map<String, ModuleOverlay> getWorkflowModules() {
+
+    return workflowModules;
+
+  }
+
+  /**
+   * The adapter sections of the shared tree, keyed by adapter id
+   *
+   * @param adapters The dummy adapter's keys per adapter id
+   */
+  public void setAdapters(
+      final Map<String, DummyAdapterConfig> adapters) {
+
+    this.adapters = adapters;
+
+  }
+
+  /**
+   * The workflow-module sections of the shared tree, keyed by workflow module id
+   *
+   * @param workflowModules The overlay per workflow module
+   */
+  public void setWorkflowModules(
+      final Map<String, ModuleOverlay> workflowModules) {
+
+    this.workflowModules = workflowModules;
+
+  }
+
+  /**
    * The dummy adapter's keys of one <code>vanillabp.adapters.&lt;id&gt;</code>
    * section.
    */
-  @Getter
-  @Setter
   public static class DummyAdapterConfig {
 
     /**
@@ -123,17 +163,46 @@ public class DummyAdapterOverlayProperties {
     public DummyAdapterConfig() {
     }
 
+    /**
+     * A test value which proves that an adapter-specific key inside the shared tree
+     * reaches the adapter's overlay typed
+     *
+     * @return The value written at this level, or <code>null</code> where this level writes none
+     */
+    public Integer getTest() {
+
+      return test;
+
+    }
+
+    /**
+     * A test value which proves that an adapter-specific key inside the shared tree
+     * reaches the adapter's overlay typed
+     *
+     * @param test The value of this level, or <code>null</code>
+     */
+    public void setTest(
+        final Integer test) {
+
+      this.test = test;
+
+    }
+
   }
 
   /**
    * The dummy adapter's view of one workflow-module section.
    */
-  @Getter
-  @Setter
   public static class ModuleOverlay {
 
+    /**
+     * The dummy adapter's keys written at this workflow module, keyed by adapter id.
+     */
     private Map<String, DummyAdapterConfig> adapters = Map.of();
 
+    /**
+     * The workflow sections below this workflow module, keyed by BPMN process id.
+     */
     private Map<String, WorkflowOverlay> workflows = Map.of();
 
     /**
@@ -143,17 +212,67 @@ public class DummyAdapterOverlayProperties {
     public ModuleOverlay() {
     }
 
+    /**
+     * The dummy adapter's keys written at this workflow module, keyed by adapter id
+     *
+     * @return The dummy adapter's keys per adapter id
+     */
+    public Map<String, DummyAdapterConfig> getAdapters() {
+
+      return adapters;
+
+    }
+
+    /**
+     * The workflow sections below this workflow module, keyed by BPMN process id
+     *
+     * @return The overlay per workflow
+     */
+    public Map<String, WorkflowOverlay> getWorkflows() {
+
+      return workflows;
+
+    }
+
+    /**
+     * The dummy adapter's keys written at this workflow module, keyed by adapter id
+     *
+     * @param adapters The dummy adapter's keys per adapter id
+     */
+    public void setAdapters(
+        final Map<String, DummyAdapterConfig> adapters) {
+
+      this.adapters = adapters;
+
+    }
+
+    /**
+     * The workflow sections below this workflow module, keyed by BPMN process id
+     *
+     * @param workflows The overlay per workflow
+     */
+    public void setWorkflows(
+        final Map<String, WorkflowOverlay> workflows) {
+
+      this.workflows = workflows;
+
+    }
+
   }
 
   /**
    * The dummy adapter's view of one workflow section.
    */
-  @Getter
-  @Setter
   public static class WorkflowOverlay {
 
+    /**
+     * The dummy adapter's keys written at this workflow, keyed by adapter id.
+     */
     private Map<String, DummyAdapterConfig> adapters = Map.of();
 
+    /**
+     * The task sections below this workflow, keyed by task definition.
+     */
     private Map<String, TaskOverlay> tasks = Map.of();
 
     /**
@@ -163,15 +282,62 @@ public class DummyAdapterOverlayProperties {
     public WorkflowOverlay() {
     }
 
+    /**
+     * The dummy adapter's keys written at this workflow, keyed by adapter id
+     *
+     * @return The dummy adapter's keys per adapter id
+     */
+    public Map<String, DummyAdapterConfig> getAdapters() {
+
+      return adapters;
+
+    }
+
+    /**
+     * The task sections below this workflow, keyed by task definition
+     *
+     * @return The overlay per task
+     */
+    public Map<String, TaskOverlay> getTasks() {
+
+      return tasks;
+
+    }
+
+    /**
+     * The dummy adapter's keys written at this workflow, keyed by adapter id
+     *
+     * @param adapters The dummy adapter's keys per adapter id
+     */
+    public void setAdapters(
+        final Map<String, DummyAdapterConfig> adapters) {
+
+      this.adapters = adapters;
+
+    }
+
+    /**
+     * The task sections below this workflow, keyed by task definition
+     *
+     * @param tasks The overlay per task
+     */
+    public void setTasks(
+        final Map<String, TaskOverlay> tasks) {
+
+      this.tasks = tasks;
+
+    }
+
   }
 
   /**
    * The dummy adapter's view of one task section - the MOST specific level.
    */
-  @Getter
-  @Setter
   public static class TaskOverlay {
 
+    /**
+     * The dummy adapter's keys written at this task, keyed by adapter id.
+     */
     private Map<String, DummyAdapterConfig> adapters = Map.of();
 
     /**
@@ -179,6 +345,29 @@ public class DummyAdapterOverlayProperties {
      * specific of the four levels, so a value set here wins.
      */
     public TaskOverlay() {
+    }
+
+    /**
+     * The dummy adapter's keys written at this task, keyed by adapter id
+     *
+     * @return The dummy adapter's keys per adapter id
+     */
+    public Map<String, DummyAdapterConfig> getAdapters() {
+
+      return adapters;
+
+    }
+
+    /**
+     * The dummy adapter's keys written at this task, keyed by adapter id
+     *
+     * @param adapters The dummy adapter's keys per adapter id
+     */
+    public void setAdapters(
+        final Map<String, DummyAdapterConfig> adapters) {
+
+      this.adapters = adapters;
+
     }
 
   }

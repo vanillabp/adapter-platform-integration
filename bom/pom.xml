@@ -134,14 +134,6 @@
            <scope>compile</scope> there, or it inherits 'test' from this BOM and stops
            compiling. That happened in 'business-cockpit' on 2026-09-22 and turned every
            open pull request of that repository red. -->
-      <!-- Build-time helper: it teaches MapStruct to read fluent accessors and only runs
-           on an annotation-processor path. Nothing calls it once the class files exist. -->
-      <dependency>
-        <groupId>io.vanillabp</groupId>
-        <artifactId>vanillabp-mapstruct-fluent-accessors</artifactId>
-        <version>${project.version}</version>
-        <scope>provided</scope>
-      </dependency>
       <!-- Test helper: the small utilities a VanillaBP test uses to set itself up. -->
       <dependency>
         <groupId>io.vanillabp</groupId>

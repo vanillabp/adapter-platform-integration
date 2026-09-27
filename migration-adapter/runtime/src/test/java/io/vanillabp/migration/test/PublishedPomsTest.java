@@ -13,8 +13,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * A tool which translates our source stays out of the runtime classpath of the
  * applications using our artifacts.
  * <p>
- * Lombok, MapStruct's processor and the two platform processors do their work while
- * javac runs and have nothing left to do once the class file exists. An application asked
+ * Lombok and the two platform processors do their work while javac runs and have nothing
+ * left to do once the class file exists. An application asked
  * for a workflow engine, not for them, and every jar it did not ask for is one more thing
  * to scan, to ship and to answer a CVE report about. The scope which says that is
  * {@code provided}: it puts the jar on our own compile path and hands it to nobody.
@@ -32,16 +32,13 @@ public class PublishedPomsTest {
 
   /**
    * The tools which translate the source. Each one is read by javac and by nothing which
-   * runs afterwards. {@code org.mapstruct:mapstruct} is not among them, because
-   * {@code Mappers.getMapper(...)} runs with the application.
+   * runs afterwards.
    */
   private static final Set<String> TOOLS_OF_THIS_BUILD = Set
       .of(
           "org.projectlombok:lombok",
-          "org.mapstruct:mapstruct-processor",
           "org.springframework.boot:spring-boot-autoconfigure-processor",
-          "io.quarkus:quarkus-extension-processor",
-          "io.vanillabp:vanillabp-mapstruct-fluent-accessors");
+          "io.quarkus:quarkus-extension-processor");
 
   @Test
   @DisplayName("no POM of this repository hands an application a tool of the build")

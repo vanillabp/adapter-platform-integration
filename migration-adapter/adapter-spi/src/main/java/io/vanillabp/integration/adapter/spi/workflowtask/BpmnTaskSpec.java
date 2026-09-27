@@ -39,7 +39,7 @@ package io.vanillabp.integration.adapter.spi.workflowtask;
  *          <code>null</code> means that this adapter does not read the shape, and the
  *          question is then not asked at all rather than answered by a guess (decision 38
  *          in the repository's DECISIONS.md); an empty list means that every element of
- *          the chain names its item. See decision &lt;pending: 556&gt; in the repository's
+ *          the chain names its item. See decision 94 in the repository's
  *          DECISIONS.md
  */
 public record BpmnTaskSpec(

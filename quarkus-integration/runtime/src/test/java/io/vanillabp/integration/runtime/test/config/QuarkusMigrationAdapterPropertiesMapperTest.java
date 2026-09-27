@@ -23,12 +23,11 @@ import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Round-trip test pinning the GENERATED {@code toCore()} mapping: every property of
- * the Quarkus {@code @ConfigMapping} interface has to arrive in the core model.
- * Adding a property to only one side already fails the BUILD (the mapper is
- * generated with {@code unmappedSourcePolicy}/{@code unmappedTargetPolicy} ERROR);
- * this test additionally pins the VALUE semantics (Optional unwrapping, empty-list
- * defaults, nested maps).
+ * Round-trip test pinning the hand-written {@code toCore()} mapping: every property of
+ * the Quarkus {@code @ConfigMapping} interface has to arrive in the core model. That a
+ * property is copied at all is the job of
+ * {@link QuarkusMigrationAdapterPropertiesMapperGuardTest}; this test pins what the
+ * copied value MEANS (Optional unwrapping, empty-list defaults, nested maps).
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class QuarkusMigrationAdapterPropertiesMapperTest {

@@ -5,10 +5,6 @@ import java.util.Map;
 
 import org.springframework.data.annotation.Id;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.Setter;
-
 /**
  * A single entry of the MongoDB-based phase-two outbox, stored in the configured
  * collection (<code>vanillabp.outbox.mongo.collection</code>). The entry persists the fields of a
@@ -26,9 +22,6 @@ import lombok.Setter;
  * asynchronously after the configured retention) or {@link #STATUS_BLOCKED} (too many
  * failed attempts; manual cleanup required).
  */
-@Getter
-@Setter
-@AllArgsConstructor
 public class PhaseTwoOutboxEntry {
 
   /**
@@ -54,11 +47,21 @@ public class PhaseTwoOutboxEntry {
    */
   public static final String STATUS_BLOCKED = "BLOCKED";
 
+  /**
+   * The entry's own id, which MongoDB keeps unique and which {@link #dedupKey} holds
+   * once the entry was dispatched.
+   */
   @Id
   private String id;
 
+  /**
+   * The workflow module the call belongs to.
+   */
   private String workflowModuleId;
 
+  /**
+   * The BPMN process the call belongs to.
+   */
   private String bpmnProcessId;
 
   /**
@@ -67,6 +70,10 @@ public class PhaseTwoOutboxEntry {
    */
   private String operation;
 
+  /**
+   * The workflow aggregate the call belongs to, in its serialized form. The core's
+   * router converts it back to the aggregate's id type at dispatch time.
+   */
   private String aggregateId;
 
   /**
@@ -75,6 +82,9 @@ public class PhaseTwoOutboxEntry {
    */
   private String adapterId;
 
+  /**
+   * What the operation is called with, as the scheduling side handed it over.
+   */
   private Map<String, String> args;
 
   /**
@@ -91,8 +101,15 @@ public class PhaseTwoOutboxEntry {
    */
   private String dedupKey;
 
+  /**
+   * Where the entry stands: {@link #STATUS_OPEN}, {@link #STATUS_DONE} or
+   * {@link #STATUS_BLOCKED}.
+   */
   private String status;
 
+  /**
+   * When the call was scheduled.
+   */
   private Instant createdAt;
 
   /**
@@ -103,8 +120,16 @@ public class PhaseTwoOutboxEntry {
    */
   private int attempts;
 
+  /**
+   * When the next dispatch attempt may start. A poll passes over an entry which is not
+   * due yet.
+   */
   private Instant nextAttemptAt;
 
+  /**
+   * When the dispatch reached the BPMS, which the retention deletes by.
+   * <code>null</code> while the entry is still open.
+   */
   private Instant doneAt;
 
   /**
@@ -125,9 +150,435 @@ public class PhaseTwoOutboxEntry {
   /**
    * What Spring Data starts from when it reads an entry of the collection: it builds the
    * empty entry and fills the fields afterwards. The outbox writing an entry uses the
-   * constructor taking every field, which Lombok generates.
+   * constructor taking every field.
    */
   public PhaseTwoOutboxEntry() {
   }
 
+  /**
+   * What the outbox writing an entry uses: every field is known at that moment.
+   *
+   * @param id The entry id
+   * @param workflowModuleId The workflow module id
+   * @param bpmnProcessId The BPMN process id
+   * @param operation The operation's name
+   * @param aggregateId The aggregate id as text
+   * @param adapterId The adapter id, or <code>null</code>
+   * @param args The arguments of the call
+   * @param idempotencyKey The idempotency key, or <code>null</code>
+   * @param dedupKey The key the index holds, never <code>null</code>
+   * @param status The status
+   * @param createdAt The moment the entry was written
+   * @param attempts The number of ended attempts
+   * @param nextAttemptAt The moment the entry becomes due again
+   * @param doneAt The moment the entry was dispatched, or <code>null</code>
+   * @param leasedBy The node holding the entry, or <code>null</code>
+   * @param leasedUntil The moment the lease runs out, or <code>null</code>
+   */
+  public PhaseTwoOutboxEntry(
+      final String id,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String operation,
+      final String aggregateId,
+      final String adapterId,
+      final Map<String, String> args,
+      final String idempotencyKey,
+      final String dedupKey,
+      final String status,
+      final Instant createdAt,
+      final int attempts,
+      final Instant nextAttemptAt,
+      final Instant doneAt,
+      final String leasedBy,
+      final Instant leasedUntil) {
+
+    this.id = id;
+    this.workflowModuleId = workflowModuleId;
+    this.bpmnProcessId = bpmnProcessId;
+    this.operation = operation;
+    this.aggregateId = aggregateId;
+    this.adapterId = adapterId;
+    this.args = args;
+    this.idempotencyKey = idempotencyKey;
+    this.dedupKey = dedupKey;
+    this.status = status;
+    this.createdAt = createdAt;
+    this.attempts = attempts;
+    this.nextAttemptAt = nextAttemptAt;
+    this.doneAt = doneAt;
+    this.leasedBy = leasedBy;
+    this.leasedUntil = leasedUntil;
+
+  }
+
+  /**
+   * The entry's own id, which MongoDB keeps unique
+   *
+   * @return The entry id
+   */
+  public String getId() {
+
+    return id;
+
+  }
+
+  /**
+   * The workflow module the call belongs to
+   *
+   * @return The workflow module id
+   */
+  public String getWorkflowModuleId() {
+
+    return workflowModuleId;
+
+  }
+
+  /**
+   * The BPMN process the call belongs to
+   *
+   * @return The BPMN process id
+   */
+  public String getBpmnProcessId() {
+
+    return bpmnProcessId;
+
+  }
+
+  /**
+   * The name of the scheduled {@link io.vanillabp.integration.spi.PhaseOperation}
+   *
+   * @return The operation's name
+   */
+  public String getOperation() {
+
+    return operation;
+
+  }
+
+  /**
+   * The workflow aggregate the call belongs to, in its serialized form
+   *
+   * @return The aggregate id as text
+   */
+  public String getAggregateId() {
+
+    return aggregateId;
+
+  }
+
+  /**
+   * The id of the BPMS adapter elected at scheduling time, see {@link #adapterId}
+   *
+   * @return The adapter id, or <code>null</code> for a future probing operation
+   */
+  public String getAdapterId() {
+
+    return adapterId;
+
+  }
+
+  /**
+   * What the operation is called with
+   *
+   * @return The arguments of the call
+   */
+  public Map<String, String> getArgs() {
+
+    return args;
+
+  }
+
+  /**
+   * The call's idempotency key, see {@link #idempotencyKey}
+   *
+   * @return The idempotency key, or <code>null</code> where the operation must not be deduplicated
+   */
+  public String getIdempotencyKey() {
+
+    return idempotencyKey;
+
+  }
+
+  /**
+   * What the unique index spans, see {@link #dedupKey}
+   *
+   * @return The key the index holds, never <code>null</code>
+   */
+  public String getDedupKey() {
+
+    return dedupKey;
+
+  }
+
+  /**
+   * Where the entry stands: {@link #STATUS_OPEN}, {@link #STATUS_DONE} or {@link
+   * #STATUS_BLOCKED}
+   *
+   * @return The status
+   */
+  public String getStatus() {
+
+    return status;
+
+  }
+
+  /**
+   * When the call was scheduled
+   *
+   * @return The moment the entry was written
+   */
+  public Instant getCreatedAt() {
+
+    return createdAt;
+
+  }
+
+  /**
+   * How many dispatch attempts of this entry ended, see {@link #attempts}
+   *
+   * @return The number of ended attempts
+   */
+  public int getAttempts() {
+
+    return attempts;
+
+  }
+
+  /**
+   * When the next dispatch attempt may start
+   *
+   * @return The moment the entry becomes due again
+   */
+  public Instant getNextAttemptAt() {
+
+    return nextAttemptAt;
+
+  }
+
+  /**
+   * When the dispatch reached the BPMS, which the retention deletes by
+   *
+   * @return The moment the entry was dispatched, or <code>null</code> while it is open
+   */
+  public Instant getDoneAt() {
+
+    return doneAt;
+
+  }
+
+  /**
+   * Which node is dispatching this entry, see {@link #leasedBy}
+   *
+   * @return The node holding the entry, or <code>null</code> where nobody holds it
+   */
+  public String getLeasedBy() {
+
+    return leasedBy;
+
+  }
+
+  /**
+   * How long the claim on this entry lasts, see {@link #leasedUntil}
+   *
+   * @return The moment the lease runs out, or <code>null</code> where nobody holds the entry
+   */
+  public Instant getLeasedUntil() {
+
+    return leasedUntil;
+
+  }
+
+  /**
+   * The entry's own id, which MongoDB keeps unique
+   *
+   * @param id The entry id
+   */
+  public void setId(
+      final String id) {
+
+    this.id = id;
+
+  }
+
+  /**
+   * The workflow module the call belongs to
+   *
+   * @param workflowModuleId The workflow module id
+   */
+  public void setWorkflowModuleId(
+      final String workflowModuleId) {
+
+    this.workflowModuleId = workflowModuleId;
+
+  }
+
+  /**
+   * The BPMN process the call belongs to
+   *
+   * @param bpmnProcessId The BPMN process id
+   */
+  public void setBpmnProcessId(
+      final String bpmnProcessId) {
+
+    this.bpmnProcessId = bpmnProcessId;
+
+  }
+
+  /**
+   * The name of the scheduled {@link io.vanillabp.integration.spi.PhaseOperation}
+   *
+   * @param operation The operation's name
+   */
+  public void setOperation(
+      final String operation) {
+
+    this.operation = operation;
+
+  }
+
+  /**
+   * The workflow aggregate the call belongs to, in its serialized form
+   *
+   * @param aggregateId The aggregate id as text
+   */
+  public void setAggregateId(
+      final String aggregateId) {
+
+    this.aggregateId = aggregateId;
+
+  }
+
+  /**
+   * The id of the BPMS adapter elected at scheduling time, see {@link #adapterId}
+   *
+   * @param adapterId The adapter id, or <code>null</code>
+   */
+  public void setAdapterId(
+      final String adapterId) {
+
+    this.adapterId = adapterId;
+
+  }
+
+  /**
+   * What the operation is called with
+   *
+   * @param args The arguments of the call
+   */
+  public void setArgs(
+      final Map<String, String> args) {
+
+    this.args = args;
+
+  }
+
+  /**
+   * The call's idempotency key, see {@link #idempotencyKey}
+   *
+   * @param idempotencyKey The idempotency key, or <code>null</code>
+   */
+  public void setIdempotencyKey(
+      final String idempotencyKey) {
+
+    this.idempotencyKey = idempotencyKey;
+
+  }
+
+  /**
+   * What the unique index spans, see {@link #dedupKey}
+   *
+   * @param dedupKey The key the index holds, never <code>null</code>
+   */
+  public void setDedupKey(
+      final String dedupKey) {
+
+    this.dedupKey = dedupKey;
+
+  }
+
+  /**
+   * Where the entry stands: {@link #STATUS_OPEN}, {@link #STATUS_DONE} or {@link
+   * #STATUS_BLOCKED}
+   *
+   * @param status The status
+   */
+  public void setStatus(
+      final String status) {
+
+    this.status = status;
+
+  }
+
+  /**
+   * When the call was scheduled
+   *
+   * @param createdAt The moment the entry was written
+   */
+  public void setCreatedAt(
+      final Instant createdAt) {
+
+    this.createdAt = createdAt;
+
+  }
+
+  /**
+   * How many dispatch attempts of this entry ended, see {@link #attempts}
+   *
+   * @param attempts The number of ended attempts
+   */
+  public void setAttempts(
+      final int attempts) {
+
+    this.attempts = attempts;
+
+  }
+
+  /**
+   * When the next dispatch attempt may start
+   *
+   * @param nextAttemptAt The moment the entry becomes due again
+   */
+  public void setNextAttemptAt(
+      final Instant nextAttemptAt) {
+
+    this.nextAttemptAt = nextAttemptAt;
+
+  }
+
+  /**
+   * When the dispatch reached the BPMS, which the retention deletes by
+   *
+   * @param doneAt The moment the entry was dispatched, or <code>null</code>
+   */
+  public void setDoneAt(
+      final Instant doneAt) {
+
+    this.doneAt = doneAt;
+
+  }
+
+  /**
+   * Which node is dispatching this entry, see {@link #leasedBy}
+   *
+   * @param leasedBy The node holding the entry, or <code>null</code>
+   */
+  public void setLeasedBy(
+      final String leasedBy) {
+
+    this.leasedBy = leasedBy;
+
+  }
+
+  /**
+   * How long the claim on this entry lasts, see {@link #leasedUntil}
+   *
+   * @param leasedUntil The moment the lease runs out, or <code>null</code>
+   */
+  public void setLeasedUntil(
+      final Instant leasedUntil) {
+
+    this.leasedUntil = leasedUntil;
+
+  }
 }

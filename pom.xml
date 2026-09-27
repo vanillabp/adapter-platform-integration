@@ -33,7 +33,6 @@
 
   <modules>
     <module>bom</module>
-    <module>build-tools/mapstruct-fluent-accessors</module>
     <module>test-utils</module>
     <module>schema</module>
     <module>migration-adapter</module>
@@ -81,7 +80,6 @@
     <spring-boot.version>4.1.1</spring-boot.version>
     <quarkus.version>3.39.3</quarkus.version>
     <lombok.version>1.18.48</lombok.version>
-    <mapstruct.version>1.6.3</mapstruct.version>
     <transaction-outbox.version>7.1.750</transaction-outbox.version>
     <jacoco.version>0.8.15</jacoco.version>
     <mockito.version>5.23.0</mockito.version>
@@ -237,15 +235,13 @@
                  build which looks green. Everything else about the check comes from the
                  parent. -->
             <failOnWarnings>true</failOnWarnings>
-            <!-- two kinds of source file in this build are generated, and generated code
-                 carries no comments. The Quarkus extension processor writes an accessor
-                 class next to every class holding build steps, and MapStruct writes the
-                 implementation of a mapper interface, named after it. Both are compiled and
-                 neither is written by hand, so they are left out here rather than being the
-                 reason a missing comment stays allowed everywhere. -->
+            <!-- one kind of source file in this build is generated, and generated code
+                 carries no comments: the Quarkus extension processor writes an accessor
+                 class next to every class holding build steps. It is compiled and nobody
+                 writes it by hand, so it is left out here rather than being the reason a
+                 missing comment stays allowed everywhere. -->
             <sourceFileExcludes>
               <sourceFileExclude>**/*$$accessor.java</sourceFileExclude>
-              <sourceFileExclude>**/*MapperImpl.java</sourceFileExclude>
             </sourceFileExcludes>
           </configuration>
         </plugin>

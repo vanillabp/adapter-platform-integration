@@ -12,10 +12,6 @@ import java.util.function.UnaryOperator;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.experimental.SuperBuilder;
 
 /**
  * Configuration of the default {@link io.vanillabp.integration.spi.PhaseTwoOutbox}
@@ -29,19 +25,18 @@ import lombok.experimental.SuperBuilder;
  * What that log owns alone is the period a record is kept, which lives in
  * {@link DeliveryProperties}.
  */
-@Getter
-@Setter
-@SuperBuilder
 public class PhaseTwoOutboxProperties {
 
   /**
    * The empty section a configuration binder starts from: both platforms create the object
    * and then write the keys the application configured into it, one setter per key.
    * <p>
-   * It asks the builder for the values, and that is not a detour: Lombok moves the
-   * initializer of a field with a default into the builder, so a constructor which sets
-   * nothing itself would hand an application which configures no outbox a poll interval of
-   * <code>null</code> and no store sections at all.
+   * It asks the builder for the values, and that is not a detour: every default of this
+   * class stands on the builder as well as on the field, and both ways into an object
+   * end here. A constructor which set the fields itself would have to repeat every
+   * default, and the first one somebody forgets would hand an application which
+   * configures no outbox a poll interval of <code>null</code> and no store sections at
+   * all.
    */
   public PhaseTwoOutboxProperties() {
 
@@ -74,7 +69,6 @@ public class PhaseTwoOutboxProperties {
    * before the sleeping was there, so an application which sets nothing keeps the timing
    * it had.
    */
-  @Builder.Default
   private Duration pollInterval = DEFAULT_POLL_INTERVAL;
 
   /**
@@ -93,7 +87,6 @@ public class PhaseTwoOutboxProperties {
    * <p>
    * Key <code>vanillabp.outbox.attempt-frequency</code>, thirty seconds by default.
    */
-  @Builder.Default
   private Duration attemptFrequency = Duration.ofSeconds(30);
 
   /**
@@ -110,7 +103,6 @@ public class PhaseTwoOutboxProperties {
    * <p>
    * Key <code>vanillabp.outbox.max-attempt-frequency</code>, five minutes by default.
    */
-  @Builder.Default
   private Duration maxAttemptFrequency = Duration.ofMinutes(5);
 
   /**
@@ -122,7 +114,6 @@ public class PhaseTwoOutboxProperties {
    * <p>
    * Key <code>vanillabp.outbox.block-after-attempts</code>, fifty attempts by default.
    */
-  @Builder.Default
   private int blockAfterAttempts = 50;
 
   /**
@@ -181,7 +172,6 @@ public class PhaseTwoOutboxProperties {
    * Key <code>vanillabp.outbox.dispatch-threads</code>, four threads by default. Fewer
    * than one is refused with a message naming the key.
    */
-  @Builder.Default
   private int dispatchThreads = 4;
 
   /**
@@ -201,7 +191,6 @@ public class PhaseTwoOutboxProperties {
    * records of processed task deliveries share it, because it is a setting of the store
    * rather than of the outbox.
    */
-  @Builder.Default
   private boolean createSchema = true;
 
   /**
@@ -230,7 +219,6 @@ public class PhaseTwoOutboxProperties {
    * <p>
    * Key <code>vanillabp.outbox.retention</code>, seven days by default.
    */
-  @Builder.Default
   private Duration retention = DEFAULT_RETENTION;
 
   /**
@@ -255,7 +243,6 @@ public class PhaseTwoOutboxProperties {
    * the same application - each aggregate is served by the outbox matching its
    * persistence.
    */
-  @Builder.Default
   private JdbcOutboxProperties jdbc = new JdbcOutboxProperties();
 
   /**
@@ -263,14 +250,12 @@ public class PhaseTwoOutboxProperties {
    * and MongoDB) may be active in the same application - each aggregate is served by
    * the outbox matching its persistence.
    */
-  @Builder.Default
   private MongoOutboxProperties mongo = new MongoOutboxProperties();
 
   /**
    * When the housekeeping of the outbox runs and in which time zone (properties section
    * <code>vanillabp.outbox.housekeeping.*</code>).
    */
-  @Builder.Default
   private HousekeepingProperties housekeeping = new HousekeepingProperties();
 
   /**
@@ -431,9 +416,6 @@ public class PhaseTwoOutboxProperties {
    * <code>vanillabp.outbox.jdbc.*</code>): whether it is built at all, and the two tables
    * it works on.
    */
-  @Getter
-  @Setter
-  @SuperBuilder
   public static class JdbcOutboxProperties {
 
     /**
@@ -441,10 +423,11 @@ public class PhaseTwoOutboxProperties {
      * which writes nothing about the JDBC outbox gets, since the field holding it has this
      * as its default.
      * <p>
-     * It asks the builder for the values, and that is not a detour: Lombok moves the
-     * initializer of a field with a default into the builder, so a constructor which sets
-     * nothing itself would switch the JDBC outbox off for every application which
-     * configures no outbox.
+     * It asks the builder for the values, and that is not a detour: every default of
+     * this class stands on the builder as well as on the field, and both ways into an
+     * object end here. A constructor which set the fields itself would have to repeat
+     * every default, and the first one somebody forgets would switch the JDBC outbox off
+     * for every application which configures no outbox.
      */
     public JdbcOutboxProperties() {
 
@@ -498,7 +481,6 @@ public class PhaseTwoOutboxProperties {
      * <p>
      * Key <code>vanillabp.outbox.jdbc.enabled</code>, <code>true</code> by default.
      */
-    @Builder.Default
     private boolean enabled = true;
 
     /**
@@ -513,7 +495,6 @@ public class PhaseTwoOutboxProperties {
      * <p>
      * Key <code>vanillabp.outbox.jdbc.table</code>, unset by default.
      */
-    @Builder.Default
     private String table = null;
 
     /**
@@ -527,7 +508,6 @@ public class PhaseTwoOutboxProperties {
      * <p>
      * Key <code>vanillabp.outbox.jdbc.payload-table</code>, unset by default.
      */
-    @Builder.Default
     private String payloadTable = null;
 
     /**
@@ -549,7 +529,6 @@ public class PhaseTwoOutboxProperties {
      * <p>
      * Key <code>vanillabp.outbox.jdbc.delivery-table</code>, unset by default.
      */
-    @Builder.Default
     private String deliveryTable = null;
 
     /**
@@ -567,7 +546,6 @@ public class PhaseTwoOutboxProperties {
      * <p>
      * Key <code>vanillabp.outbox.jdbc.housekeeping-table</code>, unset by default.
      */
-    @Builder.Default
     private String housekeepingTable = null;
 
     /**
@@ -584,6 +562,370 @@ public class PhaseTwoOutboxProperties {
 
     }
 
+    /**
+     * The builder of {@link JdbcOutboxProperties}. Its two type parameters carry the
+     * class being built and the builder itself, so a call inherited from a base class
+     * comes back as the builder of the subclass and the next call in the chain sees
+     * every key again.
+     *
+     * @param <C> The class this builder builds
+     * @param <B> The builder itself, which every method of the chain returns
+     */
+    public abstract static class JdbcOutboxPropertiesBuilder<C extends JdbcOutboxProperties, B extends JdbcOutboxProperties.JdbcOutboxPropertiesBuilder<C, B>> {
+
+      /**
+       * Whether the JDBC-based default outbox is created when a data source is
+       * available. The builder starts from the same value the field does.
+       */
+      private boolean enabled = true;
+
+      /**
+       * The name of the table storing outbox entries. The builder starts from the same
+       * value the field does.
+       */
+      private String table = null;
+
+      /**
+       * The name of the table storing the payloads of phase-two calls which carry one
+       * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). The builder
+       * starts from the same value the field does.
+       */
+      private String payloadTable = null;
+
+      /**
+       * The name of the table storing the records of processed task deliveries (see
+       * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The builder starts from
+       * the same value the field does.
+       */
+      private String deliveryTable = null;
+
+      /**
+       * The name of the table the nightly housekeeping takes its lease in - one row per
+       * store, holding who is house-keeping it and until when, so only one node of a
+       * cluster measures its own work (see decision 91 in the repository's
+       * DECISIONS.md). The builder starts from the same value the field does.
+       */
+      private String housekeepingTable = null;
+
+      /**
+       * The builder of a subclass calls this while it is built. Nobody else needs one:
+       * {@link JdbcOutboxProperties#builder()} hands out the builder of this class.
+       */
+      public JdbcOutboxPropertiesBuilder() {
+      }
+
+      /**
+       * Whether the JDBC-based default outbox is created when a data source is
+       * available.
+       *
+       * @param enabled The value of {@link #enabled}
+       * @return This builder, so the calls chain
+       */
+      public B enabled(
+          final boolean enabled) {
+
+        this.enabled = enabled;
+        return self();
+
+      }
+
+      /**
+       * The name of the table storing outbox entries.
+       *
+       * @param table The value of {@link #table}
+       * @return This builder, so the calls chain
+       */
+      public B table(
+          final String table) {
+
+        this.table = table;
+        return self();
+
+      }
+
+      /**
+       * The name of the table storing the payloads of phase-two calls which carry one
+       * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}).
+       *
+       * @param payloadTable The value of {@link #payloadTable}
+       * @return This builder, so the calls chain
+       */
+      public B payloadTable(
+          final String payloadTable) {
+
+        this.payloadTable = payloadTable;
+        return self();
+
+      }
+
+      /**
+       * The name of the table storing the records of processed task deliveries (see
+       * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
+       *
+       * @param deliveryTable The value of {@link #deliveryTable}
+       * @return This builder, so the calls chain
+       */
+      public B deliveryTable(
+          final String deliveryTable) {
+
+        this.deliveryTable = deliveryTable;
+        return self();
+
+      }
+
+      /**
+       * The name of the table the nightly housekeeping takes its lease in - one row per
+       * store, holding who is house-keeping it and until when, so only one node of a
+       * cluster measures its own work (see decision 91 in the repository's
+       * DECISIONS.md).
+       *
+       * @param housekeepingTable The value of {@link #housekeepingTable}
+       * @return This builder, so the calls chain
+       */
+      public B housekeepingTable(
+          final String housekeepingTable) {
+
+        this.housekeepingTable = housekeepingTable;
+        return self();
+
+      }
+
+      /**
+       * The builder itself, typed as the builder of the subclass. Every method of the
+       * chain returns it, which is what keeps a chain started on a subclass builder at
+       * that subclass.
+       *
+       * @return This builder
+       */
+      protected abstract B self();
+
+      /**
+       * Builds the object from what was written into this builder.
+       *
+       * @return The built object
+       */
+      public abstract C build();
+
+      /**
+       * What this builder holds, for a message and for a debugger.
+       *
+       * @return The name of this builder and every value written into it
+       */
+      @Override
+      public String toString() {
+
+        return "JdbcOutboxProperties.JdbcOutboxPropertiesBuilder("
+            + "enabled="
+            + enabled
+            + ", "
+            + "table="
+            + table
+            + ", "
+            + "payloadTable="
+            + payloadTable
+            + ", "
+            + "deliveryTable="
+            + deliveryTable
+            + ", "
+            + "housekeepingTable="
+            + housekeepingTable
+            + ")";
+
+      }
+
+    }
+
+    /**
+     * The builder {@link #builder()} hands out: the one which builds
+     * {@link JdbcOutboxProperties} itself rather than a subclass of it.
+     */
+    private static final class JdbcOutboxPropertiesBuilderImpl extends JdbcOutboxProperties.JdbcOutboxPropertiesBuilder<JdbcOutboxProperties, JdbcOutboxProperties.JdbcOutboxPropertiesBuilderImpl> {
+
+      /**
+       * Nobody but {@link JdbcOutboxProperties#builder()} builds one.
+       */
+      private JdbcOutboxPropertiesBuilderImpl() {
+      }
+
+      /**
+       * This builder, typed as itself.
+       *
+       * @return This builder
+       */
+      @Override
+      protected JdbcOutboxProperties.JdbcOutboxPropertiesBuilderImpl self() {
+
+        return this;
+
+      }
+
+      /**
+       * Builds the object from what was written into this builder.
+       *
+       * @return The built object
+       */
+      @Override
+      public JdbcOutboxProperties build() {
+
+        return new JdbcOutboxProperties(this);
+
+      }
+
+    }
+
+    /**
+     * What every builder of this class and of its subclasses builds through. It is the
+     * one place the values of this class move from the builder into the object, so a
+     * subclass builder fills the keys of its base class as well.
+     *
+     * @param b The builder holding what was written
+     */
+    protected JdbcOutboxProperties(
+        final JdbcOutboxProperties.JdbcOutboxPropertiesBuilder<?, ?> b) {
+
+      this.enabled = b.enabled;
+      this.table = b.table;
+      this.payloadTable = b.payloadTable;
+      this.deliveryTable = b.deliveryTable;
+      this.housekeepingTable = b.housekeepingTable;
+
+    }
+
+    /**
+     * A builder of {@link JdbcOutboxProperties}, empty except for the values which have
+     * a default.
+     *
+     * @return The builder
+     */
+    public static JdbcOutboxProperties.JdbcOutboxPropertiesBuilder<?, ?> builder() {
+
+      return new JdbcOutboxProperties.JdbcOutboxPropertiesBuilderImpl();
+
+    }
+
+    /**
+     * Whether the JDBC-based default outbox is created when a data source is available.
+     *
+     * @return The value of {@link #enabled}
+     */
+    public boolean isEnabled() {
+
+      return enabled;
+
+    }
+
+    /**
+     * The name of the table storing outbox entries.
+     *
+     * @return The value of {@link #table}
+     */
+    public String getTable() {
+
+      return table;
+
+    }
+
+    /**
+     * The name of the table storing the payloads of phase-two calls which carry one (see
+     * {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}).
+     *
+     * @return The value of {@link #payloadTable}
+     */
+    public String getPayloadTable() {
+
+      return payloadTable;
+
+    }
+
+    /**
+     * The name of the table storing the records of processed task deliveries (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
+     *
+     * @return The value of {@link #deliveryTable}
+     */
+    public String getDeliveryTable() {
+
+      return deliveryTable;
+
+    }
+
+    /**
+     * The name of the table the nightly housekeeping takes its lease in - one row per
+     * store, holding who is house-keeping it and until when, so only one node of a
+     * cluster measures its own work (see decision 91 in the repository's DECISIONS.md).
+     *
+     * @return The value of {@link #housekeepingTable}
+     */
+    public String getHousekeepingTable() {
+
+      return housekeepingTable;
+
+    }
+
+    /**
+     * Whether the JDBC-based default outbox is created when a data source is available.
+     *
+     * @param enabled The value of {@link #enabled}
+     */
+    public void setEnabled(
+        final boolean enabled) {
+
+      this.enabled = enabled;
+
+    }
+
+    /**
+     * The name of the table storing outbox entries.
+     *
+     * @param table The value of {@link #table}
+     */
+    public void setTable(
+        final String table) {
+
+      this.table = table;
+
+    }
+
+    /**
+     * The name of the table storing the payloads of phase-two calls which carry one (see
+     * {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}).
+     *
+     * @param payloadTable The value of {@link #payloadTable}
+     */
+    public void setPayloadTable(
+        final String payloadTable) {
+
+      this.payloadTable = payloadTable;
+
+    }
+
+    /**
+     * The name of the table storing the records of processed task deliveries (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
+     *
+     * @param deliveryTable The value of {@link #deliveryTable}
+     */
+    public void setDeliveryTable(
+        final String deliveryTable) {
+
+      this.deliveryTable = deliveryTable;
+
+    }
+
+    /**
+     * The name of the table the nightly housekeeping takes its lease in - one row per
+     * store, holding who is house-keeping it and until when, so only one node of a
+     * cluster measures its own work (see decision 91 in the repository's DECISIONS.md).
+     *
+     * @param housekeepingTable The value of {@link #housekeepingTable}
+     */
+    public void setHousekeepingTable(
+        final String housekeepingTable) {
+
+      this.housekeepingTable = housekeepingTable;
+
+    }
+
   }
 
   /**
@@ -591,9 +933,6 @@ public class PhaseTwoOutboxProperties {
    * <code>vanillabp.outbox.mongo.*</code>): whether it is built at all, and the
    * collections it and the delivery log work on.
    */
-  @Getter
-  @Setter
-  @SuperBuilder
   public static class MongoOutboxProperties {
 
     /**
@@ -601,10 +940,11 @@ public class PhaseTwoOutboxProperties {
      * which writes nothing about the MongoDB outbox gets, since the field holding it has
      * this as its default.
      * <p>
-     * It asks the builder for the values, and that is not a detour: Lombok moves the
-     * initializer of a field with a default into the builder, so a constructor which sets
-     * nothing itself would switch the MongoDB outbox off and leave both collections
-     * unnamed.
+     * It asks the builder for the values, and that is not a detour: every default of
+     * this class stands on the builder as well as on the field, and both ways into an
+     * object end here. A constructor which set the fields itself would have to repeat
+     * every default, and the first one somebody forgets would switch the MongoDB outbox
+     * off and leave both collections unnamed.
      */
     public MongoOutboxProperties() {
 
@@ -681,7 +1021,6 @@ public class PhaseTwoOutboxProperties {
      * <p>
      * Key <code>vanillabp.outbox.mongo.enabled</code>, <code>true</code> by default.
      */
-    @Builder.Default
     private boolean enabled = true;
 
     /**
@@ -692,7 +1031,6 @@ public class PhaseTwoOutboxProperties {
      * Key <code>vanillabp.outbox.mongo.collection</code>,
      * {@value #DEFAULT_COLLECTION} by default.
      */
-    @Builder.Default
     private String collection = DEFAULT_COLLECTION;
 
     /**
@@ -705,7 +1043,6 @@ public class PhaseTwoOutboxProperties {
      * <p>
      * Key <code>vanillabp.outbox.mongo.payload-collection</code>, unset by default.
      */
-    @Builder.Default
     private String payloadCollection = null;
 
     /**
@@ -724,7 +1061,6 @@ public class PhaseTwoOutboxProperties {
      * Key <code>vanillabp.outbox.mongo.delivery-collection</code>,
      * {@value #DEFAULT_DELIVERY_COLLECTION} by default.
      */
-    @Builder.Default
     private String deliveryCollection = DEFAULT_DELIVERY_COLLECTION;
 
     /**
@@ -738,7 +1074,6 @@ public class PhaseTwoOutboxProperties {
      * Key <code>vanillabp.outbox.mongo.housekeeping-collection</code>,
      * {@value #DEFAULT_HOUSEKEEPING_COLLECTION} by default.
      */
-    @Builder.Default
     private String housekeepingCollection = DEFAULT_HOUSEKEEPING_COLLECTION;
 
     /**
@@ -757,6 +1092,374 @@ public class PhaseTwoOutboxProperties {
 
     }
 
+    /**
+     * The builder of {@link MongoOutboxProperties}. Its two type parameters carry the
+     * class being built and the builder itself, so a call inherited from a base class
+     * comes back as the builder of the subclass and the next call in the chain sees
+     * every key again.
+     *
+     * @param <C> The class this builder builds
+     * @param <B> The builder itself, which every method of the chain returns
+     */
+    public abstract static class MongoOutboxPropertiesBuilder<C extends MongoOutboxProperties, B extends MongoOutboxProperties.MongoOutboxPropertiesBuilder<C, B>> {
+
+      /**
+       * Whether the MongoDB-based default outbox is created when a MongoDB connection is
+       * available. The builder starts from the same value the field does.
+       */
+      private boolean enabled = true;
+
+      /**
+       * The name of the collection storing outbox entries. The builder starts from the
+       * same value the field does.
+       */
+      private String collection = DEFAULT_COLLECTION;
+
+      /**
+       * The name of the collection storing the payloads of phase-two calls which carry
+       * one (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). The builder
+       * starts from the same value the field does.
+       */
+      private String payloadCollection = null;
+
+      /**
+       * The name of the collection storing the records of processed task deliveries (see
+       * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The builder starts from
+       * the same value the field does.
+       */
+      private String deliveryCollection = DEFAULT_DELIVERY_COLLECTION;
+
+      /**
+       * The name of the collection the nightly housekeeping takes its lease in - one
+       * document per store, holding who is house-keeping it and until when, so only one
+       * node of a cluster measures its own work (see decision 91 in the repository's
+       * DECISIONS.md). The builder starts from the same value the field does.
+       */
+      private String housekeepingCollection = DEFAULT_HOUSEKEEPING_COLLECTION;
+
+      /**
+       * The builder of a subclass calls this while it is built. Nobody else needs one:
+       * {@link MongoOutboxProperties#builder()} hands out the builder of this class.
+       */
+      public MongoOutboxPropertiesBuilder() {
+      }
+
+      /**
+       * Whether the MongoDB-based default outbox is created when a MongoDB connection is
+       * available.
+       *
+       * @param enabled The value of {@link #enabled}
+       * @return This builder, so the calls chain
+       */
+      public B enabled(
+          final boolean enabled) {
+
+        this.enabled = enabled;
+        return self();
+
+      }
+
+      /**
+       * The name of the collection storing outbox entries.
+       *
+       * @param collection The value of {@link #collection}
+       * @return This builder, so the calls chain
+       */
+      public B collection(
+          final String collection) {
+
+        this.collection = collection;
+        return self();
+
+      }
+
+      /**
+       * The name of the collection storing the payloads of phase-two calls which carry
+       * one (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}).
+       *
+       * @param payloadCollection The value of {@link #payloadCollection}
+       * @return This builder, so the calls chain
+       */
+      public B payloadCollection(
+          final String payloadCollection) {
+
+        this.payloadCollection = payloadCollection;
+        return self();
+
+      }
+
+      /**
+       * The name of the collection storing the records of processed task deliveries (see
+       * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
+       *
+       * @param deliveryCollection The value of {@link #deliveryCollection}
+       * @return This builder, so the calls chain
+       */
+      public B deliveryCollection(
+          final String deliveryCollection) {
+
+        this.deliveryCollection = deliveryCollection;
+        return self();
+
+      }
+
+      /**
+       * The name of the collection the nightly housekeeping takes its lease in - one
+       * document per store, holding who is house-keeping it and until when, so only one
+       * node of a cluster measures its own work (see decision 91 in the repository's
+       * DECISIONS.md).
+       *
+       * @param housekeepingCollection The value of {@link #housekeepingCollection}
+       * @return This builder, so the calls chain
+       */
+      public B housekeepingCollection(
+          final String housekeepingCollection) {
+
+        this.housekeepingCollection = housekeepingCollection;
+        return self();
+
+      }
+
+      /**
+       * The builder itself, typed as the builder of the subclass. Every method of the
+       * chain returns it, which is what keeps a chain started on a subclass builder at
+       * that subclass.
+       *
+       * @return This builder
+       */
+      protected abstract B self();
+
+      /**
+       * Builds the object from what was written into this builder.
+       *
+       * @return The built object
+       */
+      public abstract C build();
+
+      /**
+       * What this builder holds, for a message and for a debugger.
+       *
+       * @return The name of this builder and every value written into it
+       */
+      @Override
+      public String toString() {
+
+        return "MongoOutboxProperties.MongoOutboxPropertiesBuilder("
+            + "enabled="
+            + enabled
+            + ", "
+            + "collection="
+            + collection
+            + ", "
+            + "payloadCollection="
+            + payloadCollection
+            + ", "
+            + "deliveryCollection="
+            + deliveryCollection
+            + ", "
+            + "housekeepingCollection="
+            + housekeepingCollection
+            + ")";
+
+      }
+
+    }
+
+    /**
+     * The builder {@link #builder()} hands out: the one which builds
+     * {@link MongoOutboxProperties} itself rather than a subclass of it.
+     */
+    private static final class MongoOutboxPropertiesBuilderImpl extends MongoOutboxProperties.MongoOutboxPropertiesBuilder<MongoOutboxProperties, MongoOutboxProperties.MongoOutboxPropertiesBuilderImpl> {
+
+      /**
+       * Nobody but {@link MongoOutboxProperties#builder()} builds one.
+       */
+      private MongoOutboxPropertiesBuilderImpl() {
+      }
+
+      /**
+       * This builder, typed as itself.
+       *
+       * @return This builder
+       */
+      @Override
+      protected MongoOutboxProperties.MongoOutboxPropertiesBuilderImpl self() {
+
+        return this;
+
+      }
+
+      /**
+       * Builds the object from what was written into this builder.
+       *
+       * @return The built object
+       */
+      @Override
+      public MongoOutboxProperties build() {
+
+        return new MongoOutboxProperties(this);
+
+      }
+
+    }
+
+    /**
+     * What every builder of this class and of its subclasses builds through. It is the
+     * one place the values of this class move from the builder into the object, so a
+     * subclass builder fills the keys of its base class as well.
+     *
+     * @param b The builder holding what was written
+     */
+    protected MongoOutboxProperties(
+        final MongoOutboxProperties.MongoOutboxPropertiesBuilder<?, ?> b) {
+
+      this.enabled = b.enabled;
+      this.collection = b.collection;
+      this.payloadCollection = b.payloadCollection;
+      this.deliveryCollection = b.deliveryCollection;
+      this.housekeepingCollection = b.housekeepingCollection;
+
+    }
+
+    /**
+     * A builder of {@link MongoOutboxProperties}, empty except for the values which have
+     * a default.
+     *
+     * @return The builder
+     */
+    public static MongoOutboxProperties.MongoOutboxPropertiesBuilder<?, ?> builder() {
+
+      return new MongoOutboxProperties.MongoOutboxPropertiesBuilderImpl();
+
+    }
+
+    /**
+     * Whether the MongoDB-based default outbox is created when a MongoDB connection is
+     * available.
+     *
+     * @return The value of {@link #enabled}
+     */
+    public boolean isEnabled() {
+
+      return enabled;
+
+    }
+
+    /**
+     * The name of the collection storing outbox entries.
+     *
+     * @return The value of {@link #collection}
+     */
+    public String getCollection() {
+
+      return collection;
+
+    }
+
+    /**
+     * The name of the collection storing the payloads of phase-two calls which carry one
+     * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}).
+     *
+     * @return The value of {@link #payloadCollection}
+     */
+    public String getPayloadCollection() {
+
+      return payloadCollection;
+
+    }
+
+    /**
+     * The name of the collection storing the records of processed task deliveries (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
+     *
+     * @return The value of {@link #deliveryCollection}
+     */
+    public String getDeliveryCollection() {
+
+      return deliveryCollection;
+
+    }
+
+    /**
+     * The name of the collection the nightly housekeeping takes its lease in - one
+     * document per store, holding who is house-keeping it and until when, so only one
+     * node of a cluster measures its own work (see decision 91 in the repository's
+     * DECISIONS.md).
+     *
+     * @return The value of {@link #housekeepingCollection}
+     */
+    public String getHousekeepingCollection() {
+
+      return housekeepingCollection;
+
+    }
+
+    /**
+     * Whether the MongoDB-based default outbox is created when a MongoDB connection is
+     * available.
+     *
+     * @param enabled The value of {@link #enabled}
+     */
+    public void setEnabled(
+        final boolean enabled) {
+
+      this.enabled = enabled;
+
+    }
+
+    /**
+     * The name of the collection storing outbox entries.
+     *
+     * @param collection The value of {@link #collection}
+     */
+    public void setCollection(
+        final String collection) {
+
+      this.collection = collection;
+
+    }
+
+    /**
+     * The name of the collection storing the payloads of phase-two calls which carry one
+     * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}).
+     *
+     * @param payloadCollection The value of {@link #payloadCollection}
+     */
+    public void setPayloadCollection(
+        final String payloadCollection) {
+
+      this.payloadCollection = payloadCollection;
+
+    }
+
+    /**
+     * The name of the collection storing the records of processed task deliveries (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
+     *
+     * @param deliveryCollection The value of {@link #deliveryCollection}
+     */
+    public void setDeliveryCollection(
+        final String deliveryCollection) {
+
+      this.deliveryCollection = deliveryCollection;
+
+    }
+
+    /**
+     * The name of the collection the nightly housekeeping takes its lease in - one
+     * document per store, holding who is house-keeping it and until when, so only one
+     * node of a cluster measures its own work (see decision 91 in the repository's
+     * DECISIONS.md).
+     *
+     * @param housekeepingCollection The value of {@link #housekeepingCollection}
+     */
+    public void setHousekeepingCollection(
+        final String housekeepingCollection) {
+
+      this.housekeepingCollection = housekeepingCollection;
+
+    }
+
   }
 
 
@@ -770,19 +1473,17 @@ public class PhaseTwoOutboxProperties {
    * that window the outbox works off as much as fits (see decision 91 in the repository's
    * DECISIONS.md).
    */
-  @Getter
-  @Setter
-  @SuperBuilder
   public static class HousekeepingProperties {
 
     /**
      * The empty section a configuration binder starts from, and the section an application
      * which writes nothing about the housekeeping gets.
      * <p>
-     * It asks the builder for the values, and that is not a detour: Lombok moves the
-     * initializer of a field with a default into the builder, so a constructor which sets
-     * nothing itself would hand an application which configures no outbox a window from
-     * <code>null</code> to <code>null</code>.
+     * It asks the builder for the values, and that is not a detour: every default of
+     * this class stands on the builder as well as on the field, and both ways into an
+     * object end here. A constructor which set the fields itself would have to repeat
+     * every default, and the first one somebody forgets would hand an application which
+     * configures no outbox a window from <code>null</code> to <code>null</code>.
      */
     public HousekeepingProperties() {
 
@@ -851,7 +1552,6 @@ public class PhaseTwoOutboxProperties {
      * A window which ends before it starts is read as crossing midnight, so
      * <code>23:00</code> to <code>01:00</code> is two hours and not a mistake.
      */
-    @Builder.Default
     private LocalTime start = DEFAULT_START;
 
     /**
@@ -863,7 +1563,6 @@ public class PhaseTwoOutboxProperties {
      * say that the outbox did not get through (see
      * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#HOUSEKEEPING_REMAINING}).
      */
-    @Builder.Default
     private LocalTime end = DEFAULT_END;
 
     /**
@@ -876,7 +1575,6 @@ public class PhaseTwoOutboxProperties {
      * A JVM standing on UTC without this key is warned once at the startup, because "four
      * in the morning" is then four UTC - see {@link #sayWhichZoneTheWindowRunsIn(io.vanillabp.integration.adapter.migration.startup.StartupFindings)}.
      */
-    @Builder.Default
     private String zone = null;
 
     /**
@@ -997,6 +1695,872 @@ public class PhaseTwoOutboxProperties {
                       ZONE_PROPERTY));
 
     }
+
+    /**
+     * The builder of {@link HousekeepingProperties}. Its two type parameters carry the
+     * class being built and the builder itself, so a call inherited from a base class
+     * comes back as the builder of the subclass and the next call in the chain sees
+     * every key again.
+     *
+     * @param <C> The class this builder builds
+     * @param <B> The builder itself, which every method of the chain returns
+     */
+    public abstract static class HousekeepingPropertiesBuilder<C extends HousekeepingProperties, B extends HousekeepingProperties.HousekeepingPropertiesBuilder<C, B>> {
+
+      /**
+       * When the window opens, in the zone below. The builder starts from the same value
+       * the field does.
+       */
+      private LocalTime start = DEFAULT_START;
+
+      /**
+       * When the window closes. The builder starts from the same value the field does.
+       */
+      private LocalTime end = DEFAULT_END;
+
+      /**
+       * The zone the two times above are read in. The builder starts from the same value
+       * the field does.
+       */
+      private String zone = null;
+
+      /**
+       * The builder of a subclass calls this while it is built. Nobody else needs one:
+       * {@link HousekeepingProperties#builder()} hands out the builder of this class.
+       */
+      public HousekeepingPropertiesBuilder() {
+      }
+
+      /**
+       * When the window opens, in the zone below.
+       *
+       * @param start The value of {@link #start}
+       * @return This builder, so the calls chain
+       */
+      public B start(
+          final LocalTime start) {
+
+        this.start = start;
+        return self();
+
+      }
+
+      /**
+       * When the window closes.
+       *
+       * @param end The value of {@link #end}
+       * @return This builder, so the calls chain
+       */
+      public B end(
+          final LocalTime end) {
+
+        this.end = end;
+        return self();
+
+      }
+
+      /**
+       * The zone the two times above are read in.
+       *
+       * @param zone The value of {@link #zone}
+       * @return This builder, so the calls chain
+       */
+      public B zone(
+          final String zone) {
+
+        this.zone = zone;
+        return self();
+
+      }
+
+      /**
+       * The builder itself, typed as the builder of the subclass. Every method of the
+       * chain returns it, which is what keeps a chain started on a subclass builder at
+       * that subclass.
+       *
+       * @return This builder
+       */
+      protected abstract B self();
+
+      /**
+       * Builds the object from what was written into this builder.
+       *
+       * @return The built object
+       */
+      public abstract C build();
+
+      /**
+       * What this builder holds, for a message and for a debugger.
+       *
+       * @return The name of this builder and every value written into it
+       */
+      @Override
+      public String toString() {
+
+        return "HousekeepingProperties.HousekeepingPropertiesBuilder("
+            + "start="
+            + start
+            + ", "
+            + "end="
+            + end
+            + ", "
+            + "zone="
+            + zone
+            + ")";
+
+      }
+
+    }
+
+    /**
+     * The builder {@link #builder()} hands out: the one which builds
+     * {@link HousekeepingProperties} itself rather than a subclass of it.
+     */
+    private static final class HousekeepingPropertiesBuilderImpl extends HousekeepingProperties.HousekeepingPropertiesBuilder<HousekeepingProperties, HousekeepingProperties.HousekeepingPropertiesBuilderImpl> {
+
+      /**
+       * Nobody but {@link HousekeepingProperties#builder()} builds one.
+       */
+      private HousekeepingPropertiesBuilderImpl() {
+      }
+
+      /**
+       * This builder, typed as itself.
+       *
+       * @return This builder
+       */
+      @Override
+      protected HousekeepingProperties.HousekeepingPropertiesBuilderImpl self() {
+
+        return this;
+
+      }
+
+      /**
+       * Builds the object from what was written into this builder.
+       *
+       * @return The built object
+       */
+      @Override
+      public HousekeepingProperties build() {
+
+        return new HousekeepingProperties(this);
+
+      }
+
+    }
+
+    /**
+     * What every builder of this class and of its subclasses builds through. It is the
+     * one place the values of this class move from the builder into the object, so a
+     * subclass builder fills the keys of its base class as well.
+     *
+     * @param b The builder holding what was written
+     */
+    protected HousekeepingProperties(
+        final HousekeepingProperties.HousekeepingPropertiesBuilder<?, ?> b) {
+
+      this.start = b.start;
+      this.end = b.end;
+      this.zone = b.zone;
+
+    }
+
+    /**
+     * A builder of {@link HousekeepingProperties}, empty except for the values which
+     * have a default.
+     *
+     * @return The builder
+     */
+    public static HousekeepingProperties.HousekeepingPropertiesBuilder<?, ?> builder() {
+
+      return new HousekeepingProperties.HousekeepingPropertiesBuilderImpl();
+
+    }
+
+    /**
+     * When the window opens, in the zone below.
+     *
+     * @return The value of {@link #start}
+     */
+    public LocalTime getStart() {
+
+      return start;
+
+    }
+
+    /**
+     * When the window closes.
+     *
+     * @return The value of {@link #end}
+     */
+    public LocalTime getEnd() {
+
+      return end;
+
+    }
+
+    /**
+     * The zone the two times above are read in.
+     *
+     * @return The value of {@link #zone}
+     */
+    public String getZone() {
+
+      return zone;
+
+    }
+
+    /**
+     * When the window opens, in the zone below.
+     *
+     * @param start The value of {@link #start}
+     */
+    public void setStart(
+        final LocalTime start) {
+
+      this.start = start;
+
+    }
+
+    /**
+     * When the window closes.
+     *
+     * @param end The value of {@link #end}
+     */
+    public void setEnd(
+        final LocalTime end) {
+
+      this.end = end;
+
+    }
+
+    /**
+     * The zone the two times above are read in.
+     *
+     * @param zone The value of {@link #zone}
+     */
+    public void setZone(
+        final String zone) {
+
+      this.zone = zone;
+
+    }
+
+  }
+
+  /**
+   * The builder of {@link PhaseTwoOutboxProperties}. Its two type parameters carry the
+   * class being built and the builder itself, so a call inherited from a base class
+   * comes back as the builder of the subclass and the next call in the chain sees every
+   * key again.
+   *
+   * @param <C> The class this builder builds
+   * @param <B> The builder itself, which every method of the chain returns
+   */
+  public abstract static class PhaseTwoOutboxPropertiesBuilder<C extends PhaseTwoOutboxProperties, B extends PhaseTwoOutboxProperties.PhaseTwoOutboxPropertiesBuilder<C, B>> {
+
+    /**
+     * The longest a store's background poller sleeps while it owes nothing. The builder
+     * starts from the same value the field does.
+     */
+    private Duration pollInterval = DEFAULT_POLL_INTERVAL;
+
+    /**
+     * The distance to the FIRST retry after a failed dispatch. The builder starts from
+     * the same value the field does.
+     */
+    private Duration attemptFrequency = Duration.ofSeconds(30);
+
+    /**
+     * The longest distance the growing backoff reaches. The builder starts from the same
+     * value the field does.
+     */
+    private Duration maxAttemptFrequency = Duration.ofMinutes(5);
+
+    /**
+     * After how many failed attempts an entry is blocked (not retried any longer). The
+     * builder starts from the same value the field does.
+     */
+    private int blockAfterAttempts = 50;
+
+    /**
+     * How many entries an outbox of VanillaBP's own dispatches at the same time - the
+     * JDBC one and the MongoDB one of each platform. The builder starts from the same
+     * value the field does.
+     */
+    private int dispatchThreads = 4;
+
+    /**
+     * Whether the schema (table/collection) used to store outbox entries is created
+     * automatically. The builder starts from the same value the field does.
+     */
+    private boolean createSchema = true;
+
+    /**
+     * How long successfully dispatched entries (marked as DONE) are retained before they
+     * are deleted asynchronously - what a retained entry buys is a dispatched operation
+     * somebody can still look at during support, not a longer deduplication window: that
+     * one ends with the dispatch (see
+     * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}). The builder starts from the
+     * same value the field does.
+     */
+    private Duration retention = DEFAULT_RETENTION;
+
+    /**
+     * Configuration of the JDBC default outbox, which both platforms run: Spring Boot on
+     * the connection of its transaction manager, Quarkus on an Agroal connection of the
+     * running JTA transaction. The builder starts from the same value the field does.
+     */
+    private JdbcOutboxProperties jdbc = new JdbcOutboxProperties();
+
+    /**
+     * Configuration of the MongoDB-based default outbox. The builder starts from the
+     * same value the field does.
+     */
+    private MongoOutboxProperties mongo = new MongoOutboxProperties();
+
+    /**
+     * When the housekeeping of the outbox runs and in which time zone (properties
+     * section <code>vanillabp.outbox.housekeeping.*</code>). The builder starts from the
+     * same value the field does.
+     */
+    private HousekeepingProperties housekeeping = new HousekeepingProperties();
+
+    /**
+     * The builder of a subclass calls this while it is built. Nobody else needs one:
+     * {@link PhaseTwoOutboxProperties#builder()} hands out the builder of this class.
+     */
+    public PhaseTwoOutboxPropertiesBuilder() {
+    }
+
+    /**
+     * The longest a store's background poller sleeps while it owes nothing.
+     *
+     * @param pollInterval The value of {@link #pollInterval}
+     * @return This builder, so the calls chain
+     */
+    public B pollInterval(
+        final Duration pollInterval) {
+
+      this.pollInterval = pollInterval;
+      return self();
+
+    }
+
+    /**
+     * The distance to the FIRST retry after a failed dispatch.
+     *
+     * @param attemptFrequency The value of {@link #attemptFrequency}
+     * @return This builder, so the calls chain
+     */
+    public B attemptFrequency(
+        final Duration attemptFrequency) {
+
+      this.attemptFrequency = attemptFrequency;
+      return self();
+
+    }
+
+    /**
+     * The longest distance the growing backoff reaches.
+     *
+     * @param maxAttemptFrequency The value of {@link #maxAttemptFrequency}
+     * @return This builder, so the calls chain
+     */
+    public B maxAttemptFrequency(
+        final Duration maxAttemptFrequency) {
+
+      this.maxAttemptFrequency = maxAttemptFrequency;
+      return self();
+
+    }
+
+    /**
+     * After how many failed attempts an entry is blocked (not retried any longer).
+     *
+     * @param blockAfterAttempts The value of {@link #blockAfterAttempts}
+     * @return This builder, so the calls chain
+     */
+    public B blockAfterAttempts(
+        final int blockAfterAttempts) {
+
+      this.blockAfterAttempts = blockAfterAttempts;
+      return self();
+
+    }
+
+    /**
+     * How many entries an outbox of VanillaBP's own dispatches at the same time - the
+     * JDBC one and the MongoDB one of each platform.
+     *
+     * @param dispatchThreads The value of {@link #dispatchThreads}
+     * @return This builder, so the calls chain
+     */
+    public B dispatchThreads(
+        final int dispatchThreads) {
+
+      this.dispatchThreads = dispatchThreads;
+      return self();
+
+    }
+
+    /**
+     * Whether the schema (table/collection) used to store outbox entries is created
+     * automatically.
+     *
+     * @param createSchema The value of {@link #createSchema}
+     * @return This builder, so the calls chain
+     */
+    public B createSchema(
+        final boolean createSchema) {
+
+      this.createSchema = createSchema;
+      return self();
+
+    }
+
+    /**
+     * How long successfully dispatched entries (marked as DONE) are retained before they
+     * are deleted asynchronously - what a retained entry buys is a dispatched operation
+     * somebody can still look at during support, not a longer deduplication window: that
+     * one ends with the dispatch (see
+     * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
+     *
+     * @param retention The value of {@link #retention}
+     * @return This builder, so the calls chain
+     */
+    public B retention(
+        final Duration retention) {
+
+      this.retention = retention;
+      return self();
+
+    }
+
+    /**
+     * Configuration of the JDBC default outbox, which both platforms run: Spring Boot on
+     * the connection of its transaction manager, Quarkus on an Agroal connection of the
+     * running JTA transaction.
+     *
+     * @param jdbc The value of {@link #jdbc}
+     * @return This builder, so the calls chain
+     */
+    public B jdbc(
+        final JdbcOutboxProperties jdbc) {
+
+      this.jdbc = jdbc;
+      return self();
+
+    }
+
+    /**
+     * Configuration of the MongoDB-based default outbox.
+     *
+     * @param mongo The value of {@link #mongo}
+     * @return This builder, so the calls chain
+     */
+    public B mongo(
+        final MongoOutboxProperties mongo) {
+
+      this.mongo = mongo;
+      return self();
+
+    }
+
+    /**
+     * When the housekeeping of the outbox runs and in which time zone (properties
+     * section <code>vanillabp.outbox.housekeeping.*</code>).
+     *
+     * @param housekeeping The value of {@link #housekeeping}
+     * @return This builder, so the calls chain
+     */
+    public B housekeeping(
+        final HousekeepingProperties housekeeping) {
+
+      this.housekeeping = housekeeping;
+      return self();
+
+    }
+
+    /**
+     * The builder itself, typed as the builder of the subclass. Every method of the
+     * chain returns it, which is what keeps a chain started on a subclass builder at
+     * that subclass.
+     *
+     * @return This builder
+     */
+    protected abstract B self();
+
+    /**
+     * Builds the object from what was written into this builder.
+     *
+     * @return The built object
+     */
+    public abstract C build();
+
+    /**
+     * What this builder holds, for a message and for a debugger.
+     *
+     * @return The name of this builder and every value written into it
+     */
+    @Override
+    public String toString() {
+
+      return "PhaseTwoOutboxProperties.PhaseTwoOutboxPropertiesBuilder("
+          + "pollInterval="
+          + pollInterval
+          + ", "
+          + "attemptFrequency="
+          + attemptFrequency
+          + ", "
+          + "maxAttemptFrequency="
+          + maxAttemptFrequency
+          + ", "
+          + "blockAfterAttempts="
+          + blockAfterAttempts
+          + ", "
+          + "dispatchThreads="
+          + dispatchThreads
+          + ", "
+          + "createSchema="
+          + createSchema
+          + ", "
+          + "retention="
+          + retention
+          + ", "
+          + "jdbc="
+          + jdbc
+          + ", "
+          + "mongo="
+          + mongo
+          + ", "
+          + "housekeeping="
+          + housekeeping
+          + ")";
+
+    }
+
+  }
+
+  /**
+   * The builder {@link #builder()} hands out: the one which builds
+   * {@link PhaseTwoOutboxProperties} itself rather than a subclass of it.
+   */
+  private static final class PhaseTwoOutboxPropertiesBuilderImpl extends PhaseTwoOutboxProperties.PhaseTwoOutboxPropertiesBuilder<PhaseTwoOutboxProperties, PhaseTwoOutboxProperties.PhaseTwoOutboxPropertiesBuilderImpl> {
+
+    /**
+     * Nobody but {@link PhaseTwoOutboxProperties#builder()} builds one.
+     */
+    private PhaseTwoOutboxPropertiesBuilderImpl() {
+    }
+
+    /**
+     * This builder, typed as itself.
+     *
+     * @return This builder
+     */
+    @Override
+    protected PhaseTwoOutboxProperties.PhaseTwoOutboxPropertiesBuilderImpl self() {
+
+      return this;
+
+    }
+
+    /**
+     * Builds the object from what was written into this builder.
+     *
+     * @return The built object
+     */
+    @Override
+    public PhaseTwoOutboxProperties build() {
+
+      return new PhaseTwoOutboxProperties(this);
+
+    }
+
+  }
+
+  /**
+   * What every builder of this class and of its subclasses builds through. It is the one
+   * place the values of this class move from the builder into the object, so a subclass
+   * builder fills the keys of its base class as well.
+   *
+   * @param b The builder holding what was written
+   */
+  protected PhaseTwoOutboxProperties(
+      final PhaseTwoOutboxProperties.PhaseTwoOutboxPropertiesBuilder<?, ?> b) {
+
+    this.pollInterval = b.pollInterval;
+    this.attemptFrequency = b.attemptFrequency;
+    this.maxAttemptFrequency = b.maxAttemptFrequency;
+    this.blockAfterAttempts = b.blockAfterAttempts;
+    this.dispatchThreads = b.dispatchThreads;
+    this.createSchema = b.createSchema;
+    this.retention = b.retention;
+    this.jdbc = b.jdbc;
+    this.mongo = b.mongo;
+    this.housekeeping = b.housekeeping;
+
+  }
+
+  /**
+   * A builder of {@link PhaseTwoOutboxProperties}, empty except for the values which
+   * have a default.
+   *
+   * @return The builder
+   */
+  public static PhaseTwoOutboxProperties.PhaseTwoOutboxPropertiesBuilder<?, ?> builder() {
+
+    return new PhaseTwoOutboxProperties.PhaseTwoOutboxPropertiesBuilderImpl();
+
+  }
+
+  /**
+   * The longest a store's background poller sleeps while it owes nothing.
+   *
+   * @return The value of {@link #pollInterval}
+   */
+  public Duration getPollInterval() {
+
+    return pollInterval;
+
+  }
+
+  /**
+   * The distance to the FIRST retry after a failed dispatch.
+   *
+   * @return The value of {@link #attemptFrequency}
+   */
+  public Duration getAttemptFrequency() {
+
+    return attemptFrequency;
+
+  }
+
+  /**
+   * The longest distance the growing backoff reaches.
+   *
+   * @return The value of {@link #maxAttemptFrequency}
+   */
+  public Duration getMaxAttemptFrequency() {
+
+    return maxAttemptFrequency;
+
+  }
+
+  /**
+   * After how many failed attempts an entry is blocked (not retried any longer).
+   *
+   * @return The value of {@link #blockAfterAttempts}
+   */
+  public int getBlockAfterAttempts() {
+
+    return blockAfterAttempts;
+
+  }
+
+  /**
+   * How many entries an outbox of VanillaBP's own dispatches at the same time - the JDBC
+   * one and the MongoDB one of each platform.
+   *
+   * @return The value of {@link #dispatchThreads}
+   */
+  public int getDispatchThreads() {
+
+    return dispatchThreads;
+
+  }
+
+  /**
+   * Whether the schema (table/collection) used to store outbox entries is created
+   * automatically.
+   *
+   * @return The value of {@link #createSchema}
+   */
+  public boolean isCreateSchema() {
+
+    return createSchema;
+
+  }
+
+  /**
+   * How long successfully dispatched entries (marked as DONE) are retained before they
+   * are deleted asynchronously - what a retained entry buys is a dispatched operation
+   * somebody can still look at during support, not a longer deduplication window: that
+   * one ends with the dispatch (see
+   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
+   *
+   * @return The value of {@link #retention}
+   */
+  public Duration getRetention() {
+
+    return retention;
+
+  }
+
+  /**
+   * Configuration of the JDBC default outbox, which both platforms run: Spring Boot on
+   * the connection of its transaction manager, Quarkus on an Agroal connection of the
+   * running JTA transaction.
+   *
+   * @return The value of {@link #jdbc}
+   */
+  public JdbcOutboxProperties getJdbc() {
+
+    return jdbc;
+
+  }
+
+  /**
+   * Configuration of the MongoDB-based default outbox.
+   *
+   * @return The value of {@link #mongo}
+   */
+  public MongoOutboxProperties getMongo() {
+
+    return mongo;
+
+  }
+
+  /**
+   * When the housekeeping of the outbox runs and in which time zone (properties section
+   * <code>vanillabp.outbox.housekeeping.*</code>).
+   *
+   * @return The value of {@link #housekeeping}
+   */
+  public HousekeepingProperties getHousekeeping() {
+
+    return housekeeping;
+
+  }
+
+  /**
+   * The longest a store's background poller sleeps while it owes nothing.
+   *
+   * @param pollInterval The value of {@link #pollInterval}
+   */
+  public void setPollInterval(
+      final Duration pollInterval) {
+
+    this.pollInterval = pollInterval;
+
+  }
+
+  /**
+   * The distance to the FIRST retry after a failed dispatch.
+   *
+   * @param attemptFrequency The value of {@link #attemptFrequency}
+   */
+  public void setAttemptFrequency(
+      final Duration attemptFrequency) {
+
+    this.attemptFrequency = attemptFrequency;
+
+  }
+
+  /**
+   * The longest distance the growing backoff reaches.
+   *
+   * @param maxAttemptFrequency The value of {@link #maxAttemptFrequency}
+   */
+  public void setMaxAttemptFrequency(
+      final Duration maxAttemptFrequency) {
+
+    this.maxAttemptFrequency = maxAttemptFrequency;
+
+  }
+
+  /**
+   * After how many failed attempts an entry is blocked (not retried any longer).
+   *
+   * @param blockAfterAttempts The value of {@link #blockAfterAttempts}
+   */
+  public void setBlockAfterAttempts(
+      final int blockAfterAttempts) {
+
+    this.blockAfterAttempts = blockAfterAttempts;
+
+  }
+
+  /**
+   * How many entries an outbox of VanillaBP's own dispatches at the same time - the JDBC
+   * one and the MongoDB one of each platform.
+   *
+   * @param dispatchThreads The value of {@link #dispatchThreads}
+   */
+  public void setDispatchThreads(
+      final int dispatchThreads) {
+
+    this.dispatchThreads = dispatchThreads;
+
+  }
+
+  /**
+   * Whether the schema (table/collection) used to store outbox entries is created
+   * automatically.
+   *
+   * @param createSchema The value of {@link #createSchema}
+   */
+  public void setCreateSchema(
+      final boolean createSchema) {
+
+    this.createSchema = createSchema;
+
+  }
+
+  /**
+   * How long successfully dispatched entries (marked as DONE) are retained before they
+   * are deleted asynchronously - what a retained entry buys is a dispatched operation
+   * somebody can still look at during support, not a longer deduplication window: that
+   * one ends with the dispatch (see
+   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
+   *
+   * @param retention The value of {@link #retention}
+   */
+  public void setRetention(
+      final Duration retention) {
+
+    this.retention = retention;
+
+  }
+
+  /**
+   * Configuration of the JDBC default outbox, which both platforms run: Spring Boot on
+   * the connection of its transaction manager, Quarkus on an Agroal connection of the
+   * running JTA transaction.
+   *
+   * @param jdbc The value of {@link #jdbc}
+   */
+  public void setJdbc(
+      final JdbcOutboxProperties jdbc) {
+
+    this.jdbc = jdbc;
+
+  }
+
+  /**
+   * Configuration of the MongoDB-based default outbox.
+   *
+   * @param mongo The value of {@link #mongo}
+   */
+  public void setMongo(
+      final MongoOutboxProperties mongo) {
+
+    this.mongo = mongo;
+
+  }
+
+  /**
+   * When the housekeeping of the outbox runs and in which time zone (properties section
+   * <code>vanillabp.outbox.housekeeping.*</code>).
+   *
+   * @param housekeeping The value of {@link #housekeeping}
+   */
+  public void setHousekeeping(
+      final HousekeepingProperties housekeeping) {
+
+    this.housekeeping = housekeeping;
 
   }
 

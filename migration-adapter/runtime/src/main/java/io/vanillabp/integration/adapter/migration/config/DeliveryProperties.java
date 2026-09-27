@@ -2,10 +2,6 @@ package io.vanillabp.integration.adapter.migration.config;
 
 import java.time.Duration;
 
-import lombok.Getter;
-import lombok.Setter;
-import lombok.experimental.SuperBuilder;
-
 /**
  * Configuration of what VanillaBP does with the records of processed task deliveries
  * (properties section <code>vanillabp.delivery</code>, overridable per workflow module as
@@ -29,9 +25,6 @@ import lombok.experimental.SuperBuilder;
  * deletion in each of the four stores VanillaBP ships to mean anything at all. A property
  * which is bound per module and silently ignored there is worse than not having one.
  */
-@Getter
-@Setter
-@SuperBuilder
 public class DeliveryProperties {
 
   /**
@@ -40,9 +33,9 @@ public class DeliveryProperties {
    * key of this section is <code>null</code> until somebody writes it, because
    * <code>null</code> is what carries "this level says nothing".
    * <p>
-   * It asks the builder for the values, which is how a field given a default one day keeps
-   * it: Lombok moves the initializer of such a field into the builder, so a constructor
-   * which sets nothing itself would leave the field <code>null</code>.
+   * It asks the builder for the values, which is how a field given a default one day
+   * keeps it: the default then stands on the builder as well, and this constructor reads
+   * it from there.
    */
   public DeliveryProperties() {
 
@@ -196,5 +189,385 @@ public class DeliveryProperties {
    * The default of {@link #maxOpenTasksChecked}: ten probes per wake-up.
    */
   public static final int DEFAULT_MAX_OPEN_TASKS_CHECKED = 10;
+
+  /**
+   * The builder of {@link DeliveryProperties}. Its two type parameters carry the class
+   * being built and the builder itself, so a call inherited from a base class comes back
+   * as the builder of the subclass and the next call in the chain sees every key again.
+   *
+   * @param <C> The class this builder builds
+   * @param <B> The builder itself, which every method of the chain returns
+   */
+  public abstract static class DeliveryPropertiesBuilder<C extends DeliveryProperties, B extends DeliveryProperties.DeliveryPropertiesBuilder<C, B>> {
+
+    /**
+     * Whether the records of a workflow are deleted the moment it ends, instead of
+     * waiting for {@link #retention} to pass (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf}).
+     */
+    private Boolean releaseOnWorkflowEnd;
+
+    /**
+     * How long a task may stay open before VanillaBP reports it, measured from the
+     * moment the handler ran (see
+     * {@link io.vanillabp.integration.spi.TaskDelivery#recordedAt()}).
+     */
+    private Duration maxTaskAge;
+
+    /**
+     * Whether a delivery looks at the other tasks VanillaBP believes are open in the
+     * same workflow of the BPMS, asks that BPMS whether they still exist and reports the
+     * ones which are gone as canceled (see
+     * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#reportTasksTheBpmsNoLongerHas}).
+     */
+    private Boolean checkOpenTasksOnDelivery;
+
+    /**
+     * How many other open tasks one delivery probes at most (see
+     * {@link #checkOpenTasksOnDelivery}).
+     */
+    private Integer maxOpenTasksChecked;
+
+    /**
+     * How long the record of a processed task delivery is kept, counted from the last
+     * redelivery it answered (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog#stillOpen}).
+     */
+    private Duration retention;
+
+    /**
+     * The builder of a subclass calls this while it is built. Nobody else needs one:
+     * {@link DeliveryProperties#builder()} hands out the builder of this class.
+     */
+    public DeliveryPropertiesBuilder() {
+    }
+
+    /**
+     * Whether the records of a workflow are deleted the moment it ends, instead of
+     * waiting for {@link #retention} to pass (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf}).
+     *
+     * @param releaseOnWorkflowEnd The value of {@link #releaseOnWorkflowEnd}
+     * @return This builder, so the calls chain
+     */
+    public B releaseOnWorkflowEnd(
+        final Boolean releaseOnWorkflowEnd) {
+
+      this.releaseOnWorkflowEnd = releaseOnWorkflowEnd;
+      return self();
+
+    }
+
+    /**
+     * How long a task may stay open before VanillaBP reports it, measured from the
+     * moment the handler ran (see
+     * {@link io.vanillabp.integration.spi.TaskDelivery#recordedAt()}).
+     *
+     * @param maxTaskAge The value of {@link #maxTaskAge}
+     * @return This builder, so the calls chain
+     */
+    public B maxTaskAge(
+        final Duration maxTaskAge) {
+
+      this.maxTaskAge = maxTaskAge;
+      return self();
+
+    }
+
+    /**
+     * Whether a delivery looks at the other tasks VanillaBP believes are open in the
+     * same workflow of the BPMS, asks that BPMS whether they still exist and reports the
+     * ones which are gone as canceled (see
+     * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#reportTasksTheBpmsNoLongerHas}).
+     *
+     * @param checkOpenTasksOnDelivery The value of {@link #checkOpenTasksOnDelivery}
+     * @return This builder, so the calls chain
+     */
+    public B checkOpenTasksOnDelivery(
+        final Boolean checkOpenTasksOnDelivery) {
+
+      this.checkOpenTasksOnDelivery = checkOpenTasksOnDelivery;
+      return self();
+
+    }
+
+    /**
+     * How many other open tasks one delivery probes at most (see
+     * {@link #checkOpenTasksOnDelivery}).
+     *
+     * @param maxOpenTasksChecked The value of {@link #maxOpenTasksChecked}
+     * @return This builder, so the calls chain
+     */
+    public B maxOpenTasksChecked(
+        final Integer maxOpenTasksChecked) {
+
+      this.maxOpenTasksChecked = maxOpenTasksChecked;
+      return self();
+
+    }
+
+    /**
+     * How long the record of a processed task delivery is kept, counted from the last
+     * redelivery it answered (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog#stillOpen}).
+     *
+     * @param retention The value of {@link #retention}
+     * @return This builder, so the calls chain
+     */
+    public B retention(
+        final Duration retention) {
+
+      this.retention = retention;
+      return self();
+
+    }
+
+    /**
+     * The builder itself, typed as the builder of the subclass. Every method of the
+     * chain returns it, which is what keeps a chain started on a subclass builder at
+     * that subclass.
+     *
+     * @return This builder
+     */
+    protected abstract B self();
+
+    /**
+     * Builds the object from what was written into this builder.
+     *
+     * @return The built object
+     */
+    public abstract C build();
+
+    /**
+     * What this builder holds, for a message and for a debugger.
+     *
+     * @return The name of this builder and every value written into it
+     */
+    @Override
+    public String toString() {
+
+      return "DeliveryProperties.DeliveryPropertiesBuilder("
+          + "releaseOnWorkflowEnd="
+          + releaseOnWorkflowEnd
+          + ", "
+          + "maxTaskAge="
+          + maxTaskAge
+          + ", "
+          + "checkOpenTasksOnDelivery="
+          + checkOpenTasksOnDelivery
+          + ", "
+          + "maxOpenTasksChecked="
+          + maxOpenTasksChecked
+          + ", "
+          + "retention="
+          + retention
+          + ")";
+
+    }
+
+  }
+
+  /**
+   * The builder {@link #builder()} hands out: the one which builds
+   * {@link DeliveryProperties} itself rather than a subclass of it.
+   */
+  private static final class DeliveryPropertiesBuilderImpl extends DeliveryProperties.DeliveryPropertiesBuilder<DeliveryProperties, DeliveryProperties.DeliveryPropertiesBuilderImpl> {
+
+    /**
+     * Nobody but {@link DeliveryProperties#builder()} builds one.
+     */
+    private DeliveryPropertiesBuilderImpl() {
+    }
+
+    /**
+     * This builder, typed as itself.
+     *
+     * @return This builder
+     */
+    @Override
+    protected DeliveryProperties.DeliveryPropertiesBuilderImpl self() {
+
+      return this;
+
+    }
+
+    /**
+     * Builds the object from what was written into this builder.
+     *
+     * @return The built object
+     */
+    @Override
+    public DeliveryProperties build() {
+
+      return new DeliveryProperties(this);
+
+    }
+
+  }
+
+  /**
+   * What every builder of this class and of its subclasses builds through. It is the one
+   * place the values of this class move from the builder into the object, so a subclass
+   * builder fills the keys of its base class as well.
+   *
+   * @param b The builder holding what was written
+   */
+  protected DeliveryProperties(
+      final DeliveryProperties.DeliveryPropertiesBuilder<?, ?> b) {
+
+    this.releaseOnWorkflowEnd = b.releaseOnWorkflowEnd;
+    this.maxTaskAge = b.maxTaskAge;
+    this.checkOpenTasksOnDelivery = b.checkOpenTasksOnDelivery;
+    this.maxOpenTasksChecked = b.maxOpenTasksChecked;
+    this.retention = b.retention;
+
+  }
+
+  /**
+   * A builder of {@link DeliveryProperties}, empty except for the values which have a
+   * default.
+   *
+   * @return The builder
+   */
+  public static DeliveryProperties.DeliveryPropertiesBuilder<?, ?> builder() {
+
+    return new DeliveryProperties.DeliveryPropertiesBuilderImpl();
+
+  }
+
+  /**
+   * Whether the records of a workflow are deleted the moment it ends, instead of waiting
+   * for {@link #retention} to pass (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf}).
+   *
+   * @return The value of {@link #releaseOnWorkflowEnd}
+   */
+  public Boolean getReleaseOnWorkflowEnd() {
+
+    return releaseOnWorkflowEnd;
+
+  }
+
+  /**
+   * How long a task may stay open before VanillaBP reports it, measured from the moment
+   * the handler ran (see
+   * {@link io.vanillabp.integration.spi.TaskDelivery#recordedAt()}).
+   *
+   * @return The value of {@link #maxTaskAge}
+   */
+  public Duration getMaxTaskAge() {
+
+    return maxTaskAge;
+
+  }
+
+  /**
+   * Whether a delivery looks at the other tasks VanillaBP believes are open in the same
+   * workflow of the BPMS, asks that BPMS whether they still exist and reports the ones
+   * which are gone as canceled (see
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#reportTasksTheBpmsNoLongerHas}).
+   *
+   * @return The value of {@link #checkOpenTasksOnDelivery}
+   */
+  public Boolean getCheckOpenTasksOnDelivery() {
+
+    return checkOpenTasksOnDelivery;
+
+  }
+
+  /**
+   * How many other open tasks one delivery probes at most (see
+   * {@link #checkOpenTasksOnDelivery}).
+   *
+   * @return The value of {@link #maxOpenTasksChecked}
+   */
+  public Integer getMaxOpenTasksChecked() {
+
+    return maxOpenTasksChecked;
+
+  }
+
+  /**
+   * How long the record of a processed task delivery is kept, counted from the last
+   * redelivery it answered (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#stillOpen}).
+   *
+   * @return The value of {@link #retention}
+   */
+  public Duration getRetention() {
+
+    return retention;
+
+  }
+
+  /**
+   * Whether the records of a workflow are deleted the moment it ends, instead of waiting
+   * for {@link #retention} to pass (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf}).
+   *
+   * @param releaseOnWorkflowEnd The value of {@link #releaseOnWorkflowEnd}
+   */
+  public void setReleaseOnWorkflowEnd(
+      final Boolean releaseOnWorkflowEnd) {
+
+    this.releaseOnWorkflowEnd = releaseOnWorkflowEnd;
+
+  }
+
+  /**
+   * How long a task may stay open before VanillaBP reports it, measured from the moment
+   * the handler ran (see
+   * {@link io.vanillabp.integration.spi.TaskDelivery#recordedAt()}).
+   *
+   * @param maxTaskAge The value of {@link #maxTaskAge}
+   */
+  public void setMaxTaskAge(
+      final Duration maxTaskAge) {
+
+    this.maxTaskAge = maxTaskAge;
+
+  }
+
+  /**
+   * Whether a delivery looks at the other tasks VanillaBP believes are open in the same
+   * workflow of the BPMS, asks that BPMS whether they still exist and reports the ones
+   * which are gone as canceled (see
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker#reportTasksTheBpmsNoLongerHas}).
+   *
+   * @param checkOpenTasksOnDelivery The value of {@link #checkOpenTasksOnDelivery}
+   */
+  public void setCheckOpenTasksOnDelivery(
+      final Boolean checkOpenTasksOnDelivery) {
+
+    this.checkOpenTasksOnDelivery = checkOpenTasksOnDelivery;
+
+  }
+
+  /**
+   * How many other open tasks one delivery probes at most (see
+   * {@link #checkOpenTasksOnDelivery}).
+   *
+   * @param maxOpenTasksChecked The value of {@link #maxOpenTasksChecked}
+   */
+  public void setMaxOpenTasksChecked(
+      final Integer maxOpenTasksChecked) {
+
+    this.maxOpenTasksChecked = maxOpenTasksChecked;
+
+  }
+
+  /**
+   * How long the record of a processed task delivery is kept, counted from the last
+   * redelivery it answered (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#stillOpen}).
+   *
+   * @param retention The value of {@link #retention}
+   */
+  public void setRetention(
+      final Duration retention) {
+
+    this.retention = retention;
+
+  }
 
 }

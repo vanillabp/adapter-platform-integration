@@ -16,7 +16,7 @@ package io.vanillabp.integration.spi.startup;
  * warning. Grouping by adapter or by the phase of the boot names something true about
  * VanillaBP rather than about the reader.
  * <p>
- * See decision &lt;pending: 579&gt; in the repository's DECISIONS.md.
+ * See decision 96 in the repository's DECISIONS.md.
  */
 public enum StartupTopic {
 

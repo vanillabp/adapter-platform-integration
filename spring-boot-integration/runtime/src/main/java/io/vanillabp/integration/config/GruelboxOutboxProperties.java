@@ -3,8 +3,6 @@ package io.vanillabp.integration.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import lombok.Getter;
-import lombok.Setter;
 
 /**
  * The section <code>vanillabp.outbox.gruelbox.*</code>: whether the gruelbox-based
@@ -24,8 +22,6 @@ import lombok.Setter;
  * description, and <code>META-INF/additional-spring-configuration-metadata.json</code> does
  * not repeat it, see {@code AKeyIsDescribedInOnePlaceTest}.
  */
-@Getter
-@Setter
 @ConfigurationProperties(GruelboxOutboxProperties.PREFIX)
 public class GruelboxOutboxProperties {
 
@@ -59,6 +55,31 @@ public class GruelboxOutboxProperties {
    * itself.
    */
   public GruelboxOutboxProperties() {
+
+  }
+
+  /**
+   * Whether the gruelbox-based outbox is built in place of the JDBC one VanillaBP writes
+   * itself, see {@link #enabled}.
+   *
+   * @return <code>true</code> where the application asked for the gruelbox store
+   */
+  public boolean isEnabled() {
+
+    return enabled;
+
+  }
+
+  /**
+   * Whether the gruelbox-based outbox is built in place of the JDBC one VanillaBP writes
+   * itself, see {@link #enabled}.
+   *
+   * @param enabled <code>true</code> to build the gruelbox store
+   */
+  public void setEnabled(
+      final boolean enabled) {
+
+    this.enabled = enabled;
 
   }
 

@@ -17,10 +17,6 @@ import java.util.stream.Stream;
 import io.vanillabp.integration.extension.spi.settings.SettingsLevel;
 import io.vanillabp.integration.extension.spi.settings.SettingsResolution;
 import io.vanillabp.integration.spi.startup.StartupTopic;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.experimental.SuperBuilder;
 
 /**
  * Everything below {@code vanillabp} after both platforms have bound it: the adapter sections, the
@@ -38,9 +34,6 @@ import lombok.experimental.SuperBuilder;
  * walks them with {@link SettingsResolution}, the one implementation every plug-in uses
  * (decision 53 in the repository's DECISIONS.md).
  */
-@Getter
-@Setter
-@SuperBuilder
 public class MigrationAdapterProperties extends AdaptersConfigurationProperties {
 
   /**
@@ -56,10 +49,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * application which configures nothing keeps what the defaults say and is led on from
    * there by {@link #normalize(ClasspathFacts)} and the validation.
    * <p>
-   * It asks the builder for the values, and that is not a detour: Lombok moves the
-   * initializer of a field with a default into the builder, so a constructor which sets
-   * nothing itself would leave every map of this class <code>null</code> and every
-   * sub-section missing.
+   * It asks the builder for the values, and that is not a detour: every default of this
+   * class stands on the builder as well as on the field, and both ways into an object
+   * end here. A constructor which set the fields itself would have to repeat every
+   * default, and the first one somebody forgets would leave every map of this class
+   * <code>null</code> and every sub-section missing.
    */
   public MigrationAdapterProperties() {
 
@@ -85,7 +79,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * has to point to the adapter type the custom adapter is derived from. In case of
    * an adapter-type identifier the type property may be undefined.
    */
-  @Builder.Default
   private Map<String, AdapterConfigProperties> adapters = Map.of();
 
   /**
@@ -96,7 +89,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   /**
    * Properties specific to workflow modules.
    */
-  @Builder.Default
   private Map<String, WorkflowModuleAdapterProperties> workflowModules = Map.of();
 
   /**
@@ -106,7 +98,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * application wrote below them, keyed by the rest of the path - what the keys MEAN is
    * the extension's own business (see {@link ExtensionProperties}).
    */
-  @Builder.Default
   private Map<String, Map<String, String>> extensions = Map.of();
 
   /**
@@ -114,7 +105,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementations
    * (properties section <code>vanillabp.outbox</code>).
    */
-  @Builder.Default
   private PhaseTwoOutboxProperties outbox = new PhaseTwoOutboxProperties();
 
   /**
@@ -138,7 +128,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} (properties section
    * <code>vanillabp.workflow-adapter-cache</code>).
    */
-  @Builder.Default
   private WorkflowAdapterCacheProperties workflowAdapterCache = new WorkflowAdapterCacheProperties();
 
   /**
@@ -146,7 +135,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * transaction it opens (properties section <code>vanillabp.transactions</code>,
    * overridable per workflow module).
    */
-  @Builder.Default
   private TransactionsProperties transactions = new TransactionsProperties();
 
   /**
@@ -154,7 +142,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * (properties section <code>vanillabp.election</code>, overridable per workflow
    * module).
    */
-  @Builder.Default
   private ElectionProperties election = new ElectionProperties();
 
   /**
@@ -162,7 +149,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * section <code>vanillabp.delivery</code>, overridable per workflow module - except the
    * retention, see <code>vanillabp.delivery.retention</code>).
    */
-  @Builder.Default
   private DeliveryProperties delivery = new DeliveryProperties();
 
   /**
@@ -170,7 +156,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * <code>vanillabp.metrics</code>) - today only how long the measurement of a gauge
    * which has to ask somebody is reused.
    */
-  @Builder.Default
   private MetricsProperties metrics = new MetricsProperties();
 
   /**
@@ -182,9 +167,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * startup check already holds, and it carries no accessors a binder would take for a
    * property: nothing below <code>vanillabp</code> configures it.
    */
-  @Builder.Default
-  @lombok.Getter(lombok.AccessLevel.NONE)
-  @lombok.Setter(lombok.AccessLevel.NONE)
   private io.vanillabp.integration.adapter.migration.startup.StartupFindings startupFindings = new io.vanillabp.integration.adapter.migration.startup.StartupFindings();
 
   /**
@@ -235,7 +217,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * decision stays visible in the configuration instead of being drowned in a log
    * filter, exactly like an adapter's <code>accept-unscoped-identifiers</code>.
    */
-  @Builder.Default
   private List<String> retiredAdapters = List.of();
 
   /**
@@ -342,7 +323,6 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * module, which keeps a development environment from offering a key whose value the next
    * derivation throws away.
    */
-  @Builder.Default
   private Map<String, List<String>> conventionalResourcesLocations = Map.of();
 
   /**
@@ -2782,6 +2762,885 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     return workflowModule.getWorkflows().values().stream()
         .map(WorkflowAdapterProperties::getBpmnProcessId)
         .toList();
+  }
+
+  /**
+   * The builder of {@link MigrationAdapterProperties}. Its two type parameters carry the
+   * class being built and the builder itself, so a call inherited from a base class
+   * comes back as the builder of the subclass and the next call in the chain sees every
+   * key again.
+   *
+   * @param <C> The class this builder builds
+   * @param <B> The builder itself, which every method of the chain returns
+   */
+  public abstract static class MigrationAdapterPropertiesBuilder<C extends MigrationAdapterProperties, B extends MigrationAdapterProperties.MigrationAdapterPropertiesBuilder<C, B>> extends AdaptersConfigurationProperties.AdaptersConfigurationPropertiesBuilder<C, B> {
+
+    /**
+     * The configuration of all adapters known (properties section
+     * <code>vanillabp.adapters.&lt;id&gt;.*</code>). The builder starts from the same
+     * value the field does.
+     */
+    private Map<String, AdapterConfigProperties> adapters = Map.of();
+
+    /**
+     * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
+     */
+    private String resourcesLocation;
+
+    /**
+     * Properties specific to workflow modules. The builder starts from the same value
+     * the field does.
+     */
+    private Map<String, WorkflowModuleAdapterProperties> workflowModules = Map.of();
+
+    /**
+     * The settings of the extensions (properties section
+     * <code>vanillabp.extensions.&lt;extension&gt;.*</code>), overridable per workflow
+     * module, per workflow and per task. The builder starts from the same value the
+     * field does.
+     */
+    private Map<String, Map<String, String>> extensions = Map.of();
+
+    /**
+     * Configuration of the default {@link io.vanillabp.integration.spi.PhaseTwoOutbox}
+     * implementations (properties section <code>vanillabp.outbox</code>). The builder
+     * starts from the same value the field does.
+     */
+    private PhaseTwoOutboxProperties outbox = new PhaseTwoOutboxProperties();
+
+    /**
+     * Refused here on purpose: the permission to share a whole workflow aggregate
+     * belongs to the single workflow (see decision 66 in the repository's DECISIONS.md).
+     */
+    private Boolean allowFullSyncWithBpms;
+
+    /**
+     * The <code>&#64;TaskParam</code> parameters of the whole application whose type the
+     * developer declared (<code>vanillabp.declared-task-params</code>).
+     */
+    private java.util.List<String> declaredTaskParams;
+
+    /**
+     * Configuration of the default election cache
+     * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} (properties section
+     * <code>vanillabp.workflow-adapter-cache</code>). The builder starts from the same
+     * value the field does.
+     */
+    private WorkflowAdapterCacheProperties workflowAdapterCache = new WorkflowAdapterCacheProperties();
+
+    /**
+     * What VanillaBP does about a workflow aggregate whose store is not covered by the
+     * transaction it opens (properties section <code>vanillabp.transactions</code>,
+     * overridable per workflow module). The builder starts from the same value the field
+     * does.
+     */
+    private TransactionsProperties transactions = new TransactionsProperties();
+
+    /**
+     * What VanillaBP does about a prioritized adapter which cannot locate workflows
+     * (properties section <code>vanillabp.election</code>, overridable per workflow
+     * module). The builder starts from the same value the field does.
+     */
+    private ElectionProperties election = new ElectionProperties();
+
+    /**
+     * What VanillaBP does with the records of processed task deliveries (properties
+     * section <code>vanillabp.delivery</code>, overridable per workflow module - except
+     * the retention, see <code>vanillabp.delivery.retention</code>). The builder starts
+     * from the same value the field does.
+     */
+    private DeliveryProperties delivery = new DeliveryProperties();
+
+    /**
+     * What VanillaBP publishes as metrics (properties section
+     * <code>vanillabp.metrics</code>) - today only how long the measurement of a gauge
+     * which has to ask somebody is reused. The builder starts from the same value the
+     * field does.
+     */
+    private MetricsProperties metrics = new MetricsProperties();
+
+    /**
+     * Where every startup check leaves what it found, so the whole start says it once,
+     * at its end, instead of a line per check (see
+     * {@link io.vanillabp.integration.adapter.migration.startup.StartupFindings}). The
+     * builder starts from the same value the field does.
+     */
+    private io.vanillabp.integration.adapter.migration.startup.StartupFindings startupFindings = new io.vanillabp.integration.adapter.migration.startup.StartupFindings();
+
+    /**
+     * Adapter ids this application USED to have and deliberately does not configure any
+     * more - the last step of a BPMS migration, once nothing runs in the old BPMS any
+     * more. The builder starts from the same value the field does.
+     */
+    private List<String> retiredAdapters = List.of();
+
+    /**
+     * The base location BPMN resources of a workflow module are read from when neither
+     * an adapter-specific nor the global <code>resources-location</code> is configured -
+     * derived from the classpath facts by {@link #normalize(ClasspathFacts)}. The
+     * builder starts from the same value the field does.
+     */
+    private Map<String, List<String>> conventionalResourcesLocations = Map.of();
+
+    /**
+     * The builder of a subclass calls this while it is built. Nobody else needs one:
+     * {@link MigrationAdapterProperties#builder()} hands out the builder of this class.
+     */
+    public MigrationAdapterPropertiesBuilder() {
+    }
+
+    /**
+     * The configuration of all adapters known (properties section
+     * <code>vanillabp.adapters.&lt;id&gt;.*</code>).
+     *
+     * @param adapters The value of {@link #adapters}
+     * @return This builder, so the calls chain
+     */
+    public B adapters(
+        final Map<String, AdapterConfigProperties> adapters) {
+
+      this.adapters = adapters;
+      return self();
+
+    }
+
+    /**
+     * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
+     *
+     * @param resourcesLocation The value of {@link #resourcesLocation}
+     * @return This builder, so the calls chain
+     */
+    public B resourcesLocation(
+        final String resourcesLocation) {
+
+      this.resourcesLocation = resourcesLocation;
+      return self();
+
+    }
+
+    /**
+     * Properties specific to workflow modules.
+     *
+     * @param workflowModules The value of {@link #workflowModules}
+     * @return This builder, so the calls chain
+     */
+    public B workflowModules(
+        final Map<String, WorkflowModuleAdapterProperties> workflowModules) {
+
+      this.workflowModules = workflowModules;
+      return self();
+
+    }
+
+    /**
+     * The settings of the extensions (properties section
+     * <code>vanillabp.extensions.&lt;extension&gt;.*</code>), overridable per workflow
+     * module, per workflow and per task.
+     *
+     * @param extensions The value of {@link #extensions}
+     * @return This builder, so the calls chain
+     */
+    public B extensions(
+        final Map<String, Map<String, String>> extensions) {
+
+      this.extensions = extensions;
+      return self();
+
+    }
+
+    /**
+     * Configuration of the default {@link io.vanillabp.integration.spi.PhaseTwoOutbox}
+     * implementations (properties section <code>vanillabp.outbox</code>).
+     *
+     * @param outbox The value of {@link #outbox}
+     * @return This builder, so the calls chain
+     */
+    public B outbox(
+        final PhaseTwoOutboxProperties outbox) {
+
+      this.outbox = outbox;
+      return self();
+
+    }
+
+    /**
+     * Refused here on purpose: the permission to share a whole workflow aggregate
+     * belongs to the single workflow (see decision 66 in the repository's DECISIONS.md).
+     *
+     * @param allowFullSyncWithBpms The value of {@link #allowFullSyncWithBpms}
+     * @return This builder, so the calls chain
+     */
+    public B allowFullSyncWithBpms(
+        final Boolean allowFullSyncWithBpms) {
+
+      this.allowFullSyncWithBpms = allowFullSyncWithBpms;
+      return self();
+
+    }
+
+    /**
+     * The <code>&#64;TaskParam</code> parameters of the whole application whose type the
+     * developer declared (<code>vanillabp.declared-task-params</code>).
+     *
+     * @param declaredTaskParams The value of {@link #declaredTaskParams}
+     * @return This builder, so the calls chain
+     */
+    public B declaredTaskParams(
+        final java.util.List<String> declaredTaskParams) {
+
+      this.declaredTaskParams = declaredTaskParams;
+      return self();
+
+    }
+
+    /**
+     * Configuration of the default election cache
+     * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} (properties section
+     * <code>vanillabp.workflow-adapter-cache</code>).
+     *
+     * @param workflowAdapterCache The value of {@link #workflowAdapterCache}
+     * @return This builder, so the calls chain
+     */
+    public B workflowAdapterCache(
+        final WorkflowAdapterCacheProperties workflowAdapterCache) {
+
+      this.workflowAdapterCache = workflowAdapterCache;
+      return self();
+
+    }
+
+    /**
+     * What VanillaBP does about a workflow aggregate whose store is not covered by the
+     * transaction it opens (properties section <code>vanillabp.transactions</code>,
+     * overridable per workflow module).
+     *
+     * @param transactions The value of {@link #transactions}
+     * @return This builder, so the calls chain
+     */
+    public B transactions(
+        final TransactionsProperties transactions) {
+
+      this.transactions = transactions;
+      return self();
+
+    }
+
+    /**
+     * What VanillaBP does about a prioritized adapter which cannot locate workflows
+     * (properties section <code>vanillabp.election</code>, overridable per workflow
+     * module).
+     *
+     * @param election The value of {@link #election}
+     * @return This builder, so the calls chain
+     */
+    public B election(
+        final ElectionProperties election) {
+
+      this.election = election;
+      return self();
+
+    }
+
+    /**
+     * What VanillaBP does with the records of processed task deliveries (properties
+     * section <code>vanillabp.delivery</code>, overridable per workflow module - except
+     * the retention, see <code>vanillabp.delivery.retention</code>).
+     *
+     * @param delivery The value of {@link #delivery}
+     * @return This builder, so the calls chain
+     */
+    public B delivery(
+        final DeliveryProperties delivery) {
+
+      this.delivery = delivery;
+      return self();
+
+    }
+
+    /**
+     * What VanillaBP publishes as metrics (properties section
+     * <code>vanillabp.metrics</code>) - today only how long the measurement of a gauge
+     * which has to ask somebody is reused.
+     *
+     * @param metrics The value of {@link #metrics}
+     * @return This builder, so the calls chain
+     */
+    public B metrics(
+        final MetricsProperties metrics) {
+
+      this.metrics = metrics;
+      return self();
+
+    }
+
+    /**
+     * Where every startup check leaves what it found, so the whole start says it once,
+     * at its end, instead of a line per check (see
+     * {@link io.vanillabp.integration.adapter.migration.startup.StartupFindings}).
+     *
+     * @param startupFindings The value of {@link #startupFindings}
+     * @return This builder, so the calls chain
+     */
+    public B startupFindings(
+        final io.vanillabp.integration.adapter.migration.startup.StartupFindings startupFindings) {
+
+      this.startupFindings = startupFindings;
+      return self();
+
+    }
+
+    /**
+     * Adapter ids this application USED to have and deliberately does not configure any
+     * more - the last step of a BPMS migration, once nothing runs in the old BPMS any
+     * more.
+     *
+     * @param retiredAdapters The value of {@link #retiredAdapters}
+     * @return This builder, so the calls chain
+     */
+    public B retiredAdapters(
+        final List<String> retiredAdapters) {
+
+      this.retiredAdapters = retiredAdapters;
+      return self();
+
+    }
+
+    /**
+     * The base location BPMN resources of a workflow module are read from when neither
+     * an adapter-specific nor the global <code>resources-location</code> is configured -
+     * derived from the classpath facts by {@link #normalize(ClasspathFacts)}.
+     *
+     * @param conventionalResourcesLocations The value of {@link #conventionalResourcesLocations}
+     * @return This builder, so the calls chain
+     */
+    public B conventionalResourcesLocations(
+        final Map<String, List<String>> conventionalResourcesLocations) {
+
+      this.conventionalResourcesLocations = conventionalResourcesLocations;
+      return self();
+
+    }
+
+    /**
+     * The builder itself, typed as the builder of the subclass. Every method of the
+     * chain returns it, which is what keeps a chain started on a subclass builder at
+     * that subclass.
+     *
+     * @return This builder
+     */
+    @Override
+    protected abstract B self();
+
+    /**
+     * Builds the object from what was written into this builder.
+     *
+     * @return The built object
+     */
+    @Override
+    public abstract C build();
+
+    /**
+     * What this builder holds, for a message and for a debugger.
+     *
+     * @return The name of this builder and every value written into it
+     */
+    @Override
+    public String toString() {
+
+      return "MigrationAdapterProperties.MigrationAdapterPropertiesBuilder("
+          + "super="
+          + super.toString()
+          + ", "
+          + "adapters="
+          + adapters
+          + ", "
+          + "resourcesLocation="
+          + resourcesLocation
+          + ", "
+          + "workflowModules="
+          + workflowModules
+          + ", "
+          + "extensions="
+          + extensions
+          + ", "
+          + "outbox="
+          + outbox
+          + ", "
+          + "allowFullSyncWithBpms="
+          + allowFullSyncWithBpms
+          + ", "
+          + "declaredTaskParams="
+          + declaredTaskParams
+          + ", "
+          + "workflowAdapterCache="
+          + workflowAdapterCache
+          + ", "
+          + "transactions="
+          + transactions
+          + ", "
+          + "election="
+          + election
+          + ", "
+          + "delivery="
+          + delivery
+          + ", "
+          + "metrics="
+          + metrics
+          + ", "
+          + "startupFindings="
+          + startupFindings
+          + ", "
+          + "retiredAdapters="
+          + retiredAdapters
+          + ", "
+          + "conventionalResourcesLocations="
+          + conventionalResourcesLocations
+          + ")";
+
+    }
+
+  }
+
+  /**
+   * The builder {@link #builder()} hands out: the one which builds
+   * {@link MigrationAdapterProperties} itself rather than a subclass of it.
+   */
+  private static final class MigrationAdapterPropertiesBuilderImpl extends MigrationAdapterProperties.MigrationAdapterPropertiesBuilder<MigrationAdapterProperties, MigrationAdapterProperties.MigrationAdapterPropertiesBuilderImpl> {
+
+    /**
+     * Nobody but {@link MigrationAdapterProperties#builder()} builds one.
+     */
+    private MigrationAdapterPropertiesBuilderImpl() {
+    }
+
+    /**
+     * This builder, typed as itself.
+     *
+     * @return This builder
+     */
+    @Override
+    protected MigrationAdapterProperties.MigrationAdapterPropertiesBuilderImpl self() {
+
+      return this;
+
+    }
+
+    /**
+     * Builds the object from what was written into this builder.
+     *
+     * @return The built object
+     */
+    @Override
+    public MigrationAdapterProperties build() {
+
+      return new MigrationAdapterProperties(this);
+
+    }
+
+  }
+
+  /**
+   * What every builder of this class and of its subclasses builds through. It is the one
+   * place the values of this class move from the builder into the object, so a subclass
+   * builder fills the keys of its base class as well.
+   *
+   * @param b The builder holding what was written
+   */
+  protected MigrationAdapterProperties(
+      final MigrationAdapterProperties.MigrationAdapterPropertiesBuilder<?, ?> b) {
+
+    super(b);
+
+    this.adapters = b.adapters;
+    this.resourcesLocation = b.resourcesLocation;
+    this.workflowModules = b.workflowModules;
+    this.extensions = b.extensions;
+    this.outbox = b.outbox;
+    this.allowFullSyncWithBpms = b.allowFullSyncWithBpms;
+    this.declaredTaskParams = b.declaredTaskParams;
+    this.workflowAdapterCache = b.workflowAdapterCache;
+    this.transactions = b.transactions;
+    this.election = b.election;
+    this.delivery = b.delivery;
+    this.metrics = b.metrics;
+    this.startupFindings = b.startupFindings;
+    this.retiredAdapters = b.retiredAdapters;
+    this.conventionalResourcesLocations = b.conventionalResourcesLocations;
+
+  }
+
+  /**
+   * A builder of {@link MigrationAdapterProperties}, empty except for the values which
+   * have a default.
+   *
+   * @return The builder
+   */
+  public static MigrationAdapterProperties.MigrationAdapterPropertiesBuilder<?, ?> builder() {
+
+    return new MigrationAdapterProperties.MigrationAdapterPropertiesBuilderImpl();
+
+  }
+
+  /**
+   * The configuration of all adapters known (properties section
+   * <code>vanillabp.adapters.&lt;id&gt;.*</code>).
+   *
+   * @return The value of {@link #adapters}
+   */
+  public Map<String, AdapterConfigProperties> getAdapters() {
+
+    return adapters;
+
+  }
+
+  /**
+   * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
+   *
+   * @return The value of {@link #resourcesLocation}
+   */
+  public String getResourcesLocation() {
+
+    return resourcesLocation;
+
+  }
+
+  /**
+   * Properties specific to workflow modules.
+   *
+   * @return The value of {@link #workflowModules}
+   */
+  public Map<String, WorkflowModuleAdapterProperties> getWorkflowModules() {
+
+    return workflowModules;
+
+  }
+
+  /**
+   * The settings of the extensions (properties section
+   * <code>vanillabp.extensions.&lt;extension&gt;.*</code>), overridable per workflow
+   * module, per workflow and per task.
+   *
+   * @return The value of {@link #extensions}
+   */
+  public Map<String, Map<String, String>> getExtensions() {
+
+    return extensions;
+
+  }
+
+  /**
+   * Configuration of the default {@link io.vanillabp.integration.spi.PhaseTwoOutbox}
+   * implementations (properties section <code>vanillabp.outbox</code>).
+   *
+   * @return The value of {@link #outbox}
+   */
+  public PhaseTwoOutboxProperties getOutbox() {
+
+    return outbox;
+
+  }
+
+  /**
+   * Refused here on purpose: the permission to share a whole workflow aggregate belongs
+   * to the single workflow (see decision 66 in the repository's DECISIONS.md).
+   *
+   * @return The value of {@link #allowFullSyncWithBpms}
+   */
+  public Boolean getAllowFullSyncWithBpms() {
+
+    return allowFullSyncWithBpms;
+
+  }
+
+  /**
+   * The <code>&#64;TaskParam</code> parameters of the whole application whose type the
+   * developer declared (<code>vanillabp.declared-task-params</code>).
+   *
+   * @return The value of {@link #declaredTaskParams}
+   */
+  public java.util.List<String> getDeclaredTaskParams() {
+
+    return declaredTaskParams;
+
+  }
+
+  /**
+   * Configuration of the default election cache
+   * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} (properties section
+   * <code>vanillabp.workflow-adapter-cache</code>).
+   *
+   * @return The value of {@link #workflowAdapterCache}
+   */
+  public WorkflowAdapterCacheProperties getWorkflowAdapterCache() {
+
+    return workflowAdapterCache;
+
+  }
+
+  /**
+   * What VanillaBP does about a workflow aggregate whose store is not covered by the
+   * transaction it opens (properties section <code>vanillabp.transactions</code>,
+   * overridable per workflow module).
+   *
+   * @return The value of {@link #transactions}
+   */
+  public TransactionsProperties getTransactions() {
+
+    return transactions;
+
+  }
+
+  /**
+   * What VanillaBP does about a prioritized adapter which cannot locate workflows
+   * (properties section <code>vanillabp.election</code>, overridable per workflow
+   * module).
+   *
+   * @return The value of {@link #election}
+   */
+  public ElectionProperties getElection() {
+
+    return election;
+
+  }
+
+  /**
+   * What VanillaBP does with the records of processed task deliveries (properties
+   * section <code>vanillabp.delivery</code>, overridable per workflow module - except
+   * the retention, see <code>vanillabp.delivery.retention</code>).
+   *
+   * @return The value of {@link #delivery}
+   */
+  public DeliveryProperties getDelivery() {
+
+    return delivery;
+
+  }
+
+  /**
+   * What VanillaBP publishes as metrics (properties section
+   * <code>vanillabp.metrics</code>) - today only how long the measurement of a gauge
+   * which has to ask somebody is reused.
+   *
+   * @return The value of {@link #metrics}
+   */
+  public MetricsProperties getMetrics() {
+
+    return metrics;
+
+  }
+
+  /**
+   * Adapter ids this application USED to have and deliberately does not configure any
+   * more - the last step of a BPMS migration, once nothing runs in the old BPMS any
+   * more.
+   *
+   * @return The value of {@link #retiredAdapters}
+   */
+  public List<String> getRetiredAdapters() {
+
+    return retiredAdapters;
+
+  }
+
+  /**
+   * The base location BPMN resources of a workflow module are read from when neither an
+   * adapter-specific nor the global <code>resources-location</code> is configured -
+   * derived from the classpath facts by {@link #normalize(ClasspathFacts)}.
+   *
+   * @return The value of {@link #conventionalResourcesLocations}
+   */
+  public Map<String, List<String>> getConventionalResourcesLocations() {
+
+    return conventionalResourcesLocations;
+
+  }
+
+  /**
+   * The configuration of all adapters known (properties section
+   * <code>vanillabp.adapters.&lt;id&gt;.*</code>).
+   *
+   * @param adapters The value of {@link #adapters}
+   */
+  public void setAdapters(
+      final Map<String, AdapterConfigProperties> adapters) {
+
+    this.adapters = adapters;
+
+  }
+
+  /**
+   * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
+   *
+   * @param resourcesLocation The value of {@link #resourcesLocation}
+   */
+  public void setResourcesLocation(
+      final String resourcesLocation) {
+
+    this.resourcesLocation = resourcesLocation;
+
+  }
+
+  /**
+   * Properties specific to workflow modules.
+   *
+   * @param workflowModules The value of {@link #workflowModules}
+   */
+  public void setWorkflowModules(
+      final Map<String, WorkflowModuleAdapterProperties> workflowModules) {
+
+    this.workflowModules = workflowModules;
+
+  }
+
+  /**
+   * The settings of the extensions (properties section
+   * <code>vanillabp.extensions.&lt;extension&gt;.*</code>), overridable per workflow
+   * module, per workflow and per task.
+   *
+   * @param extensions The value of {@link #extensions}
+   */
+  public void setExtensions(
+      final Map<String, Map<String, String>> extensions) {
+
+    this.extensions = extensions;
+
+  }
+
+  /**
+   * Configuration of the default {@link io.vanillabp.integration.spi.PhaseTwoOutbox}
+   * implementations (properties section <code>vanillabp.outbox</code>).
+   *
+   * @param outbox The value of {@link #outbox}
+   */
+  public void setOutbox(
+      final PhaseTwoOutboxProperties outbox) {
+
+    this.outbox = outbox;
+
+  }
+
+  /**
+   * Refused here on purpose: the permission to share a whole workflow aggregate belongs
+   * to the single workflow (see decision 66 in the repository's DECISIONS.md).
+   *
+   * @param allowFullSyncWithBpms The value of {@link #allowFullSyncWithBpms}
+   */
+  public void setAllowFullSyncWithBpms(
+      final Boolean allowFullSyncWithBpms) {
+
+    this.allowFullSyncWithBpms = allowFullSyncWithBpms;
+
+  }
+
+  /**
+   * The <code>&#64;TaskParam</code> parameters of the whole application whose type the
+   * developer declared (<code>vanillabp.declared-task-params</code>).
+   *
+   * @param declaredTaskParams The value of {@link #declaredTaskParams}
+   */
+  public void setDeclaredTaskParams(
+      final java.util.List<String> declaredTaskParams) {
+
+    this.declaredTaskParams = declaredTaskParams;
+
+  }
+
+  /**
+   * Configuration of the default election cache
+   * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} (properties section
+   * <code>vanillabp.workflow-adapter-cache</code>).
+   *
+   * @param workflowAdapterCache The value of {@link #workflowAdapterCache}
+   */
+  public void setWorkflowAdapterCache(
+      final WorkflowAdapterCacheProperties workflowAdapterCache) {
+
+    this.workflowAdapterCache = workflowAdapterCache;
+
+  }
+
+  /**
+   * What VanillaBP does about a workflow aggregate whose store is not covered by the
+   * transaction it opens (properties section <code>vanillabp.transactions</code>,
+   * overridable per workflow module).
+   *
+   * @param transactions The value of {@link #transactions}
+   */
+  public void setTransactions(
+      final TransactionsProperties transactions) {
+
+    this.transactions = transactions;
+
+  }
+
+  /**
+   * What VanillaBP does about a prioritized adapter which cannot locate workflows
+   * (properties section <code>vanillabp.election</code>, overridable per workflow
+   * module).
+   *
+   * @param election The value of {@link #election}
+   */
+  public void setElection(
+      final ElectionProperties election) {
+
+    this.election = election;
+
+  }
+
+  /**
+   * What VanillaBP does with the records of processed task deliveries (properties
+   * section <code>vanillabp.delivery</code>, overridable per workflow module - except
+   * the retention, see <code>vanillabp.delivery.retention</code>).
+   *
+   * @param delivery The value of {@link #delivery}
+   */
+  public void setDelivery(
+      final DeliveryProperties delivery) {
+
+    this.delivery = delivery;
+
+  }
+
+  /**
+   * What VanillaBP publishes as metrics (properties section
+   * <code>vanillabp.metrics</code>) - today only how long the measurement of a gauge
+   * which has to ask somebody is reused.
+   *
+   * @param metrics The value of {@link #metrics}
+   */
+  public void setMetrics(
+      final MetricsProperties metrics) {
+
+    this.metrics = metrics;
+
+  }
+
+  /**
+   * Adapter ids this application USED to have and deliberately does not configure any
+   * more - the last step of a BPMS migration, once nothing runs in the old BPMS any
+   * more.
+   *
+   * @param retiredAdapters The value of {@link #retiredAdapters}
+   */
+  public void setRetiredAdapters(
+      final List<String> retiredAdapters) {
+
+    this.retiredAdapters = retiredAdapters;
+
+  }
+
+  /**
+   * The base location BPMN resources of a workflow module are read from when neither an
+   * adapter-specific nor the global <code>resources-location</code> is configured -
+   * derived from the classpath facts by {@link #normalize(ClasspathFacts)}.
+   *
+   * @param conventionalResourcesLocations The value of {@link #conventionalResourcesLocations}
+   */
+  public void setConventionalResourcesLocations(
+      final Map<String, List<String>> conventionalResourcesLocations) {
+
+    this.conventionalResourcesLocations = conventionalResourcesLocations;
+
   }
 
 }
