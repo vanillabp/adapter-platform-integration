@@ -160,12 +160,14 @@ as possible at **build time**, following Quarkus' extension philosophy:
    the platform-neutral core (`MigrationAdapterProperties`).
    `QuarkusMigrationAdapterProperties` stays a RUN_TIME `@ConfigMapping` (module
    config files and env overrides need the runtime config), and the transformer
-   copies it onto the core model via the GENERATED MapStruct mapper
-   `QuarkusMigrationAdapterPropertiesMapper` (`unmappedSourcePolicy`/
-   `unmappedTargetPolicy = ERROR` pins the mapping at compile time; the SmallRye
-   interface's fluent accessors are made visible to MapStruct by the reactor
-   artifact `vanillabp-mapstruct-fluent-accessors` on the annotation-processor path
-   — build with `install`, not `package`). Defaulting and ALL guiding validation
+   copies it onto the core model via the hand-written mapper
+   `QuarkusMigrationAdapterPropertiesMapper` (MapStruct wrote it until story 639;
+   it left because a class we publish carries no MapStruct annotation and because
+   the annotation put `org.mapstruct:mapstruct` on the classpath of every
+   application, see decision 81 in DECISIONS.md. What the generator caught at
+   compile time is caught by `QuarkusMigrationAdapterPropertiesMapperGuardTest`
+   now: it walks both sides by reflection and fails on a value read nowhere or
+   written nowhere). Defaulting and ALL guiding validation
    run in the core; the transformer keeps only the capability checks.
    Adapter extensions contribute their own keys to the shared tree via an
    adapter-owned RUN_TIME `@ConfigRoot @ConfigMapping(prefix = "vanillabp")`
