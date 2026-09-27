@@ -606,6 +606,28 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   }
 
+  @Override
+  public void reportCompensation(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<io.vanillabp.integration.adapter.spi.workflowtask.CompensationSpec> compensations) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if ((entry == null) || (entry.processService == null)) {
+      // a process no @WorkflowService class serves has no aggregate to warn about, the
+      // same as for the elements reported next to this
+      return;
+    }
+    concurrentTokenCheck
+        .reportCompensation(
+            workflowModuleId,
+            bpmnProcessId,
+            entry.processService.getWorkflowAggregateClass(),
+            entry.processService.detectsConcurrentModification(),
+            compensations);
+
+  }
+
   /**
    * The same for the versions a BPMS still holds with workflows running on them, read by the
    * startup check for old process versions - the elements of an older model reach an aggregate
