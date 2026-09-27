@@ -44,9 +44,11 @@ import io.vanillabp.spi.service.WorkflowTask;
  * VanillaBP names a workflow by its workflow aggregate and by nothing else, and writes
  * that id into the business key wherever it starts the workflow itself. A workflow
  * started past VanillaBP can carry a key somebody else chose, and then two values say
- * different things about one instance. This test holds the three places where the BPMS
- * hands such a workflow over: a task delivery, the notification that the workflow ended,
- * and a start the BPMS performed on its own.
+ * different things about one instance. This test holds the two places where the check
+ * compares them, a task delivery and the notification that the workflow ended, and the
+ * third place a workflow arrives at, a start the BPMS performed on its own. There the key
+ * is the name VanillaBP looks the workflow up by rather than a second value, so a start
+ * carrying a name no workflow aggregate has is refused for that reason.
  * <p>
  * What a disagreement produces is a refusal, never an incident VanillaBP raises itself.
  * The invocation ends, and each BPMS applies what it applies to any failing handler. See
@@ -382,7 +384,7 @@ public class BusinessKeyIsTheAggregateIdTest {
     final var testee = registry();
     final var aggregate = storeAggregate("4712");
 
-    // every Camunda 8 workflow up to cluster 8.9 and every workflow of a BPMS which
+    // every Camunda 8 workflow up to cluster 8.8 and every workflow of a BPMS which
     // keeps no business key looks like this, so this is the ordinary case
     testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4712", null));
 

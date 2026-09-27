@@ -2291,7 +2291,7 @@ there is no behaviour a version-1 application could be upgrading from.
 
 VanillaBP names a workflow by its workflow aggregate and by nothing else. A BPMS which keeps a
 business key of its own gets that id written into it wherever VanillaBP starts the workflow:
-Camunda 7 has done so from the beginning, and Camunda 8 does it from cluster 8.10, the first line
+Camunda 7 has done so from the beginning, and Camunda 8 does it from cluster 8.9, the first line
 with a `businessId` on an instance. A workflow started past VanillaBP can carry a key somebody
 else chose and the variable with the aggregate's id as well, and then two values say different
 things about one instance.
@@ -2307,16 +2307,21 @@ The rule is one sentence: a business key counts only where it carries the workfl
 A key which says something else is not a second identity, it is a defect in whatever started that
 workflow.
 
-Three places take a workflow over from the BPMS, and the check sits at all three. A task delivery
-and the notification that a workflow ended both report the aggregate's id, so the comparison is
-free. A start the BPMS performed on its own has no aggregate yet, so the key the instance already
-carries is compared against the id VanillaBP gives the aggregate, at the point where that id is
-final and still inside the transaction the start opened. A refusal there takes the aggregate with
-it instead of leaving one behind which the instance does not name.
+Two places hand a workflow over together with the aggregate's id, and the check sits at both. A
+task delivery and the notification that a workflow ended both report that id, so the comparison is
+free. `WorkflowTaskRegistry.invokeWorkflowTask` and `WorkflowTaskRegistry.workflowEnded` ask for it
+before they do anything else with what the BPMS handed over.
 
-The election is not a fourth place. The awareness probes send the aggregate's id out and get a
+*This entry named a third place until decision 98: a start the BPMS performed on its own, where the
+key the instance already carried was held against the id VanillaBP gave the aggregate inside the
+transaction the start opened. That comparison is gone, because the application names the workflow
+at such a start and there is no second value left to compare. What the BPMS holds IS the name
+VanillaBP looks the workflow up by, so a start is refused where no workflow aggregate carries that
+name, which is decision 98's own rule rather than this check.*
+
+The election is not a third place. The awareness probes send the aggregate's id out and get a
 `WorkflowAwareness` back, so a workflow another adapter now holds is taken over at its next
-delivery, which is the first of the three. The same holds for a workflow taken over from
+delivery, which is the first of the two. The same holds for a workflow taken over from
 version 1.
 
 What a disagreement produces is a refusal, and VanillaBP raises no incident of its own. It ends
@@ -2330,7 +2335,7 @@ workflow module, the BPMN process, the adapter and the BPMS' own instance.
 What says nothing does not contradict. A deviation needs two values which both say something and
 disagree, so a missing business key, a missing aggregate id, or both, are silence.
 
-An absent business key is the state of every Camunda 8 workflow up to cluster 8.9, of every
+An absent business key is the state of every Camunda 8 workflow up to cluster 8.8, of every
 workflow on the Process-Engine-API, and of every workflow a timer started.
 
 An absent aggregate id is the sentence which keeps the upgrade from version 1 working, and it is
@@ -2347,8 +2352,8 @@ in the integration rather than a matter of taste, so a property would only let a
 keep running on an identity nobody can vouch for. There is nothing to trade off either: the check
 compares two strings the delivery already carries, with no question to the BPMS.
 
-`BusinessKeyIsTheAggregateIdTest` holds all three places, the empty key, the key which carries the
-id, and that a refused start leaves no aggregate behind.
+`BusinessKeyIsTheAggregateIdTest` holds both places, the empty key, the key which carries the id,
+and that a start refused for its name leaves no aggregate behind.
 
 Nothing is written in `UPGRADE.md`, and the reason is sharper than "version 1 filled the business
 key from the aggregate's id as well". A version-1 instance on Camunda 7 carries a business key and
@@ -2386,10 +2391,10 @@ departs from what version 1 did, and it would only report earlier what the missi
 reports anyway.
 
 Where the check does work is a BPMS which keeps both. Camunda 8 has a `businessId` on an instance
-from cluster 8.10 on and carries the aggregate's id in a process variable, so both values exist
+from cluster 8.9 on and carries the aggregate's id in a process variable, so both values exist
 there and the comparison has something to do. The adapter reports neither today, on any line, so
-the check is dormant until the line built against 8.10 reports the value. The wiki says so on both
-sides rather than describing the end state as if it were here.
+the check is dormant until the lines which can carry the value, 8.9 and 8.10, report it. The wiki
+says so on both sides rather than describing the end state as if it were here.
 
 ### 71. Parts which do not belong together stop the boot, and an unknown pair only warns
 
@@ -2954,3 +2959,237 @@ The promise is written where an adapter author meets it: in the javadoc of `Phas
 and on the outbox page of both platform wikis.
 `GruelboxWritesTheDueTimeADispatchAskedForTest#aLongerWindowIsWrittenToo` holds the case which
 used to go the other way.
+
+### 94. A held version says which of its elements never name the item of a round
+
+A multi-instance element which names no item - a Camunda 7 element without
+`camunda:elementVariable`, a Camunda 8 one without `inputElement` - iterates without ever
+saying what the value of a round is. A handler reading that value gets `null` and nothing says
+why, so an adapter asks the core while it DEPLOYS a model and refuses the pairing.
+
+A version a BPMS only still holds is never deployed again, so nobody asks - while the methods of
+the application serve it all the same, because their version ranges say so. The first news is a
+`null` in a handler running on a workflow which was started before the upgrade, and those are the
+workflows which run longest.
+
+So `BpmnTaskSpec` carries `multiInstanceElementsWithoutAnItem`, and the adapter fills it from the
+model it read for `ProcessVersionCatalog.tasksOfVersion`. The component stands last, like `name`
+before it, so every constructor an adapter and a test already write stays as it is.
+
+`null` means that this adapter does not read the shape, and then the question is not asked at
+all. An empty list means that every element of the chain names its item. That is decision 38: a
+check which cannot answer for sure stays silent rather than refusing.
+
+The finding is a WARNING and goes into the block a start writes at its end, under the versions a
+BPMS still holds. Nobody can change a held model any more, and an application may have decided on
+purpose to let the item be `null` there; what it must not be is silent. The way out is on the
+side of the code: narrow the version range of the method and add one for the old version which
+reads the index and the total only.
+
+`DeployedProcessVersionsCheck.reportItemsThisVersionNeverNames` asks the question, and
+`TheMultiInstanceShapeOfAHeldVersionTest` holds the cases.
+
+### 95. A held version waiting for a name nobody sends any more is worth a look
+
+A version a BPMS still holds can declare a message name or a signal name which no model of this
+deployment declares any more. The workflows on that version wait at their event for something
+nothing sends, and nothing in VanillaBP would say so: the name lives in a model the BPMS holds
+and in no file of the application.
+
+The core already reads those models for the name-clash check of a held version, so the question
+costs nothing extra. It is answered there, next to the clash.
+
+A warning, never a refusal. The platform can see the case and cannot know whether it is meant: a
+rename whose old workflows were finished by hand looks exactly like a rename nobody finished. So
+the line says "look at it" rather than "write this" - decision 38.
+
+Messages and signals only. An error code and an escalation code are thrown by the model which
+carries them, so a held version declaring one carries whatever throws it as well. A task
+definition nobody serves is the subject of its own check, which says more about it than this
+could. A BPMN process id is the process being asked about.
+
+Two things silence it. A version nobody runs on: nothing waits there. And an adapter which never
+reported what the current models declare: where nobody said what this deployment has, every old
+name looks new, and the check would report a whole model.
+
+It goes into the block a start writes at its end, under the versions a BPMS still holds.
+`NameClashAvoidanceService.reportNamesNobodySendsAnyMore` writes it, the adapters answer through
+`NameClashAvoidanceSupport.reportIdentifiersOfHeldVersion`, and
+`ANameTheCurrentDeploymentNoLongerDeclaresTest` holds the case.
+
+### 96. A start says once what it noticed
+
+VanillaBP looks at a lot while an application starts. It used to say each of it where it found
+it, so the findings stood between the lines of every other library and nobody read them unless
+they were already searching. There are 260 such messages across the platform and the four
+adapters, and of them at most 95 can appear on a start which survives.
+
+So a start collects what it finds and says it once, at its end, as one block between two rulers:
+`StartupFindings`. A check reports a finding instead of logging it, and the block is written in
+ONE call of the logger, because a block written line by line is a block the next library writes
+into.
+
+The block is grouped by topic, and a topic is the artifact the fix lies in: parts and versions,
+configuration, code, BPMN models, the versions a BPMS still holds, stored state, infrastructure.
+That is the order a developer walks, and almost every message ends with an instruction naming one
+such place, so the heading tells a reader which file to open. Each heading carries its count,
+which is the line a reader skims. Grouping by severity was the obvious alternative and says
+nothing: on a start which survives, nearly every finding is a warning anyway.
+
+An application with nothing to notice gets nothing: no ruler, no heading, no empty message. A
+healthy start reads the way it did before.
+
+A finding is reported unformatted, with its scope beside its text, because the same finding
+arrives once per workflow module, per BPMN process, per adapter id and per method. Two findings
+of one topic carrying the same text become one entry naming both scopes.
+
+**The two ends.** What ends a start is collected as well and thrown once, at the same moment,
+with its reasons grouped and counted the way the block is grouped and counted, so the two read
+alike. A developer who put two things wrong learns both in one start instead of one per restart;
+the shape was already in the tree, in `DeploymentService.checkPartsBelongTogether`.
+
+What was noticed before the refusal fell due is written before it is thrown. A warning does not
+become less true because a later check ends the start.
+
+The limit: a check which cannot let the start walk on, because the next check would ask a
+question this one just proved unanswerable, throws where it stands. Its javadoc says so.
+
+**Where the end of a start is.** At the end of `DeploymentService.startWorkflowProcessing`.
+Nothing a start can notice comes later: six validations run in a hook both platforms fire once
+every bean exists, and the election capability of the adapters is judged after the deployment,
+because a BPMS may only tell what it can do once something was deployed to it.
+
+What Quarkus refuses while it BUILDS never reaches the block, and it is right that it does not:
+an application which was never built never starts.
+
+A start which was refused already ends earlier than that. The deployment and the start of the
+workflow processing are the two steps which reach outside the application, and both look for a
+collected refusal before they run: nothing is deployed to a BPMS for an application which is
+about to end, and no adapter is told to hand out tasks for one. It also decides which message a
+developer reads where both would speak, and the right one is the check which named a gap in
+their application rather than whatever the deployment runs into afterwards.
+
+`MigrationAdapterProperties.startupFindings()` is where a check finds the collection to report
+into, and `TheBoxAtTheEndOfAStartTest` holds the block, the healthy start which gets nothing, and
+the two ends.
+
+### 97. An adapter reports through a bean, not through the adapter SPI
+
+The block at the end of a start (decision 96) belongs to the core. An adapter has to reach it,
+because 152 of the 260 startup messages of VanillaBP come from the four adapters, and a start
+which writes a block for the platform and a line per adapter is worse than one which writes lines
+for everything.
+
+The way there is a bean. `io.vanillabp.integration.spi.startup.StartupReport` lives in the
+integration SPI, `StartupFindings` implements it, and both platform integrations publish one
+instance per application. An adapter asks for it the way it asks for a data source: a
+constructor parameter on Spring Boot, an injection point or a producer parameter on Quarkus.
+
+Not the adapter SPI, and not `AdapterCollaborators`. The collaborators are handed to the
+deployment service and the process service of an adapter, and most of what an adapter finds
+at a start is found before either of them exists: the Camunda 8 adapter alone has 75
+messages and nearly all of them are about its configuration, which is read while its beans
+are built. A collaborator would reach half the places which need it, and the other half
+would need the bean anyway. Two ways to one object is one way too many.
+
+The interface carries the reporting half and nothing else: `notice`, `warn`, `error`,
+`refuse`. When a start is over, whether a reason not to start is collected or thrown, and
+what the block looks like stay with the core, because those are answers a start needs once
+and not once per adapter.
+
+`StartupTopic` moved from the core into the integration SPI with it. An adapter names the
+topic of its finding, so the list of topics is part of the contract rather than part of the
+core's rendering.
+
+**What an adapter reports.** A finding, which is something the developer of the application has
+to change or know about. What the adapter itself set up, how many workers it started, which BPMS
+it reached: those are reports about the adapter doing its work and they stay where they are. The
+three framed reports of the adapters (`Camunda8Connectors`, `Camunda8Listeners`,
+`Camunda7Listeners`) are of that kind and do not move.
+
+**Nothing breaks while the adapters follow.** The platform publishes the bean and nothing asks
+for it yet. An adapter which does not know about it behaves exactly as it did, and each of the
+four picks the bean up in its own story once this snapshot is published. That is why the way is a
+bean and not a new mandatory collaborator: a mandatory one would turn every adapter red the
+moment the snapshot lands, for a feature none of them uses yet.
+
+`AnAdapterReportsIntoTheSameBoxTest` holds a finding which arrives through the bean, and
+`TheStartupReportOfAnAdapterTest` of both platform integrations holds that each of them publishes
+it.
+
+### 98. The application names the workflow, and the BPMS holds that name
+
+The id of a workflow is the id of its workflow aggregate. The application assigns it, in the
+`@WorkflowStartedByBpms` method, and nobody else does. The BPMS is told about it afterwards and
+keeps it: Camunda 7 as the business key, Camunda 8 and the Process-Engine-API as a process
+variable named after the aggregate's id attribute.
+
+**Why the id belongs to the application.** Decision 92 handed the workflow aggregate of a started
+workflow to the application, because an object which comes into existence without the application
+does not carry the application's values. The id was left half way. The core still read a name out
+of the BPMS, still tried to turn it into an id of the aggregate, and then held it against the id
+the application had chosen. Two parties named one workflow, and the core refused every start
+where they disagreed. The Camunda 7 adapter carried the proof in its own suite: its Quarkus
+lifecycle test starts a process past VanillaBP with a key of its own, and that start had been
+failing since 504 landed.
+
+An id is a value like any other. It belongs where the other values of the aggregate come from. So
+the derivation is gone: `getNaturalIdentity`, the trigger time as an id, the generated fallback,
+and the conversion which took a business key over where it happened to fit the id type. What is
+left is one sentence a reader can hold in their head.
+
+**What the listener reads.** The listener hangs on EVERY start event of a process, the plain one
+included, and decides from the STATE of the workflow rather than from the kind of the event:
+
+- the BPMS holds a name and a workflow aggregate carries it: the workflow is already ours and
+  nothing is built. That is the application's own start, and it is the same answer for a second
+  delivery of the same notification, which is how at-least-once delivery stays harmless.
+- the BPMS holds no name: somebody started this workflow past VanillaBP. The
+  `@WorkflowStartedByBpms` method builds the aggregate and names it, and the adapter writes that
+  name into the BPMS.
+- the BPMS holds a name no workflow aggregate carries: the start is refused. The message says
+  that VanillaBP names a workflow, names the value the BPMS holds and says where it is kept.
+- an unnamed start reaches a process without such a method: the start is refused, and the message
+  carries the method to write. That is a runtime refusal, so the BPMS makes an incident of it.
+
+The old rule read the kind of the start event instead. It could not work. Anybody with access to
+the engine can start any process, and a timer start event says nothing about who started the
+instance this time.
+
+**Where the name is read from.** One question, two places to look.
+`BpmsInitiatedStartContext.getBusinessKey()` is the answer of a BPMS which keeps a business key
+of its own, and the core reads it first. Otherwise the core reads the process variable named
+after the aggregate's id attribute out of `getVariables()`. Both are the same value under two
+roofs, so one rule serves every BPMS and an adapter has nothing extra to report.
+
+A name which does not even fit the type of the id attribute - a text against a numeric id - is a
+name no workflow aggregate carries, and it takes the same refusal. There is no separate case for
+it, because there is no separate outcome.
+
+**What still runs at boot.** A process whose BPMS fires a start event by itself - a timer, a
+signal, a condition - and which has no `@WorkflowStartedByBpms` method still ends the boot, which
+is decision 92. Such a start can only ever arrive unnamed, so the application would find out at
+three in the morning.
+
+A plain or message start event is not judged that way. It is the shape the application's own
+start has, so demanding a method for it would refuse every ordinary process. A foreign start
+through one of them is refused when it happens.
+
+**What it costs.** One load of the workflow aggregate per start of a workflow, where the
+application's own start used to cost nothing. The workflow's first task loads the same aggregate
+a moment later anyway. On Camunda 8 it also costs one job per start, which the adapter's own
+decision measures.
+
+**What this supersedes.** Decision 24 of the `camunda7-adapter`, which said a workflow started
+past VanillaBP keeps the business key it was started with and gets its aggregate under that key.
+It does not any more: a key VanillaBP did not write is refused.
+
+The part of decision 92 which said the trigger carries a timer's time and that taking it as the
+id makes a repeated notification harmless. There is no trigger time any more. No BPMS hands a
+start listener the time it scheduled the start for, so an adapter would have to invent it. An
+application which needs the time models a process variable, fills it by an expression and reads
+it as a `@TaskParam`. Repeated notifications are handled by the name the BPMS holds instead,
+which works for a signal and a condition as well.
+
+`BpmsInitiatedStartExecution` carries the rule and `BpmsInitiatedStartTest` holds the four
+answers of the listener.

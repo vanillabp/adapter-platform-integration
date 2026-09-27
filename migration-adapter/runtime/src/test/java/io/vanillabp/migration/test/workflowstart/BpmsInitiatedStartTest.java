@@ -976,7 +976,8 @@ public class BpmsInitiatedStartTest {
   }
 
 
-  // --- what a start means is read from the state of the workflow, see DECISIONS.pending/653.md
+  // --- what a start means is read from the state of the workflow, see decision 98 in the
+  // repository's DECISIONS.md
 
   @Test
   @DisplayName("A workflow the BPMS already names and which has its aggregate is left alone")

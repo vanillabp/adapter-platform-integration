@@ -5,7 +5,7 @@ package io.vanillabp.integration.adapter.migration.processservice;
  * id.
  * <p>
  * VanillaBP names a workflow by its workflow aggregate and by nothing else. A BPMS which
- * keeps a business key of its own (Camunda 7 always, Camunda 8 from cluster 8.10) gets
+ * keeps a business key of its own (Camunda 7 always, Camunda 8 from cluster 8.9) gets
  * that id written into it wherever VanillaBP starts the workflow. A workflow started past
  * VanillaBP can carry a key somebody else chose, and then two values say different things
  * about one instance. Nobody noticed that before this check existed, because no inbound
@@ -40,7 +40,7 @@ public final class BusinessKeyCheck {
    * <p>
    * Nothing happens where either value is absent, and both halves of that are deliberate.
    * <p>
-   * An absent business key is the state of every Camunda 8 workflow up to cluster 8.9 and
+   * An absent business key is the state of every Camunda 8 workflow up to cluster 8.8 and
    * of every workflow on a BPMS which keeps none.
    * <p>
    * An absent aggregate id is the workflow an application takes over after upgrading from

@@ -1152,30 +1152,32 @@ name their model does not carry.
 
 VanillaBP names a workflow by its workflow aggregate and by nothing else. A BPMS which keeps a
 business key of its own gets that id written into it wherever VanillaBP starts the workflow:
-Camunda 7 always, Camunda 8 from cluster 8.10 on. A workflow started past VanillaBP can carry a
+Camunda 7 always, Camunda 8 from cluster 8.9 on. A workflow started past VanillaBP can carry a
 key somebody else chose while it also carries the variable with the aggregate's id, and then two
 values say different things about one instance.
 
 An adapter reports what its BPMS keeps through `getBusinessKey()`, which exists on all three
 contexts the BPMS hands a workflow over with: `TaskInvocationContext`, `WorkflowEndedContext` and
-`BpmsInitiatedStartContext`. The core compares it against the aggregate's id and refuses the
-delivery where the two disagree. It raises no incident itself on any BPMS, here as everywhere: the
-invocation ends, and the BPMS applies what it applies to any failing handler, which is a retry and
-then an incident on both Camunda engines.
+`BpmsInitiatedStartContext`. The check reads it on the first two, where the aggregate's id comes
+with it: the core holds the two values against each other and refuses what the BPMS handed over
+where they disagree. It raises no incident itself on any BPMS, here as everywhere: the invocation
+ends, and the BPMS applies what it applies to any failing handler, which is a retry and then an
+incident on both Camunda engines.
 
-A start the BPMS performed on its own has no aggregate yet, so the comparison happens where the
-id is final and still inside the transaction the start opened. A refusal there takes the aggregate
-with it rather than leaving one behind which the instance does not name.
+A start the BPMS performed on its own is the third context, and there the key is not compared at
+all. The application names the workflow at such a start, so the key is the name VanillaBP looks
+the workflow up by, and a start is refused where no workflow aggregate carries that name. That
+refusal happens inside the transaction the start opened, so it leaves no aggregate behind.
 
 What says nothing does not contradict, on either side. An absent business key is the ordinary
-state of every Camunda 8 workflow up to cluster 8.9 and of every workflow on a BPMS without
+state of every Camunda 8 workflow up to cluster 8.8 and of every workflow on a BPMS without
 business keys. An absent aggregate id is the workflow an application takes over after upgrading
 from version 1 on Camunda 7: version 1 wrote no process variables there, so such an instance
 carries its identity in the business key and nowhere else, and reading a missing variable as a
 deviation would send every migrated workflow into an incident at its first delivery.
 There is no way to switch the check off, because a disagreement is a defect in whatever started
 the workflow rather than a matter of taste. It is
-[decision 69](../DECISIONS.md), and `BusinessKeyIsTheAggregateIdTest` holds the three places, the
+[decision 69](../DECISIONS.md), and `BusinessKeyIsTheAggregateIdTest` holds the two places, the
 empty key, the key which carries the id, and the start which leaves nothing behind.
 
 #### Deployment-failure policy
@@ -2976,7 +2978,7 @@ one included.
 The rule is one sentence: the id of a workflow is the id of its workflow aggregate, and the
 application assigns it. The BPMS holds that id afterwards - Camunda 7 as the business key,
 Camunda 8 and the Process-Engine-API as a process variable named after the aggregate's id
-attribute. See `DECISIONS.pending/653.md`.
+attribute. See [decision 98](../DECISIONS.md).
 
 Adapters use the SPI (`io.vanillabp.integration.adapter.spi.workflowstart`) twice:
 
