@@ -308,7 +308,7 @@ public class DiscardedScheduleTest {
     // secondary workflow of the SAME aggregate, so the three correlations share workflow
     // module, BPMN process and aggregate id, and a correlation id read from business data
     // does not have to differ. What differs is the activation each of them was planned
-    // in, which is exactly what the BPMS names and what story 141 put into the key
+    // in, which is exactly what the BPMS names and what the idempotency key carries
     final var outbox = new PendingKeyOutbox();
     final var testee = serviceWithDiscardingOutbox(outbox);
 
@@ -398,10 +398,10 @@ public class DiscardedScheduleTest {
   @DisplayName("A handler spawning its own thread loses the activation and the key with it")
   public void anActivationDoesNotReachAThreadTheHandlerStarted() throws Exception {
 
-    // the decision of story 141: absent rather than failing. A plain ThreadLocal, never
-    // an inheritable one, so a pooled thread cannot carry an activation into work which
+    // absent rather than failing. The activation is a plain ThreadLocal and never an
+    // inheritable one, so a pooled thread cannot carry an activation into work which
     // does not belong to it - the price is that a handler correlating from a thread of
-    // its own gets the key every VanillaBP application had before
+    // its own gets the key of a correlation which knows no activation
     final var outbox = new PendingKeyOutbox();
     final var testee = serviceWithDiscardingOutbox(outbox);
 

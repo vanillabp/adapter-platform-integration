@@ -157,9 +157,8 @@ public class OpenTasksOfWorkflowTest {
    * <p>
    * The rows are needed for the question to be interesting at all. A planner decides
    * between the index over WORKFLOW_ID and the index over what "open" means, and with a
-   * handful of rows either is as good as the other - a thousand open tasks spread over
-   * five hundred workflows is what makes the difference visible, which is the shape the
-   * measurement in the module's README used as well.
+   * handful of rows either is as good as the other. A thousand open tasks spread over
+   * five hundred workflows is what makes the difference visible.
    */
   @Test
   @DisplayName("The read follows the index over WORKFLOW_ID rather than everything which is open")
