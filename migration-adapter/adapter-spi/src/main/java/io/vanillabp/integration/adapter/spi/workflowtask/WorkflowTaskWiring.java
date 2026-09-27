@@ -31,6 +31,9 @@ import java.util.Collection;
  * has to be rewritten for;</li>
  * <li>{@link #reportConcurrentTokenElements(String, String, Collection)} - the elements
  * which can put a second token into a workflow;</li>
+ * <li>{@link #reportCompensation(String, String, Collection)} - the compensation throw
+ * events which start more than one handler, which is the same second token drawn
+ * differently;</li>
  * <li>{@link #registerProcessVersions(String, String, String, ProcessVersionCatalog)} -
  * only where your BPMS can place version tags;</li>
  * <li>{@link #reportNoProcessVersionCatalog(String, String, String, io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion)} -
@@ -137,6 +140,39 @@ public interface WorkflowTaskWiring {
       final String workflowModuleId,
       final String bpmnProcessId,
       final Collection<String> elementIds) {
+
+  }
+
+  /**
+   * Reports the compensation throw events of a BPMN process which start MORE THAN ONE
+   * handler. Called during <code>wireBpmn</code>, next to
+   * {@link #reportConcurrentTokenElements(String, String, Collection)} and for the same
+   * reason: only the adapter can read its BPMN dialect.
+   * <p>
+   * Compensation is the second token drawn differently. A throw event which compensates
+   * two finished activities starts both handlers, the workflow holds a token per handler,
+   * and each of them writes the workflow aggregate - so it belongs on the list of things
+   * an aggregate without a version attribute cannot survive. It is reported separately
+   * because the finding has a shape the flat list cannot carry: the developer has to read
+   * WHICH throw event starts WHICH handlers, and the throw event alone says nothing.
+   * <p>
+   * A throw event starting one handler is left out. The compensation then runs where every
+   * other activity of the model runs, on the one token the workflow already has.
+   * <p>
+   * Whether the handlers run one after the other or next to each other is the engine's
+   * answer and differs. Camunda 8 hands out both handler jobs at once; Camunda 7 starts
+   * them one after the other in the transaction of the throw event, measured on 7.24 - but
+   * a handler which WAITS keeps its token while the next one is started there too, so the
+   * report is the same on both.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The PLAIN BPMN process ID
+   * @param compensations The throw events starting several handlers, with those handlers
+   */
+  default void reportCompensation(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<CompensationSpec> compensations) {
 
   }
 

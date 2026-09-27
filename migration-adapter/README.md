@@ -672,6 +672,7 @@ sequenceDiagram
       DS->>AD: wireBpmn(module, filename, processId, model, PC)
       AD->>WT: validateTaskWiring(module, process, tasks)  — MANDATORY
       AD->>WT: reportConcurrentTokenElements(…)  — optional
+      AD->>WT: reportCompensation(…)  — optional
       AD->>WT: registerProcessVersions(module, process, ProcessVersionCatalog)  — optional
       AD->>WT: workflowTaskCompletesAsynchronously / taskParameterNames / multiInstanceElementNames / workflowsShareTheWorkflowAggregate  — as needed
       AD->>BS: validateBpmsInitiatedStarts(module, process, start events)  — if the BPMS can report starts
@@ -3961,7 +3962,9 @@ The core answers the part it owns, and only that part:
   (`WorkflowTaskInvoker#reportConcurrentTokenElements`), the core decides what it means:
   `ConcurrentTokenCheck` asks the aggregate class for a version attribute, by the SIMPLE name
   of the annotation so JPA and Spring Data are covered without a dependency on either, and
-  warns once per BPMN process where there is none. An aggregate with a version attribute stays
+  warns once per BPMN process where there is none. Compensation arrives through
+  `reportCompensation` instead of through the flat list, because a developer has to read WHICH
+  throw event starts WHICH handlers; the text is the same, so both fold into one entry. An aggregate with a version attribute stays
   quiet, because then the collision is the exception above instead of a lost write.
 - The second writer a dependency brings is hinted at the same way. `SavingHandlerCheck` warns once
   per BPMN process where an extension has handler methods VanillaBP may save afterwards and the

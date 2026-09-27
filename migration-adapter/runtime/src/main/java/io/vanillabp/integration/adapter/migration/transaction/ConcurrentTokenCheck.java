@@ -4,6 +4,7 @@ import java.util.Collection;
 import java.util.stream.Collectors;
 
 import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
+import io.vanillabp.integration.adapter.spi.workflowtask.CompensationSpec;
 import io.vanillabp.integration.spi.startup.StartupTopic;
 
 /**
@@ -22,7 +23,9 @@ import io.vanillabp.integration.spi.startup.StartupTopic;
  * the BPMS still holds with workflows running on them
  * ({@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#concurrentTokenElementsOfVersion}),
  * because an older version with a parallel gateway the new model dropped keeps forking every
- * workflow started before it. The warning names the models it was drawn from beside its text,
+ * workflow started before it. Compensation is the same finding drawn differently and arrives
+ * through {@link #reportCompensation}: a throw event starting several handlers leaves the
+ * workflow with a token per handler. The warning names the models it was drawn from beside its text,
  * so the box folds what belongs to one aggregate into one entry however many models lead to
  * it.
  * <p>
@@ -81,6 +84,61 @@ public class ConcurrentTokenCheck {
         aggregateNoticesASecondWriter,
         "process '%s' of workflow module '%s' (%s)"
             .formatted(bpmnProcessId, workflowModuleId, describe(elementIds)));
+
+  }
+
+  /**
+   * The same finding, drawn as compensation: a throw event which starts more than one
+   * handler leaves the workflow with a token per handler, and every one of them writes the
+   * workflow aggregate.
+   * <p>
+   * It is reported on its own because the shape is what a developer needs here. The flat
+   * list of elements would name the throw event and the handlers next to each other and
+   * leave the reader to work out which starts which, while the whole point is that ONE
+   * event in the model turns into several branches at once.
+   * <p>
+   * The text is the one every other form of this finding carries, so a process whose
+   * parallel gateway was named already folds into the same entry: the thing to change is
+   * the aggregate, and it is one thing however many places in the model lead to it.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param workflowAggregateClass The workflow aggregate's class
+   * @param aggregateNoticesASecondWriter What the aggregate's persistence answers about
+   *          noticing a concurrent change
+   * @param compensations The compensation throw events starting several handlers, with
+   *          those handlers
+   */
+  public void reportCompensation(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Class<?> workflowAggregateClass,
+      final boolean aggregateNoticesASecondWriter,
+      final Collection<CompensationSpec> compensations) {
+
+    if ((compensations == null) || compensations.isEmpty()) {
+      return;
+    }
+    final var startingSeveralHandlers = compensations
+        .stream()
+        .filter(compensation -> compensation.handlerIds() != null)
+        .filter(compensation -> compensation.handlerIds().size() > 1)
+        .toList();
+    if (startingSeveralHandlers.isEmpty()) {
+      return;
+    }
+    report(
+        workflowAggregateClass,
+        aggregateNoticesASecondWriter,
+        "process '%s' of workflow module '%s' (%s)"
+            .formatted(
+                bpmnProcessId,
+                workflowModuleId,
+                startingSeveralHandlers
+                    .stream()
+                    .map(compensation -> "the compensation throw event '%s' starts the handlers %s"
+                        .formatted(compensation.throwEventId(), named(compensation.handlerIds())))
+                    .collect(Collectors.joining("; "))));
 
   }
 
@@ -181,6 +239,19 @@ public class ConcurrentTokenCheck {
                 collision into an exception VanillaBP reports and the BPMS retries, which is why \
                 this message is about its absence."""
                 .formatted(workflowAggregateClass.getName()));
+
+  }
+
+  /**
+   * The element ids as the warning names them, all of them and in the order they were
+   * reported - a handler left out of the list would be one the reader goes looking for.
+   */
+  private static String named(
+      final Collection<String> elementIds) {
+
+    return elementIds
+        .stream()
+        .collect(Collectors.joining("', '", "'", "'"));
 
   }
 
