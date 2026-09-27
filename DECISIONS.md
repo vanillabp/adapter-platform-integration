@@ -2291,7 +2291,7 @@ there is no behaviour a version-1 application could be upgrading from.
 
 VanillaBP names a workflow by its workflow aggregate and by nothing else. A BPMS which keeps a
 business key of its own gets that id written into it wherever VanillaBP starts the workflow:
-Camunda 7 has done so from the beginning, and Camunda 8 does it from cluster 8.10, the first line
+Camunda 7 has done so from the beginning, and Camunda 8 does it from cluster 8.9, the first line
 with a `businessId` on an instance. A workflow started past VanillaBP can carry a key somebody
 else chose and the variable with the aggregate's id as well, and then two values say different
 things about one instance.
@@ -2307,16 +2307,21 @@ The rule is one sentence: a business key counts only where it carries the workfl
 A key which says something else is not a second identity, it is a defect in whatever started that
 workflow.
 
-Three places take a workflow over from the BPMS, and the check sits at all three. A task delivery
-and the notification that a workflow ended both report the aggregate's id, so the comparison is
-free. A start the BPMS performed on its own has no aggregate yet, so the key the instance already
-carries is compared against the id VanillaBP gives the aggregate, at the point where that id is
-final and still inside the transaction the start opened. A refusal there takes the aggregate with
-it instead of leaving one behind which the instance does not name.
+Two places hand a workflow over together with the aggregate's id, and the check sits at both. A
+task delivery and the notification that a workflow ended both report that id, so the comparison is
+free. `WorkflowTaskRegistry.invokeWorkflowTask` and `WorkflowTaskRegistry.workflowEnded` ask for it
+before they do anything else with what the BPMS handed over.
 
-The election is not a fourth place. The awareness probes send the aggregate's id out and get a
+*This entry named a third place until story 653: a start the BPMS performed on its own, where the
+key the instance already carried was held against the id VanillaBP gave the aggregate inside the
+transaction the start opened. That comparison is gone, because the application names the workflow
+at such a start and there is no second value left to compare. What the BPMS holds IS the name
+VanillaBP looks the workflow up by, so a start is refused where no workflow aggregate carries that
+name, which is story 653's own rule rather than this check.*
+
+The election is not a third place. The awareness probes send the aggregate's id out and get a
 `WorkflowAwareness` back, so a workflow another adapter now holds is taken over at its next
-delivery, which is the first of the three. The same holds for a workflow taken over from
+delivery, which is the first of the two. The same holds for a workflow taken over from
 version 1.
 
 What a disagreement produces is a refusal, and VanillaBP raises no incident of its own. It ends
@@ -2330,7 +2335,7 @@ workflow module, the BPMN process, the adapter and the BPMS' own instance.
 What says nothing does not contradict. A deviation needs two values which both say something and
 disagree, so a missing business key, a missing aggregate id, or both, are silence.
 
-An absent business key is the state of every Camunda 8 workflow up to cluster 8.9, of every
+An absent business key is the state of every Camunda 8 workflow up to cluster 8.8, of every
 workflow on the Process-Engine-API, and of every workflow a timer started.
 
 An absent aggregate id is the sentence which keeps the upgrade from version 1 working, and it is
@@ -2347,8 +2352,8 @@ in the integration rather than a matter of taste, so a property would only let a
 keep running on an identity nobody can vouch for. There is nothing to trade off either: the check
 compares two strings the delivery already carries, with no question to the BPMS.
 
-`BusinessKeyIsTheAggregateIdTest` holds all three places, the empty key, the key which carries the
-id, and that a refused start leaves no aggregate behind.
+`BusinessKeyIsTheAggregateIdTest` holds both places, the empty key, the key which carries the id,
+and that a start refused for its name leaves no aggregate behind.
 
 Nothing is written in `UPGRADE.md`, and the reason is sharper than "version 1 filled the business
 key from the aggregate's id as well". A version-1 instance on Camunda 7 carries a business key and

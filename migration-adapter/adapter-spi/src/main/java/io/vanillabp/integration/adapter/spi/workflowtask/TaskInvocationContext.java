@@ -334,7 +334,7 @@ public interface TaskInvocationContext {
   /**
    * The business key the BPMS keeps for this workflow of its own accord, where the BPMS
    * has such a thing at all: the Camunda 7 business key, the business id of a
-   * Camunda 8 cluster from 8.10 on, whatever a BPMS calls the one value an operator
+   * Camunda 8 cluster from 8.9 on, whatever a BPMS calls the one value an operator
    * recognizes an instance by in its own tooling.
    * <p>
    * VanillaBP names a workflow by its workflow aggregate and by nothing else, so a
@@ -347,7 +347,7 @@ public interface TaskInvocationContext {
    * nothing, is decision 69 in the repository's DECISIONS.md.
    * <p>
    * The default is <code>null</code>, which means "this BPMS keeps no business key".
-   * That is the whole answer for Camunda 8 up to 8.9 and for the Process-Engine-API. An
+   * That is the whole answer for Camunda 8 up to 8.8 and for the Process-Engine-API. An
    * adapter whose BPMS keeps the aggregate's id IN its business key reports it here as
    * well: the value costs nothing to pass on and the comparison then simply holds.
    * <p>
