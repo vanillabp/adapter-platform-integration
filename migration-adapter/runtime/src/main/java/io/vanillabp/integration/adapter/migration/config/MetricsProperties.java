@@ -2,11 +2,6 @@ package io.vanillabp.integration.adapter.migration.config;
 
 import java.time.Duration;
 
-import lombok.Builder;
-import lombok.Getter;
-import lombok.Setter;
-import lombok.experimental.SuperBuilder;
-
 /**
  * Configuration of what VanillaBP publishes as metrics (properties section
  * <code>vanillabp.metrics</code>). There is one setting, and it exists because of one
@@ -20,9 +15,6 @@ import lombok.experimental.SuperBuilder;
  * queries would turn watching the system into load on it. {@link #gaugeCache} is how
  * long one such measurement is reused instead.
  */
-@Getter
-@Setter
-@SuperBuilder
 public class MetricsProperties {
 
   /**
@@ -67,17 +59,17 @@ public class MetricsProperties {
    * what a test wants when it has just changed something and needs to see it; in an
    * application it means paying for the query as often as somebody looks.
    */
-  @Builder.Default
   private Duration gaugeCache = DEFAULT_GAUGE_CACHE;
 
   /**
    * The empty section a configuration binder starts from: both platforms create the object
    * and then write the keys the application configured into it, one setter per key.
    * <p>
-   * It asks the builder for the values, and that is not a detour: Lombok moves the
-   * initializer of {@link #gaugeCache} into the builder, so a constructor which sets
-   * nothing itself would leave an application which configures no metrics without the
-   * default.
+   * It asks the builder for the values, and that is not a detour: every default of this
+   * class stands on the builder as well as on the field, and both ways into an object
+   * end here. A constructor which set the fields itself would have to repeat every
+   * default, and the first one somebody forgets would leave an application which
+   * configures no metrics without the default.
    */
   public MetricsProperties() {
 
@@ -119,6 +111,166 @@ public class MetricsProperties {
             duration nor a way to switch anything off. Remove the property to use the default of %s, \
             or set 'PT0S' to measure on every collection."""
             .formatted(GAUGE_CACHE_PROPERTY, gaugeCache, DEFAULT_GAUGE_CACHE_ISO));
+
+  }
+
+  /**
+   * The builder of {@link MetricsProperties}. Its two type parameters carry the class
+   * being built and the builder itself, so a call inherited from a base class comes back
+   * as the builder of the subclass and the next call in the chain sees every key again.
+   *
+   * @param <C> The class this builder builds
+   * @param <B> The builder itself, which every method of the chain returns
+   */
+  public abstract static class MetricsPropertiesBuilder<C extends MetricsProperties, B extends MetricsProperties.MetricsPropertiesBuilder<C, B>> {
+
+    /**
+     * How long the measurement of a gauge which has to ask somebody is reused before it
+     * is taken again. The builder starts from the same value the field does.
+     */
+    private Duration gaugeCache = DEFAULT_GAUGE_CACHE;
+
+    /**
+     * The builder of a subclass calls this while it is built. Nobody else needs one:
+     * {@link MetricsProperties#builder()} hands out the builder of this class.
+     */
+    public MetricsPropertiesBuilder() {
+    }
+
+    /**
+     * How long the measurement of a gauge which has to ask somebody is reused before it
+     * is taken again.
+     *
+     * @param gaugeCache The value of {@link #gaugeCache}
+     * @return This builder, so the calls chain
+     */
+    public B gaugeCache(
+        final Duration gaugeCache) {
+
+      this.gaugeCache = gaugeCache;
+      return self();
+
+    }
+
+    /**
+     * The builder itself, typed as the builder of the subclass. Every method of the
+     * chain returns it, which is what keeps a chain started on a subclass builder at
+     * that subclass.
+     *
+     * @return This builder
+     */
+    protected abstract B self();
+
+    /**
+     * Builds the object from what was written into this builder.
+     *
+     * @return The built object
+     */
+    public abstract C build();
+
+    /**
+     * What this builder holds, for a message and for a debugger.
+     *
+     * @return The name of this builder and every value written into it
+     */
+    @Override
+    public String toString() {
+
+      return "MetricsProperties.MetricsPropertiesBuilder("
+          + "gaugeCache="
+          + gaugeCache
+          + ")";
+
+    }
+
+  }
+
+  /**
+   * The builder {@link #builder()} hands out: the one which builds
+   * {@link MetricsProperties} itself rather than a subclass of it.
+   */
+  private static final class MetricsPropertiesBuilderImpl extends MetricsProperties.MetricsPropertiesBuilder<MetricsProperties, MetricsProperties.MetricsPropertiesBuilderImpl> {
+
+    /**
+     * Nobody but {@link MetricsProperties#builder()} builds one.
+     */
+    private MetricsPropertiesBuilderImpl() {
+    }
+
+    /**
+     * This builder, typed as itself.
+     *
+     * @return This builder
+     */
+    @Override
+    protected MetricsProperties.MetricsPropertiesBuilderImpl self() {
+
+      return this;
+
+    }
+
+    /**
+     * Builds the object from what was written into this builder.
+     *
+     * @return The built object
+     */
+    @Override
+    public MetricsProperties build() {
+
+      return new MetricsProperties(this);
+
+    }
+
+  }
+
+  /**
+   * What every builder of this class and of its subclasses builds through. It is the one
+   * place the values of this class move from the builder into the object, so a subclass
+   * builder fills the keys of its base class as well.
+   *
+   * @param b The builder holding what was written
+   */
+  protected MetricsProperties(
+      final MetricsProperties.MetricsPropertiesBuilder<?, ?> b) {
+
+    this.gaugeCache = b.gaugeCache;
+
+  }
+
+  /**
+   * A builder of {@link MetricsProperties}, empty except for the values which have a
+   * default.
+   *
+   * @return The builder
+   */
+  public static MetricsProperties.MetricsPropertiesBuilder<?, ?> builder() {
+
+    return new MetricsProperties.MetricsPropertiesBuilderImpl();
+
+  }
+
+  /**
+   * How long the measurement of a gauge which has to ask somebody is reused before it is
+   * taken again.
+   *
+   * @return The value of {@link #gaugeCache}
+   */
+  public Duration getGaugeCache() {
+
+    return gaugeCache;
+
+  }
+
+  /**
+   * How long the measurement of a gauge which has to ask somebody is reused before it is
+   * taken again.
+   *
+   * @param gaugeCache The value of {@link #gaugeCache}
+   */
+  public void setGaugeCache(
+      final Duration gaugeCache) {
+
+    this.gaugeCache = gaugeCache;
 
   }
 
