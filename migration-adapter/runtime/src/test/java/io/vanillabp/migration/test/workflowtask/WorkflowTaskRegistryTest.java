@@ -27,6 +27,7 @@ import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegis
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
+import io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException;
 import io.vanillabp.integration.adapter.spi.workflowtask.MultiInstanceValue;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -582,11 +583,11 @@ public class WorkflowTaskRegistryTest {
     }
 
     @Test
-    @DisplayName("A missing aggregate fails with a guiding message")
+    @DisplayName("A delivery for an aggregate this application does not have is refused, and the refusal blames nobody")
     public void missingAggregateFails() {
 
       final var exception = assertThrows(
-          IllegalStateException.class,
+          DeliveryOfAnUnknownWorkflowException.class,
           () -> registry.invokeWorkflowTask(MODULE, PROCESS, new TaskInvocationContext() {
 
             @Override
@@ -601,8 +602,26 @@ public class WorkflowTaskRegistryTest {
 
           }));
 
-      assertTrue(exception.getMessage().contains("no-such-id"));
-      assertTrue(exception.getMessage().contains(Aggregate.class.getName()));
+      // what the BPMS named, so the workflow can be looked up in whichever application owns it
+      assertTrue(exception.getMessage().contains("no-such-id"), exception.getMessage());
+      assertTrue(exception.getMessage().contains(Aggregate.class.getName()), exception.getMessage());
+      assertEquals("no-such-id", exception.getWorkflowAggregateId());
+      assertEquals(MODULE, exception.getWorkflowModuleId());
+      assertEquals(PROCESS, exception.getBpmnProcessId());
+      assertEquals("doSomething", exception.getTaskDefinition());
+
+      // both readings of it, because the registry cannot tell them apart either
+      assertTrue(
+          exception.getMessage().contains("Another application shares this BPMS and owns this workflow"),
+          exception.getMessage());
+      assertTrue(
+          exception
+              .getMessage()
+              .contains("the workflow aggregate was deleted while the workflow was still running"),
+          exception.getMessage());
+      assertFalse(
+          exception.getMessage().contains("must not be deleted while the workflow is active"),
+          exception.getMessage());
 
     }
 

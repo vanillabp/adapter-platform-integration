@@ -4093,6 +4093,16 @@ does is inside it, and nothing had to be repeated per BPMS.
   how often a call naming a task was routed without asking any BPMS, which is the number the next
   step of that feature is decided on, see [the record answers which BPMS holds a
   task](#the-record-answers-which-bpms-holds-a-task).
+- `vanillabp.task.deliveries.unknown.workflow` counts the deliveries the core refused because the
+  application holds no workflow aggregate of the id the BPMS named
+  (`DeliveryOfAnUnknownWorkflowException`, thrown where `loadById` answers nothing). The usual
+  cause is two applications on one BPMS which deploy a BPMN process of the same name, so a worker
+  of one takes the work of the other. Nothing is written into the delivery store for it: that
+  record would sit in the application which wrongly received the task, while whoever investigates
+  reads the records of the application which owns the workflow, and there it would be missing. The
+  counter is what answers "does this happen often", which is the question asked the second time
+  such an incident shows up. `MigrationProcessServiceTest` holds the wording of the refusal, its
+  facts and the counting.
 - `DeliveryMdc` is a `try`-with-resources remembering the previous values of its six keys and
   putting them back, so a thread the application uses for other work is handed over unchanged.
   It is used around the task delivery and around the phase-two dispatch in `PhaseTwoRouter`,

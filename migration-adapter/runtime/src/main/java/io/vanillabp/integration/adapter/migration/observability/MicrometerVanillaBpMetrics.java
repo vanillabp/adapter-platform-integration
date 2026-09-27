@@ -235,6 +235,31 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
   }
 
   @Override
+  public void taskDeliveredForAnUnknownWorkflow(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String taskDefinition) {
+
+    final var meterRegistry = registry;
+    if (meterRegistry == null) {
+      return;
+    }
+
+    counter(
+        meterRegistry,
+        TASK_DELIVERIES_UNKNOWN_WORKFLOW,
+        "Task deliveries refused because this application has no workflow aggregate of that ID",
+        Tags.of(
+            TAG_ADAPTER, tagValue(adapterId),
+            TAG_WORKFLOW_MODULE, tagValue(workflowModuleId),
+            TAG_BPMN_PROCESS, tagValue(bpmnProcessId),
+            TAG_TASK_DEFINITION, tagValue(taskDefinition)))
+        .increment();
+
+  }
+
+  @Override
   public void taskElectionAnsweredFromRecord(
       final String adapterId,
       final String workflowModuleId,
