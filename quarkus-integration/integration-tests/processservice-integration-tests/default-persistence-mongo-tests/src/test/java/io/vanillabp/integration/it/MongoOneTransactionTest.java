@@ -76,9 +76,6 @@ public class MongoOneTransactionTest {
   MongoClient mongoClient;
 
   /**
-   * Counts what a reader OUTSIDE the running transaction sees - the point of the test.
-   */
-  /**
    * The outbox as a reader OUTSIDE the running transaction sees it. Built on the client
    * rather than on the transaction, which is the point of the test, and asked through the
    * reader so that neither a collection nor a field is named here.
