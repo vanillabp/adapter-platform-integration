@@ -2978,7 +2978,7 @@ one included.
 The rule is one sentence: the id of a workflow is the id of its workflow aggregate, and the
 application assigns it. The BPMS holds that id afterwards - Camunda 7 as the business key,
 Camunda 8 and the Process-Engine-API as a process variable named after the aggregate's id
-attribute. See `DECISIONS.pending/653.md`.
+attribute. See [decision 98](../DECISIONS.md).
 
 Adapters use the SPI (`io.vanillabp.integration.adapter.spi.workflowstart`) twice:
 
