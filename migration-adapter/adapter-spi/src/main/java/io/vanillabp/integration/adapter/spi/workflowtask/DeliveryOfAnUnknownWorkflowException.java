@@ -28,16 +28,41 @@ public class DeliveryOfAnUnknownWorkflowException extends RuntimeException {
 
   private static final long serialVersionUID = 1L;
 
+  /**
+   * The adapter whose worker was handed this task. An application may run two adapters of the
+   * same BPMS, so this is what says on which of them the refusal happened.
+   */
   private final String adapterId;
 
+  /**
+   * The workflow module the BPMN process belongs to. Two modules may carry the same BPMN
+   * process id, so an adapter reporting the process alone would name the wrong one.
+   */
   private final String workflowModuleId;
 
+  /**
+   * The BPMN process the refused task belongs to, in the plain spelling the application uses.
+   * Whatever the adapter prefixes it with on its way to the BPMS is not part of it.
+   */
   private final String bpmnProcessId;
 
+  /**
+   * The task definition the delivery was routed by. It is what tells one refused task of a
+   * process from another, which is what a count per task needs.
+   */
   private final String taskDefinition;
 
+  /**
+   * The id the BPMS named the workflow aggregate by, serialized as it arrived. No workflow
+   * aggregate of it is stored in this application, which is the whole finding.
+   */
   private final String workflowAggregateId;
 
+  /**
+   * The BPMS' own id of the workflow, or <code>null</code> where the delivery carried none.
+   * It is the value somebody searches the other application by, so an adapter which writes
+   * the refusal anywhere writes this with it.
+   */
   private final String workflowId;
 
   /**
