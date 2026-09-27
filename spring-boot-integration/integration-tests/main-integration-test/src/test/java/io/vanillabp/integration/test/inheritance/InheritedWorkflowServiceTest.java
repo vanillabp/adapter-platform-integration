@@ -40,8 +40,8 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * What <code>&#64;Inherited</code> promises on Spring Boot, and the regression which proves
- * that this story moved Quarkus rather than Spring Boot: the class of the BEAN is the
+ * What <code>&#64;Inherited</code> promises on Spring Boot, where it always held and has to
+ * keep holding while Quarkus is brought level: the class of the BEAN is the
  * workflow service, so the BPMN process is named after the SUBCLASS, the subclass' handler
  * and the handler it inherited both serve that process, and the workflow module is the one of
  * the subclass.

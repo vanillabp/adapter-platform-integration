@@ -4,11 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
-import java.util.Date;
 import java.util.UUID;
 import java.util.stream.IntStream;
 
-import org.bson.Document;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,8 +15,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.model.Filters;
 
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLanes;
@@ -29,6 +25,7 @@ import io.vanillabp.integration.test.PayloadExtension;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 
 /**
@@ -90,11 +87,13 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
   @Inject
   MongoClient mongoClient;
 
-  private MongoCollection<Document> outbox() {
+  /**
+   * The outbox of the application, asked through the reader so that neither a collection
+   * nor a field is named here.
+   */
+  private MongoPhaseTwoOutboxReader outbox() {
 
-    return mongoClient
-        .getDatabase(DATABASE)
-        .getCollection("vanillabp-phase-two-outbox");
+    return MongoPhaseTwoOutboxReader.ofTheVanillaBpOutbox(mongoClient.getDatabase(DATABASE));
 
   }
 
@@ -103,7 +102,7 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
 
     listener.reset();
     extension.reset();
-    outbox().deleteMany(new Document());
+    outbox().removeAllEntries();
 
   }
 
@@ -125,7 +124,7 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
   private void anEntryDueNow(
       final String operation,
       final String aggregateId,
-      final Document args,
+      final java.util.Map<String, String> args,
       final Instant writtenAt) {
 
     final var id = UUID.randomUUID().toString();
@@ -133,28 +132,22 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
     // tells them apart. An entry which failed once carries a due time of its own anyway, so
     // the claim cannot read the order off that field - it has to sort by the other one
     outbox()
-        .insertOne(new Document()
-            .append("_id", id)
-            .append("workflowModuleId", MODULE)
-            .append("bpmnProcessId", PROCESS)
-            .append("operation", operation)
-            .append("aggregateId", aggregateId)
-            .append("adapterId", "test")
-            .append("args", args)
-            .append("idempotencyKey", id)
-            .append("dedupKey", id)
-            .append("status", "OPEN")
-            .append("createdAt", Date.from(writtenAt))
-            .append("attempts", 0)
-            .append("nextAttemptAt", Date.from(DUE_AT))
-            .append("leasedBy", null)
-            .append("leasedUntil", null));
+        .writeWaitingEntry(
+            id,
+            MODULE,
+            PROCESS,
+            operation,
+            aggregateId,
+            "test",
+            args,
+            writtenAt,
+            DUE_AT);
 
   }
 
   private long dispatched() {
 
-    return outbox().countDocuments(Filters.eq("status", "DONE"));
+    return outbox().entriesDispatched();
 
   }
 
@@ -185,7 +178,7 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
         .forEach(position -> anEntryDueNow(
             PayloadExtension.OPERATION_NAME,
             "one-aggregate",
-            new Document(PayloadExtension.ARG_EVENT, eventOf(position)),
+            java.util.Map.of(PayloadExtension.ARG_EVENT, eventOf(position)),
             writtenAt.plusMillis(position)));
 
     final var dispatchedCalls = extension.awaitDispatched(OPERATIONS_OF_ONE_WORKFLOW, UNTIL_IT_HAPPENED);
@@ -213,8 +206,8 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
     // however many lanes there are, and the test would be about the hash instead
     final var aggregates = twoAggregatesOnDifferentLanes();
     final var writtenAt = Instant.now().minusSeconds(60);
-    anEntryDueNow("START_WORKFLOW", aggregates[0], null, writtenAt);
-    anEntryDueNow("START_WORKFLOW", aggregates[1], null, writtenAt.plusMillis(1));
+    anEntryDueNow("START_WORKFLOW", aggregates[0], java.util.Map.of(), writtenAt);
+    anEntryDueNow("START_WORKFLOW", aggregates[1], java.util.Map.of(), writtenAt.plusMillis(1));
 
     // both dispatches let each other out, so both entries are marked. Where one lane served
     // them the second one would still be waiting for its turn when the first one gave up

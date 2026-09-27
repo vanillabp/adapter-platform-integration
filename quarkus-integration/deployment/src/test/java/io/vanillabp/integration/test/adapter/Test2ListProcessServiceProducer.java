@@ -10,11 +10,11 @@ import jakarta.enterprise.inject.Produces;
 
 /**
  * Produces a process service for adapter id 'test2' via a bean of type
- * <code>List&lt;MigratableProcessService&gt;</code> - the per-adapter-id shape of the
- * adapter-config-model story (26d): a CDI producer cannot yield N element beans for N
- * runtime-configured ids, so adapters produce ONE List bean which the platform's
- * collection point flattens ALONGSIDE element beans (here:
- * {@link TestMigratableProcessService} serving id 'test' as an element bean).
+ * <code>List&lt;MigratableProcessService&gt;</code>, which is the shape an adapter uses
+ * for ids it only learns at runtime: a CDI producer cannot yield N element beans for N
+ * configured ids, so an adapter produces ONE List bean which the platform's collection
+ * point flattens ALONGSIDE element beans (here: {@link TestMigratableProcessService}
+ * serving id 'test' as an element bean).
  */
 @ApplicationScoped
 @Unremovable

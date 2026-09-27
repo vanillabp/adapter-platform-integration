@@ -32,15 +32,15 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What story 160 promises: adding an operation costs ONE place in the core and ONE in
- * an adapter, and nothing else. This test is the promise - it adds an operation the way
- * a new core operation would be added (the constant below stands in for a constant in
+ * Adding an operation costs ONE place in the core and ONE in an adapter, and nothing
+ * else. This test is that promise: it adds an operation the way a new core operation
+ * would be added (the constant below stands in for a constant in
  * {@link PhaseOperation}), lets an adapter contribute a handler for it, and runs it
  * through both phases without touching the outbox SPI, the router, the process service
  * or a pair of methods per operation.
  * <p>
- * The adapter here is written the way an adapter is written now: a map of handlers and
- * the three probes, no phase methods at all.
+ * The adapter here is written the way an adapter is written: a map of handlers and the
+ * three probes, no phase methods at all.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AddingAnOperationTest {
@@ -70,9 +70,9 @@ public class AddingAnOperationTest {
       .build();
 
   /**
-   * An adapter in the shape story 160 introduced: it answers the probes and contributes
-   * one handler per operation it serves. Whether it serves the new operation is one
-   * entry in that map - which is the second and last place adding an operation touches.
+   * An adapter in the shape every adapter has: it answers the probes and contributes one
+   * handler per operation it serves. Whether it serves the new operation is one entry in
+   * that map, which is the second and last place adding an operation touches.
    */
   private static class ArchivingAdapter implements MigratableProcessService<Object> {
 

@@ -12,14 +12,15 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Documents the current, honest behavior for TWO adapter ids of ONE type (B2
- * regression test at the platform level): the mocked adapter provides a single
- * process service serving adapter id 'test' only, while 'test2' (same type) is
- * prioritized first. The election's fail-fast fires AT STARTUP (the
- * process services are validated by a StartupEvent observer) with a guiding message
- * naming the unserved adapter id - workflows must never silently start in the wrong
- * BPMS. Full per-adapter-id multiplicity is introduced by the adapter-config-model
- * story (26d), which turns this failure into a green boot.
+ * A prioritized adapter id nobody serves ends the boot. Two ids of ONE type are
+ * configured here and the mocked adapter provides a process service for 'test' alone,
+ * while 'test2' is prioritized first.
+ * <p>
+ * The check fires AT STARTUP, where the process services are validated by an observer of
+ * the startup event, and its message names the unserved id: a workflow must never
+ * silently start in the BPMS which happened to answer instead. An adapter which does
+ * serve both ids boots green, which
+ * {@link Test2ListProcessServiceProducer} is the other half of.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MultipleAdapterConfigurationTest {

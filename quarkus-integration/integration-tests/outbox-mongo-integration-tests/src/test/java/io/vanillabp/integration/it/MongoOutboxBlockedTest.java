@@ -3,14 +3,12 @@ package io.vanillabp.integration.it;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import org.bson.Document;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoCollection;
 
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.test.Aggregate;
@@ -18,6 +16,7 @@ import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -64,11 +63,13 @@ public class MongoOutboxBlockedTest {
   @Inject
   MongoClient mongoClient;
 
-  private MongoCollection<Document> outbox() {
+  /**
+   * The outbox of the application, asked through the reader so that neither a collection
+   * nor a field is named here.
+   */
+  private MongoPhaseTwoOutboxReader outbox() {
 
-    return mongoClient
-        .getDatabase("outbox-blocked-it")
-        .getCollection("vanillabp-phase-two-outbox");
+    return MongoPhaseTwoOutboxReader.ofTheVanillaBpOutbox(mongoClient.getDatabase("outbox-blocked-it"));
 
   }
 
@@ -84,7 +85,7 @@ public class MongoOutboxBlockedTest {
 
     // wait until the entry is marked BLOCKED
     final var deadline = System.currentTimeMillis() + 10000;
-    while (outbox().countDocuments(new Document("status", "BLOCKED")) == 0) {
+    while (outbox().entriesBlocked() == 0) {
       assertTrue(System.currentTimeMillis() < deadline, "entry was not blocked");
       Thread.sleep(50);
     }

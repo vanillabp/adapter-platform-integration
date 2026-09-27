@@ -4,10 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.Date;
 import java.util.UUID;
 
-import org.bson.Document;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -15,7 +13,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoCollection;
 
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.test.Aggregate;
@@ -23,6 +20,7 @@ import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -87,11 +85,13 @@ public class MongoOutboxDispatchTest {
   @Inject
   io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutbox outbox;
 
-  private MongoCollection<Document> outbox() {
+  /**
+   * The outbox of the application, asked through the reader so that neither a collection
+   * nor a field is named here.
+   */
+  private MongoPhaseTwoOutboxReader outbox() {
 
-    return mongoClient
-        .getDatabase("outbox-dispatch-it")
-        .getCollection("vanillabp-phase-two-outbox");
+    return MongoPhaseTwoOutboxReader.ofTheVanillaBpOutbox(mongoClient.getDatabase("outbox-dispatch-it"));
 
   }
 
@@ -107,7 +107,7 @@ public class MongoOutboxDispatchTest {
   private void awaitDeduplicationWindowClosed() throws Exception {
 
     final var deadline = System.currentTimeMillis() + 10000;
-    while (outbox().countDocuments(new Document("status", new Document("$ne", "DONE"))) > 0) {
+    while (outbox().entriesAtAll() > outbox().entriesDispatched()) {
       assertTrue(System.currentTimeMillis() < deadline, "an outbox entry was never marked DONE");
       Thread.sleep(50);
     }
@@ -118,7 +118,7 @@ public class MongoOutboxDispatchTest {
   public void reset() {
 
     listener.reset();
-    outbox().deleteMany(new Document());
+    outbox().removeAllEntries();
 
   }
 
@@ -158,17 +158,15 @@ public class MongoOutboxDispatchTest {
       final java.time.Instant writtenAt) {
 
     outbox()
-        .insertOne(new Document()
-            .append("_id", id)
-            .append("workflowModuleId", "test-module")
-            .append("bpmnProcessId", "Test")
-            .append("operation", "START_WORKFLOW")
-            .append("aggregateId", "4711")
-            .append("dedupKey", id)
-            .append("status", "OPEN")
-            .append("createdAt", Date.from(writtenAt))
-            .append("attempts", 0)
-            .append("nextAttemptAt", Date.from(java.time.Instant.now().plus(java.time.Duration.ofHours(1)))));
+        .writeWaitingEntry(
+            id,
+            "test-module",
+            "Test",
+            "START_WORKFLOW",
+            "4711",
+            "test",
+            writtenAt,
+            java.time.Instant.now().plus(java.time.Duration.ofHours(1)));
 
   }
 
@@ -182,7 +180,7 @@ public class MongoOutboxDispatchTest {
       attachedAggregate = workflowService.startWorkflow("commit-test");
       // best-effort mode: the entry is written immediately, so it is visible
       // BEFORE the commit (no MongoDB transaction - documented window)
-      assertEquals(1, outbox().countDocuments());
+      assertEquals(1, outbox().entriesAtAll());
     } catch (final Exception e) {
       userTransaction.rollback();
       throw e;
@@ -198,7 +196,7 @@ public class MongoOutboxDispatchTest {
 
     // DONE instead of delete: the entry stays visible until the retention cleanup
     final var deadline = System.currentTimeMillis() + 10000;
-    while (outbox().countDocuments(new Document("status", "DONE")) == 0) {
+    while (outbox().entriesDispatched() == 0) {
       assertTrue(System.currentTimeMillis() < deadline, "outbox entry was not marked DONE");
       Thread.sleep(50);
     }
@@ -212,11 +210,11 @@ public class MongoOutboxDispatchTest {
     userTransaction.begin();
     workflowService.startWorkflow("rollback-test");
     // best-effort mode: the entry is already visible inside the transaction
-    assertEquals(1, outbox().countDocuments());
+    assertEquals(1, outbox().entriesAtAll());
     userTransaction.rollback();
 
     // the rollback handling deleted the entry best-effort
-    assertEquals(0, outbox().countDocuments(), "the entry has to be deleted on rollback");
+    assertEquals(0, outbox().entriesAtAll(), "the entry has to be deleted on rollback");
 
     // wait longer than the poll interval: phase two must never be dispatched
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
@@ -240,7 +238,7 @@ public class MongoOutboxDispatchTest {
     listener.awaitInvocations(1, 10000);
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertEquals(1, listener.getInvocations().size(), "only one of the two starts was planned");
-    assertEquals(1, outbox().countDocuments());
+    assertEquals(1, outbox().entriesAtAll());
 
   }
 
@@ -264,7 +262,7 @@ public class MongoOutboxDispatchTest {
     listener.awaitInvocations(2, 10000);
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertEquals(2, listener.getInvocations().size(), "the repetition reached the BPMS");
-    assertEquals(2, outbox().countDocuments());
+    assertEquals(2, outbox().entriesAtAll());
 
   }
 
@@ -291,20 +289,18 @@ public class MongoOutboxDispatchTest {
 
     // simulate an entry committed by a crashed instance: this JVM's outbox never
     // saw it being scheduled, so only the poller can pick it up
-    final var now = new Date();
-    outbox().insertOne(new Document()
-        .append("_id", UUID.randomUUID().toString())
-        .append("workflowModuleId", "test-module")
-        .append("bpmnProcessId", "WorkflowService")
-        .append("operation", "START_WORKFLOW")
-        .append("aggregateId", "4711")
-        .append("adapterId", "test")
-        .append("idempotencyKey", "START_WORKFLOW|test-module|WorkflowService|4711")
-        .append("dedupKey", "START_WORKFLOW|test-module|WorkflowService|4711")
-        .append("status", "OPEN")
-        .append("createdAt", now)
-        .append("attempts", 0)
-        .append("nextAttemptAt", now));
+    final var now = java.time.Instant.now();
+    outbox()
+        .writeWaitingEntry(
+            UUID.randomUUID().toString(),
+            "test-module",
+            "WorkflowService",
+            "START_WORKFLOW",
+            "4711",
+            "test",
+            "START_WORKFLOW|test-module|WorkflowService|4711",
+            now,
+            now);
 
     final var invocations = listener.awaitInvocations(1, 10000);
     // the aggregate ID was converted back to the aggregate's ID type (Long)

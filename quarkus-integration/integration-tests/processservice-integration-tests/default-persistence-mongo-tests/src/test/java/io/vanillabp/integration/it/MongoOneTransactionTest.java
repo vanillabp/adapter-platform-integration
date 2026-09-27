@@ -23,6 +23,7 @@ import io.vanillabp.integration.test.persistence.MongoRepositoryWorkflowService;
 import io.vanillabp.integration.test.persistence.PhaseTwoRecorder;
 import io.vanillabp.integration.test.persistence.SingleTaskWiringSource;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 
 /**
@@ -42,7 +43,6 @@ import jakarta.inject.Inject;
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoOneTransactionTest {
 
-  private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
 
   private static final String DATABASE = "one-transaction-it";
 
@@ -76,14 +76,22 @@ public class MongoOneTransactionTest {
   MongoClient mongoClient;
 
   /**
-   * Counts what a reader OUTSIDE the running transaction sees - the point of the test.
+   * The outbox as a reader OUTSIDE the running transaction sees it. Built on the client
+   * rather than on the transaction, which is the point of the test, and asked through the
+   * reader so that neither a collection nor a field is named here.
    */
-  private long outboxEntriesVisibleOutside() {
+  private MongoPhaseTwoOutboxReader outboxOutside() {
 
-    return mongoClient
-        .getDatabase(DATABASE)
-        .getCollection(OUTBOX_COLLECTION)
-        .countDocuments(new Document("aggregateId", "one-transaction"));
+    return MongoPhaseTwoOutboxReader.ofTheVanillaBpOutbox(mongoClient.getDatabase(DATABASE));
+
+  }
+
+  private long outboxEntriesVisibleOutside(
+      final String aggregateId) {
+
+    return outboxOutside()
+        .entriesOfAggregate(aggregateId)
+        .size();
 
   }
 
@@ -108,13 +116,13 @@ public class MongoOneTransactionTest {
           // still inside the transaction: nothing of this is visible to anybody else
           assertEquals(
               0,
-              outboxEntriesVisibleOutside(),
+              outboxEntriesVisibleOutside("one-transaction"),
               "the outbox entry was written outside the MongoDB transaction of the aggregate");
           assertEquals(0, aggregatesVisibleOutside(), "the aggregate was written before the commit");
         });
 
     // after the commit both are there
-    assertEquals(1, outboxEntriesVisibleOutside(), "the outbox entry did not survive the commit");
+    assertEquals(1, outboxEntriesVisibleOutside("one-transaction"), "the outbox entry did not survive the commit");
     assertNotNull(repository.findById("one-transaction"));
 
   }
@@ -135,10 +143,7 @@ public class MongoOneTransactionTest {
     assertNull(repository.findById("rolled-back"), "the aggregate survived a rolled-back transaction");
     assertEquals(
         0,
-        mongoClient
-            .getDatabase(DATABASE)
-            .getCollection(OUTBOX_COLLECTION)
-            .countDocuments(new Document("aggregateId", "rolled-back")),
+        outboxEntriesVisibleOutside("rolled-back"),
         "the outbox entry survived a rolled-back transaction");
 
   }

@@ -7,11 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Date;
 import java.util.List;
 import java.util.UUID;
 
-import org.bson.Document;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -20,8 +18,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.model.Filters;
 
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.test.Aggregate;
@@ -29,6 +25,7 @@ import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -94,11 +91,13 @@ public class MongoDispatchOutlastingItsLeaseTest {
   @Inject
   MongoClient mongoClient;
 
-  private MongoCollection<Document> outbox() {
+  /**
+   * The outbox of the application, asked through the reader so that neither a collection
+   * nor a field is named here.
+   */
+  private MongoPhaseTwoOutboxReader outbox() {
 
-    return mongoClient
-        .getDatabase("outbox-lease-it")
-        .getCollection("vanillabp-phase-two-outbox");
+    return MongoPhaseTwoOutboxReader.ofTheVanillaBpOutbox(mongoClient.getDatabase("outbox-lease-it"));
 
   }
 
@@ -106,7 +105,7 @@ public class MongoDispatchOutlastingItsLeaseTest {
   public void startFromAnEmptyCollection() {
 
     listener.reset();
-    outbox().deleteMany(new Document());
+    outbox().removeAllEntries();
 
   }
 
@@ -136,34 +135,31 @@ public class MongoDispatchOutlastingItsLeaseTest {
       final Instant leasedUntil) {
 
     final var id = UUID.randomUUID().toString();
-    final var now = Date.from(Instant.now());
-    final var key = "START_WORKFLOW|test-module|WorkflowService|%s".formatted(aggregateId);
+    final var now = Instant.now();
     outbox()
-        .insertOne(new Document()
-            .append("_id", id)
-            .append("workflowModuleId", "test-module")
-            .append("bpmnProcessId", "WorkflowService")
-            .append("operation", "START_WORKFLOW")
-            .append("aggregateId", aggregateId)
-            .append("adapterId", "test")
-            .append("idempotencyKey", key)
-            .append("dedupKey", key)
-            .append("status", "OPEN")
-            .append("createdAt", now)
-            .append("attempts", 0)
-            .append("nextAttemptAt", now)
-            .append("leasedBy", leasedBy)
-            .append("leasedUntil", leasedUntil == null ? null : Date.from(leasedUntil)));
+        .writeWaitingEntry(
+            id,
+            "test-module",
+            "WorkflowService",
+            "START_WORKFLOW",
+            aggregateId,
+            "test",
+            "START_WORKFLOW|test-module|WorkflowService|%s".formatted(aggregateId),
+            now,
+            now);
+    if (leasedBy != null) {
+      outbox().leaseEntry(id, leasedBy, leasedUntil);
+    }
     return id;
 
   }
 
-  private Document entryOf(
+  private MongoPhaseTwoOutboxReader.Entry entryOf(
       final String id) {
 
     return outbox()
-        .find(Filters.eq("_id", id))
-        .first();
+        .entryById(id)
+        .orElseThrow();
 
   }
 
@@ -176,17 +172,7 @@ public class MongoDispatchOutlastingItsLeaseTest {
    */
   private boolean anotherNodeWouldTakeSomething() {
 
-    final var now = Date.from(Instant.now());
-    return outbox()
-        .find(Filters
-            .and(
-                Filters.eq("status", "OPEN"),
-                Filters.lte("nextAttemptAt", now),
-                Filters
-                    .or(
-                        Filters.eq("leasedUntil", null),
-                        Filters.lte("leasedUntil", now))))
-        .first() != null;
+    return outbox().somethingIsDueAndUnleased();
 
   }
 
@@ -219,18 +205,18 @@ public class MongoDispatchOutlastingItsLeaseTest {
           "another node would have taken the entry while it was being dispatched");
       assertEquals(
           0,
-          entryOf(entry).getInteger("attempts"),
+          entryOf(entry).attempts(),
           "the claim counted an attempt although no attempt has ended");
       Thread.sleep(100);
     }
 
-    waitUntil("the dispatch never finished", () -> "DONE".equals(entryOf(entry).getString("status")));
+    waitUntil("the dispatch never finished", () -> entryOf(entry).wasDispatched());
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
 
     assertEquals(1, listener.getInvocations().size(), "the operation reached the adapter more than once");
     assertEquals(
         1,
-        entryOf(entry).getInteger("attempts"),
+        entryOf(entry).attempts(),
         "one attempt was made, so one attempt is what the entry counts");
 
   }
@@ -244,16 +230,14 @@ public class MongoDispatchOutlastingItsLeaseTest {
     userTransaction.commit();
 
     listener.awaitInvocations(1, UNTIL_IT_HAPPENED);
-    waitUntil(
-        "the entry was never marked",
-        () -> outbox().countDocuments(Filters.eq("status", "DONE")) == 1);
+    waitUntil("the entry was never marked", () -> outbox().entriesDispatched() == 1);
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
 
     final var dispatched = outbox()
-        .find(Filters.eq("status", "DONE"))
-        .first();
+        .entriesDispatchedAlready()
+        .getFirst();
     assertNotNull(dispatched);
-    assertEquals(1, dispatched.getInteger("attempts"), "an attempt which was made is an attempt which counts");
+    assertEquals(1, dispatched.attempts(), "an attempt which was made is an attempt which counts");
 
   }
 
@@ -267,8 +251,7 @@ public class MongoDispatchOutlastingItsLeaseTest {
         "4712", "a-node-which-is-working", Instant.now().plus(Duration.ofHours(1)));
 
     listener.awaitInvocations(1, UNTIL_IT_HAPPENED);
-    waitUntil("the entry of the node which died was never taken over", () -> "DONE".equals(entryOf(leftBehind)
-        .getString("status")));
+    waitUntil("the entry of the node which died was never taken over", () -> entryOf(leftBehind).wasDispatched());
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
 
     // the aggregate ID was converted back to the aggregate's ID type (Long)
@@ -277,8 +260,8 @@ public class MongoDispatchOutlastingItsLeaseTest {
         listener.getInvocations(),
         "an entry whose lease is still running was dispatched as well");
     final var untouched = entryOf(heldBySomebodyElse);
-    assertEquals("OPEN", untouched.getString("status"), "the leased entry was dispatched");
-    assertEquals(0, untouched.getInteger("attempts"), "the leased entry was attempted");
+    assertTrue(untouched.isWaiting(), "the leased entry was dispatched");
+    assertEquals(0, untouched.attempts(), "the leased entry was attempted");
 
   }
 

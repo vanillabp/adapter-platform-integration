@@ -260,6 +260,29 @@ public final class WorkflowLocator {
   }
 
   /**
+   * Takes back a hint this instance wrote, for the one caller which learns right
+   * afterwards that the note was about a workflow of somebody else: a delivery is
+   * recorded before the aggregate is read, and an application which does not hold that
+   * aggregate refuses the delivery.
+   * <p>
+   * Dropped under this instance's own BPMN process id, which is the id the hint was
+   * written under. Without a cache the call does nothing, and dropping an absent hint is
+   * a no-op.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate (any type - its
+   *        serialized form is the key)
+   */
+  public void forget(
+      final Object workflowAggregateId) {
+
+    if ((cache == null) || (workflowAggregateId == null)) {
+      return;
+    }
+    cache.invalidate(workflowModuleId, bpmnProcessId, workflowAggregateId.toString());
+
+  }
+
+  /**
    * What the cache knows about the BPMS' own id of this workflow, looked for under every
    * BPMN process id this workflow service serves.
    * <p>

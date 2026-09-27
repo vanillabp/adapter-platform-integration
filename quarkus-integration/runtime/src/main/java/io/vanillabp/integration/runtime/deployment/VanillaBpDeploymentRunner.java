@@ -161,6 +161,24 @@ public class VanillaBpDeploymentRunner {
 
   }
 
+  /**
+   * Builds the core's deployment service for this start. A seam rather than a
+   * <code>new</code> in the middle of the start, so a test can watch the order in which
+   * the steps of a start are called on it.
+   *
+   * @param deploymentServices The deployment service of every configured adapter
+   * @param wiringServices The wiring service of every extension taking part
+   * @return The deployment service this start runs
+   */
+  DeploymentService deploymentServiceOf(
+      final List<AdapterDeploymentService<?, ?>> deploymentServices,
+      final List<ExtensionWiringService<?, ?>> wiringServices) {
+
+    return new DeploymentService(
+        properties, deploymentServices, wiringServices, workflowTaskWiring);
+
+  }
+
   synchronized void deployAndStart() {
 
     workflowModuleIds = bpmsResourceIndex.getWorkflowModuleIds();
@@ -179,8 +197,7 @@ public class VanillaBpDeploymentRunner {
         .stream()
         .toList();
 
-    deploymentService = new DeploymentService(
-        properties, deploymentServices, wiringServices, workflowTaskWiring);
+    deploymentService = deploymentServiceOf(deploymentServices, wiringServices);
 
     // what the BUILD found out about the workflow modules' configuration files: the
     // recorder saying it runs before there are beans, so it kept the sentence and this

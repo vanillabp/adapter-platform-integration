@@ -6,14 +6,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 
-import org.bson.Document;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoCollection;
 
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.test.Aggregate;
@@ -22,6 +20,7 @@ import io.vanillabp.integration.test.CountingCommandListener;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -39,7 +38,12 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
 
   private static final String DATABASE = "outbox-sleeping-it";
 
-  private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
+  /**
+   * The collection the application writes its outbox into. The command listener counts
+   * what was sent to a collection BY NAME, so this test needs the name as well as the
+   * reader, and it asks the reader for it.
+   */
+  private static final String OUTBOX_COLLECTION = MongoPhaseTwoOutboxReader.defaultOutboxCollectionName();
 
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
@@ -66,11 +70,13 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
   @Inject
   MongoClient mongoClient;
 
-  private MongoCollection<Document> outbox() {
+  /**
+   * The outbox of the application, asked through the reader so that no field is named
+   * here.
+   */
+  private MongoPhaseTwoOutboxReader outbox() {
 
-    return mongoClient
-        .getDatabase(DATABASE)
-        .getCollection(OUTBOX_COLLECTION);
+    return MongoPhaseTwoOutboxReader.ofTheVanillaBpOutbox(mongoClient.getDatabase(DATABASE));
 
   }
 
@@ -96,7 +102,7 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
   private void awaitNothingLeftUndone() throws Exception {
 
     final var deadline = System.currentTimeMillis() + 30_000;
-    while (outbox().countDocuments(new Document("status", "OPEN")) > 0) {
+    while (outbox().entriesWaiting() > 0) {
       assertTrue(System.currentTimeMillis() < deadline, "an outbox entry was never dispatched");
       Thread.sleep(50);
     }
@@ -142,9 +148,11 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
   public void theQuestionsOfThePollerAreIndexed() {
 
     // without these each question reads the whole collection, and that cost grows with everything
-    // the collection ever held while the wake-ups stay as rare
-    final var keys = new java.util.ArrayList<org.bson.Document>();
-    outbox().listIndexes().forEach(index -> keys.add(index.get("key", org.bson.Document.class)));
+    // the collection ever held while the wake-ups stay as rare.
+    // The field names stand here rather than coming from the reader, because they are what
+    // this test is about: an index is a promise about a field, and a field renamed without
+    // its index makes this assertion fail, which is the whole point of it
+    final var keys = outbox().indexKeys();
 
     assertTrue(
         keys.contains(new org.bson.Document("status", 1).append("nextAttemptAt", 1)),

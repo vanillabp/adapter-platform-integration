@@ -28,6 +28,7 @@ import com.mongodb.ConnectionString;
 
 import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -50,7 +51,11 @@ import io.vanillabp.spi.process.ProcessService;
 @Testcontainers
 public class MongoOutboxSleepsWhileNothingIsDueTest {
 
-  private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
+  /**
+   * The collection the application writes its outbox into. Asked of the reader rather
+   * than written down here, so a rename of the platform is followed in one place.
+   */
+  private static final String OUTBOX_COLLECTION = MongoPhaseTwoOutboxReader.defaultOutboxCollectionName();
 
   @Container
   static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB))
@@ -91,9 +96,9 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
 
   private long countEntriesNotDone() {
 
-    return mongoTemplate
-        .getCollection(OUTBOX_COLLECTION)
-        .countDocuments(new org.bson.Document("status", "OPEN"));
+    return MongoPhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(mongoTemplate.getDb())
+        .entriesWaiting();
 
   }
 
@@ -165,10 +170,13 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
   public void theQuestionsOfThePollerAreIndexed() {
 
     // without these each question reads the whole collection, and that cost grows with everything
-    // the collection ever held while the wake-ups stay as rare
-    final var keys = new java.util.ArrayList<org.bson.Document>();
-    mongoTemplate.getCollection(OUTBOX_COLLECTION).listIndexes()
-        .forEach(index -> keys.add(index.get("key", org.bson.Document.class)));
+    // the collection ever held while the wake-ups stay as rare.
+    // The field names stand here rather than coming from the reader, because they are what
+    // this test is about: an index is a promise about a field, and a field renamed without
+    // its index makes this assertion fail, which is the whole point of it
+    final var keys = MongoPhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(mongoTemplate.getDb())
+        .indexKeys();
 
     assertTrue(
         keys.contains(new org.bson.Document("status", 1).append("nextAttemptAt", 1)),

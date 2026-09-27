@@ -8,20 +8,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Date;
+import java.util.Map;
 import java.util.UUID;
 import java.util.function.Supplier;
 
-import org.bson.Document;
-import org.bson.types.Binary;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import com.mongodb.client.MongoClient;
-import com.mongodb.client.MongoCollection;
-import com.mongodb.client.model.Filters;
 
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.spi.PhaseTwoCall;
@@ -30,6 +26,7 @@ import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 
 /**
@@ -48,16 +45,11 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
 
   private static final String DATABASE = "outbox-housekeeping-it";
 
-  private static final String OUTBOX_COLLECTION = "vanillabp-phase-two-outbox";
-
-  private static final String PAYLOAD_COLLECTION = OUTBOX_COLLECTION
-      + "-payloads";
-
   /**
    * Older than the default retention of seven days, so everything written here is old
    * enough to be removed - which makes the entries the only reason a payload stays.
    */
-  private static final Date LONG_BEFORE_THE_RETENTION = Date.from(Instant.now().minus(Duration.ofDays(10)));
+  private static final Instant LONG_BEFORE_THE_RETENTION = Instant.now().minus(Duration.ofDays(10));
 
   /**
    * How long the test waits for the poll which cleans up. The application polls twice a
@@ -88,19 +80,13 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
   @Inject
   MongoClient mongoClient;
 
-  private MongoCollection<Document> outbox() {
+  /**
+   * The store of the application, asked through the reader so that neither a collection
+   * nor a field is named here.
+   */
+  private MongoPhaseTwoOutboxReader store() {
 
-    return mongoClient
-        .getDatabase(DATABASE)
-        .getCollection(OUTBOX_COLLECTION);
-
-  }
-
-  private MongoCollection<Document> payloads() {
-
-    return mongoClient
-        .getDatabase(DATABASE)
-        .getCollection(PAYLOAD_COLLECTION);
+    return MongoPhaseTwoOutboxReader.ofTheVanillaBpOutbox(mongoClient.getDatabase(DATABASE));
 
   }
 
@@ -115,70 +101,82 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
       final String reference,
       final String content) {
 
-    payloads()
-        .insertOne(
-            new Document()
-                .append("_id", reference)
-                .append("workflowModuleId", "test-module")
-                .append("bpmnProcessId", "TestProcess")
-                .append("operation", "sample:NOTIFY")
-                .append("payload", new Binary(content.getBytes(StandardCharsets.UTF_8)))
-                .append("createdAt", LONG_BEFORE_THE_RETENTION));
+    store()
+        .writePayload(
+            reference,
+            "test-module",
+            "TestProcess",
+            "sample:NOTIFY",
+            content.getBytes(StandardCharsets.UTF_8),
+            LONG_BEFORE_THE_RETENTION);
 
   }
 
   /**
-   * Writes an entry the way the store left it behind before this test began.
+   * Writes an entry the store put aside for a person, the way it stood before this test
+   * began.
    *
    * @param payloadReference The payload this entry names
-   * @param status What became of the entry
-   * @param doneAt When it was dispatched, <code>null</code> for an entry which was not
    * @return The entry's id
    */
-  private String entry(
-      final String payloadReference,
-      final String status,
-      final Date doneAt) {
+  private String blockedEntry(
+      final String payloadReference) {
 
     final var id = UUID.randomUUID().toString();
-    outbox()
-        .insertOne(
-            new Document()
-                .append("_id", id)
-                .append("workflowModuleId", "test-module")
-                .append("bpmnProcessId", "TestProcess")
-                .append("operation", "sample:NOTIFY")
-                .append("aggregateId", "4711")
-                .append("adapterId", "test")
-                .append("args", new Document(PhaseTwoCall.ARG_PAYLOAD_REFERENCE, payloadReference))
-                .append("idempotencyKey", null)
-                // the key of a blocked entry is released the way a dispatched one
-                // releases it, which is why both carry their own id here
-                .append("dedupKey", id)
-                .append("status", status)
-                .append("createdAt", LONG_BEFORE_THE_RETENTION)
-                .append("attempts", 0)
-                .append("nextAttemptAt", LONG_BEFORE_THE_RETENTION)
-                .append("doneAt", doneAt));
+    store()
+        .writeBlockedEntry(
+            id,
+            "test-module",
+            "TestProcess",
+            "sample:NOTIFY",
+            "4711",
+            "test",
+            Map.of(PhaseTwoCall.ARG_PAYLOAD_REFERENCE, payloadReference),
+            LONG_BEFORE_THE_RETENTION);
     return id;
 
   }
 
-  private Document payload(
-      final String reference) {
+  /**
+   * Writes an entry which was dispatched long ago and whose retention ran out.
+   *
+   * @param payloadReference The payload this entry names
+   * @return The entry's id
+   */
+  private String dispatchedEntry(
+      final String payloadReference) {
 
-    return payloads()
-        .find(Filters.eq("_id", reference))
-        .first();
+    final var id = UUID.randomUUID().toString();
+    store()
+        .writeDispatchedEntry(
+            id,
+            "test-module",
+            "TestProcess",
+            "sample:NOTIFY",
+            "4711",
+            "test",
+            id,
+            Map.of(PhaseTwoCall.ARG_PAYLOAD_REFERENCE, payloadReference),
+            LONG_BEFORE_THE_RETENTION);
+    return id;
 
   }
 
-  private Document entryOf(
+  private MongoPhaseTwoOutboxReader.Payload payload(
+      final String reference) {
+
+    return store()
+        .payloadOf(reference)
+        .orElse(null);
+
+  }
+
+  private MongoPhaseTwoOutboxReader.Entry entryOf(
       final String id) {
 
-    return outbox()
-        .find(Filters.eq("_id", id))
-        .first();
+    return store()
+        .entryById(id)
+        .orElse(null);
 
   }
 
@@ -196,7 +194,7 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
    * @param whatIsExpected What the housekeeping owes this document
    */
   private void awaitRemoved(
-      final Supplier<Document> document,
+      final Supplier<?> document,
       final String whatIsExpected) throws InterruptedException {
 
     final var deadline = System.currentTimeMillis() + UNTIL_THE_HOUSEKEEPING_RAN;
@@ -217,8 +215,8 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
     // an entry is written before the payload it names, because a sweep between the two
     // writes would meet a payload nothing names yet and remove the very payload this
     // test says is kept
-    final var blockedEntry = entry(blockedPayload, "BLOCKED", null);
-    final var dispatchedEntry = entry(dispatchedPayload, "DONE", LONG_BEFORE_THE_RETENTION);
+    final var blockedEntry = blockedEntry(blockedPayload);
+    final var dispatchedEntry = dispatchedEntry(dispatchedPayload);
     payloadOlderThanTheRetention(blockedPayload, KEPT_FOR_THE_OPERATOR);
     payloadOlderThanTheRetention(dispatchedPayload, "the state a dispatch already carried");
     payloadOlderThanTheRetention(orphanPayload, "written by a write which was rolled back");
@@ -230,9 +228,9 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
     assertNotNull(entryOf(blockedEntry), "a blocked entry waits for a person and no retention removes it");
     assertArrayEquals(
         KEPT_FOR_THE_OPERATOR.getBytes(StandardCharsets.UTF_8),
-        payload(blockedPayload).get("payload", Binary.class).getData(),
+        payload(blockedPayload).payload(),
         "the entry is still there, so its payload has to be there as well");
-    assertEquals(1, payloads().countDocuments(), "only the payload of the blocked entry is left");
+    assertEquals(1, store().payloadsAtAll(), "only the payload of the blocked entry is left");
 
   }
 
