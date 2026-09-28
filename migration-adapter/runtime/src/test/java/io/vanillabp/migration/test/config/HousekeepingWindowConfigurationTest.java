@@ -34,8 +34,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * repository's DECISIONS.md.
  * <p>
  * The warning does not go into the log where it is found. It is left with the findings of
- * the start and reaches the reader in the box at the end of it (decision &lt;pending:
- * 579&gt;), which is why these tests read the findings rather than a log appender.
+ * the start and reaches the reader in the box at the end of it (decision 96 in the
+ * repository's DECISIONS.md), which is why these tests read the findings rather than a log
+ * appender.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class HousekeepingWindowConfigurationTest {
