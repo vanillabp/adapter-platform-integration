@@ -87,6 +87,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.prioritizedAdapters(unwrapListOrEmpty(properties.prioritizedAdapters()));
     core.retiredAdapters(unwrapListOrEmpty(properties.retiredAdapters()));
     core.allowFullSyncWithBpms(unwrap(properties.allowFullSyncWithBpms()));
+    core.acceptExpressionsInTheModel(unwrap(properties.acceptExpressionsInTheModel()));
     core.declaredTaskParams(unwrapListOrNull(properties.declaredTaskParams()));
     core.adapters(copyValues(properties.adapters(), this::toCore));
     core.resourcesLocation(unwrap(properties.resourcesLocation()));
@@ -447,6 +448,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
 
     core.prioritizedAdapters(unwrapListOrEmpty(workflowModuleProperties.prioritizedAdapters()));
     core.allowFullSyncWithBpms(unwrap(workflowModuleProperties.allowFullSyncWithBpms()));
+    core.acceptExpressionsInTheModel(unwrap(workflowModuleProperties.acceptExpressionsInTheModel()));
     core.declaredTaskParams(unwrapListOrNull(workflowModuleProperties.declaredTaskParams()));
     core.adapters(copyValues(workflowModuleProperties.adapters(), this::toCore));
     core.workflows(copyValues(workflowModuleProperties.workflows(), this::toCore));
@@ -483,6 +485,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
 
     core.prioritizedAdapters(unwrapListOrEmpty(workflowProperties.prioritizedAdapters()));
     core.allowFullSyncWithBpms(unwrap(workflowProperties.allowFullSyncWithBpms()));
+    core.acceptExpressionsInTheModel(unwrap(workflowProperties.acceptExpressionsInTheModel()));
     core.declaredAggregateValues(unwrapListOrEmpty(workflowProperties.declaredAggregateValues()));
     core.declaredTaskParams(unwrapListOrNull(workflowProperties.declaredTaskParams()));
     core.adapters(copyValues(workflowProperties.adapters(), this::toCore));

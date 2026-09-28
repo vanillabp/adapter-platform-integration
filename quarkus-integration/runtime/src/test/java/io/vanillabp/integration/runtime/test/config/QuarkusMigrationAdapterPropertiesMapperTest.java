@@ -172,6 +172,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
     }
 
+    /**
+     * None of these fixtures accepts the expressions of a model either - what the mapper
+     * does with that answer is asserted where the level it belongs to is built.
+     */
+    @Override
+    public Optional<Boolean> acceptExpressionsInTheModel() {
+
+      return Optional.empty();
+
+    }
+
 
     /**
      * Without extension settings, which is what most of these fixtures need.
@@ -234,6 +245,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
      */
     @Override
     public Optional<Boolean> allowFullSyncWithBpms() {
+
+      return Optional.empty();
+
+    }
+
+    /**
+     * None of these fixtures accepts the expressions of a model either - what the mapper
+     * does with that answer is asserted where the level it belongs to is built.
+     */
+    @Override
+    public Optional<Boolean> acceptExpressionsInTheModel() {
 
       return Optional.empty();
 
@@ -411,6 +433,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
      */
     @Override
     public Optional<Boolean> allowFullSyncWithBpms() {
+
+      return Optional.empty();
+
+    }
+
+    /**
+     * None of these fixtures accepts the expressions of a model either - what the mapper
+     * does with that answer is asserted where the level it belongs to is built.
+     */
+    @Override
+    public Optional<Boolean> acceptExpressionsInTheModel() {
 
       return Optional.empty();
 

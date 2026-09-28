@@ -116,6 +116,13 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private Boolean allowFullSyncWithBpms;
 
   /**
+   * Whether the expressions of every BPMN model of this application are meant as they
+   * are (<code>vanillabp.accept-expressions-in-the-model</code>) - the least specific of
+   * the three levels, for an application which decided it once.
+   */
+  private Boolean acceptExpressionsInTheModel;
+
+  /**
    * The <code>&#64;TaskParam</code> parameters of the whole application whose type the
    * developer declared (<code>vanillabp.declared-task-params</code>). The least specific of
    * the four levels the declaration may be written at, and the one to reach for where every
@@ -1503,6 +1510,64 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * Whether the expressions of that workflow's BPMN model are meant as they are
+   * (<code>accept-expressions-in-the-model</code>), so the startup stops naming them.
+   * <p>
+   * Read at three levels, the most specific winning: the workflow, the workflow module, the
+   * application. Unlike the permission above this is no permission at all - nothing leaves
+   * the application because of it, and nothing behaves differently. It says that somebody
+   * looked at the expressions of a model and meant them, which is a thing a team decides
+   * for a whole application as easily as for one process.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return Whether the expressions of that process are accepted as they are
+   */
+  public boolean acceptsExpressionsInTheModel(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var module = workflowModuleId != null
+        ? workflowModules.get(workflowModuleId)
+        : null;
+    if (module != null) {
+      final var workflow = bpmnProcessId != null
+          ? module
+              .getWorkflows()
+              .get(bpmnProcessId)
+          : null;
+      if ((workflow != null) && (workflow.getAcceptExpressionsInTheModel() != null)) {
+        return workflow.getAcceptExpressionsInTheModel();
+      }
+      if (module.getAcceptExpressionsInTheModel() != null) {
+        return module.getAcceptExpressionsInTheModel();
+      }
+    }
+    return Boolean.TRUE.equals(acceptExpressionsInTheModel);
+
+  }
+
+  /**
+   * The property accepting what {@link #acceptsExpressionsInTheModel(String, String)}
+   * decides, for the message which has to hand the developer a line to copy. The key at the
+   * WORKFLOW, the most specific of the three: a line written there is about the model the
+   * message is about, while the same line at the workflow module would cover the process
+   * somebody adds next week as well.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return The property key at the workflow
+   */
+  public static String acceptExpressionsInTheModelProperty(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return "%s.workflow-modules.%s.workflows.%s.accept-expressions-in-the-model"
+        .formatted(PREFIX, workflowModuleId, bpmnProcessId);
+
+  }
+
+  /**
    * Refuses the permission of {@link #allowsFullSyncWithBpms(String, String)} wherever it
    * stands somewhere else than at a workflow. Every level it can be written at is bound,
    * so the line is answered rather than ignored, and the answer says where it belongs. It
@@ -2815,6 +2880,13 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     private Boolean allowFullSyncWithBpms;
 
     /**
+     * Whether the expressions of every BPMN model of this application are meant as they
+     * are (<code>vanillabp.accept-expressions-in-the-model</code>) - the least specific of
+     * the three levels, for an application which decided it once.
+     */
+    private Boolean acceptExpressionsInTheModel;
+
+    /**
      * The <code>&#64;TaskParam</code> parameters of the whole application whose type the
      * developer declared (<code>vanillabp.declared-task-params</code>).
      */
@@ -2974,6 +3046,23 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
         final Boolean allowFullSyncWithBpms) {
 
       this.allowFullSyncWithBpms = allowFullSyncWithBpms;
+      return self();
+
+    }
+
+    /**
+     * Whether the expressions of every BPMN model of this application are meant as they
+     * are (<code>vanillabp.accept-expressions-in-the-model</code>) - the least specific of
+     * the three levels, for an application which decided it once.
+     *
+     * @param acceptExpressionsInTheModel The value of
+     * {@link #acceptExpressionsInTheModel}
+     * @return This builder, so the calls chain
+     */
+    public B acceptExpressionsInTheModel(
+        final Boolean acceptExpressionsInTheModel) {
+
+      this.acceptExpressionsInTheModel = acceptExpressionsInTheModel;
       return self();
 
     }
@@ -3169,6 +3258,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
           + "allowFullSyncWithBpms="
           + allowFullSyncWithBpms
           + ", "
+          + "acceptExpressionsInTheModel="
+          + acceptExpressionsInTheModel
+          + ", "
           + "declaredTaskParams="
           + declaredTaskParams
           + ", "
@@ -3257,6 +3349,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     this.extensions = b.extensions;
     this.outbox = b.outbox;
     this.allowFullSyncWithBpms = b.allowFullSyncWithBpms;
+    this.acceptExpressionsInTheModel = b.acceptExpressionsInTheModel;
     this.declaredTaskParams = b.declaredTaskParams;
     this.workflowAdapterCache = b.workflowAdapterCache;
     this.transactions = b.transactions;
@@ -3349,6 +3442,19 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   public Boolean getAllowFullSyncWithBpms() {
 
     return allowFullSyncWithBpms;
+
+  }
+
+  /**
+   * Whether the expressions of every BPMN model of this application are meant as they
+   * are (<code>vanillabp.accept-expressions-in-the-model</code>) - the least specific of
+   * the three levels, for an application which decided it once.
+   *
+   * @return The value of {@link #acceptExpressionsInTheModel}
+   */
+  public Boolean getAcceptExpressionsInTheModel() {
+
+    return acceptExpressionsInTheModel;
 
   }
 
@@ -3529,6 +3635,20 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       final Boolean allowFullSyncWithBpms) {
 
     this.allowFullSyncWithBpms = allowFullSyncWithBpms;
+
+  }
+
+  /**
+   * Whether the expressions of every BPMN model of this application are meant as they
+   * are (<code>vanillabp.accept-expressions-in-the-model</code>) - the least specific of
+   * the three levels, for an application which decided it once.
+   *
+   * @param acceptExpressionsInTheModel The value of {@link #acceptExpressionsInTheModel}
+   */
+  public void setAcceptExpressionsInTheModel(
+      final Boolean acceptExpressionsInTheModel) {
+
+    this.acceptExpressionsInTheModel = acceptExpressionsInTheModel;
 
   }
 

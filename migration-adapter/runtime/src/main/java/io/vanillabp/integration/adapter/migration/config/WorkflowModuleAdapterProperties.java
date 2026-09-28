@@ -66,6 +66,13 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   private Boolean allowFullSyncWithBpms;
 
   /**
+   * Whether the expressions of this module's BPMN models are meant as they are
+   * (<code>accept-expressions-in-the-model</code>). A workflow of the module which says
+   * nothing keeps this answer.
+   */
+  private Boolean acceptExpressionsInTheModel;
+
+  /**
    * The <code>&#64;TaskParam</code> parameters of this workflow module whose type the
    * developer declared (<code>declared-task-params</code>). The second least specific of
    * the four levels; a task, and then a workflow, outranks it.
@@ -134,6 +141,13 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
      * belongs to the single workflow (see decision 66 in the repository's DECISIONS.md).
      */
     private Boolean allowFullSyncWithBpms;
+
+    /**
+     * Whether the expressions of this module's BPMN models are meant as they are
+     * (<code>accept-expressions-in-the-model</code>). A workflow of the module which says
+     * nothing keeps this answer.
+     */
+    private Boolean acceptExpressionsInTheModel;
 
     /**
      * The <code>&#64;TaskParam</code> parameters of this workflow module whose type the
@@ -226,6 +240,23 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
         final Boolean allowFullSyncWithBpms) {
 
       this.allowFullSyncWithBpms = allowFullSyncWithBpms;
+      return self();
+
+    }
+
+    /**
+     * Whether the expressions of this module's BPMN models are meant as they are
+     * (<code>accept-expressions-in-the-model</code>). A workflow of the module which says
+     * nothing keeps this answer.
+     *
+     * @param acceptExpressionsInTheModel The value of
+     * {@link #acceptExpressionsInTheModel}
+     * @return This builder, so the calls chain
+     */
+    public B acceptExpressionsInTheModel(
+        final Boolean acceptExpressionsInTheModel) {
+
+      this.acceptExpressionsInTheModel = acceptExpressionsInTheModel;
       return self();
 
     }
@@ -346,6 +377,9 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
           + "allowFullSyncWithBpms="
           + allowFullSyncWithBpms
           + ", "
+          + "acceptExpressionsInTheModel="
+          + acceptExpressionsInTheModel
+          + ", "
           + "declaredTaskParams="
           + declaredTaskParams
           + ", "
@@ -420,6 +454,7 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
     this.adapters = b.adapters;
     this.workflows = b.workflows;
     this.allowFullSyncWithBpms = b.allowFullSyncWithBpms;
+    this.acceptExpressionsInTheModel = b.acceptExpressionsInTheModel;
     this.declaredTaskParams = b.declaredTaskParams;
     this.transactions = b.transactions;
     this.election = b.election;
@@ -483,6 +518,19 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   public Boolean getAllowFullSyncWithBpms() {
 
     return allowFullSyncWithBpms;
+
+  }
+
+  /**
+   * Whether the expressions of this module's BPMN models are meant as they are
+   * (<code>accept-expressions-in-the-model</code>). A workflow of the module which says
+   * nothing keeps this answer.
+   *
+   * @return The value of {@link #acceptExpressionsInTheModel}
+   */
+  public Boolean getAcceptExpressionsInTheModel() {
+
+    return acceptExpressionsInTheModel;
 
   }
 
@@ -592,6 +640,20 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
       final Boolean allowFullSyncWithBpms) {
 
     this.allowFullSyncWithBpms = allowFullSyncWithBpms;
+
+  }
+
+  /**
+   * Whether the expressions of this module's BPMN models are meant as they are
+   * (<code>accept-expressions-in-the-model</code>). A workflow of the module which says
+   * nothing keeps this answer.
+   *
+   * @param acceptExpressionsInTheModel The value of {@link #acceptExpressionsInTheModel}
+   */
+  public void setAcceptExpressionsInTheModel(
+      final Boolean acceptExpressionsInTheModel) {
+
+    this.acceptExpressionsInTheModel = acceptExpressionsInTheModel;
 
   }
 
