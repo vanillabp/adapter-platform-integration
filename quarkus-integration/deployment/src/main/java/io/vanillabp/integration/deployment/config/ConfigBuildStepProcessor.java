@@ -126,7 +126,7 @@ public class ConfigBuildStepProcessor {
               %s
             It runs on Spring Boot alone, because it needs the Spring transaction manager \
             gruelbox is written against, and it is not part of VanillaBP at all - the artifact \
-            'io.vanillabp:gruelbox-phase-two-outbox-spring-boot' carries it. Remove the keys and \
+            'io.vanillabp:gruelbox-phase-two-outbox' carries it. Remove the keys and \
             let VanillaBP store the phase-two entries itself: it writes them into the table of \
             'vanillabp.outbox.jdbc.*' where the application has a data source, and into the \
             collection of 'vanillabp.outbox.mongo.*' where it has MongoDB."""

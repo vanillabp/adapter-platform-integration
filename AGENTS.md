@@ -125,6 +125,14 @@ directly in front of a second one, which javadoc drops without a word, so the te
 Run it when you wrote or moved a comment. Hang a block it reports back on the element it
 describes rather than delete it.
 
+## The extension double exists twice
+
+`SampleExtension` of `spring-boot-integration/integration-tests/outbox-jpa-integration-test` has a copy
+in `vanillabp/gruelbox-phase-two-outbox`, because the module it lives in publishes nothing and a
+repository outside this one cannot depend on it. A change here does not reach that copy, so read it
+before you decide that a difference between the two is on purpose. Keeping the copy rather than
+publishing the double is the decision.
+
 ## What code may point at
 
 Nothing which a later change can invalidate without anything noticing: no story or prompt number,

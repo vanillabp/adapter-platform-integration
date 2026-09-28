@@ -55,7 +55,7 @@ import lombok.extern.slf4j.Slf4j;
  * that store still holds, see
  * {@link #reportWhatTheFormerStoreStillHolds(DataSource, String, VanillaBpConfigurationProperties)}.
  * That store is no longer part of VanillaBP; it lives in
- * <code>io.vanillabp:gruelbox-phase-two-outbox-spring-boot</code>, and an application which
+ * <code>io.vanillabp:gruelbox-phase-two-outbox</code>, and an application which
  * adds that artifact gets this configuration out of the way: it registers the outbox bean
  * under the name below, and the condition on this class reads that name.
  */
@@ -102,7 +102,7 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
    * The artifact an application adds to go on running the gruelbox store, named in the
    * message above so the remedy is one line to copy.
    */
-  private static final String THE_ARTIFACT_CARRYING_THE_FORMER_STORE = "io.vanillabp:gruelbox-phase-two-outbox-spring-boot";
+  private static final String THE_ARTIFACT_CARRYING_THE_FORMER_STORE = "io.vanillabp:gruelbox-phase-two-outbox";
 
   /**
    * Built by Spring Boot while it applies its auto-configurations, and only where the

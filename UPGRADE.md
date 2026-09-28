@@ -248,7 +248,7 @@ Keep gruelbox. Add one dependency and change no configuration:
 ```xml
 <dependency>
   <groupId>io.vanillabp</groupId>
-  <artifactId>gruelbox-phase-two-outbox-spring-boot</artifactId>
+  <artifactId>gruelbox-phase-two-outbox</artifactId>
   <version>1.0.0</version>
 </dependency>
 ```
@@ -256,9 +256,10 @@ Keep gruelbox. Add one dependency and change no configuration:
 The dependency is the whole switch: the store VanillaBP writes itself steps back, the section
 `vanillabp.outbox.gruelbox.*` stays what it was, and the rows stay where they are. What that store
 cannot do, and the store VanillaBP writes itself can, is listed in its own
-[README](https://github.com/vanillabp/gruelbox-phase-two-outbox). Setting
-`vanillabp.outbox.gruelbox.enabled` without that dependency ends the startup, because an application
-which asks for one table and writes another is worse off than one which is told.
+[README](https://github.com/vanillabp/gruelbox-phase-two-outbox). The dependency is what asks for
+that store, and `vanillabp.outbox.gruelbox.enabled` belongs to it: without the artifact the key is a
+line nothing reads, and VanillaBP's own store serves. What VanillaBP does say is what is left in
+`TXNO_OUTBOX`, at every start, until the table is empty.
 
 #### What the startup says about a configuration
 

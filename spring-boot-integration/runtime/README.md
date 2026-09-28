@@ -294,16 +294,18 @@ database or an existing outbox infrastructure), define a bean implementing
 `io.vanillabp.integration.spi.PhaseTwoOutbox` — the auto-configurations
 back off.
 
-A third store exists outside this repository. `io.vanillabp:gruelbox-phase-two-outbox-spring-boot`
+A third store exists outside this repository. `io.vanillabp:gruelbox-phase-two-outbox`
 keeps the entries in the [gruelbox transaction-outbox](https://github.com/gruelbox/transaction-outbox),
 which is where VanillaBP kept them until release 2.0. It registers the bean
 `vanillaBpJdbcPhaseTwoOutbox` itself and is applied before the JDBC default, which carries
-`@ConditionalOnMissingBean` on that name, so adding the artifact is the whole switch. What that store
-can and cannot do is documented where it is built. Here it leaves two marks: the message of the JPA
-default about what `TXNO_OUTBOX` still holds, and `GruelboxMissingAutoConfiguration`, which ends the
-boot of an application setting `vanillabp.outbox.gruelbox.enabled` without having that artifact - such
-an application would otherwise write its entries into another table than the one it still has work
-waiting in.
+`@ConditionalOnMissingBean` on that name, so adding the artifact is the whole switch and
+`vanillabp.outbox.gruelbox.enabled=false` is the way back. Both keys and the store itself belong to
+that artifact, this module neither binds nor describes them, and what that store can and cannot do is
+documented where it is built.
+
+What is left here is one message: the JPA default says what `TXNO_OUTBOX` still holds undispatched, so
+an application which upgrades onto this store learns that its old entries lie in a table nothing reads
+any more.
 
 ### What an IDE proposes for the `vanillabp` keys
 

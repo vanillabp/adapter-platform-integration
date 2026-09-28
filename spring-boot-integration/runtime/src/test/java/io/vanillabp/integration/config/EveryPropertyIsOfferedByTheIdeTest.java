@@ -44,18 +44,6 @@ public class EveryPropertyIsOfferedByTheIdeTest {
   private static final String METADATA = "META-INF/additional-spring-configuration-metadata.json";
 
   /**
-   * Keys the file describes although nothing in this repository binds them. Each one is a
-   * decision: an application writes the key, so a development environment has to offer it
-   * and say what it does, while the class which reads it stands somewhere else.
-   * <p>
-   * <code>vanillabp.outbox.gruelbox.enabled</code> is such a key. The store it switches
-   * lives in its own artifact, and VanillaBP only reads the key to end the startup of an
-   * application which sets it without having that artifact.
-   */
-  private static final Set<String> DESCRIBED_FOR_ANOTHER_ARTIFACT = Set
-      .of("vanillabp.outbox.gruelbox.enabled");
-
-  /**
    * The types a binder writes a value into rather than descending through. A map of
    * strings onto a configuration class is one of them: what stands below it is an adapter
    * id or a workflow module id, so the file describes the map and stops there.
@@ -101,7 +89,6 @@ public class EveryPropertyIsOfferedByTheIdeTest {
 
     final var withoutAProperty = new TreeSet<>(namesOfTheMetadataFile());
     withoutAProperty.removeAll(bindable);
-    withoutAProperty.removeAll(DESCRIBED_FOR_ANOTHER_ARTIFACT);
 
     assertEquals(
         Set.of(),

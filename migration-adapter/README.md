@@ -1515,7 +1515,7 @@ BPMN process is the process service's business, not the records'.
   `JdbcConnectionAccess`, the one piece which cannot be platform-neutral. Whether a
   table is there is asked of the JDBC metadata by `jdbc.JdbcSchema#tableExists`, used
   by every store which either creates its table or verifies that the application
-  created it - including the gruelbox outbox of `io.vanillabp:gruelbox-phase-two-outbox-spring-boot`,
+  created it - including the gruelbox outbox of `io.vanillabp:gruelbox-phase-two-outbox`,
   whose table is gruelbox's and therefore not shipped by `vanillabp-schema`.
 - The switch is the adapter-scoped `deduplicate-deliveries` (default `true`),
   resolvable per workflow module, workflow and task like every adapter-scoped key.
@@ -2747,7 +2747,7 @@ applications may define their own `PhaseTwoOutbox` bean instead):
 | Spring Boot | JPA                      | the core's `JdbcPhaseTwoOutboxStore`, with the connection and the transaction of `spring-boot-integration` |
 | Spring Boot | MongoDB                  | own implementation using `MongoTemplate` (`spring-boot-integration`)                                       |
 | Quarkus     | JDBC datasource (Agroal) | the same core store, on an Agroal connection enlisted in the running JTA transaction                       |
-| Spring Boot | JPA, another artifact    | based on `com.gruelbox:transactionoutbox`, in `io.vanillabp:gruelbox-phase-two-outbox-spring-boot`         |
+| Spring Boot | JPA, another artifact    | based on `com.gruelbox:transactionoutbox`, in `io.vanillabp:gruelbox-phase-two-outbox`                     |
 
 ### Telling the application that a workflow ended (`WorkflowEndedInvoker`)
 

@@ -29,7 +29,7 @@ processed task deliveries (`VANILLABP_TASK_DELIVERY`), the payloads of the phase
 carry one (`VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD`) and the claim which says who removes the old rows
 of a store tonight (`VANILLABP_HOUSEKEEPING`). All four serve a Spring Boot and a Quarkus
 application alike, because both run the same JDBC store. Not described: `TXNO_OUTBOX`, the table of
-the gruelbox store in `io.vanillabp:gruelbox-phase-two-outbox-spring-boot` - that schema belongs to
+the gruelbox store in `io.vanillabp:gruelbox-phase-two-outbox` - that schema belongs to
 gruelbox and its own migrator.
 
 The payload table is needed by every JDBC-backed outbox, gruelbox included: a call which carries
