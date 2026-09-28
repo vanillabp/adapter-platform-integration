@@ -76,6 +76,13 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   private Boolean allowFullSyncWithBpms;
 
   /**
+   * Whether the expressions of this workflow's BPMN model are meant as they are
+   * (<code>accept-expressions-in-the-model</code>) - the most specific of the three
+   * levels it may be written at, and the level the startup message hands out.
+   */
+  private Boolean acceptExpressionsInTheModel;
+
+  /**
    * The values of the workflow aggregate this workflow declares for the BPMS
    * (<code>declared-aggregate-values</code>). An entry names a path in the aggregate:
    * <code>amount</code> is the attribute itself, <code>shipping.*</code> is every value
@@ -154,6 +161,13 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
      * DECISIONS.md.
      */
     private Boolean allowFullSyncWithBpms;
+
+    /**
+     * Whether the expressions of this workflow's BPMN model are meant as they are
+     * (<code>accept-expressions-in-the-model</code>) - the most specific of the three
+     * levels it may be written at, and the level the startup message hands out.
+     */
+    private Boolean acceptExpressionsInTheModel;
 
     /**
      * The values of the workflow aggregate this workflow declares for the BPMS
@@ -271,6 +285,23 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     }
 
     /**
+     * Whether the expressions of this workflow's BPMN model are meant as they are
+     * (<code>accept-expressions-in-the-model</code>) - the most specific of the three
+     * levels it may be written at, and the level the startup message hands out.
+     *
+     * @param acceptExpressionsInTheModel The value of
+     * {@link #acceptExpressionsInTheModel}
+     * @return This builder, so the calls chain
+     */
+    public B acceptExpressionsInTheModel(
+        final Boolean acceptExpressionsInTheModel) {
+
+      this.acceptExpressionsInTheModel = acceptExpressionsInTheModel;
+      return self();
+
+    }
+
+    /**
      * The values of the workflow aggregate this workflow declares for the BPMS
      * (<code>declared-aggregate-values</code>).
      *
@@ -363,6 +394,9 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
           + "allowFullSyncWithBpms="
           + allowFullSyncWithBpms
           + ", "
+          + "acceptExpressionsInTheModel="
+          + acceptExpressionsInTheModel
+          + ", "
           + "declaredAggregateValues="
           + declaredAggregateValues
           + ", "
@@ -433,6 +467,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     this.tasks = b.tasks;
     this.extensions = b.extensions;
     this.allowFullSyncWithBpms = b.allowFullSyncWithBpms;
+    this.acceptExpressionsInTheModel = b.acceptExpressionsInTheModel;
     this.declaredAggregateValues = b.declaredAggregateValues;
     this.declaredTaskParams = b.declaredTaskParams;
     this.delivery = b.delivery;
@@ -520,6 +555,19 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   public Boolean getAllowFullSyncWithBpms() {
 
     return allowFullSyncWithBpms;
+
+  }
+
+  /**
+   * Whether the expressions of this workflow's BPMN model are meant as they are
+   * (<code>accept-expressions-in-the-model</code>) - the most specific of the three
+   * levels it may be written at, and the level the startup message hands out.
+   *
+   * @return The value of {@link #acceptExpressionsInTheModel}
+   */
+  public Boolean getAcceptExpressionsInTheModel() {
+
+    return acceptExpressionsInTheModel;
 
   }
 
@@ -634,6 +682,20 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
       final Boolean allowFullSyncWithBpms) {
 
     this.allowFullSyncWithBpms = allowFullSyncWithBpms;
+
+  }
+
+  /**
+   * Whether the expressions of this workflow's BPMN model are meant as they are
+   * (<code>accept-expressions-in-the-model</code>) - the most specific of the three
+   * levels it may be written at, and the level the startup message hands out.
+   *
+   * @param acceptExpressionsInTheModel The value of {@link #acceptExpressionsInTheModel}
+   */
+  public void setAcceptExpressionsInTheModel(
+      final Boolean acceptExpressionsInTheModel) {
+
+    this.acceptExpressionsInTheModel = acceptExpressionsInTheModel;
 
   }
 

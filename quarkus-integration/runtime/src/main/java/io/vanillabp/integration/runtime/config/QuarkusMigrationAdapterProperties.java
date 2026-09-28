@@ -68,6 +68,14 @@ public interface QuarkusMigrationAdapterProperties {
   Optional<Boolean> allowFullSyncWithBpms();
 
   /**
+   * Whether the expressions of every BPMN model of this application are meant as they
+   * are, the least specific of the three levels the core reads this at.
+   *
+   * @return The answer of this level, an empty Optional leaving it to the level above
+   */
+  Optional<Boolean> acceptExpressionsInTheModel();
+
+  /**
    * The <code>&#64;TaskParam</code> parameters whose type the developer declared, by the
    * name the input mapping gives the value.
    *
@@ -743,6 +751,14 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Boolean> allowFullSyncWithBpms();
 
     /**
+     * Whether the expressions of this module's BPMN models are meant as they are. A
+     * workflow saying nothing keeps this answer.
+     *
+     * @return The answer of this level, an empty Optional leaving it to the level above
+     */
+    Optional<Boolean> acceptExpressionsInTheModel();
+
+    /**
      * The <code>&#64;TaskParam</code> parameters whose type the developer declared, by the
      * name the input mapping gives the value.
      *
@@ -912,6 +928,14 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The permission, an empty Optional meaning "not allowed"
      */
     Optional<Boolean> allowFullSyncWithBpms();
+
+    /**
+     * Whether the expressions of this workflow's BPMN model are meant as they are - the
+     * most specific of the three levels, and the one a startup message hands out.
+     *
+     * @return The answer of this level, an empty Optional leaving it to the level above
+     */
+    Optional<Boolean> acceptExpressionsInTheModel();
 
     /**
      * The values of the workflow aggregate this workflow declares for the BPMS. An entry

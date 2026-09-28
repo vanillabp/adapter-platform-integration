@@ -145,6 +145,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   private final io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck concurrentTokenCheck;
 
   /**
+   * The hint about expressions of a BPMN model which are more than the name of a variable.
+   */
+  private final io.vanillabp.integration.adapter.migration.expressions.ModelExpressionCheck modelExpressionCheck;
+
+  /**
    * Where a finding of this registry is left, so the whole start says it once.
    */
   private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
@@ -285,6 +290,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     this.workflowEndedHandlers = new WorkflowEndedHandlers(processVersions);
     this.concurrentTokenCheck = new io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck(
         findings);
+    this.modelExpressionCheck = new io.vanillabp.integration.adapter.migration.expressions.ModelExpressionCheck(
+        findings, properties);
     this.extensionHandlers = new io.vanillabp.integration.adapter.migration.handler.ExtensionHandlerRegistry(
         transactionRunner, processVersions, findings);
     this.aggregateSync = aggregateSync;
@@ -625,6 +632,24 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
             entry.processService.getWorkflowAggregateClass(),
             entry.processService.detectsConcurrentModification(),
             compensations);
+
+  }
+
+  @Override
+  public void reportModelExpressions(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<io.vanillabp.integration.adapter.spi.expressions.ModelExpression> expressions) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if (entry == null) {
+      // a process no @WorkflowService class serves is a model this application does not
+      // own - it travels to the BPMS because it shares a file with the process which IS
+      // served, and asking for its expressions to be rewritten asks for a file nobody
+      // here can change. The deployment reports such a process on its own
+      return;
+    }
+    modelExpressionCheck.reportModelExpressions(workflowModuleId, bpmnProcessId, expressions);
 
   }
 

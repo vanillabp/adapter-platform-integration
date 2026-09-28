@@ -3927,6 +3927,44 @@ would be the worst answer, since nobody can tell it from a computed `false`.
 Held by `PortableValuesCheckTest` and `DeclaredAggregateValuesTest`, both of which read the messages
 rather than only counting that something was thrown.
 
+## An expression in the model binds the data model
+
+`303` asks what the values travelling to the BPMS are worth. This one asks what the model DOES with
+them, and the answer is decided at the expression: `${order.shipping.express}` binds the model twice
+over, to the shape of the objects behind the name and to the expression language of that BPMS.
+Rename the attribute in Java and a model nobody touched stops working. Move to another BPMS and the
+expression stops working.
+
+The wiki has recommended the way round it for years, on the page `Workflow-aggregates`: a getter on
+the workflow aggregate which answers the question the model asks, so the model reads
+`${shippedAsNormalItem}` and survives both changes. What was missing is that anybody notices when a
+model does it differently.
+
+The work is split the way it is split for every other finding about a model. The adapter reads its
+model and reports every expression it found through `WorkflowTaskWiring#reportModelExpressions`, once
+per BPMN process and with the plain names included, because the message counts them. The core judges
+them, in `ModelExpressionCheck`, and the rule it judges by is `ExpressionForm`: the name of one
+variable, a path, a call, or a computation. The rule lives here and not in the adapter, so that the
+same expression is answered the same way whichever BPMS it is deployed to.
+
+The severities are the two halves of the binding:
+
+|                         What the expression does                          |                      What it binds                      |                    What is said                     |
+|---------------------------------------------------------------------------|---------------------------------------------------------|-----------------------------------------------------|
+| names one variable (`shippedAsNormalItem`)                                | nothing                                                 | nothing - this is what we recommend                 |
+| walks a path (`order.shipping.express`), calls something (`count(i) > 3`) | the shape of the data, the function library of one BPMS | a WARN naming the element, the place and the getter |
+| computes (`not bigItem`, `amount > 1000`)                                 | the expression language, whose words differ             | a NOTICE, the smaller half of the story             |
+
+Neither ends a deployment. An existing model would stop deploying over a style, and a check which
+reads expressions can misread one - which is also why anything the rule cannot place is a NOTICE
+rather than the loudest message. A process whose expressions are meant as they are says so with
+`accept-expressions-in-the-model`, read at the workflow, the workflow module or the application, the
+most specific winning. A process no `@WorkflowService` class claims is left out: its model shares a
+file with the process which IS served, and asking for a file nobody here can change is not a fix.
+
+Held by `ModelExpressionCheckTest` for the rule and by `ExpressionsInTheModelTest` of each platform
+for the whole way through a start.
+
 ## Two writers on one workflow aggregate
 
 A workflow aggregate has one workflow, which reads like one writer - until the process holds

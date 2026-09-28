@@ -34,6 +34,8 @@ import java.util.Collection;
  * <li>{@link #reportCompensation(String, String, Collection)} - the compensation throw
  * events which start more than one handler, which is the same second token drawn
  * differently;</li>
+ * <li>{@link #reportModelExpressions(String, String, Collection)} - the expressions the
+ * model reads the workflow's data with;</li>
  * <li>{@link #registerProcessVersions(String, String, String, ProcessVersionCatalog)} -
  * only where your BPMS can place version tags;</li>
  * <li>{@link #reportNoProcessVersionCatalog(String, String, String, io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion)} -
@@ -173,6 +175,38 @@ public interface WorkflowTaskWiring {
       final String workflowModuleId,
       final String bpmnProcessId,
       final Collection<CompensationSpec> compensations) {
+
+  }
+
+  /**
+   * Reports the expressions a BPMN process reads the workflow's data with, so the core can
+   * say what the ones which are more than the name of a variable cost. Called during
+   * <code>wireBpmn</code>, ONCE per BPMN process and with ALL of them, the plain names
+   * included: the message counts them, and a developer reading that five of seven
+   * expressions already name a variable learns how far their model is.
+   * <p>
+   * Finding them is the adapter's half of the work, because the places and the language
+   * belong to the BPMS. Judging them is the core's, because the answer has to be the same
+   * whichever BPMS a model is deployed to - an expression which walks a path binds the
+   * shape of the application's data everywhere.
+   * <p>
+   * Report what reads the workflow's DATA: the conditions of sequence flows and of
+   * conditional events, timers, the cardinality, the collection and the completion
+   * condition of a multi-instance element, a loop condition, the correlation key of a
+   * message, the inputs of a decision, an input or output mapping. Leave out what the BPMS
+   * resolves for itself - an expression naming a wired task, a delegate class, a form key.
+   * An adapter which cannot read its models reports nothing, and nothing is read into that
+   * silence.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The PLAIN BPMN process ID
+   * @param expressions The expressions of that process, each with the element it sits in
+   *          and the place inside it
+   */
+  default void reportModelExpressions(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<io.vanillabp.integration.adapter.spi.expressions.ModelExpression> expressions) {
 
   }
 

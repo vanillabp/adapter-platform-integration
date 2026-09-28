@@ -388,6 +388,16 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
                 bpmnProcessId,
                 source.tasksOf(adapterId, workflowModuleId, bpmnProcessId)));
 
+    // like a real adapter: report the expressions of the model, so the core can say what
+    // the ones which are more than the name of a variable bind
+    taskWiringSource
+        .first()
+        .ifPresent(
+            source -> collaborators.workflowTaskWiring().reportModelExpressions(
+                workflowModuleId,
+                bpmnProcessId,
+                source.expressionsOf(adapterId, workflowModuleId, bpmnProcessId)));
+
     // like a real adapter: report the start events the BPMS fires on its own, so the
     // core can check the application's @WorkflowStartedByBpms methods against them
     collaborators

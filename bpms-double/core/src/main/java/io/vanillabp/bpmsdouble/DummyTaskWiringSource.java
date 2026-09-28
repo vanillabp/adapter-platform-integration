@@ -3,6 +3,7 @@ package io.vanillabp.bpmsdouble;
 import java.util.Collection;
 import java.util.List;
 
+import io.vanillabp.integration.adapter.spi.expressions.ModelExpression;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 
 /**
@@ -47,6 +48,26 @@ public interface DummyTaskWiringSource {
       final String adapterId,
       final String workflowModuleId,
       final String filename) {
+
+    return List.of();
+
+  }
+
+  /**
+   * The expressions of the given BPMN process as a real adapter reads them off the model,
+   * all of them: the plain names of variables as well as the paths and the calls, because
+   * the core counts them. The default answers none, which is what an adapter unable to read
+   * its models reports.
+   *
+   * @param adapterId The adapter ID reading the model
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return The expressions of that process
+   */
+  default Collection<ModelExpression> expressionsOf(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId) {
 
     return List.of();
 

@@ -621,6 +621,32 @@ wiki page
 [Workflow aggregates](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-aggregates#two-writers-on-one-aggregate)
 describes the four ways an application can avoid the collision.
 
+#### An expression in your model is named at the start
+
+A version-1 model full of expressions deploys as it did. What is new is that the start says what the
+expressions cost. An expression which walks a path (`${order.shipping.express}`) or calls something
+(`${count(order.items) > 3}`) is a warning per BPMN process, because it binds the model to the shape
+of your Java objects and to the expression language of that BPMS. An expression which only computes
+(`${not bigItem}`) is a notice. An expression which is the name of one variable, which is what the
+wiki page
+[Workflow aggregates](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-aggregates#decoupling-bpmn-from-the-data-model)
+has recommended all along, is not mentioned at all.
+
+Nothing about the deployment changes and no model has to be rewritten. Where a process reads the way
+it is meant to, one line ends the message:
+
+```yaml
+vanillabp:
+  workflow-modules:
+    ride-sharing:
+      workflows:
+        RideProcess:
+          accept-expressions-in-the-model: true
+```
+
+The same line at the workflow module or at `vanillabp` covers everything below it, and the most
+specific level wins.
+
 #### What the startup says about the versions your BPMS still holds
 
 The first boot of the upgraded application reads the process versions its BPMS still holds, asks
