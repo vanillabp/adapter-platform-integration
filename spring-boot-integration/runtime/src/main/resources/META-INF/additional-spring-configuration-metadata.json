@@ -30,7 +30,7 @@
     {
       "name": "vanillabp.outbox.max-attempt-frequency",
       "type": "java.time.Duration",
-      "description": "The longest distance the growing backoff reaches. Every failed attempt doubles the wait until it arrives here, so a BPMS which comes back is noticed within this period however long it was away. The gruelbox store knows one fixed distance and does not follow this key.",
+      "description": "The longest distance the growing backoff reaches. Every failed attempt doubles the wait until it arrives here, so a BPMS which comes back is noticed within this period however long it was away. The gruelbox store of 'io.vanillabp:gruelbox-phase-two-outbox' knows one fixed distance and does not follow this key.",
       "defaultValue": "5m"
     },
     {
@@ -66,7 +66,7 @@
     {
       "name": "vanillabp.outbox.jdbc.table",
       "type": "java.lang.String",
-      "description": "The name of the table storing outbox entries (default 'VANILLABP_PHASE_TWO_OUTBOX'). An application which switched to gruelbox ('vanillabp.outbox.gruelbox.enabled') stores its entries in gruelbox' own table 'TXNO_OUTBOX'. This key does not rename that table, but the payloads of that store follow the name written here. Every outbox instance needs its own store - two dispatchers polling the same table would compete and double-dispatch."
+      "description": "The name of the table storing outbox entries (default 'VANILLABP_PHASE_TWO_OUTBOX'). An application running the gruelbox store stores its entries in gruelbox' own table 'TXNO_OUTBOX'. This key does not rename that table, but the payloads of that store follow the name written here. Every outbox instance needs its own store - two dispatchers polling the same table would compete and double-dispatch."
     },
     {
       "name": "vanillabp.outbox.jdbc.payload-table",

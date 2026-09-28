@@ -12,7 +12,6 @@ import org.springframework.context.ApplicationContext;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
-import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.outbox.jdbc.JdbcPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
@@ -39,22 +38,19 @@ import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
  * beans found and the remedy (provide a {@link PhaseTwoOutboxAware} bean).
  * <p>
  * The delivery-log resolver next to this one walks the same three steps. The two stay
- * apart on purpose: they look up different bean types, the JPA default of an outbox goes
- * by two bean names while a delivery log has one, and each message names the properties of
- * its own store. A shared step-walker would have to be handed all of that, and every
+ * apart on purpose: they look up different bean types and each message names the properties
+ * of its own store. A shared step-walker would have to be handed all of that, and every
  * reader of either resolver would have to open it to see what happens.
  */
 public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
   /**
-   * The names the JPA default goes by. Two of them, because an application may still run
-   * the gruelbox store instead of the one VanillaBP writes itself
-   * (<code>vanillabp.outbox.gruelbox.enabled</code>) - never both, the two
-   * auto-configurations exclude each other.
+   * The name the JPA default goes by. A store contributed by another artifact registers its
+   * outbox bean under this very name, and the platform's own configuration steps back where
+   * the name is taken, so there is one name whichever store an application runs.
    */
-  private static final Set<String> JPA_DEFAULT_OUTBOX_BEAN_NAMES = Set.of(
-      JdbcPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME,
-      GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME);
+  private static final Set<String> JPA_DEFAULT_OUTBOX_BEAN_NAMES = Set
+      .of(JdbcPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME);
 
   private final ApplicationContext applicationContext;
 

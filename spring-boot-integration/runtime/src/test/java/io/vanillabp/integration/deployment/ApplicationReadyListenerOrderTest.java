@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.core.annotation.Order;
 
-import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxDispatcher;
+import io.vanillabp.integration.outbox.jdbc.JdbcPhaseTwoOutbox;
 import io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
@@ -40,12 +40,12 @@ public class ApplicationReadyListenerOrderTest {
   public void startProcessingBeforeOutboxDispatchers() throws Exception {
 
     final var startProcessing = listenerOrder(SpringBootDeploymentService.class, "startProcessingOfWorkflows");
-    final var gruelboxDispatcher = listenerOrder(GruelboxPhaseTwoOutboxDispatcher.class, "startPolling");
+    final var jdbcDispatcher = listenerOrder(JdbcPhaseTwoOutbox.class, "startPolling");
     final var mongoDispatcher = listenerOrder(MongoPhaseTwoOutboxDispatcher.class, "startPolling");
 
     assertTrue(
-        startProcessing < gruelboxDispatcher,
-        "workflow processing must start BEFORE the gruelbox outbox dispatcher polls");
+        startProcessing < jdbcDispatcher,
+        "workflow processing must start BEFORE the JDBC outbox dispatcher polls");
     assertTrue(
         startProcessing < mongoDispatcher,
         "workflow processing must start BEFORE the MongoDB outbox dispatcher polls");

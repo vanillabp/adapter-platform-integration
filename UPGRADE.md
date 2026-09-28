@@ -232,6 +232,35 @@ application does not boot and the message names what to add. The transaction the
 in is checked in the same moment. What the outbox guarantees, and what it does not, is on the wiki
 page [Spring Boot integration](https://github.com/vanillabp/adapter-platform-integration/wiki/Spring-Boot-integration#what-the-outbox-guarantees).
 
+#### Gruelbox is one dependency away
+
+A version-1 application on Spring Boot with JPA stored its two-phase calls in the gruelbox
+transaction outbox, in the table `TXNO_OUTBOX`. Version 2 writes them into its own table, and the
+gruelbox store is not part of VanillaBP any more. Two ways to go.
+
+Change nothing. The entries go into `VANILLABP_PHASE_TWO_OUTBOX`, and every start counts what
+`TXNO_OUTBOX` still holds undispatched and says so, because nothing reads that table any more. Drain
+it with your version-1 application, or with your new one running gruelbox once, and drop it
+afterwards.
+
+Keep gruelbox. Add one dependency and change no configuration:
+
+```xml
+<dependency>
+  <groupId>io.vanillabp</groupId>
+  <artifactId>gruelbox-phase-two-outbox</artifactId>
+  <version>1.0.0</version>
+</dependency>
+```
+
+The dependency is the whole switch: the store VanillaBP writes itself steps back, the section
+`vanillabp.outbox.gruelbox.*` stays what it was, and the rows stay where they are. What that store
+cannot do, and the store VanillaBP writes itself can, is listed in its own
+[README](https://github.com/vanillabp/gruelbox-phase-two-outbox). The dependency is what asks for
+that store, and `vanillabp.outbox.gruelbox.enabled` belongs to it: without the artifact the key is a
+line nothing reads, and VanillaBP's own store serves. What VanillaBP does say is what is left in
+`TXNO_OUTBOX`, at every start, until the table is empty.
+
 #### What the startup says about a configuration
 
 A defect in the configuration shows up while the application starts rather than at the first

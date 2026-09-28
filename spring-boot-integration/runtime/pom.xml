@@ -75,6 +75,18 @@
       <artifactId>spring-boot-health</artifactId>
       <optional>true</optional>
     </dependency>
+    <!--
+      Nothing here uses Jackson. Spring Boot's health classes carry Jackson annotations,
+      and javadoc reads the annotations of every class it resolves, so without this the
+      javadoc check ends with three warnings about an enum constant it cannot load. It used
+      to arrive through the gruelbox library, which is not a dependency of this module any
+      more. 'provided' hands it to no application, the way Lombok above is handled.
+    -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-annotations</artifactId>
+      <scope>provided</scope>
+    </dependency>
     <dependency>
       <groupId>jakarta.annotation</groupId>
       <artifactId>jakarta.annotation-api</artifactId>
@@ -114,23 +126,6 @@
       <artifactId>spring-data-mongodb</artifactId>
       <optional>true</optional>
     </dependency>
-    <!--
-      Optional since the JDBC outbox VanillaBP writes itself became the default: an
-      application which keeps gruelbox ('vanillabp.outbox.gruelbox.enabled') adds these
-      two itself, and one which does not keeps them off its classpath.
-    -->
-    <dependency>
-      <groupId>com.gruelbox</groupId>
-      <artifactId>transactionoutbox-core</artifactId>
-      <version>${transaction-outbox.version}</version>
-      <optional>true</optional>
-    </dependency>
-    <dependency>
-      <groupId>com.gruelbox</groupId>
-      <artifactId>transactionoutbox-spring</artifactId>
-      <version>${transaction-outbox.version}</version>
-      <optional>true</optional>
-    </dependency>
     <dependency>
       <groupId>io.vanillabp.adapter</groupId>
       <artifactId>migration-adapter</artifactId>
@@ -163,6 +158,16 @@
     <dependency>
       <groupId>com.h2database</groupId>
       <artifactId>h2</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <!--
+      The tests which read the configuration metadata parse it with Jackson. It used to
+      arrive through the gruelbox library, which is not a dependency of this module any
+      more, so it is asked for here.
+    -->
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
       <scope>test</scope>
     </dependency>
     <dependency>

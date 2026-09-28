@@ -11,7 +11,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnSingleCandidate;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -23,9 +22,7 @@ import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
-import io.vanillabp.integration.config.GruelboxOutboxProperties;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
-import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.utils.config.JpaSpringDataUtilConfiguration;
 import jakarta.persistence.EntityManagerFactory;
@@ -56,11 +53,11 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * An application which ran the gruelbox store before this one gets a message about what
  * that store still holds, see
- * {@link #reportWhatTheFormerStoreStillHolds(DataSource, String, VanillaBpConfigurationProperties)}. Gruelbox itself is
- * still available: setting <code>vanillabp.outbox.gruelbox.enabled</code> to
- * <code>true</code> switches this default off and
- * {@link io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration}
- * on.
+ * {@link #reportWhatTheFormerStoreStillHolds(DataSource, String, VanillaBpConfigurationProperties)}.
+ * That store is no longer part of VanillaBP; it lives in
+ * <code>io.vanillabp:gruelbox-phase-two-outbox</code>, and an application which
+ * adds that artifact gets this configuration out of the way: it registers the outbox bean
+ * under the name below, and the condition on this class reads that name.
  */
 @AutoConfiguration(
     after = JpaSpringDataUtilConfiguration.class,
@@ -73,7 +70,9 @@ import lombok.extern.slf4j.Slf4j;
     DataSource.class, PlatformTransactionManager.class
 })
 @ConditionalOnBooleanProperty(name = "vanillabp.outbox.jdbc.enabled", matchIfMissing = true)
-@ConditionalOnProperty(name = GruelboxOutboxProperties.ENABLED, havingValue = "false", matchIfMissing = true)
+// a store contributed by another artifact registers the outbox bean under this name and is
+// applied before this configuration, which is how it takes the place of this default
+@ConditionalOnMissingBean(name = JdbcPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME)
 @EnableConfigurationProperties(VanillaBpConfigurationProperties.class)
 @Slf4j
 public class JdbcPhaseTwoOutboxAutoConfiguration {
@@ -92,13 +91,18 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
   public static final String DEFAULT_PAYLOAD_STORE_BEAN_NAME = "vanillaBpJdbcPhaseTwoPayloadStore";
 
   /**
-   * The table gruelbox stored its entries in, which is where an application upgrading
-   * from that store may still have entries waiting. The name comes from the
-   * configuration which builds that store, so both halves of the upgrade read it in one
-   * place. It is a compile-time constant, so this class does not load the gruelbox
-   * configuration at runtime and works without the library on the classpath.
+   * The table the gruelbox store writes, which is where an application upgrading onto this
+   * one may still have entries waiting. The name belongs to the library: it is what
+   * gruelbox defaults to and the only table its schema migration ever creates, so it is
+   * written out here rather than read from a store which this repository does not carry.
    */
-  private static final String FORMER_OUTBOX_TABLE_NAME = GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_TABLE_NAME;
+  private static final String FORMER_OUTBOX_TABLE_NAME = "TXNO_OUTBOX";
+
+  /**
+   * The artifact an application adds to go on running the gruelbox store, named in the
+   * message above so the remedy is one line to copy.
+   */
+  private static final String THE_ARTIFACT_CARRYING_THE_FORMER_STORE = "io.vanillabp:gruelbox-phase-two-outbox";
 
   /**
    * Built by Spring Boot while it applies its auto-configurations, and only where the
@@ -139,9 +143,8 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
    * relational database. Spring builds it where Spring Data JPA is on the classpath, there
    * is exactly one {@link EntityManagerFactory} next to a {@link DataSource} and a
    * transaction manager, <code>vanillabp.outbox.jdbc.enabled</code> is not
-   * <code>false</code> and <code>vanillabp.outbox.gruelbox.enabled</code> is not
-   * <code>true</code>; an aggregate living in MongoDB is served by the MongoDB outbox
-   * beside it.
+   * <code>false</code> and no other artifact took the name of this bean; an aggregate
+   * living in MongoDB is served by the MongoDB outbox beside it.
    *
    * @param dataSource The data source holding the outbox table
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree carrying the
@@ -176,10 +179,9 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
    * say so.
    * <p>
    * Two ways out, and the message names both: drain the entries with the version which
-   * still dispatched them, or keep running gruelbox by setting
-   * {@link GruelboxOutboxProperties#ENABLED} to <code>true</code>. A warning and
-   * not a failure, because the entries may as well be the remains of an application which
-   * left that store behind long ago.
+   * still dispatched them, or keep running gruelbox by adding the artifact which carries
+   * that store. A warning and not a failure, because the entries may as well be the remains
+   * of an application which left that store behind long ago.
    *
    * @param dataSource The data source the tables live in
    * @param tableName The table this store writes into, named in the message so the two
@@ -208,7 +210,7 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
                 forever. Either
                 - start the previous version of this application once and let it dispatch what is \
                 left, or
-                - set '%s' to 'true' to keep using gruelbox.
+                - add '%s' to keep running gruelbox.
                 Once '%s' holds nothing undispatched, this message is gone and the table can be \
                 dropped."""
                 .formatted(
@@ -216,9 +218,7 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
                     waiting,
                     tableName,
                     FORMER_OUTBOX_TABLE_NAME,
-                    // the key comes from the constant the condition of this class reads,
-                    // so a rename cannot leave this line naming a key which is gone
-                    GruelboxOutboxProperties.ENABLED,
+                    THE_ARTIFACT_CARRYING_THE_FORMER_STORE,
                     FORMER_OUTBOX_TABLE_NAME));
 
   }

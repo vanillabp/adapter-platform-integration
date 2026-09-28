@@ -17,7 +17,7 @@ import org.springframework.context.annotation.AnnotationConfigApplicationContext
 
 import io.vanillabp.integration.delivery.JdbcTaskDeliveryLogAutoConfiguration;
 import io.vanillabp.integration.delivery.MongoTaskDeliveryLogAutoConfiguration;
-import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
+import io.vanillabp.integration.outbox.jdbc.JdbcPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.processservice.SpringPhaseTwoOutboxResolver;
 import io.vanillabp.integration.processservice.SpringTaskDeliveryLogResolver;
@@ -80,7 +80,7 @@ public class StoreAttributionTest {
     final var context = new AnnotationConfigApplicationContext();
     context
         .registerBean(
-            GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME,
+            JdbcPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME,
             PhaseTwoOutbox.class,
             () -> SCHEDULING_OUTBOX);
     context
@@ -136,7 +136,7 @@ public class StoreAttributionTest {
           () -> resolver.resolveFor(CustomlyPersistedAggregate.class));
 
       final var message = exception.getMessage();
-      assertTrue(message.contains(GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME), message);
+      assertTrue(message.contains(JdbcPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME), message);
       assertTrue(message.contains(MongoPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME), message);
       assertTrue(message.contains(CustomlyPersistedAggregate.class.getName()), message);
       assertTrue(message.contains("UNKNOWN"), message);
@@ -201,7 +201,7 @@ public class StoreAttributionTest {
     try (var context = new AnnotationConfigApplicationContext()) {
       context
           .registerBean(
-              GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME,
+              JdbcPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME,
               PhaseTwoOutbox.class,
               () -> SCHEDULING_OUTBOX);
       context.registerBean("applicationOutboxAware", PhaseTwoOutboxAware.class, () -> aware);
@@ -237,7 +237,7 @@ public class StoreAttributionTest {
     try (var context = new AnnotationConfigApplicationContext()) {
       context
           .registerBean(
-              GruelboxPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME,
+              JdbcPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME,
               PhaseTwoOutbox.class,
               () -> SCHEDULING_OUTBOX);
       context.registerBean("applicationOutboxAware", PhaseTwoOutboxAware.class, () -> aware);

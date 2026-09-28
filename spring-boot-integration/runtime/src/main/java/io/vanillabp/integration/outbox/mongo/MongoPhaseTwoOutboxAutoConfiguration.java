@@ -16,7 +16,6 @@ import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.mongo.MongoIndexes;
-import io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.outbox.jdbc.JdbcPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import lombok.extern.slf4j.Slf4j;
@@ -25,9 +24,8 @@ import lombok.extern.slf4j.Slf4j;
  * Auto-configuration of the default {@link PhaseTwoOutbox} for MongoDB-based aggregate
  * persistence. Active whenever Spring Data MongoDB is on the classpath and a
  * {@link MongoDatabaseFactory} is available - it COEXISTS with the JPA default
- * ({@link JdbcPhaseTwoOutboxAutoConfiguration}, or
- * {@link GruelboxPhaseTwoOutboxAutoConfiguration} where the application still runs
- * gruelbox): each workflow aggregate
+ * ({@link JdbcPhaseTwoOutboxAutoConfiguration}, or whichever store took the place of that
+ * default): each workflow aggregate
  * is served by the outbox matching its persistence (selection per aggregate, see
  * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware}), so outbox
  * entries always ride the aggregate's own transaction even in mixed-persistence
@@ -47,9 +45,7 @@ import lombok.extern.slf4j.Slf4j;
  * (see {@link MongoPhaseTwoOutbox}).
  */
 @AutoConfiguration(
-    after = {
-        JdbcPhaseTwoOutboxAutoConfiguration.class, GruelboxPhaseTwoOutboxAutoConfiguration.class
-    },
+    after = JdbcPhaseTwoOutboxAutoConfiguration.class,
     afterName = "org.springframework.boot.data.mongodb.autoconfigure.DataMongoAutoConfiguration")
 @ConditionalOnClass(MongoRepository.class)
 @ConditionalOnBean({
