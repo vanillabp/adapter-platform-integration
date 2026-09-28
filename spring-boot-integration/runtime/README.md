@@ -229,17 +229,10 @@ turned and why the mark hangs on the call.
 Every store of this module refuses to replace an entry a dispatch has already taken; the
 younger call becomes an entry of its own then, holding no key. On the JDBC store that is the
 `ATTEMPTS` column and on MongoDB the `attempts` field, which the dispatchers count up when
-they claim an entry. On gruelbox it
-takes two answers, because gruelbox reaches a dispatch two ways: an entry a flush picked up
-was pushed back first and carries `version > 0`, while an entry submitted right after its
-commit still reads as untouched although gruelbox holds its row with `SELECT ... FOR UPDATE`
-until the handler returns. The second case is asked of `GruelboxRedispatchAwareSubmitter`,
-which sees every entry before its invocation and keeps the ids it is dispatching. Without
-that question a delete would wait for the lock, and with it a business transaction would wait
-for a remote call.
+they claim an entry.
 
 This module provides two
-default implementations and a third one an application can ask for, all configured by the `vanillabp.outbox.*` properties
+default implementations, both configured by the `vanillabp.outbox.*` properties
 (`poll-interval`, `attempt-frequency`, `block-after-attempts`, `dispatch-threads`,
 `create-schema`,
 `retention`, plus per-default `jdbc.*`/`mongo.*` sections with `enabled` flags and
@@ -294,102 +287,23 @@ disable an unwanted default via its `enabled` flag:
    otherwise scheduling is best-effort. Duplicate schedules are detected by a
    pre-check read since a duplicate-key error would abort the whole MongoDB
    transaction; the unique index remains the backstop for concurrent duplicates.
-3. **JPA on gruelbox (opt-in):** set `vanillabp.outbox.gruelbox.enabled` to `true` and the
-   JDBC default of item 1 backs off while `GruelboxPhaseTwoOutboxAutoConfiguration` takes
-   over. It is there for an application which already runs gruelbox and wants to keep its
-   table and its entries for now; nothing in the platform depends on gruelbox any more.
-   `GruelboxPhaseTwoOutboxAutoConfiguration` sets up a
-   [gruelbox transaction-outbox](https://github.com/gruelbox/transaction-outbox)
-   using `SpringTransactionManager`/`SpringInstantiator`, active under the same
-   conditions as the JPA `SpringDataUtil`. The `PhaseTwoCall` is flattened into
-   String parameters of the scheduled `GruelboxPhaseTwoDispatch` invocation
-   (gruelbox's invocation serializer only supports a whitelist of types) and
-   rebuilt at dispatch time. The contract maps onto gruelbox's native
-   capabilities: the idempotency key becomes the `uniqueRequestId` (unique
-   constraint of `TXNO_OUTBOX`; duplicates are a no-op), "DONE instead of delete"
-   is gruelbox's retention of processed entries (`vanillabp.outbox.retention` maps
-   to the retention threshold). Since deduplication has to span the entries still
-   waiting for their dispatch only (decision 22) and gruelbox' table has no column
-   for a released key, the store reads the row of that `uniqueRequestId` before it
-   schedules: a row gruelbox marked `processed` is deleted in the caller's
-   transaction so the operation can be planned again, a row which is not processed
-   yet makes the schedule a no-op. That is also why the derived key is bounded to
-   250 characters — gruelbox refuses a longer one before any database sees it. That read,
-   the replacement of a waiting entry and the question which payloads an entry still names
-   all go to gruelbox' table, so an application which builds the store itself passes the
-   data source and the table name; a store without them is refused where it is built,
-   because it would discard the next operation of a workflow whose key is still retained
-   and would let no payload be removed ever again. Recovery, retries and retention cleanup
-   are done by a fixed-delay poller calling `TransactionOutbox.flush()` on a **private
-   single-thread executor** — no `TaskScheduler` bean is registered or used, so an
-   application's `@EnableScheduling` setup stays unaffected. The outbox table
-   `TXNO_OUTBOX` is created by gruelbox's auto-DDL — set
-   `vanillabp.outbox.create-schema: false` to manage the schema manually (use
-   gruelbox's `DefaultPersistor.writeSchema(Writer)`, which emits its migrations as
-   SQL for the configured dialect). NOTE: `vanillabp.outbox.jdbc.table` names the table
-   VanillaBP writes itself and does not rename `TXNO_OUTBOX`, whose columns belong to
-   gruelbox; an application which needs another name builds the `TransactionOutbox` bean
-   itself under the name `vanillaBpTransactionOutbox`. Where the migration is
-   off, the auto-configuration verifies AT STARTUP that the table exists
-   (`validateOutboxTableExists`) and ends the boot naming table and property. This
-   table is the one piece of a schema handover `io.vanillabp:vanillabp-schema` does
-   not cover, because the schema belongs to gruelbox, and shipping foreign DDL was
-   decided against. What this store costs next to the JDBC one is in
-   `migration-adapter/README.md` and on the wiki: a dispatched entry deleted to free
-   its key, a re-dispatch after a hard crash which carries no attempt count, one fixed
-   retry distance, no dispatch lanes, and a stale adapter id named at the first
-   dispatch instead of at the start. No lanes also means that two operations of one
-   workflow are not kept in the order they were planned, which the two stores VanillaBP
-   writes itself do keep. gruelbox submits an entry the moment its transaction commits
-   while a flush carries the rest, and a failed attempt moves the column a flush orders
-   by. That is the promise the wiki makes to an application, so nothing is broken here;
-   see decision 100 in the repository's `DECISIONS.md`. VanillaBP's own tables are checked by
-   `JdbcTaskDeliveryStore#validateSchemaExists` respectively the JDBC outbox, all through
-   `io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema#tableExists`. This store's beans
-   reference each other BY NAME (`vanillaBpTransactionOutbox`), so additional
-   user-defined gruelbox instances (e.g. a dedicated hot-process outbox) do not
-   suppress it; with several transaction managers (mixed persistence)
-   the JDBC/JPA one has to be named `transactionManager`.
-   `GruelboxOutboxWiringTest` holds the wiring rules of this store
-   (`theDefaultConfigurationCreatesTheOutboxTable`, `aCustomTableNameSwitchesTheMigrationOff`,
-   `aMissingTableStopsTheStartupInsteadOfTheFirstWorkflow`,
-   `theConventionallyNamedTransactionManagerWins`),
-   `GruelboxOutboxSchemaHandoverTest` the handover to an application-managed schema,
-   `GruelboxDeduplicationWindowTest` the released key of a dispatched entry,
-   `GruelboxRefusesAStoreWithoutItsTableTest` the store which is not built without its
-   table, and `EnableSchedulingRegressionTest#noVanillaBpTaskSchedulerBean` the private
-   executor.
-   The submitter of this outbox is a bean of its own
-   (`GruelboxRedispatchAwareSubmitter`, `vanillaBpGruelboxSubmitter`), because the
-   dispatcher needs the very submitter the outbox was built with. Gruelbox hands an
-   entry to its submitter as soon as the scheduling transaction commits, while Spring
-   Boot opens the web server before VanillaBP deployed its models. A start arriving in
-   that window reaches a BPMS which does not hold the process, and an adapter reports
-   that as a failure no repetition can fix, so the entry would be blocked although the
-   next attempt would have worked. The submitter therefore keeps such an entry:
-   gruelbox treats a submitter which does not take the work like a busy executor, the
-   row stays committed and due, and the first `flush()` carries it. Building the
-   dispatcher closes that gate, starting its poller opens it for good. An outbox built
-   without a dispatcher keeps dispatching right after the commit, so a test or an
-   application flushing the outbox itself does not wait for a gate nobody opens. What
-   it costs is one poll interval for the entries of that window, once per application
-   start. Held by `GruelboxHoldsEntriesBackUntilDispatchingStartedTest`.
-   What gruelbox has no idea of is VanillaBP's classification of a failure, so
-   `GruelboxPhaseTwoFailureListener` is registered on the outbox: it blocks an entry the
-   adapter called permanent (`PhaseTwoPermanentFailure`) after the first attempt by
-   writing the blocked flag through the persistor, and it gives every blocked entry an
-   ERROR naming the workflow, because gruelbox' own line names the entry id only. It is
-   handed the persistor and the transaction manager the outbox was built with, and it
-   works because gruelbox calls a listener AFTER it committed the failed attempt, so the
-   entry carries the version that write left behind. Listener beans the application
-   brings are chained behind it (`TransactionOutboxListener#andThen`) - gruelbox takes
-   exactly one. Held by `GruelboxBlocksAPermanentFailureTest`.
 
 If both JPA and MongoDB are configured, JPA wins deterministically (consistent with
 the `SpringDataUtil` auto-configurations). To use a different outbox (e.g. another
 database or an existing outbox infrastructure), define a bean implementing
 `io.vanillabp.integration.spi.PhaseTwoOutbox` — the auto-configurations
 back off.
+
+A third store exists outside this repository. `io.vanillabp:gruelbox-phase-two-outbox-spring-boot`
+keeps the entries in the [gruelbox transaction-outbox](https://github.com/gruelbox/transaction-outbox),
+which is where VanillaBP kept them until release 2.0. It registers the bean
+`vanillaBpJdbcPhaseTwoOutbox` itself and is applied before the JDBC default, which carries
+`@ConditionalOnMissingBean` on that name, so adding the artifact is the whole switch. What that store
+can and cannot do is documented where it is built. Here it leaves two marks: the message of the JPA
+default about what `TXNO_OUTBOX` still holds, and `GruelboxMissingAutoConfiguration`, which ends the
+boot of an application setting `vanillabp.outbox.gruelbox.enabled` without having that artifact - such
+an application would otherwise write its entries into another table than the one it still has work
+waiting in.
 
 ### What an IDE proposes for the `vanillabp` keys
 
@@ -404,10 +318,10 @@ which is written by hand.
 
 So a key added to the core model is proposed by nothing until it is described there, and
 a key which lives in a condition alone is in no properties class at all.
-`vanillabp.outbox.gruelbox.enabled` was such a key for a while. It is bound by
-`GruelboxOutboxProperties` now, a properties class of this module and not of the core,
-because the gruelbox store exists on Spring Boot alone. So the processor writes that key
-itself, and the hand-written file only gives it its description.
+`vanillabp.outbox.gruelbox.enabled` is such a key: the store it switches lives in another
+artifact, and this module only reads the key to end a boot which asks for a store nothing can
+build. It is described in the hand-written file, and `EveryPropertyIsOfferedByTheIdeTest` names it
+as the one key described for another artifact.
 `EveryKeyOfAConditionIsInTheMetadataTest` reads the conditions of every
 auto-configuration back and asks the metadata about each key they name, so the next one
 fails the build instead of somebody's editor.

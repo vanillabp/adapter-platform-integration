@@ -27,8 +27,9 @@ import io.vanillabp.spi.process.ProcessService;
  * This store keeps the id in a column of its own, so the boot can ask for it with one
  * indexed query per BPMN process and says it while the application starts - hours before
  * the entry would have been read for a dispatch. That is what decision 47 in the
- * repository's DECISIONS.md asks of a store which can answer, and what
- * {@link StaleAdapterIdNamedAtDispatchTest} shows for gruelbox, which cannot.
+ * repository's DECISIONS.md asks of a store which can answer. A store which keeps a call as
+ * one serialized text cannot answer it while booting, and says it at the first dispatch
+ * instead.
  * <p>
  * Two contexts on one database: the first runs with an adapter 'old-bpms' at first priority
  * and leaves an entry of it undispatched, the second does not configure that adapter at all.

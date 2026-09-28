@@ -19,7 +19,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProp
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
-import io.vanillabp.integration.config.GruelboxOutboxProperties;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
@@ -52,6 +51,12 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
    * brings this file, which is why the lines are filtered by package below.
    */
   private static final String AUTO_CONFIGURATIONS = "META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports";
+
+  /**
+   * A key this module's own metadata describes, used by {@link #theMetadataReadIsOursAlone()}
+   * to prove that our file was read and not one of the framework.
+   */
+  private static final String A_KEY_OF_OUR_OWN = "vanillabp.outbox.jdbc.enabled";
 
   /**
    * The section every key of VanillaBP starts with. What a condition names outside it
@@ -120,9 +125,9 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
     final var keys = keysOfOurMetadata();
 
     assertTrue(
-        keys.contains(GruelboxOutboxProperties.ENABLED),
+        keys.contains(A_KEY_OF_OUR_OWN),
         "'%s' is described by this module, so our own metadata has to know it"
-            .formatted(GruelboxOutboxProperties.ENABLED));
+            .formatted(A_KEY_OF_OUR_OWN));
     assertTrue(
         keys.stream().allMatch(key -> key.startsWith(OUR_SECTION)),
         """

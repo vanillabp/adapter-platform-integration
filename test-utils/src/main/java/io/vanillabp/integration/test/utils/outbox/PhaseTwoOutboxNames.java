@@ -33,10 +33,18 @@ final class PhaseTwoOutboxNames {
   private static final String OUTBOX_DISPATCHER = "io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher";
 
   /**
-   * The Spring Boot configuration which builds the gruelbox outbox, and the name of the
-   * table gruelbox writes.
+   * The class every gruelbox-based store needs. It answers whether the application under
+   * test can run that store at all, which is a question about the library and not about
+   * VanillaBP: the store left this repository and lives in an artifact of its own.
    */
-  private static final String GRUELBOX_CONFIGURATION = "io.vanillabp.integration.outbox.gruelbox.GruelboxPhaseTwoOutboxAutoConfiguration";
+  private static final String GRUELBOX_LIBRARY = "com.gruelbox.transactionoutbox.TransactionOutbox";
+
+  /**
+   * The table a gruelbox-based store writes. The name belongs to the library: it is what
+   * gruelbox defaults to and the only table its schema migration ever creates, so it is
+   * written out here rather than read from a class this repository does not carry.
+   */
+  private static final String GRUELBOX_OUTBOX_TABLE = "TXNO_OUTBOX";
 
   private PhaseTwoOutboxNames() {
   }
@@ -52,30 +60,31 @@ final class PhaseTwoOutboxNames {
   }
 
   /**
-   * @return The table gruelbox writes, which is the outbox a Spring Boot application
-   *         with JPA runs
+   * @return The table a gruelbox-based store writes
    */
   static String gruelboxOutboxTable() {
 
-    return constant(GRUELBOX_CONFIGURATION, "DEFAULT_OUTBOX_TABLE_NAME");
+    return GRUELBOX_OUTBOX_TABLE;
 
   }
 
   /**
-   * The same name, asked for by a test which does not know whether the application
-   * under test can run that outbox at all. The gruelbox library is optional, while the
-   * VanillaBP class which configures it belongs to the Spring Boot integration and is
-   * therefore on the test classpath of every repository testing against a BPMS. An
-   * application without the library cannot load that class, and it writes no gruelbox
-   * table either, so there is no name to ask the database about.
+   * The same name, asked for by a test which does not know whether the application under
+   * test can run that outbox at all. An application without the library writes no gruelbox
+   * table, so there is no name to ask the database about, and a leftover table of that name
+   * would then belong to somebody else.
    *
-   * @return The table gruelbox writes, or nothing where this application cannot run the
-   *         gruelbox outbox
+   * @return The table a gruelbox-based store writes, or nothing where this application
+   *         cannot run one
    */
   static Optional<String> gruelboxOutboxTableIfThisApplicationCanRunIt() {
 
-    return ConstantOfAnotherModule
-        .ofAClassWhichMayBeMissing(PhaseTwoOutboxNames.class, GRUELBOX_CONFIGURATION, "DEFAULT_OUTBOX_TABLE_NAME");
+    try {
+      Class.forName(GRUELBOX_LIBRARY, false, PhaseTwoOutboxNames.class.getClassLoader());
+      return Optional.of(GRUELBOX_OUTBOX_TABLE);
+    } catch (final ClassNotFoundException libraryIsNotThere) {
+      return Optional.empty();
+    }
 
   }
 

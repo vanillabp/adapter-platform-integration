@@ -13,10 +13,12 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An application which brings a Spring Boot setting to Quarkus. The gruelbox store is built
- * on Spring Boot alone, so the key is right in itself and wrong here, and SmallRye would
- * answer it with <code>SRCFG00050</code> and the name of the key - true, and no help at all
- * to somebody who just moved their configuration over.
+ * An application which brings a Spring Boot setting to Quarkus. The gruelbox store runs on
+ * Spring Boot alone, so the key is right in itself and wrong here, and SmallRye would answer
+ * it with <code>SRCFG00050</code> and the name of the key - true, and no help at all to
+ * somebody who just moved their configuration over. The message therefore also says where
+ * that store lives now, because a reader who set the key asked for something VanillaBP does
+ * not carry any more.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class GruelboxKeyIsRefusedOnQuarkusTest {
@@ -35,9 +37,9 @@ public class GruelboxKeyIsRefusedOnQuarkusTest {
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())     // add mocked adapter
       .assertException(exceptionHavingMessage(IllegalStateException.class,
           """
-              These keys configure the gruelbox outbox store, and Quarkus does not build that store:
+              These keys configure the gruelbox outbox store, and no such store exists on Quarkus:
                 vanillabp.outbox.gruelbox.enabled
-              It runs on Spring Boot alone, because it needs the Spring transaction manager gruelbox is written against. Remove the keys and let VanillaBP store the phase-two entries itself: it writes them into the table of 'vanillabp.outbox.jdbc.*' where the application has a data source, and into the collection of 'vanillabp.outbox.mongo.*' where it has MongoDB."""));
+              It runs on Spring Boot alone, because it needs the Spring transaction manager gruelbox is written against, and it is not part of VanillaBP at all - the artifact 'io.vanillabp:gruelbox-phase-two-outbox-spring-boot' carries it. Remove the keys and let VanillaBP store the phase-two entries itself: it writes them into the table of 'vanillabp.outbox.jdbc.*' where the application has a data source, and into the collection of 'vanillabp.outbox.mongo.*' where it has MongoDB."""));
 
   @Test
   public void testGruelboxKeyIsRefused() {

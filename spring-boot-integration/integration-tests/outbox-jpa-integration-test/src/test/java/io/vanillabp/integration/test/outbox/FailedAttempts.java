@@ -2,8 +2,6 @@ package io.vanillabp.integration.test.outbox;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.function.Function;
-
 import javax.sql.DataSource;
 
 import org.springframework.context.ConfigurableApplicationContext;
@@ -33,40 +31,6 @@ public final class FailedAttempts {
    */
   private static final long UNTIL_AN_OUTBOX_COUNTS_AS_STOPPED = 30000;
 
-  /**
-   * Which store the application runs, because the two write tables of their own.
-   * Gruelbox is here for the one test which still asks for it
-   * (<code>vanillabp.outbox.gruelbox.enabled</code>). Each constant names the reader
-   * which knows that table.
-   */
-  public enum Store {
-
-    VANILLABP(PhaseTwoOutboxReader::ofTheVanillaBpOutbox),
-
-    GRUELBOX(PhaseTwoOutboxReader::ofTheGruelboxOutbox);
-
-    private final Function<DataSource, PhaseTwoOutboxReader> readerOfThisStore;
-
-    Store(
-        final Function<DataSource, PhaseTwoOutboxReader> readerOfThisStore) {
-
-      this.readerOfThisStore = readerOfThisStore;
-
-    }
-
-    /**
-     * @param dataSource The database of the application under test
-     * @return The reader of this store's table
-     */
-    PhaseTwoOutboxReader readerOf(
-        final DataSource dataSource) {
-
-      return readerOfThisStore.apply(dataSource);
-
-    }
-
-  }
-
   private FailedAttempts() {
   }
 
@@ -80,23 +44,7 @@ public final class FailedAttempts {
       final ConfigurableApplicationContext context,
       final long attempted) throws Exception {
 
-    awaitWrittenDown(context, attempted, Store.VANILLABP);
-
-  }
-
-  /**
-   * Waits until the given number of entries carry a failed attempt.
-   *
-   * @param context The running application
-   * @param attempted How many entries have to carry one
-   * @param store Which store the application runs
-   */
-  public static void awaitWrittenDown(
-      final ConfigurableApplicationContext context,
-      final long attempted,
-      final Store store) throws Exception {
-
-    final var outbox = outboxOf(context, store);
+    final var outbox = outboxOf(context);
     final var deadline = System.currentTimeMillis() + UNTIL_AN_OUTBOX_COUNTS_AS_STOPPED;
     var written = entriesCarryingAnAttempt(outbox);
     while (written < attempted) {
@@ -121,24 +69,7 @@ public final class FailedAttempts {
       final ConfigurableApplicationContext context,
       final long attempts) throws Exception {
 
-    awaitAttemptsOfAWaitingEntry(context, attempts, Store.VANILLABP);
-
-  }
-
-  /**
-   * Waits until a waiting entry was attempted the given number of times, which is how a
-   * test says "the dispatcher tried again and again" without claiming how long that took.
-   *
-   * @param context The running application
-   * @param attempts How many attempts one entry has to carry
-   * @param store Which store the application runs
-   */
-  public static void awaitAttemptsOfAWaitingEntry(
-      final ConfigurableApplicationContext context,
-      final long attempts,
-      final Store store) throws Exception {
-
-    final var outbox = outboxOf(context, store);
+    final var outbox = outboxOf(context);
     final var deadline = System.currentTimeMillis() + UNTIL_AN_OUTBOX_COUNTS_AS_STOPPED;
     var attempted = mostAttemptsOfOneEntry(outbox);
     while (attempted < attempts) {
@@ -153,18 +84,16 @@ public final class FailedAttempts {
   }
 
   /**
-   * The reader of the table this application writes. It is built once per wait: reading
-   * a name costs a class lookup, while asking for the entries does not.
+   * The reader of the table this application writes, which is the one VanillaBP writes
+   * itself.
    *
    * @param context The running application
-   * @param store Which store the application runs
    * @return The reader
    */
   private static PhaseTwoOutboxReader outboxOf(
-      final ConfigurableApplicationContext context,
-      final Store store) {
+      final ConfigurableApplicationContext context) {
 
-    return store.readerOf(context.getBean(DataSource.class));
+    return PhaseTwoOutboxReader.ofTheVanillaBpOutbox(context.getBean(DataSource.class));
 
   }
 

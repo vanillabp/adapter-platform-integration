@@ -428,8 +428,8 @@ prove "exactly the window we are waiting for". It was left out:
   another system, a BPMS-initiated start (which writes no entry at all) and a cleaned-up
   `DONE` entry all leave the outbox silent while the workflow runs perfectly well;
 - it would need a new query method in EVERY store implementation (the JDBC store both
-  platforms run, the two MongoDB stores, gruelbox where an application still asks for it,
-  and any store an application wrote itself);
+  platforms run, the two MongoDB stores, the gruelbox store of its own artifact, and any
+  store an application wrote itself);
 - what it would buy over the cache is one case: the start ran on ANOTHER node of a
   cluster, whose in-memory cache the correlating node does not share. That case is the
   one the `WorkflowAdapterCache` bean exists for - an application running clustered
@@ -1515,7 +1515,7 @@ BPMN process is the process service's business, not the records'.
   `JdbcConnectionAccess`, the one piece which cannot be platform-neutral. Whether a
   table is there is asked of the JDBC metadata by `jdbc.JdbcSchema#tableExists`, used
   by every store which either creates its table or verifies that the application
-  created it - including the gruelbox outbox a Spring Boot application may opt into,
+  created it - including the gruelbox outbox of `io.vanillabp:gruelbox-phase-two-outbox-spring-boot`,
   whose table is gruelbox's and therefore not shipped by `vanillabp-schema`.
 - The switch is the adapter-scoped `deduplicate-deliveries` (default `true`),
   resolvable per workflow module, workflow and task like every adapter-scoped key.
@@ -2747,7 +2747,7 @@ applications may define their own `PhaseTwoOutbox` bean instead):
 | Spring Boot | JPA                      | the core's `JdbcPhaseTwoOutboxStore`, with the connection and the transaction of `spring-boot-integration` |
 | Spring Boot | MongoDB                  | own implementation using `MongoTemplate` (`spring-boot-integration`)                                       |
 | Quarkus     | JDBC datasource (Agroal) | the same core store, on an Agroal connection enlisted in the running JTA transaction                       |
-| Spring Boot | JPA, opt-in              | based on `com.gruelbox:transactionoutbox`, switched on by `vanillabp.outbox.gruelbox.enabled`              |
+| Spring Boot | JPA, another artifact    | based on `com.gruelbox:transactionoutbox`, in `io.vanillabp:gruelbox-phase-two-outbox-spring-boot`         |
 
 ### Telling the application that a workflow ended (`WorkflowEndedInvoker`)
 
@@ -3203,7 +3203,7 @@ flowchart TB
   QUARKUS --> PLATFORM
 
   subgraph BSPI["Integration SPI — implemented by the PLATFORM or the APPLICATION, never by an adapter"]
-    B1["PhaseTwoOutbox (+ Aware) — stores: JDBC/Mongo, gruelbox on request"]
+    B1["PhaseTwoOutbox (+ Aware) — stores: JDBC/Mongo, gruelbox in its own artifact"]
     B2["TaskDeliveryLog (+ Aware) — JDBC/Mongo"]
     B3["TransactionRunner (+ Aware)"]
     B4["AggregatePersistenceAware"]
@@ -4130,7 +4130,8 @@ does is inside it, and nothing had to be repeated per BPMS.
 - The outbox backlog is `PhaseTwoOutbox#pendingCalls()`, an `OptionalLong` defaulting to empty.
   A store which cannot count publishes no gauge, which is honest where a zero would not be.
   All four stores VanillaBP ships implement it with one indexed count; gruelbox has no API for
-  it, so its store reads the table gruelbox created, along the index gruelbox created with it.
+  it, so the store of its own artifact reads the table gruelbox created, along the index gruelbox
+  created with it.
   On Quarkus the gauges are registered by a `StartupEvent` observer running AFTER the outbox
   dispatchers, because a store asked before its table exists cannot count.
 - A count cannot tell a backlog being worked off from one standing still, so two more meters
@@ -4143,7 +4144,7 @@ does is inside it, and nothing had to be repeated per BPMS.
   zero, which is a measurement, and a store which cannot read its oldest entry answers empty,
   which leaves a gap. Both are the store's to report, because only the store knows when an
   entry was written. Every store VanillaBP owns reads it from a column of its own, the JDBC one
-  from `CREATED_AT` on both platforms. Gruelbox, which an application may still opt into,
+  from `CREATED_AT` on both platforms. The gruelbox store, which lives in an artifact of its own,
   publishes no age: it puts the moment of writing into `nextAttemptTime` and overwrites it the
   first time a flush picks the entry up, so the entries most likely to be old are exactly the
   ones which cannot say. Its wait is measured for the entries which were submitted right after

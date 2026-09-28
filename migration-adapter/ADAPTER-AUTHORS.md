@@ -1026,8 +1026,8 @@ dispatching thread for that window. The attempt ends and the entry is planned ag
 of every other workflow go out while it waits.
 
 So the window you name is a due time, and every store VanillaBP ships makes the entry due after it:
-the relational store of the core, the two MongoDB stores, and gruelbox, which a Spring Boot
-application with JPA may still opt into and where the window is written onto the entry after the
+the relational store of the core, the two MongoDB stores, and the gruelbox store a Spring Boot
+application adds as an artifact of its own, where the window is written onto the entry after the
 failed attempt. None of them shortens your window and none of them stretches it, so a window longer
 than `vanillabp.outbox.attempt-frequency` is waited out and a shorter one is not waited past. That
 is what lets your documentation name a number (decision 93). What a store adds on top is the poll
@@ -1037,7 +1037,7 @@ Name a window your BPMS really needs, because the entry sits for it: a window of
 read model which is a second behind costs nine seconds per call.
 
 A failure which says nothing about a moment is retried at a growing distance instead, starting at
-`vanillabp.outbox.attempt-frequency` (an application which opted into gruelbox keeps that one
+`vanillabp.outbox.attempt-frequency` (an application running the gruelbox store keeps that one
 distance). Either way the
 attempt is counted, and `vanillabp.outbox.block-after-attempts` of them block the entry, which is what
 ends a workflow which never becomes searchable. `ARejectedDispatchIsPlannedAgainTest` holds it on

@@ -89,10 +89,10 @@ public class ConfigBuildStepProcessor {
   }
 
   /**
-   * The section of the gruelbox store, which Spring Boot builds and Quarkus does not. The
-   * name is written out here because the class holding it lives in the Spring Boot module,
-   * which this one does not depend on; {@code GruelboxKeyIsRefusedOnQuarkusTest} names the
-   * key as well and fails if the two ever say something different.
+   * The section of the gruelbox store, which runs on Spring Boot and not on Quarkus. The
+   * name is written out here because the class holding it lives in another repository;
+   * {@code GruelboxKeyIsRefusedOnQuarkusTest} names the key as well and fails if the two
+   * ever say something different.
    */
   private static final String GRUELBOX_SECTION = "vanillabp.outbox.gruelbox.";
 
@@ -122,14 +122,14 @@ public class ConfigBuildStepProcessor {
     }
     throw new IllegalStateException(
         """
-            These keys configure the gruelbox outbox store, and Quarkus does not build that \
-            store:
+            These keys configure the gruelbox outbox store, and no such store exists on Quarkus:
               %s
             It runs on Spring Boot alone, because it needs the Spring transaction manager \
-            gruelbox is written against. Remove the keys and let VanillaBP store the phase-two \
-            entries itself: it writes them into the table of 'vanillabp.outbox.jdbc.*' where the \
-            application has a data source, and into the collection of 'vanillabp.outbox.mongo.*' \
-            where it has MongoDB."""
+            gruelbox is written against, and it is not part of VanillaBP at all - the artifact \
+            'io.vanillabp:gruelbox-phase-two-outbox-spring-boot' carries it. Remove the keys and \
+            let VanillaBP store the phase-two entries itself: it writes them into the table of \
+            'vanillabp.outbox.jdbc.*' where the application has a data source, and into the \
+            collection of 'vanillabp.outbox.mongo.*' where it has MongoDB."""
             .formatted(String.join("\n  ", keysOfTheOtherPlatform)));
 
   }
