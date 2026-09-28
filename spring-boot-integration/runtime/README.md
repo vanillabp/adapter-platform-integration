@@ -343,7 +343,7 @@ disable an unwanted default via its `enabled` flag:
    writes itself do keep. gruelbox submits an entry the moment its transaction commits
    while a flush carries the rest, and a failed attempt moves the column a flush orders
    by. That is the promise the wiki makes to an application, so nothing is broken here;
-   see `DECISIONS.pending/542.md`. VanillaBP's own tables are checked by
+   see decision 100 in the repository's `DECISIONS.md`. VanillaBP's own tables are checked by
    `JdbcTaskDeliveryStore#validateSchemaExists` respectively the JDBC outbox, all through
    `io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema#tableExists`. This store's beans
    reference each other BY NAME (`vanillaBpTransactionOutbox`), so additional
