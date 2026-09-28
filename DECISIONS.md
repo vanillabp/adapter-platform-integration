@@ -3254,3 +3254,102 @@ subscriptions match a task type globally and it has no tenant, and today it answ
 
 `MigrationProcessService#deliverWorkflowTask` is where the refusal is worded and
 `MigrationProcessServiceTest` holds the message.
+
+### 100. The order of one workflow's operations is a promise of VanillaBP's own stores only
+
+Two operations of one workflow aggregate leave the outbox in the order they were planned.
+That holds for the two stores VanillaBP writes itself, the relational one and the MongoDB
+one, because both dispatch on `vanillabp.outbox.dispatch-threads` lanes keyed by the
+aggregate and both read the oldest entry first (decisions 75 and 77). It does NOT hold for
+the gruelbox store, and it is not going to.
+
+**Why gruelbox cannot be held to it.** The store is a thin layer over gruelbox' own table and
+gruelbox' own dispatch, which is the whole point of it: an application which ran gruelbox before
+keeps its table and its entries. Three things of that dispatch are out of reach.
+
+- There are no lanes. gruelbox submits to the executor its submitter was built with, and
+  the default is a pool which starts at one thread and grows to the parallelism of the
+  common pool once its queue of 16384 is full. Nothing binds an aggregate to a thread.
+- An entry reaches a dispatch two ways. gruelbox hands it to the submitter the moment the
+  scheduling transaction commits, and a flush picks up whatever is due. The two race, so
+  the second operation of a workflow can be submitted directly while the first one is
+  still waiting for a flush.
+- A failed attempt moves `nextAttemptTime`, which is the column a flush orders by. An
+  operation which was rejected once therefore falls behind one which was planned after it.
+
+Building lanes around gruelbox would mean holding its entries back and picking them in an
+order of our own, which is a second dispatcher on top of the one the application asked to
+keep.
+
+**Why nothing has to be written for a user.** The wiki says the order between two operations is
+not guaranteed and tells an application which needs one what to do instead: give the first
+operation a transaction of its own and open the second transaction after that one committed.
+gruelbox keeps that promise, because it is the weaker one. What the lanes buy is a store which
+does better than the promise, not a promise which now reads differently per store.
+
+**What is measured.** `EntriesOfOneAggregateKeepTheirOrderTest` and
+`MongoEntriesOfOneAggregateKeepTheirOrderTest` hold the order for the two stores which keep it,
+and `DispatchLanesTest` holds the rule itself. Nothing measures an order on gruelbox, which is
+what this decision says is right.
+
+### 101. Compensation is on the list of things which put a second token into a workflow
+
+`ConcurrentTokenCheck` knew five ways a BPMN process can hold more than one token: the
+non-interrupting boundary event, the forking parallel gateway, the forking inclusive gateway,
+the parallel multi-instance activity and the non-interrupting event subprocess, plus the ad-hoc
+subprocess. Compensation was not among them, although a throw event which compensates two
+finished activities starts both handlers and leaves the workflow with a token per handler. Each
+of those handlers is an ordinary workflow task and writes the same workflow aggregate, so an
+aggregate without a version attribute loses one of the two writes.
+
+Compensation now joins the list. The adapter reads its model and reports, the core decides what
+it means and warns, which is the split every other form of this finding follows.
+
+**Why it is reported as a shape and not as element ids.** The other forms are a flat list of
+element ids, and the message names a few of them. That does not work here. The finding is that ONE
+event in the model turns into several branches, and a list which holds the throw event next to the
+handlers leaves the reader to work out which starts which. So the adapter reports
+`CompensationSpec(throwEventId, handlerIds)` through `WorkflowTaskWiring#reportCompensation`, and
+the warning names the throw event and the handlers it starts.
+
+The text of the warning is the one every other form carries, so a process whose parallel gateway
+was reported already folds into the same entry of the startup box. What has to change is the
+aggregate, and that is one thing however many places in the model lead to it.
+
+**A throw event which starts one handler is not reported.** Compensating a single activity gives
+the workflow no second token. The handler runs where the rest of the model runs. Only a throw
+event with at least two handlers is reported, and the adapters filter that out before they
+report.
+
+**Why Camunda 7 reports it although it runs the handlers one after the other.** Measured on
+2026-09-27 against the embedded engine of Camunda 7.24 (`Camunda7CompensationTokensTest` in the
+adapter): a throw event which compensates two finished service tasks creates both compensating
+executions first and then signals them one at a time. The second handler starts after the first
+one returned. This holds for the model as a modeller writes it and for the model as the adapter
+deploys it: the adapter sets `asyncBefore` on every service task, and the flag is set on the
+handlers as well, but the engine starts a compensation handler outside the normal flow and never
+looks at it. Only one job exists at a time, and with the job executor running both handlers ran on
+one thread.
+
+Which handler goes first is not stable there, by the way. The engine sorts the subscriptions by a
+creation time of millisecond resolution and sorts stably, so two activities compensated within one
+millisecond are undone in the order they ran in. Both orders showed up in the same test within an
+hour. That changes nothing about this decision and it is one more reason the wiki promises nothing
+about the order.
+
+So on Camunda 7 two compensation handlers made of service tasks never write the aggregate at the
+same moment. The report is made anyway, for two reasons.
+
+The check asks whether the process can hold more than one token, not whether two threads are
+inside a handler. Both compensating executions exist from the moment the throw event runs, and
+that is the same answer the parallel gateway gets on this engine, where the exclusive jobs of one
+workflow are serialised by the job executor as well.
+
+And a handler which WAITS keeps its token while the next handler is started. Two compensation
+handlers drawn as user tasks are open at the same time on Camunda 7, and the application may
+complete them in two transactions which overlap. The engine gives no guarantee here that would
+make the warning wrong.
+
+What follows for the wording is that the message must not claim the handlers run in parallel. It
+says they can be open at the same time, and the wiki page `Compensation` carries what each engine
+really does.

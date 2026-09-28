@@ -92,7 +92,7 @@ import lombok.extern.slf4j.Slf4j;
  * while a flush carries whatever else is due, so the two race, and a failed attempt moves
  * the column a flush orders by. The promise an application is given is the weaker one
  * (give an operation which has to go first a transaction of its own), so this store keeps
- * it; see {@code DECISIONS.pending/542.md} in the repository.
+ * it; see decision 100 in the repository's DECISIONS.md.
  * <p>
  * {@link PhaseTwoOutbox#ageOfOldestPendingCall()} is the other question this store
  * leaves unanswered, and this one it cannot answer at all. gruelbox keeps no moment of
