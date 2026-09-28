@@ -589,8 +589,8 @@ public interface NameClashAvoidanceSupport {
    * application. That finding too is a warning, and it says "look at it" rather than
    * "write this": a rename whose old workflows were finished by hand looks exactly like a
    * rename nobody finished. It is silent for a version nobody is on and silent where this
-   * adapter never reported what the current models declare. See decision &lt;pending:
-   * 558&gt; in the repository's DECISIONS.md.
+   * adapter never reported what the current models declare. See decision 95 in the
+   * repository's DECISIONS.md.
    *
    * @param adapterId The adapter ID
    * @param workflowModuleId The workflow module of the held version

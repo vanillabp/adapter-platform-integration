@@ -120,10 +120,12 @@ nothing outside the branch has seen the number, so correcting it costs no more t
 Every other running number is checked the same way. The story prompts are such a series. They are
 kept outside this repository, so they are checked where they are kept.
 
-The other script of `bin/` is `bin/check-orphaned-javadoc.sh`. It finds a javadoc block standing
-directly in front of a second one, which javadoc drops without a word, so the text appears nowhere.
-Run it when you wrote or moved a comment. Hang a block it reports back on the element it
-describes rather than delete it.
+After you renumber, run `bin/check-decision-citations.sh`. It says whether a citation of yours still
+points at something.
+
+`bin/check-orphaned-javadoc.sh` finds a javadoc block standing directly in front of a second one,
+which javadoc drops without a word, so the text appears nowhere. Run it when you wrote or moved a
+comment. Hang a block it reports back on the element it describes rather than delete it.
 
 ## What code may point at
 
@@ -135,6 +137,15 @@ is what makes it citable.
 Where a name can carry the reason, the name is the better fix. Where it cannot, a comment says why
 in its own words, complete where it stands. Only what several places have to carry becomes an
 entry in the log.
+
+A citation of a numbered entry is the whole phrase `decision 7 in the repository's DECISIONS.md`.
+A decision which is still waiting for its number is cited by its file,
+`DECISIONS.pending/<story>.md`, in javadoc inside a `{@code}` tag. That is the one spelling of it, so the story which numbers the
+decision finds every citation with one search. A number in angle brackets is not a citation any
+more: javadoc wants the brackets escaped, the formatter then breaks the escaped form over two lines,
+and a search which reads lines walks past it. `bin/check-decision-citations.sh` finds all of that,
+wrapped or not, and it runs on every pull request. An example in a document writes a placeholder
+where the number goes, because the check cannot tell an example from a citation.
 
 Commit messages and pull-request descriptions may cite whatever they like. They are records of a
 point in time themselves.

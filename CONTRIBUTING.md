@@ -263,6 +263,27 @@ The mirror image is just as much a finding: an entry which nothing cites, or one
 fits into a comment at the single place which needs it. A decision earns a number when several
 places rely on it and copying the explanation to each of them would rot.
 
+### How a citation is written
+
+A citation of a numbered entry is the whole phrase `decision 7 in the repository's DECISIONS.md`. A
+decision often has no number yet while the branch which needs it is written. It lives in
+`DECISIONS.pending/<story>.md` then, and that file is how it is cited, in javadoc inside a `{@code}`
+tag. One spelling is the point: the story which hands out the number has to find every citation with
+one search.
+
+A number in angle brackets used to be the other spelling, and it is out. Javadoc wants the brackets
+escaped, the escaped form is long, and the formatter breaks it over two lines. Two citations written
+that way survived the story which numbered their decisions and sat in the tree for weeks, because a
+search reads one line at a time.
+
+`bin/check-decision-citations.sh` does not. It joins every line with the ones after it and takes the
+leading `*` of a continued comment off, so a wrapped citation is one string again. It reports a
+spelling which is not the file, a file which is gone because the decision got its number, and a
+number no entry of `DECISIONS.md` carries. `--self-test` wraps a citation of each kind over two
+lines and checks that the script still finds them. Both run on every pull request. Write an example
+in a document with a placeholder where the number goes, because the check reads an example as a
+citation.
+
 ## A change names who has to follow
 
 > A change which an application can see says who has to follow it, in the same pull request. Those
@@ -315,9 +336,10 @@ bin/check-decision-numbers.sh
 
 Two workflows answer a pull request. *Publish to GitHub Packages* builds and tests everything and
 publishes nothing from a branch, which is deliberate: there is one snapshot version per module, so a
-branch which published would overwrite what `main` published. *Checks* runs where a Markdown file
-changed and renders every Mermaid block of the repository, because a block which does not parse
-shows an error message where the picture should be. A red check is a finding about your change. Read the
+branch which published would overwrite what `main` published. *Checks* reads the citations of every
+decision and looks for a dropped javadoc block, and where a Markdown file changed it renders every
+Mermaid block of the repository, because a block which does not parse shows an error message where
+the picture should be. A red check is a finding about your change. Read the
 log and fix what it says rather than pushing again to see whether it goes away.
 
 ## License
