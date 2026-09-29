@@ -78,7 +78,7 @@
     <!-- the platform versions live here because two trees build against them: the two
          platform integrations and the BPMS double, which is a module tree of its own -->
     <spring-boot.version>4.1.1</spring-boot.version>
-    <quarkus.version>3.39.4</quarkus.version>
+    <quarkus.version>3.39.5</quarkus.version>
     <lombok.version>1.18.48</lombok.version>
     <jacoco.version>0.8.15</jacoco.version>
     <mockito.version>5.23.0</mockito.version>
