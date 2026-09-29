@@ -91,7 +91,7 @@
     <dependency>
       <groupId>org.mockito</groupId>
       <artifactId>mockito-junit-jupiter</artifactId>
-      <version>5.23.0</version>
+      <version>5.24.0</version>
     </dependency>
     <!-- the tests of this module run test classes of their own, which needs an engine
          and a launcher next to the API the module is built against -->

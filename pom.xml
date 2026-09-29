@@ -81,7 +81,7 @@
     <quarkus.version>3.39.5</quarkus.version>
     <lombok.version>1.18.48</lombok.version>
     <jacoco.version>0.8.15</jacoco.version>
-    <mockito.version>5.23.0</mockito.version>
+    <mockito.version>5.24.0</mockito.version>
     <!-- optional: metrics of the election cache are published if the application
          brings Micrometer; compiled against the OLDER of both platforms (Quarkus
          3.37.1 manages 1.16.6, Spring Boot 4.1.0 manages 1.17.0) -->
