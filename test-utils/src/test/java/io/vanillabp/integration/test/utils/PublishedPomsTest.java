@@ -489,6 +489,229 @@ public class PublishedPomsTest {
 
   }
 
+  @Test
+  @DisplayName("A version which is a property of the file itself is no finding")
+  public void aVersionWhichIsAPropertyOfTheFileItselfIsNoFinding(
+      @TempDir final Path root) throws IOException {
+
+    writePom(root, PublishedPoms.THE_SOURCE_POM, """
+        <project>
+          <artifactId>root</artifactId>
+          <properties>
+            <liquibase.version>5.0.4</liquibase.version>
+          </properties>
+          <dependencies>
+            <dependency>
+              <groupId>org.liquibase</groupId>
+              <artifactId>liquibase-core</artifactId>
+              <version>${liquibase.version}</version>
+            </dependency>
+            <dependency>
+              <groupId>io.vanillabp</groupId>
+              <artifactId>sibling</artifactId>
+              <version>${project.version}</version>
+            </dependency>
+          </dependencies>
+        </project>
+        """);
+
+    assertDoesNotThrow(
+        () -> PublishedPoms
+            .ofTheRepositoryAt(root, PublishedPoms.THE_SOURCE_POM)
+            .handAnApplicationNoPropertyInsteadOfAValue());
+
+  }
+
+  @Test
+  @DisplayName("A version which is a property of a POM further up is reported")
+  public void aVersionWhichIsAPropertyOfAPomFurtherUpIsReported(
+      @TempDir final Path root) throws IOException {
+
+    writePom(root, PublishedPoms.THE_SOURCE_POM, """
+        <project>
+          <artifactId>root</artifactId>
+          <properties>
+            <mapstruct.version>1.6.3</mapstruct.version>
+          </properties>
+        </project>
+        """);
+    writePom(root.resolve("runtime"), PublishedPoms.THE_SOURCE_POM, """
+        <project>
+          <artifactId>runtime</artifactId>
+          <dependencies>
+            <dependency>
+              <groupId>org.mapstruct</groupId>
+              <artifactId>mapstruct</artifactId>
+              <version>${mapstruct.version}</version>
+            </dependency>
+          </dependencies>
+        </project>
+        """);
+
+    final var failure = assertThrows(AssertionError.class,
+        () -> PublishedPoms
+            .ofTheRepositoryAt(root, PublishedPoms.THE_SOURCE_POM)
+            .handAnApplicationNoPropertyInsteadOfAValue());
+
+    assertTrue(
+        failure
+            .getMessage()
+            .contains(
+                "runtime/pom.xml declares org.mapstruct:mapstruct, version ${mapstruct.version}"),
+        () -> "The failure does not name the file, the dependency and the property: "
+            + failure.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("A BOM import whose version is a property of a POM further up is reported")
+  public void aBomImportWhoseVersionComesFromFurtherUpIsReported(
+      @TempDir final Path root) throws IOException {
+
+    writePom(root, PublishedPoms.THE_SOURCE_POM, """
+        <project>
+          <artifactId>root</artifactId>
+          <dependencyManagement>
+            <dependencies>
+              <dependency>
+                <groupId>io.quarkus</groupId>
+                <artifactId>quarkus-bom</artifactId>
+                <version>${quarkus.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+              </dependency>
+            </dependencies>
+          </dependencyManagement>
+        </project>
+        """);
+
+    final var failure = assertThrows(AssertionError.class,
+        () -> PublishedPoms
+            .ofTheRepositoryAt(root, PublishedPoms.THE_SOURCE_POM)
+            .handAnApplicationNoPropertyInsteadOfAValue());
+
+    assertTrue(
+        failure
+            .getMessage()
+            .contains("pom.xml manages io.quarkus:quarkus-bom, version ${quarkus.version}"),
+        () -> "The failure does not name the management entry: "
+            + failure.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("A scope and an exclusion are read as well as a version")
+  public void aScopeAndAnExclusionAreReadAsWellAsAVersion(
+      @TempDir final Path root) throws IOException {
+
+    writePom(root, PublishedPoms.THE_SOURCE_POM, """
+        <project>
+          <artifactId>root</artifactId>
+          <dependencies>
+            <dependency>
+              <groupId>org.example</groupId>
+              <artifactId>library</artifactId>
+              <version>1.0.0</version>
+              <scope>${library.scope}</scope>
+              <exclusions>
+                <exclusion>
+                  <groupId>${unwanted.group}</groupId>
+                  <artifactId>unwanted</artifactId>
+                </exclusion>
+              </exclusions>
+            </dependency>
+          </dependencies>
+        </project>
+        """);
+
+    final var failure = assertThrows(AssertionError.class,
+        () -> PublishedPoms
+            .ofTheRepositoryAt(root, PublishedPoms.THE_SOURCE_POM)
+            .handAnApplicationNoPropertyInsteadOfAValue());
+
+    assertTrue(
+        failure
+            .getMessage()
+            .contains("scope ${library.scope}"),
+        () -> "The failure does not report the scope: "
+            + failure.getMessage());
+    assertTrue(
+        failure
+            .getMessage()
+            .contains("exclusion groupId ${unwanted.group}"),
+        () -> "The failure does not report the exclusion: "
+            + failure.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("A dependency a parent manages passes, because its version is no property")
+  public void aDependencyAParentManagesPasses(
+      @TempDir final Path root) throws IOException {
+
+    writePom(root, PublishedPoms.THE_SOURCE_POM, """
+        <project>
+          <artifactId>root</artifactId>
+          <properties>
+            <liquibase.version>5.0.4</liquibase.version>
+          </properties>
+          <dependencyManagement>
+            <dependencies>
+              <dependency>
+                <groupId>org.liquibase</groupId>
+                <artifactId>liquibase-core</artifactId>
+                <version>${liquibase.version}</version>
+              </dependency>
+            </dependencies>
+          </dependencyManagement>
+        </project>
+        """);
+    writePom(root.resolve("runtime"), PublishedPoms.THE_SOURCE_POM, """
+        <project>
+          <artifactId>runtime</artifactId>
+          <dependencies>
+            <dependency>
+              <groupId>org.liquibase</groupId>
+              <artifactId>liquibase-core</artifactId>
+            </dependency>
+          </dependencies>
+        </project>
+        """);
+
+    assertDoesNotThrow(
+        () -> PublishedPoms
+            .ofTheRepositoryAt(root, PublishedPoms.THE_SOURCE_POM)
+            .handAnApplicationNoPropertyInsteadOfAValue());
+
+  }
+
+  @Test
+  @DisplayName("A property only a plugin uses is no finding")
+  public void aPropertyOnlyAPluginUsesIsNoFinding(
+      @TempDir final Path root) throws IOException {
+
+    writePom(root, PublishedPoms.THE_SOURCE_POM, """
+        <project>
+          <artifactId>root</artifactId>
+          <build>
+            <plugins>
+              <plugin>
+                <groupId>org.liquibase</groupId>
+                <artifactId>liquibase-maven-plugin</artifactId>
+                <version>${liquibase.version}</version>
+              </plugin>
+            </plugins>
+          </build>
+        </project>
+        """);
+
+    assertDoesNotThrow(
+        () -> PublishedPoms
+            .ofTheRepositoryAt(root, PublishedPoms.THE_SOURCE_POM)
+            .handAnApplicationNoPropertyInsteadOfAValue());
+
+  }
+
   /**
    * Runs something with the working directory the assertion reads set to the given
    * directory. The property is put back afterwards, because every later test in this fork

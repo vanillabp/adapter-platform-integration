@@ -94,6 +94,37 @@ public class TaskRecordLookupTest {
   }
 
   @Test
+  @DisplayName("The kind of task the id belongs to rides along, into the row and back out of it")
+  public void theKindOfTaskRidesAlong() {
+
+    testee
+        .record(
+            new TaskDelivery(
+                "user-task", "c8", MODULE, PROCESS, AGGREGATE, "workflow-4711", "io.vanillabp.userTask", "Activity_approve", "user-task-1", "COMPLETION_PENDING", null, null, Instant
+                    .now(), null, "USER_TASK"));
+    record("job", "job-1", "COMPLETION_PENDING", Instant.now());
+
+    assertEquals(
+        "USER_TASK",
+        testee.recordOfTask(MODULE, PROCESS, AGGREGATE, "user-task-1").orElseThrow().taskKind(),
+        "this is what lets the failure of a task operation say which kind the id is");
+    assertEquals("USER_TASK", testee.recordedDelivery("user-task").orElseThrow().taskKind());
+    assertEquals(
+        "USER_TASK",
+        testee
+            .openTasksOfWorkflow(MODULE, "workflow-4711")
+            .stream()
+            .filter(open -> "user-task-1".equals(open.taskId()))
+            .findFirst()
+            .orElseThrow()
+            .taskKind());
+    assertNull(
+        testee.recordOfTask(MODULE, PROCESS, AGGREGATE, "job-1").orElseThrow().taskKind(),
+        "an adapter which does not report the kind leaves the column empty, and empty says nothing");
+
+  }
+
+  @Test
   @DisplayName("A record of another workflow, process or module is another question")
   public void aRecordOfAnotherWorkflowIsAnotherQuestion() {
 

@@ -79,6 +79,16 @@ import java.time.Instant;
  *          the two the task is still open and its redeliveries still renew the BPMS' lock on
  *          it. Once it is set, a second completion of the same task is the warned no-op it
  *          always was, and no BPMS has to be asked for that either
+ * @param taskKind Which kind of task {@link #taskId()} is the id of, as the delivering
+ *          adapter named it: <code>TASK</code> for a task the application works off,
+ *          <code>USER_TASK</code> for a user task a person works off (the names of
+ *          {@code io.vanillabp.integration.adapter.spi.workflowtask.TaskKind}). The two ids
+ *          live in namespaces of their own, so an id handed to the command of the other kind
+ *          is answered with "not found" for a task which is perfectly alive - and this is
+ *          what lets VanillaBP say which kind the id is instead of listing what it could
+ *          be. A store keeps the text as it is. May be <code>null</code> where the adapter
+ *          does not say or the record predates this field, and then the record is left out
+ *          of that answer
  */
 public record TaskDelivery(
                            String deliveryKey,
@@ -94,6 +104,53 @@ public record TaskDelivery(
                            String bpmnErrorCode,
                            String bpmnErrorName,
                            Instant recordedAt,
-                           Instant taskClosedAt) {
+                           Instant taskClosedAt,
+                           String taskKind) {
+
+  /**
+   * A record which names no kind of task, which is what every caller wrote before the kind
+   * existed.
+   * <p>
+   * {@link #taskKind()} stands LAST although it belongs next to {@link #taskId()}: it was
+   * added to a record whose other components every store and every test already writes, and
+   * appending it keeps those callers as they are. The same reason put
+   * {@code io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec#name()} at the end
+   * of its record.
+   *
+   * @param deliveryKey The identity of the delivery
+   * @param adapterId The ID of the adapter which delivered the task
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The workflow aggregate's ID in serialized form
+   * @param workflowId The BPMS' own id of the workflow the task belongs to
+   * @param taskDefinition The task definition (or BPMN activity ID) delivered
+   * @param bpmnElementId The <code>id</code> attribute of the BPMN element delivered
+   * @param taskId The BPMS' identity of the task this delivery was about
+   * @param outcome The outcome reported to the BPMS, as the core names it
+   * @param bpmnErrorCode The BPMN error code of an outcome carrying one
+   * @param bpmnErrorName The BPMN error name of an outcome carrying one
+   * @param recordedAt When the delivery was processed
+   * @param taskClosedAt When the completion of this task reached the BPMS
+   */
+  public TaskDelivery(
+      final String deliveryKey,
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String workflowId,
+      final String taskDefinition,
+      final String bpmnElementId,
+      final String taskId,
+      final String outcome,
+      final String bpmnErrorCode,
+      final String bpmnErrorName,
+      final Instant recordedAt,
+      final Instant taskClosedAt) {
+
+    this(
+        deliveryKey, adapterId, workflowModuleId, bpmnProcessId, workflowAggregateId, workflowId, taskDefinition, bpmnElementId, taskId, outcome, bpmnErrorCode, bpmnErrorName, recordedAt, taskClosedAt, null);
+
+  }
 
 }

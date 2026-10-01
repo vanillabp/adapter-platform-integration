@@ -364,6 +364,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         // the task the delivery was about: what lets the election answer from this record
         // which adapter holds that task instead of asking every configured BPMS
         .append("taskId", delivery.taskId())
+        // which kind of task that id is the id of, so VanillaBP can say which method asks
+        // for that kind of key when a caller named the id of the other kind
+        .append("taskKind", delivery.taskKind())
         .append("outcome", delivery.outcome())
         .append("bpmnErrorCode", delivery.bpmnErrorCode())
         .append("bpmnErrorName", delivery.bpmnErrorName())
@@ -585,7 +588,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
                     .getString("taskId"), document.getString("outcome"), document
                         .getString("bpmnErrorCode"), document.getString("bpmnErrorName"), instantOf(
                             document.getDate("recordedAt")), instantOf(
-                                document.getDate("taskClosedAt")));
+                                document.getDate("taskClosedAt")), document.getString("taskKind"));
 
   }
 

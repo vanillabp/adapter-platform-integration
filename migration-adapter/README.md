@@ -1969,6 +1969,45 @@ the routing as well, see [Which method serves a delivery](#which-method-serves-a
   (`JdbcTaskDeliverySchemaTest#aTableWithoutTheElementColumnsIsReported`), and the changeset
   `vanillabp-task-delivery-element-2.0.0` of `io.vanillabp:vanillabp-schema` adds them.
 
+##### The record says which kind of task an id is
+
+`completeTask` with the id of a user task is a mistake an application really makes. The BPMS reads
+that key as a job key, no job carries it, and the answer is "not found" - for a task which is
+perfectly alive. What the caller used to read was a list of three causes, and the real one was not
+among them. The record of that task's delivery knows it: it says which kind of task the id is.
+
+- `TaskInvocationContext.getTaskKind()` is where the kind comes from, `default null`, and the
+  values are `TaskKind.TASK` and `TaskKind.USER_TASK` - the two the platform tells apart anyway
+  (`Election.HOLDS_THE_TASK` and `HOLDS_THE_USER_TASK`). The record keeps the name in `TASK_KIND`
+  respectively in the `taskKind` field of a MongoDB document, `VARCHAR(32)` and nullable, added by
+  the changeset `vanillabp-task-delivery-kind-2.0.0`. Not indexed: a record is found by its task,
+  and the kind is read from the row that lookup already returned.
+- Reported and not derived. A user task of a Camunda 8 cluster runs under a job type of
+  VanillaBP's own, so the kind could be read off `TASK_DEFINITION` - but that reading belongs to
+  one adapter and moves with every rename of that job type, while this table belongs to the
+  platform. The delivery knows the kind without asking anybody, so it says it.
+- `DeliveryRecords.locate` does not elect from a record whose kind contradicts the operation. It
+  would otherwise send a job command to the BPMS which really holds the user task, and that
+  command fails at dispatch time, in the outbox, with nobody left to tell. So the adapters are
+  asked instead, every one of them answers that it knows no such id, and
+  `MigrationProcessService.unknownToEveryBpms` reads the record again and says which kind the id
+  is and which method asks about that kind. It does not claim the other method would succeed -
+  whether the task is still open is a question only that call answers.
+- A record which names no kind contradicts nothing, and everything stays as it was: an adapter
+  which does not report the kind, a record written before the column existed, a kind a newer
+  version of VanillaBP wrote and this one does not know.
+- Where no record holds the id the caller gets the list of causes it always got, plus one sentence
+  saying why the sharper answer is missing: a record does not outlive
+  `vanillabp.delivery.retention`, so a task completed longer ago than that is a task nobody
+  remembers. An application without a store hears nothing about a record, because there is none to
+  miss.
+- This reads the same table the deduplication of a delivery reads and it is not that question.
+  The deduplication decides whether a delivery ran before; this looks up what a caller's id is
+  known as. Nothing about idempotency hangs on it, and a missing record costs nothing but the
+  sharper sentence.
+- `TheRecordSaysWhichKindOfTaskAnIdIsTest` holds all four methods and the counter-probe,
+  `TaskRecordLookupTest#theKindOfTaskRidesAlong` the way through the SQL statements.
+
 ##### What the log does not hold
 
 The records are the work the APPLICATION was handed. A user task the application has no

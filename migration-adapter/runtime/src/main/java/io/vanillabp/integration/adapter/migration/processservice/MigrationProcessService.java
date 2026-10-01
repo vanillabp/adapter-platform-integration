@@ -13,6 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
 import java.util.stream.Stream;
 
+import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.observability.DeliveryMdc;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
@@ -29,6 +30,7 @@ import io.vanillabp.integration.adapter.spi.WorkflowScope;
 import io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay;
 import io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
+import io.vanillabp.integration.adapter.spi.workflowtask.TaskKind;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.Election;
@@ -1885,7 +1887,7 @@ public class MigrationProcessService<A> {
       }
       case UNKNOWN_TO_BPMS -> {
         if (!addressesTheWorkflow(operation) || !location.isUnknownButExpected()) {
-          throw unknownToEveryBpms(operation, args, subject);
+          throw unknownToEveryBpms(operation, aggregateId, args, subject);
         }
         // the workflow exists - the hinted adapter holds it - but its read model has
         // not caught up. Plan the operation and let the dispatch ask again, where
@@ -2158,20 +2160,19 @@ public class MigrationProcessService<A> {
    */
   private RuntimeException unknownToEveryBpms(
       final PhaseOperation operation,
+      final Object workflowAggregateId,
       final Map<String, String> args,
       final String subject) {
 
     final var hint = operation.wording().hintWhenUnknown();
     final var message = """
         No configured BPMS can serve %s of %s (probed adapters, in prioritized order: %s)! The \
-        aggregate itself was saved. Likely causes: %s%s"""
+        aggregate itself was saved. %s%s"""
         .formatted(
             operation.describe(args),
             subject,
             prioritizedAdapters,
-            addressesTheWorkflow(operation)
-                ? likelyCausesOfUnknownWorkflow()
-                : likelyCausesOfUnknownTask(),
+            whyNobodyKnowsIt(operation, workflowAggregateId, args),
             hint.isEmpty()
                 ? ""
                 : " "
@@ -2182,11 +2183,149 @@ public class MigrationProcessService<A> {
 
   }
 
+  /**
+   * Why no BPMS knows what the operation addressed: what the delivery record SAYS about the
+   * id where it holds one, and the list of likely causes where it does not.
+   * <p>
+   * The record is read for an operation about a TASK only. An operation about the workflow
+   * may name a task as well - pushing a changed aggregate into the scope of one - but what
+   * was not found then is the workflow, and the record of a task says nothing about that.
+   * <p>
+   * This reads the same table the deduplication of a delivery reads, and it is not that
+   * question. The deduplication decides whether a delivery ran before; this looks up what a
+   * caller's id is known as. Nothing about idempotency hangs here, and a record which is
+   * missing costs nothing but the sharper sentence.
+   *
+   * @param operation The operation no BPMS could serve
+   * @param workflowAggregateId The workflow aggregate it was about
+   * @param args The operation's arguments, which name the task
+   * @return The part of the message which says why
+   */
+  private String whyNobodyKnowsIt(
+      final PhaseOperation operation,
+      final Object workflowAggregateId,
+      final Map<String, String> args) {
+
+    if (addressesTheWorkflow(operation)) {
+      return "Likely causes: "
+          + likelyCausesOfUnknownWorkflow();
+    }
+    final var askedAbout = DeliveryRecords.kindAskedAboutBy(operation);
+    final var recorded = deliveryRecords.recordedKindOfTheTaskNamedBy(workflowAggregateId, args);
+    if ((askedAbout != null) && (recorded != null) && (recorded != askedAbout)) {
+      return theIdBelongsToAnotherKindOfTask(operation, args, recorded, askedAbout);
+    }
+    return "Likely causes: "
+        + likelyCausesOfUnknownTask()
+        + whatAMissingRecordCannotSay();
+
+  }
+
+  /**
+   * What the record answers where the id a caller named is the id of the other kind of
+   * task - the mistake behind the case this message was written for:
+   * <code>completeTask</code> called with the id of a user task, answered by the BPMS with
+   * "not found" because no job carries that key.
+   * <p>
+   * It says what the id is and which method asks for that kind of key. It does NOT say that
+   * the other method would succeed: whether the task is still there is a question only that
+   * call can answer, and this one has no business pretending otherwise.
+   *
+   * @param operation The operation no BPMS could serve
+   * @param args The operation's arguments, which name the task
+   * @param recorded The kind the record says the id belongs to
+   * @param askedAbout The kind the operation asked a BPMS about
+   * @return The sentences naming the kind and the method
+   */
+  private static String theIdBelongsToAnotherKindOfTask(
+      final PhaseOperation operation,
+      final Map<String, String> args,
+      final TaskKind recorded,
+      final TaskKind askedAbout) {
+
+    final var methodToUse = METHOD_ASKING_ABOUT_THE_OTHER_KIND.get(operation);
+    final var whatTheIdIs = """
+        VanillaBP wrote down that '%s' is the id of %s, while this operation asks a BPMS about \
+        %s. The two kinds of id live in namespaces of their own, so no BPMS finds %s under the \
+        id of %s."""
+        .formatted(
+            args.get(PhaseTwoCall.ARG_TASK_ID),
+            spellOut(recorded),
+            spellOut(askedAbout),
+            spellOut(askedAbout),
+            spellOut(recorded));
+    if (methodToUse == null) {
+      return whatTheIdIs;
+    }
+    return whatTheIdIs + """
+         The method which asks about %s is %s. Whether that task is still open is another \
+        question, and only the call itself answers it."""
+        .formatted(spellOut(recorded), methodToUse);
+
+  }
+
+  /**
+   * Which method of the <code>ProcessService</code> asks about the OTHER kind of task than
+   * the named operation does. Four operations and four counterparts: every mix-up of a task
+   * and a user task, in both directions, has a method it was meant for.
+   * <p>
+   * An operation an EXTENSION contributed is not in here although its election may ask about
+   * a task. Such an operation has no method of its own in the <code>ProcessService</code>,
+   * so the message names the kind and leaves the method out rather than inventing one.
+   */
+  private static final Map<PhaseOperation, String> METHOD_ASKING_ABOUT_THE_OTHER_KIND = Map
+      .of(
+          PhaseOperation.COMPLETE_TASK, "completeUserTask",
+          PhaseOperation.CANCEL_TASK, "cancelUserTask",
+          PhaseOperation.COMPLETE_USER_TASK, "completeTask",
+          PhaseOperation.CANCEL_USER_TASK, "cancelTask");
+
+  /**
+   * A kind of task as a reader of the message says it.
+   *
+   * @param kind The kind to spell out
+   * @return The words for it
+   */
+  private static String spellOut(
+      final TaskKind kind) {
+
+    return switch (kind) {
+      case TASK -> "a task";
+      case USER_TASK -> "a user task";
+    };
+
+  }
+
   private static String likelyCausesOfUnknownTask() {
 
     return "the task ID is wrong or outdated, the task was already completed long ago, or the "
         + "workflow was canceled. If a BPMS was reported unavailable, this operation would have "
         + "failed differently - an unknown task is a definite answer of all adapters.";
+
+  }
+
+  /**
+   * Why the answer stayed a list of causes although VanillaBP keeps a record per delivery:
+   * the record of this id is gone or was never written, so what the id is cannot be read
+   * back any more.
+   * <p>
+   * The retention is named because it is the reason a task completed a while ago gets the
+   * list rather than the sentence. An application without a store hears nothing about a
+   * record, because there is none to miss.
+   *
+   * @return One sentence, or nothing where the application keeps no records
+   */
+  private String whatAMissingRecordCannotSay() {
+
+    final var retention = deliveryRecords.retentionOfTheRecords();
+    if ((deliveryRecords.resolveLog() == null) || (retention == null)) {
+      return "";
+    }
+    return """
+         VanillaBP keeps no record of this id, so it cannot say which kind of task the id \
+        belongs to: a record is kept for %s after the task was last seen ('%s'), and a task \
+        completed longer ago than that is a task nobody remembers."""
+        .formatted(retention, DeliveryProperties.RETENTION_PROPERTY);
 
   }
 

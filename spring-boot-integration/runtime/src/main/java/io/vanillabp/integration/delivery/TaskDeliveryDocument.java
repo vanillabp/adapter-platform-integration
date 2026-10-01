@@ -104,6 +104,15 @@ public class TaskDeliveryDocument {
   private Instant taskClosedAt;
 
   /**
+   * Which kind of task {@link #taskId} is the id of, as the delivering adapter named it:
+   * <code>TASK</code> for a task the application works off, <code>USER_TASK</code> for a user
+   * task a person works off. The two ids live in namespaces of their own, so this is what lets
+   * VanillaBP say which method asks for the kind of key a caller named. Absent where the
+   * adapter does not say and in a document written before this existed.
+   */
+  private String taskKind;
+
+  /**
    * What Spring Data starts from when it reads a document of the collection: it builds the
    * empty record and fills the fields afterwards. A log writing a record uses the
    * constructor taking every field.
@@ -129,6 +138,7 @@ public class TaskDeliveryDocument {
    * @param recordedAt The moment the delivery was processed
    * @param lastSeenAt The moment of the last redelivery
    * @param taskClosedAt The moment the task was closed, or <code>null</code>
+   * @param taskKind The kind of task the id belongs to, or <code>null</code>
    */
   public TaskDeliveryDocument(
       final String id,
@@ -145,7 +155,8 @@ public class TaskDeliveryDocument {
       final String bpmnErrorName,
       final Instant recordedAt,
       final Instant lastSeenAt,
-      final Instant taskClosedAt) {
+      final Instant taskClosedAt,
+      final String taskKind) {
 
     this.id = id;
     this.adapterId = adapterId;
@@ -162,6 +173,7 @@ public class TaskDeliveryDocument {
     this.recordedAt = recordedAt;
     this.lastSeenAt = lastSeenAt;
     this.taskClosedAt = taskClosedAt;
+    this.taskKind = taskKind;
 
   }
 
@@ -330,6 +342,18 @@ public class TaskDeliveryDocument {
   public Instant getTaskClosedAt() {
 
     return taskClosedAt;
+
+  }
+
+  /**
+   * The kind of task the id of this record belongs to, see {@link #taskKind}
+   *
+   * @return <code>TASK</code>, <code>USER_TASK</code>, or <code>null</code> where the adapter
+   *         did not say
+   */
+  public String getTaskKind() {
+
+    return taskKind;
 
   }
 
@@ -513,6 +537,18 @@ public class TaskDeliveryDocument {
       final Instant taskClosedAt) {
 
     this.taskClosedAt = taskClosedAt;
+
+  }
+
+  /**
+   * The kind of task the id of this record belongs to, see {@link #taskKind}
+   *
+   * @param taskKind The kind of task, or <code>null</code>
+   */
+  public void setTaskKind(
+      final String taskKind) {
+
+    this.taskKind = taskKind;
 
   }
 }

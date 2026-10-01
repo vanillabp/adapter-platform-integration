@@ -20,6 +20,15 @@
     <module>integration-tests</module>
   </modules>
 
+  <properties>
+    <!-- Here and not in the aggregator POM above: this file is published, and a consumer
+         resolves the BOM import below out of the published file. A property the file does
+         not carry is gone for the consumer the day the aggregator stops defining it, and
+         the import then carries the name of the property as its version. Keep in sync
+         with the property of the same name in bpms-double/quarkus/pom.xml. -->
+    <quarkus.version>3.40.0</quarkus.version>
+  </properties>
+
   <dependencyManagement>
     <dependencies>
       <dependency>
