@@ -10,8 +10,8 @@ import io.vanillabp.integration.test.utils.PublishedPoms;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * A tool which translates our source stays out of the runtime classpath of the
- * applications using our artifacts.
+ * What the POMs of this repository hand an application: no tool which only translates our
+ * source, and no property where a version belongs.
  * <p>
  * Lombok and the two platform processors do their work while javac runs and have nothing
  * left to do once the class file exists. An application asked
@@ -19,10 +19,16 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * to scan, to ship and to answer a CVE report about. The scope which says that is
  * {@code provided}: it puts the jar on our own compile path and hands it to nobody.
  * <p>
- * What the check knows sits in {@link PublishedPoms} of the module 'test-utils', because
- * every repository of VanillaBP can make this mistake and they all make it in the same
- * way. This test is the caller which names the file this repository publishes and the
- * tools this build uses.
+ * The second assertion is about the versions in those POMs. A version written as
+ * {@code ${some.version}} resolves in our own build, where the POM holding the value is
+ * in the reactor, and it stops resolving for a consumer the day that POM stops defining
+ * the property. On 2026-09-27 that turned every Quarkus blueprint red while this
+ * repository stayed green.
+ * <p>
+ * What the checks know sits in {@link PublishedPoms} of the module 'test-utils', because
+ * every repository of VanillaBP can make these mistakes and they all make them in the
+ * same way. This test is the caller which names the file this repository publishes and
+ * the tools this build uses.
  * <p>
  * This repository writes no flattened POM, so an application reads the same
  * {@code pom.xml} a reviewer reads, and the check reads it too.
@@ -47,6 +53,16 @@ public class PublishedPomsTest {
     PublishedPoms
         .ofTheRepositoryUnderTest(PublishedPoms.THE_SOURCE_POM)
         .handAnApplicationNoToolOfTheBuild(TOOLS_OF_THIS_BUILD);
+
+  }
+
+  @Test
+  @DisplayName("no POM of this repository hands an application a property instead of a value")
+  public void noPomHandsAnApplicationAPropertyInsteadOfAValue() {
+
+    PublishedPoms
+        .ofTheRepositoryUnderTest(PublishedPoms.THE_SOURCE_POM)
+        .handAnApplicationNoPropertyInsteadOfAValue();
 
   }
 

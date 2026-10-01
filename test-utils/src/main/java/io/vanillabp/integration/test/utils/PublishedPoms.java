@@ -4,8 +4,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.regex.Pattern;
 
 import javax.xml.parsers.DocumentBuilderFactory;
 
@@ -14,6 +17,11 @@ import org.w3c.dom.Element;
 /**
  * What the POMs of a repository hand an application, read back out of the files the
  * build publishes.
+ * <p>
+ * Two things are asserted on those files, and both are invisible to the build which
+ * writes them. {@link #handAnApplicationNoToolOfTheBuild(Set)} is about which jars reach
+ * an application, {@link #handAnApplicationNoPropertyInsteadOfAValue()} is about whether
+ * a version in the file is a version at all.
  * <p>
  * A build uses tools which only translate the source: Lombok, MapStruct's processor,
  * the annotation processors of Spring Boot and Quarkus. Each one is read while javac
@@ -75,6 +83,16 @@ public final class PublishedPoms {
    */
   private static final Set<String> SCOPES_WHICH_REACH_NO_APPLICATION = Set
       .of("provided", "test");
+
+  /**
+   * The names a POM may use without defining them. They are the coordinates of the file
+   * itself, which Maven fills from the file, so they arrive wherever the file does.
+   */
+  private static final Set<String> THE_COORDINATES_OF_THE_FILE_ITSELF = Set
+      .of("project.version", "project.groupId", "project.artifactId");
+
+  /** A property as a POM writes it, with the name of the property as the one group. */
+  private static final Pattern A_PROPERTY = Pattern.compile("\\$\\{([^}]+)}");
 
   private final Path repositoryRoot;
 
@@ -256,6 +274,149 @@ public final class PublishedPoms {
                   .formatted(String.join("\n", promisedInVain)));
     }
     throw new AssertionError(message.toString());
+
+  }
+
+  /**
+   * Asserts that no published POM of the repository names a property in the version, the
+   * scope or an exclusion of a dependency without carrying the value of that property.
+   * <p>
+   * A module writes {@code ${liquibase.version}} and the value stands in a POM three
+   * levels above it. Our own build has that POM in the reactor, so the value arrives and
+   * the build stays green. A consumer never has our reactor. It reads the published file,
+   * and it reads the parent the file names, which for a snapshot is the NEWEST build of
+   * that snapshot and not the build this module went out with. From the day the value
+   * leaves that parent, the version a consumer sees is the name of the property.
+   * <p>
+   * That happened on 2026-09-27. The Quarkus runtime declared
+   * {@code org.mapstruct:mapstruct} at {@code ${mapstruct.version}}, a later commit took
+   * the property out of the aggregator POM, and every Quarkus blueprint on both engines
+   * ended with {@code Could not find artifact org.mapstruct:mapstruct:jar:}
+   * {@code ${mapstruct.version}}. Twenty-six jobs, and no build of the platform itself
+   * had anything to say about it. Only a consumer can see this class of mistake, which is
+   * why it is asserted on the file the consumer reads.
+   * <p>
+   * A {@code dependencyManagement} is read too, although Maven ignores the managed
+   * entries of a dependency's POM. An entry of scope {@code import} is the exception: a
+   * consumer resolves it while it builds the model of our artifact, and an import it
+   * cannot resolve ends with {@code Failed to read artifact descriptor}. Measured on
+   * 2026-10-01 with a parent whose property was removed: the consumer's build stops, and
+   * it stops on our artifact rather than on the import.
+   * <p>
+   * {@code ${project.version}}, {@code ${project.groupId}} and
+   * {@code ${project.artifactId}} are allowed. They are the coordinates of the file
+   * itself rather than properties somebody wrote somewhere, so the model a consumer
+   * builds out of that one file already holds them.
+   *
+   * @throws AssertionError If a published POM leaves a consumer with a property name
+   *           where a value belongs
+   */
+  public void handAnApplicationNoPropertyInsteadOfAValue() {
+
+    final var owedAValue = new ArrayList<String>();
+
+    for (final var pom : publishedFiles) {
+      final var project = projectOf(pom);
+      final var valuesTheFileBrings = propertyNamesOf(project);
+      for (final var declaration : dependenciesOf(project)) {
+        collectPropertiesWithoutAValue(pom, "declares", declaration, valuesTheFileBrings,
+            owedAValue);
+      }
+      for (final var managed : dependenciesOf(childOf(project, "dependencyManagement"))) {
+        collectPropertiesWithoutAValue(pom, "manages", managed, valuesTheFileBrings, owedAValue);
+      }
+    }
+
+    if (owedAValue.isEmpty()) {
+      return;
+    }
+
+    throw new AssertionError(
+        ("A published POM names a property whose value it does not carry:\n"
+            + "%s\n"
+            + "Our build resolves these, because the POM holding the value is in the reactor. A "
+            + "consumer resolves the published file against the newest build of its snapshot "
+            + "parent, so the value is gone as soon as that parent stops defining it, and the "
+            + "consumer is handed the name of the property as the version. Bring the value into "
+            + "this file: define the property here, or write the value at the declaration. Where "
+            + "a parent already manages the dependency, leaving the version out of the "
+            + "declaration works as well.")
+            .formatted(String.join("\n", owedAValue)));
+
+  }
+
+  /**
+   * Adds one line per property without a value in the given dependency, for the version,
+   * the scope and the two coordinates of every exclusion. Those are the places a value
+   * reaches a consumer through.
+   */
+  private void collectPropertiesWithoutAValue(
+      final Path pom,
+      final String declaresOrManages,
+      final Element dependency,
+      final Set<String> valuesTheFileBrings,
+      final List<String> owedAValue) {
+
+    final var coordinate = coordinateOf(dependency);
+    final BiConsumer<String, String> report = (
+        place,
+        property) -> owedAValue
+            .add("  %s %s %s, %s ${%s}".formatted(repositoryRoot.relativize(pom), declaresOrManages,
+                coordinate, place, property));
+
+    propertiesWithoutAValue(textOfChild(dependency, "version"), valuesTheFileBrings)
+        .forEach(property -> report.accept("version", property));
+    propertiesWithoutAValue(textOfChild(dependency, "scope"), valuesTheFileBrings)
+        .forEach(property -> report.accept("scope", property));
+    for (final var exclusion : childrenOf(childOf(dependency, "exclusions"), "exclusion")) {
+      propertiesWithoutAValue(textOfChild(exclusion, "groupId"), valuesTheFileBrings)
+          .forEach(property -> report.accept("exclusion groupId", property));
+      propertiesWithoutAValue(textOfChild(exclusion, "artifactId"), valuesTheFileBrings)
+          .forEach(property -> report.accept("exclusion artifactId", property));
+    }
+
+  }
+
+  /**
+   * The properties the given text asks for and the file cannot answer. A text may hold
+   * more than one of them, as {@code ${group.id}:${artifact.id}} in an exclusion does.
+   */
+  private static List<String> propertiesWithoutAValue(
+      final String text,
+      final Set<String> valuesTheFileBrings) {
+
+    if (text == null) {
+      return List.of();
+    }
+    final var withoutAValue = new ArrayList<String>();
+    final var properties = A_PROPERTY.matcher(text);
+    while (properties.find()) {
+      final var property = properties.group(1);
+      if (!THE_COORDINATES_OF_THE_FILE_ITSELF.contains(property) && !valuesTheFileBrings
+          .contains(property)) {
+        withoutAValue.add(property);
+      }
+    }
+    return withoutAValue;
+
+  }
+
+  /** The names below {@code project/properties}, which is what a POM defines itself. */
+  private static Set<String> propertyNamesOf(
+      final Element project) {
+
+    final var names = new HashSet<String>();
+    final var properties = childOf(project, "properties");
+    if (properties == null) {
+      return names;
+    }
+    final var nodes = properties.getChildNodes();
+    for (var index = 0; index < nodes.getLength(); index++) {
+      if (nodes.item(index) instanceof final Element property) {
+        names.add(property.getTagName());
+      }
+    }
+    return names;
 
   }
 

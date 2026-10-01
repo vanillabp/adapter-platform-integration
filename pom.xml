@@ -75,10 +75,12 @@
          application on Java 21 keeps working. Raising this number shuts such an
          application out, so raise it deliberately and say so in UPGRADE.md. -->
     <version.java>21</version.java>
-    <!-- the platform versions live here because two trees build against them: the two
-         platform integrations and the BPMS double, which is a module tree of its own -->
-    <spring-boot.version>4.1.1</spring-boot.version>
-    <quarkus.version>3.40.0</quarkus.version>
+    <!-- A platform version stands in the POM which imports that platform's BOM and not
+         here. A consumer resolves that import out of the published file, and a property
+         defined further up is gone for it the day that POM stops defining the property.
+         Quarkus is in quarkus-integration/pom.xml and bpms-double/quarkus/pom.xml, Spring
+         Boot in spring-boot-integration/pom.xml and bpms-double/spring-boot/pom.xml. Keep
+         the two of one platform in sync. -->
     <lombok.version>1.18.48</lombok.version>
     <jacoco.version>0.8.15</jacoco.version>
     <mockito.version>5.24.0</mockito.version>
@@ -135,19 +137,35 @@
         <version>${micrometer.version}</version>
       </dependency>
       <dependency>
+        <!-- Managed here and declared without a version everywhere, so that no published
+             POM carries '${testcontainers.version}' in a version a consumer reads. See
+             handAnApplicationNoPropertyInsteadOfAValue in PublishedPoms for what goes
+             wrong when it does. The artifact names are the 2.x ones: Testcontainers 2
+             renamed 'junit-jupiter' to 'testcontainers-junit-jupiter' and gives every
+             module the prefix. -->
         <groupId>org.testcontainers</groupId>
         <artifactId>testcontainers</artifactId>
         <version>${testcontainers.version}</version>
       </dependency>
       <dependency>
         <groupId>org.testcontainers</groupId>
-        <artifactId>junit-jupiter</artifactId>
+        <artifactId>testcontainers-junit-jupiter</artifactId>
         <version>${testcontainers.version}</version>
       </dependency>
       <dependency>
         <groupId>org.testcontainers</groupId>
         <artifactId>testcontainers-mongodb</artifactId>
         <version>${testcontainers.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.testcontainers</groupId>
+        <artifactId>testcontainers-postgresql</artifactId>
+        <version>${testcontainers.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.liquibase</groupId>
+        <artifactId>liquibase-core</artifactId>
+        <version>${liquibase.version}</version>
       </dependency>
     </dependencies>
   </dependencyManagement>
