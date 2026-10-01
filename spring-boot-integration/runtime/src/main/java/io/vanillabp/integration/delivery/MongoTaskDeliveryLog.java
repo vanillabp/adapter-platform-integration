@@ -156,7 +156,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                   .bpmnProcessId(), delivery.workflowAggregateId(), delivery.workflowId(), delivery
                       .taskDefinition(), delivery.bpmnElementId(), delivery.taskId(), delivery
                           .outcome(), delivery.bpmnErrorCode(), delivery
-                              .bpmnErrorName(), recordedAt, recordedAt, null),
+                              .bpmnErrorName(), recordedAt, recordedAt, null, delivery.taskKind()),
           collection);
       compensateUnlessCommitted(delivery);
       return true;
@@ -351,7 +351,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
             .getBpmnElementId(), document
                 .getTaskId(), document.getOutcome(), document.getBpmnErrorCode(), document
                     .getBpmnErrorName(), document.getRecordedAt(), document
-                        .getTaskClosedAt());
+                        .getTaskClosedAt(), document.getTaskKind());
 
   }
 

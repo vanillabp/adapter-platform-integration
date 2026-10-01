@@ -80,7 +80,7 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_DELIVERY = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      TASK_CLOSED_AT \
+      TASK_CLOSED_AT, TASK_KIND \
       FROM %s \
       WHERE DELIVERY_KEY = ?""";
 
@@ -100,7 +100,7 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_RECORD_OF_TASK = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      TASK_CLOSED_AT \
+      TASK_CLOSED_AT, TASK_KIND \
       FROM %s \
       WHERE TASK_ID = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
       AND OUTCOME = ? \
@@ -141,7 +141,7 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_OPEN_TASKS_OF_AGGREGATE = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      TASK_CLOSED_AT \
+      TASK_CLOSED_AT, TASK_KIND \
       FROM %s \
       WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
       AND OUTCOME = ? AND TASK_CLOSED_AT IS NULL \
@@ -171,7 +171,7 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_OPEN_TASKS_OF_WORKFLOW = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      TASK_CLOSED_AT \
+      TASK_CLOSED_AT, TASK_KIND \
       FROM %s \
       WHERE WORKFLOW_MODULE_ID = ? AND WORKFLOW_ID = ? \
       AND OUTCOME = ? AND TASK_CLOSED_AT IS NULL \
@@ -233,8 +233,8 @@ public class JdbcTaskDeliveryStore {
       INSERT INTO %s \
       (DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      LAST_SEEN_AT) \
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+      LAST_SEEN_AT, TASK_KIND) \
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
 
   // TASK_CLOSED_AT is not written here: a record is born open, and the moment the
   // application's completion reached the BPMS is the one thing about a task which is known
@@ -575,7 +575,7 @@ public class JdbcTaskDeliveryStore {
                             ? null
                             : recordedAt.toInstant(), taskClosedAt == null
                                 ? null
-                                : taskClosedAt.toInstant());
+                                : taskClosedAt.toInstant(), resultSet.getString(15));
 
   }
 
@@ -660,6 +660,7 @@ public class JdbcTaskDeliveryStore {
         // the record was seen the moment it was written; a redelivery of a task which
         // stays open moves this one and leaves RECORDED_AT where it is
         statement.setTimestamp(14, recordedAt);
+        statement.setString(15, delivery.taskKind());
         statement.executeUpdate();
       }
       return true;
@@ -846,7 +847,9 @@ public class JdbcTaskDeliveryStore {
           new AddedColumn(
               "BPMN_ELEMENT_ID", "VARCHAR(255) (nullable: a record written before the column existed names no element)", "a record does not say which element of the model it belongs to, so an extension listing the open tasks of a workflow cannot find the part of the model each of them stands for", null),
           new AddedColumn(
-              "WORKFLOW_ID", "VARCHAR(255) (nullable: a record written before the column existed names no workflow)", "a record does not say which workflow of the BPMS it belongs to, so nobody can follow a task into the tooling of that BPMS and VanillaBP cannot read the other tasks it still believes are open in that workflow", INDEX_OF_WORKFLOW));
+              "WORKFLOW_ID", "VARCHAR(255) (nullable: a record written before the column existed names no workflow)", "a record does not say which workflow of the BPMS it belongs to, so nobody can follow a task into the tooling of that BPMS and VanillaBP cannot read the other tasks it still believes are open in that workflow", INDEX_OF_WORKFLOW),
+          new AddedColumn(
+              "TASK_KIND", "VARCHAR(32) (nullable: a record written before the column existed names no kind)", "a record does not say whether its id is the id of a task or of a user task, so completing a task with the id of a user task is answered with everything it could be instead of what it is", null));
 
   /**
    * A column a later version of VanillaBP added: its name, the statement which adds it and
@@ -1103,7 +1106,8 @@ public class JdbcTaskDeliveryStore {
         LAST_SEEN_AT %s NOT NULL, \
         TASK_CLOSED_AT %s, \
         BPMN_ELEMENT_ID VARCHAR(255), \
-        WORKFLOW_ID VARCHAR(255))"""
+        WORKFLOW_ID VARCHAR(255), \
+        TASK_KIND VARCHAR(32))"""
         .formatted(tableName, timestampType, timestampType, timestampType);
 
   }

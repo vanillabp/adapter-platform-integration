@@ -18,6 +18,7 @@ import io.vanillabp.integration.adapter.migration.workflowtask.TaskDeliveryKey;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
+import io.vanillabp.integration.adapter.spi.workflowtask.TaskKind;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.spi.Election;
 import io.vanillabp.integration.spi.PhaseOperation;
@@ -357,13 +358,15 @@ public final class DeliveryRecords {
     // it which adapter holds that task, instead of asking every configured BPMS. The
     // element of the model and the BPMS' own id of the workflow travel with it for a
     // reader: they are what an extension and an operator address this task by outside
-    // VanillaBP, and an adapter which names neither leaves both empty
+    // VanillaBP, and an adapter which names neither leaves both empty. The KIND of task is
+    // what lets VanillaBP answer a caller who named the id of the other kind, which is a
+    // mistake an application really makes
     final var recordWasWritten = deliveryLog.record(
         new TaskDelivery(deliveryKey, context.getAdapterId(), workflowModuleId, bpmnProcessId, context
             .getWorkflowAggregateId(), context
                 .getWorkflowId(), context.getTaskDefinition(), context.getBpmnElementId(), context
                     .getTaskId(), outcome.kind().name(), outcome.errorCode(), outcome
-                        .errorName(), Instant.now(), null));
+                        .errorName(), Instant.now(), null, nameOf(context.getTaskKind())));
     if (!recordWasWritten) {
       reportHandlerRanTwiceAtTheSameTime(deliveryKey, context);
     }
@@ -849,6 +852,24 @@ public final class DeliveryRecords {
     if ((record == null) || (record.adapterId() == null)) {
       return null;
     }
+    if (namesAnotherKindOfTask(record, operation)) {
+      // the caller named a task of one kind and asks for a command of the other - the id of
+      // a user task handed to a job command, say. Electing from the record would send that
+      // command to the BPMS which really holds the task, and the BPMS would answer "no such
+      // job" at dispatch time, long after the caller was gone. So the record does not answer
+      // this election: the adapters are asked, every one of them says it knows no such task,
+      // and the failure says which kind the id is (see
+      // MigrationProcessService#unknownToEveryBpms)
+      log.debug(
+          "Task '{}' of aggregate '{}' was delivered as {} while {} asks a BPMS about {} - "
+              + "probing instead",
+          taskId,
+          workflowAggregateId,
+          record.taskKind(),
+          operation.name(),
+          kindAskedAboutBy(operation));
+      return null;
+    }
     final var adapter = adapterProcessServices
         .stream()
         .filter(candidate -> candidate.getAdapterId().equals(record.adapterId()))
@@ -992,6 +1013,152 @@ public final class DeliveryRecords {
       final PhaseOperation operation) {
 
     return (operation.election() == Election.HOLDS_THE_TASK) || (operation.election() == Election.HOLDS_THE_USER_TASK);
+
+  }
+
+  /**
+   * Which kind of task an operation asks a BPMS about, which is the election it is elected
+   * by: a task and a user task are two questions because their ids live in namespaces of
+   * their own.
+   *
+   * @param operation The operation being elected for
+   * @return The kind, or <code>null</code> where the operation asks about no task at all -
+   *         which is every operation about the workflow, however it names a task
+   */
+  public static TaskKind kindAskedAboutBy(
+      final PhaseOperation operation) {
+
+    return switch (operation.election()) {
+      case HOLDS_THE_TASK -> TaskKind.TASK;
+      case HOLDS_THE_USER_TASK -> TaskKind.USER_TASK;
+      default -> null;
+    };
+
+  }
+
+  /**
+   * Whether the record says that the id belongs to the OTHER kind of task than the one this
+   * operation asks a BPMS about.
+   * <p>
+   * Both sides have to say something. A record written by an adapter which does not report
+   * the kind names none, and an operation about the workflow asks about no kind, so neither
+   * contradicts anything and everything stays as it was.
+   *
+   * @param record The record of the task the call names
+   * @param operation The operation being elected for
+   * @return Whether the two name different kinds
+   */
+  private static boolean namesAnotherKindOfTask(
+      final TaskDelivery record,
+      final PhaseOperation operation) {
+
+    final var asked = kindAskedAboutBy(operation);
+    final var recorded = kindNamedBy(record.taskKind());
+    return (asked != null) && (recorded != null) && (recorded != asked);
+
+  }
+
+  /**
+   * The name a store keeps a kind of task under, which is the enum's own name - the way the
+   * outcome of a delivery travels into a record as well.
+   *
+   * @param kind The kind the delivering adapter reported, or <code>null</code>
+   * @return The name, or <code>null</code> where the adapter reported none
+   */
+  private static String nameOf(
+      final TaskKind kind) {
+
+    return kind == null
+        ? null
+        : kind.name();
+
+  }
+
+  /**
+   * The kind a record names, or <code>null</code> where it names nothing this version knows.
+   * A record written by a NEWER version of VanillaBP may hold a kind which did not exist
+   * yet, and a kind nobody here understands says nothing - the alternative would be to
+   * read it as a contradiction and send a caller to a method of a kind nobody knows.
+   *
+   * @param recordedKind The text the record holds, which may be <code>null</code>
+   * @return The kind, or <code>null</code>
+   */
+  private static TaskKind kindNamedBy(
+      final String recordedKind) {
+
+    if (recordedKind == null) {
+      return null;
+    }
+    for (final var kind : TaskKind.values()) {
+      if (kind.name().equals(recordedKind)) {
+        return kind;
+      }
+    }
+    return null;
+
+  }
+
+  /**
+   * Which kind of task the id a call names was delivered as, read from the record of that
+   * task - what the failure of an operation no BPMS could serve says instead of listing
+   * what the id could be.
+   * <p>
+   * It answers <code>null</code> where nothing is known, and that is the ordinary case: an
+   * application without a store, an adapter which does not report the kind, a record the
+   * retention deleted, or a task which was never delivered under this id at all. A failure
+   * of the store is swallowed here, unlike everywhere else: a message is being built for a
+   * failure the caller already has, and replacing it with a second one would hide the first.
+   *
+   * @param workflowAggregateId The workflow aggregate the operation is about
+   * @param args The operation's arguments, which name the task
+   * @return The kind the record names, or <code>null</code>
+   */
+  public TaskKind recordedKindOfTheTaskNamedBy(
+      final Object workflowAggregateId,
+      final Map<String, String> args) {
+
+    if (workflowAggregateId == null) {
+      return null;
+    }
+    final var taskId = theTaskNamedBy(args);
+    if (taskId == null) {
+      return null;
+    }
+    final var deliveryLog = resolveLog();
+    if (deliveryLog == null) {
+      return null;
+    }
+    try {
+      final var record = recordOfTaskUnderAnyServedId(deliveryLog, workflowAggregateId.toString(), taskId);
+      return record == null
+          ? null
+          : kindNamedBy(record.taskKind());
+    } catch (final RuntimeException e) {
+      log
+          .debug(
+              "Could not read which kind of task '{}' of aggregate '{}' (BPMN process '{}' of "
+                  + "workflow module '{}') was delivered as",
+              taskId,
+              workflowAggregateId,
+              bpmnProcessId,
+              workflowModuleId,
+              e);
+      return null;
+    }
+
+  }
+
+  /**
+   * How long a record is kept, which is what a caller has to know who got no sharper answer:
+   * a task completed longer ago than this has no record left to read the kind from.
+   *
+   * @return The retention, or <code>null</code> where no configuration was bound (tests)
+   */
+  public Duration retentionOfTheRecords() {
+
+    return properties == null
+        ? null
+        : properties.resolvedDeliveryRetention();
 
   }
 

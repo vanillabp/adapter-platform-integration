@@ -100,6 +100,36 @@ public interface TaskInvocationContext {
   }
 
   /**
+   * Which kind of task {@link #getTaskId()} is the id of: a task the application works off
+   * or a user task a person works off.
+   * <p>
+   * The two ids live in namespaces of their own, and a BPMS asked for a job under the key
+   * of a user task answers "not found" for a task which is perfectly alive. That is a
+   * mistake an application really makes - {@code completeTask} with the id of a user task -
+   * and the answer it got named everything it could be except the one thing it was. So the
+   * kind travels into the delivery record
+   * ({@link io.vanillabp.integration.spi.TaskDelivery#taskKind()}), and VanillaBP reads it
+   * back when no BPMS knows the id a caller named.
+   * <p>
+   * The kind is reported and not derived. It could be read off the task definition, because
+   * a user task of a Camunda 8 cluster runs under a job type of VanillaBP's own, but that
+   * reading belongs to one adapter and moves with every rename of that job type, while the
+   * record belongs to the platform. The delivery knows the kind without asking anybody, so
+   * it says it.
+   * <p>
+   * The default is <code>null</code>, which means "this adapter does not say". The record of
+   * such a delivery names no kind and is left out of the answer, which is what an adapter
+   * written before this keeps doing.
+   *
+   * @return The kind of task or <code>null</code>
+   */
+  default TaskKind getTaskKind() {
+
+    return null;
+
+  }
+
+  /**
    * The event being processed. BPMS adapters deliver {@link TaskEvent.Event#CREATED}
    * when a task is to be processed; {@link TaskEvent.Event#CANCELED} arrives with
    * the complete/cancel feature.

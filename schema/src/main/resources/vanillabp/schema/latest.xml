@@ -385,4 +385,25 @@
     </createIndex>
   </changeSet>
 
+  <changeSet author="VanillaBP" id="vanillabp-task-delivery-kind-2.0.0" labels="2.0.0">
+    <comment>
+      Which kind of task TASK_ID is the id of: TASK for a task the application works off,
+      USER_TASK for a user task a person works off. The two ids live in namespaces of their own, so
+      a BPMS asked for a job under the key of a user task answers "not found" for a task which is
+      perfectly alive - and that is a mistake an application really makes. With this column
+      VanillaBP answers which kind the id is and which method asks for that kind, instead of
+      listing everything the failure could have been. Written down and not derived: a user task of
+      a Camunda 8 cluster runs under a job type of VanillaBP's own, so the kind could be read off
+      TASK_DEFINITION, but that reading belongs to one adapter and moves with every rename of that
+      job type, while this table belongs to the platform. Nullable, because an adapter which does
+      not report the kind leaves it empty and so does a record written before the column existed;
+      such a record is left out of the answer. No index: a record is found by its task and the kind
+      is read from the row that lookup already returned. A changeset of its own rather than a
+      column added to the ones above, because those were applied already.
+    </comment>
+    <addColumn tableName="${vanillabp.delivery.table}">
+      <column name="TASK_KIND" type="VARCHAR(32)" />
+    </addColumn>
+  </changeSet>
+
 </databaseChangeLog>

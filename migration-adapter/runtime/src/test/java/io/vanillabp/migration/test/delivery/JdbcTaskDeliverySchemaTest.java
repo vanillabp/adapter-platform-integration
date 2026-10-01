@@ -136,6 +136,7 @@ public class JdbcTaskDeliverySchemaTest {
                   TASK_CLOSED_AT TIMESTAMP, \
                   BPMN_ELEMENT_ID VARCHAR(255), \
                   WORKFLOW_ID VARCHAR(255), \
+                  TASK_KIND VARCHAR(32), \
                   CONSTRAINT PK_VANILLABP_TASK_DELIVERY PRIMARY KEY (DELIVERY_KEY))""");
     }
 
@@ -320,6 +321,60 @@ public class JdbcTaskDeliverySchemaTest {
                   TASK_CLOSED_AT TIMESTAMP, \
                   BPMN_ELEMENT_ID VARCHAR(255))""");
     }
+
+  }
+
+  /**
+   * The table one column further still: everything but TASK_KIND, which is the last column a
+   * version of VanillaBP added.
+   */
+  private static void createTableWithoutTheTaskKind(
+      final String database) throws SQLException {
+
+    try (Connection connection = h2(database).acquire(); var statement = connection.createStatement()) {
+      statement
+          .executeUpdate(
+              """
+                  CREATE TABLE VANILLABP_TASK_DELIVERY (\
+                  DELIVERY_KEY VARCHAR(512) PRIMARY KEY, \
+                  ADAPTER_ID VARCHAR(255), \
+                  WORKFLOW_MODULE_ID VARCHAR(255) NOT NULL, \
+                  BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
+                  AGGREGATE_ID VARCHAR(1024), \
+                  TASK_DEFINITION VARCHAR(255), \
+                  TASK_ID VARCHAR(255), \
+                  OUTCOME VARCHAR(32) NOT NULL, \
+                  BPMN_ERROR_CODE VARCHAR(255), \
+                  BPMN_ERROR_NAME VARCHAR(255), \
+                  RECORDED_AT TIMESTAMP NOT NULL, \
+                  LAST_SEEN_AT TIMESTAMP NOT NULL, \
+                  TASK_CLOSED_AT TIMESTAMP, \
+                  BPMN_ELEMENT_ID VARCHAR(255), \
+                  WORKFLOW_ID VARCHAR(255))""");
+    }
+
+  }
+
+  @Test
+  @DisplayName("A table without TASK_KIND names the column and the answer it costs")
+  public void aTableWithoutTheTaskKindIsReported() throws SQLException {
+
+    createTableWithoutTheTaskKind("without-task-kind");
+
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> storeOn("without-task-kind").validateSchemaExists());
+
+    assertTrue(failure.getMessage().contains("TASK_KIND"), failure.getMessage());
+    assertTrue(
+        failure.getMessage().contains("ALTER TABLE VANILLABP_TASK_DELIVERY ADD TASK_KIND VARCHAR(32)"),
+        failure.getMessage());
+    assertTrue(
+        failure.getMessage().contains("the id of a task or of a user task"),
+        "the message says what the column is for: "
+            + failure.getMessage());
+    // a record is found by its task and the kind is read from that row, so no index is asked for
+    assertFalse(failure.getMessage().contains("CREATE INDEX"), failure.getMessage());
 
   }
 
