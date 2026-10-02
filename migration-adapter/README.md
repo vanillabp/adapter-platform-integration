@@ -1064,7 +1064,7 @@ classDiagram
     +getProcessVersion() String  «default null → matches every method without version»
     +runInCurrentTransaction() boolean  «default false · C7 true, except on an own engine datasource»
     +getAdapterId() String  «default null — fills the election cache»
-    +getDeliveryId() String  «default null → no record · C8 job key, PEA task id, C7 the engine's job id on an own datasource and none otherwise, never for a user task»
+    +getDeliveryId() String  «default null → a row which deduplicates nothing · C8 job key, PEA task id, C7 the engine's job id on an own datasource and none otherwise, never for a user task»
     +getActivationId() String  «default null · C7 activityInstanceId, C8 elementInstanceKey, PEA task id»
     +getBpmnElementId() String  «default null · the id a modeller wrote, routes a delivery and travels into the record»
     +getWorkflowId() String  «default null · the BPMS' own id of the running instance»
@@ -1489,6 +1489,13 @@ BPMN process is the process service's business, not the records'.
   qualifies it with adapter ID, workflow module, BPMN process and event, so an ID only
   has to be unique within its own BPMS, and hashes the result where it would outgrow
   what a store can index (512 characters, MySQL's unique-key limit with utf8mb4).
+- An adapter which reports no ID gets a key all the same, with
+  `TaskDeliveryKey.NOT_DEDUPLICATED` and a random value where the ID would stand, and
+  `TaskDeliveryIdentity.deduplicates()` says `false` for it. The row is what matters: it
+  names the adapter which holds the task and the kind of id its id is, and those two
+  answers have nothing to do with repetitions. Nothing is ever looked up by such a key, so
+  no second delivery can land on it and the race which writes one WARN cannot happen there.
+  A reader of the store sees at the key itself which of the two kinds of row it has.
 - The record is written in the handler's own transaction
   (`MigrationProcessService.executeWorkflowTask`): read before the aggregate is loaded,
   written after it was saved, and it carries the OUTCOME (`WorkflowTaskOutcome.Kind`
@@ -1521,9 +1528,14 @@ BPMN process is the process service's business, not the records'.
   resolvable per workflow module, workflow and task like every adapter-scoped key.
 - An adapter says whether it needs this at all:
   `MigratableProcessService.deliversTasksAtLeastOnce()` (default `false`). It decides
-  the startup report only - at runtime nothing is remembered where no delivery ID
-  arrives. Camunda 7 answers `false` on purpose: it delivers tasks inside its own
-  transaction, so a redelivery proves that nothing was committed.
+  the startup report only - at runtime nothing is DEDUPLICATED where no delivery ID
+  arrives, while the row is written either way. Camunda 7 answers `false` on purpose: it
+  delivers tasks inside its own transaction, so a redelivery proves that nothing was
+  committed.
+- `deduplicate-deliveries` switched off is the one case which writes no row at all. It
+  says the handlers are idempotent themselves, and the BPMS behind it may repeat a
+  delivery - a row per repetition would show one task as often as it was handed out to
+  everything which reads the open work of a workflow.
 - Without a store there is a guiding WARN at startup
   (`validateTaskDeliveryLogAtStartup`, once per process service) instead of a failed
   boot. Unlike the outbox, nothing is broken without a log - the behaviour is the one
@@ -1746,9 +1758,10 @@ the registry decision 25 rejected is decision 30.
   walk would have produced: an open record elects the adapter it names, a closed one is the warned
   no-op with the message it always had, and everything else answers `null` and lets
   `WorkflowLocator` decide. `null` is the answer to a missing store, `deduplicate-deliveries`
-  switched off, a passed retention, a BPMS which reports no delivery identity (Camunda 7 delivers
-  in the application's transaction, so a redelivery proves nothing was committed) and an adapter
-  which is not prioritized for this workflow any more.
+  switched off, a passed retention, a task which was never delivered under that id and an adapter
+  which is not prioritized for this workflow any more. A BPMS which reports no delivery identity
+  is NOT among them: Camunda 7 delivers in the application's transaction and reports none, and its
+  row answers this read like any other.
 - What decides whether it is asked at all is the CALL and not the operation: the arguments name a
   task, or they do not. That is why `aggregateChanged(aggregate, taskId)` is routed by the record
   as well, although `AGGREGATE_CHANGED` is elected by whoever holds the workflow - while the task

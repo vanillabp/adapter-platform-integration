@@ -48,8 +48,11 @@ import lombok.Getter;
  * (completed as well as BPMN error, whose code and name have to survive);</li>
  * <li>a delivery whose handler threw leaves no record - the retry runs it, which is what
  * makes the BPMS' retry work;</li>
- * <li>nothing is remembered where the adapter reports no delivery identity, or where the
- * feature is switched off for the adapter, the workflow or the single task;</li>
+ * <li>a delivery whose adapter reports no identity is remembered all the same, under a key
+ * which recognises no repetition - the row answers which BPMS holds the task and which kind
+ * of id its id is, and only the switch turns that off too;</li>
+ * <li>nothing is remembered where the feature is switched off for the adapter, the workflow
+ * or the single task;</li>
  * <li>an adapter which may repeat deliveries without a log to remember them is reported
  * at startup, naming the property to silence it;</li>
  * <li>the elements of a multi-instance activity are told apart although they share task,
@@ -456,7 +459,7 @@ public class InboundIdempotencyTest {
   }
 
   @Test
-  @DisplayName("Without a delivery identity nothing is remembered")
+  @DisplayName("Without a delivery identity each delivery writes a row of its own")
   public void deliveriesWithoutAnIdentityAreNotDeduplicated() {
 
     final var testee = registry(processService(properties(null, null, null), deliveryLog));
@@ -465,7 +468,33 @@ public class InboundIdempotencyTest {
     testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4714", null));
     testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4714", null));
 
-    assertEquals(2, persistence.aggregates.get("4714").invocations);
+    assertEquals(2, persistence.aggregates.get("4714").invocations, "nothing is deduplicated");
+    assertEquals(2, deliveryLog.records.size(), "and both deliveries are written down");
+    deliveryLog.records
+        .keySet()
+        .forEach(key -> assertTrue(
+            key.contains("(not-deduplicated)"),
+            "the key says that no repetition is recognised by it: "
+                + key));
+    deliveryLog.records
+        .values()
+        .forEach(record -> assertEquals(ADAPTER, record.adapterId(), "and the row still names the adapter"));
+
+  }
+
+  @Test
+  @DisplayName("The switch turned off is the one case which writes nothing")
+  public void nothingIsRememberedWhereTheSwitchIsOff() {
+
+    // a BPMS behind this switch may repeat a delivery, and a row per repetition would show
+    // the same task as many times as it was handed out
+    final var testee = registry(processService(properties(false, null, null), deliveryLog));
+    storeAggregate("4717");
+
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4717", "job-1"));
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4717", "job-1"));
+
+    assertEquals(2, persistence.aggregates.get("4717").invocations);
     assertTrue(deliveryLog.records.isEmpty());
 
   }

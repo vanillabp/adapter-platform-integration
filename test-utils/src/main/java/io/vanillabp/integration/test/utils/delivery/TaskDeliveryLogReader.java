@@ -43,7 +43,7 @@ public final class TaskDeliveryLogReader {
    */
   private static final String COLUMNS_OF_A_RECORD = """
       TASK_ID, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
-      TASK_DEFINITION, BPMN_ELEMENT_ID, OUTCOME, TASK_CLOSED_AT""";
+      TASK_DEFINITION, BPMN_ELEMENT_ID, OUTCOME, TASK_CLOSED_AT, TASK_KIND""";
 
   /**
    * What the log wrote down about one delivery of one task.
@@ -63,6 +63,9 @@ public final class TaskDeliveryLogReader {
    * @param bpmnElementId The element of the model which handed the task out
    * @param outcome What the handler of the application reported back
    * @param taskWasClosed Whether the completion of the task has reached the BPMS
+   * @param taskKind Which kind of task {@link #taskId()} is the id of, as the delivering
+   *          adapter named it (<code>TASK</code> or <code>USER_TASK</code>), empty where
+   *          the adapter named none
    */
   public record Delivery(
                          String taskId,
@@ -74,7 +77,8 @@ public final class TaskDeliveryLogReader {
                          String taskDefinition,
                          String bpmnElementId,
                          String outcome,
-                         boolean taskWasClosed) {
+                         boolean taskWasClosed,
+                         String taskKind) {
 
   }
 
@@ -199,7 +203,9 @@ public final class TaskDeliveryLogReader {
         results.getString("TASK_ID"), results.getString("ADAPTER_ID"), results.getString("WORKFLOW_MODULE_ID"), results
             .getString("BPMN_PROCESS_ID"), results.getString("AGGREGATE_ID"), results.getString("WORKFLOW_ID"), results
                 .getString("TASK_DEFINITION"), results.getString(
-                    "BPMN_ELEMENT_ID"), results.getString("OUTCOME"), results.getTimestamp("TASK_CLOSED_AT") != null);
+                    "BPMN_ELEMENT_ID"), results
+                        .getString("OUTCOME"), results.getTimestamp("TASK_CLOSED_AT") != null, results
+                            .getString("TASK_KIND"));
 
   }
 

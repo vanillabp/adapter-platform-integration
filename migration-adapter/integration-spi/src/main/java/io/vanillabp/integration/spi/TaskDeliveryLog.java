@@ -30,6 +30,14 @@ import java.util.Optional;
  * and the workflow, and counts the case as
  * <code>vanillabp.task.redeliveries.concurrent</code>.
  * <p>
+ * <strong>A delivery nobody deduplicates:</strong> an adapter may report no delivery identity,
+ * which says that it never repeats a delivery. The core still writes a record for it, because
+ * the record answers two more questions than the deduplication does - which BPMS holds the
+ * task, and which kind of id its id is - and both were lost with the row. Such a record carries
+ * a key of its own which belongs to one row and to no delivery, so
+ * {@link #recordedDelivery(String)} is never called with it and nothing can land on it twice.
+ * A store needs no code for this: it writes and reads the key as the text it always was.
+ * <p>
  * <strong>Retention:</strong> records are deleted asynchronously once
  * <code>vanillabp.delivery.retention</code> passed, which defaults to
  * <code>vanillabp.outbox.retention</code> (7 days) and is a property of its own since the
@@ -43,6 +51,14 @@ import java.util.Optional;
  * from the last redelivery the record answered ({@link #stillOpen(String)}), so a task
  * which stays open keeps the record answering it and the clock starts once nobody hands
  * that task out any more.
+ * <p>
+ * A record of a delivery nobody deduplicates is kept exactly as long and deleted by the same
+ * statement, and for it the period counts from the moment the handler ran: no repetition ever
+ * arrives to move it. Nothing about correctness hangs on that number there - the record
+ * answers no repetition in the first place - so what a deleted one costs is the saved BPMS
+ * round trip of a task operation and the sharper sentence of a failure which names the kind
+ * of an id. An installation whose tasks stay open longer than the retention and which wants
+ * both raises the retention.
  * <p>
  * <strong>Release at the end of a workflow:</strong> where
  * <code>vanillabp.delivery.release-on-workflow-end</code> is switched on, the records of

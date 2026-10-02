@@ -24,7 +24,9 @@ import java.time.Instant;
  *          the core from the delivering adapter, the workflow module, the BPMN
  *          process, the event and the delivery ID the adapter reported. A
  *          redelivery of the same task yields the same key, a genuinely new task
- *          instance a different one
+ *          instance a different one. Where the adapter reports no delivery ID the key
+ *          says so in words and carries a random value, so it belongs to this one record
+ *          and no second delivery is ever looked up by it
  * @param adapterId The ID of the adapter which delivered the task. It is part of the
  *          {@link #deliveryKey()} as well, but only as text and hashed once the key grows
  *          too long, so a store cannot answer questions about it - which is why it is a
