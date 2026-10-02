@@ -46,10 +46,10 @@ because most of what looks like adapter work belongs to the core:
 
 Before you implement anything, ask which part of it is the same for every BPMS. That part is
 already in the core or belongs there, and building it in an adapter is the most common wrong turn
-this SPI invites. Version 1 of VanillaBP put the outbox and the eventual-consistency handling into
-the individual adapters, which is exactly why an application could not be migrated from one BPMS
-to another. If you find yourself writing retry logic, an idempotency registry or a rule about
-which BPMS should serve a call, stop and ask us instead of writing it.
+this SPI invites. Version 1 of VanillaBP left the eventual-consistency handling to the individual
+adapters, which is exactly why an application could not be migrated from one BPMS to another. If
+you find yourself writing retry logic, an idempotency registry or a rule about which BPMS should
+serve a call, stop and ask us instead of writing it.
 
 Five consequences are worth stating before the interfaces.
 
