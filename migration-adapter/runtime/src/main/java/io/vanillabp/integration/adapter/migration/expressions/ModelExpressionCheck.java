@@ -36,8 +36,8 @@ import io.vanillabp.integration.spi.startup.StartupTopic;
  * message hands out.
  * <p>
  * Why the rule lives here while the detection lives in every adapter, and why an expression
- * naming a single variable is reported nowhere, is written down in
- * {@code DECISIONS.pending/502.md} of this repository, until the decision is numbered.
+ * naming a single variable is reported nowhere, is decision 103 in the repository's
+ * DECISIONS.md.
  */
 public class ModelExpressionCheck {
 
