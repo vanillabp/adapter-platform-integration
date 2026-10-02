@@ -208,10 +208,14 @@ out of the environment, so `${...}` and `@Value` could see them while `Environme
 
 An adapter whose BPMS is remote cannot take part in your local transaction, so a workflow is started
 in two phases through a transaction outbox. Coming from version 1 that is new, and it is asked of an
-application on Camunda 7 as well, which version 1 never did. Three tables are created in the database
-your workflow aggregates live in: the outbox store, the payloads of the calls which carry one, and
-the log of processed task deliveries which keeps a redelivered task from running your handler twice.
-A payload lies beside its entry rather than inside it, which is why it has a table of its own.
+application on Camunda 7 as well. Three tables are created in the database your workflow aggregates
+live in: the outbox store, the payloads of the calls which carry one, and the log of processed task
+deliveries which keeps a redelivered task from running your handler twice. A payload lies beside its
+entry rather than inside it, which is why it has a table of its own.
+
+Version 1 had no outbox. On Camunda 8 a listener completed the job after your transaction had
+committed, so nothing about that call was written down and a node which died in between lost it.
+Version 1 left no table of two-phase calls behind, so there is nothing to drain or carry over.
 
 `vanillabp.outbox.create-schema` defaults to `true`, so an application which configures nothing gets
 its tables on the first boot. An application whose schema is a reviewed artifact sets the switch to
@@ -231,35 +235,6 @@ Where the first adapter of the priority list needs the outbox and none can be re
 application does not boot and the message names what to add. The transaction the outbox entry rides
 in is checked in the same moment. What the outbox guarantees, and what it does not, is on the wiki
 page [Spring Boot integration](https://github.com/vanillabp/adapter-platform-integration/wiki/Spring-Boot-integration#what-the-outbox-guarantees).
-
-#### Gruelbox is one dependency away
-
-A version-1 application on Spring Boot with JPA stored its two-phase calls in the gruelbox
-transaction outbox, in the table `TXNO_OUTBOX`. Version 2 writes them into its own table, and the
-gruelbox store is not part of VanillaBP any more. Two ways to go.
-
-Change nothing. The entries go into `VANILLABP_PHASE_TWO_OUTBOX`, and every start counts what
-`TXNO_OUTBOX` still holds undispatched and says so, because nothing reads that table any more. Drain
-it with your version-1 application, or with your new one running gruelbox once, and drop it
-afterwards.
-
-Keep gruelbox. Add one dependency and change no configuration:
-
-```xml
-<dependency>
-  <groupId>io.vanillabp</groupId>
-  <artifactId>gruelbox-phase-two-outbox</artifactId>
-  <version>1.0.0</version>
-</dependency>
-```
-
-The dependency is the whole switch: the store VanillaBP writes itself steps back, the section
-`vanillabp.outbox.gruelbox.*` stays what it was, and the rows stay where they are. What that store
-cannot do, and the store VanillaBP writes itself can, is listed in its own
-[README](https://github.com/vanillabp/gruelbox-phase-two-outbox). The dependency is what asks for
-that store, and `vanillabp.outbox.gruelbox.enabled` belongs to it: without the artifact the key is a
-line nothing reads, and VanillaBP's own store serves. What VanillaBP does say is what is left in
-`TXNO_OUTBOX`, at every start, until the table is empty.
 
 #### What the startup says about a configuration
 
