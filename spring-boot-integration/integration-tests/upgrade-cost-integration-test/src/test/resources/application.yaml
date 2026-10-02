@@ -1,0 +1,32 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:upgrade-cost-it;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: create
+dummy-adapter:
+  at-least-once-delivery: true
+vanillabp:
+  adapters:
+    the-bpms:
+      type: dummy
+      test: 1
+  workflow-modules:
+    upgrade-cost-module:
+      adapters:
+        the-bpms:
+          resources-location: classpath*:upgrade-cost-module/processes/dummy
+      workflows:
+        UpgradeCostProcess:
+          allow-full-sync-with-bpms: true
+          declared-aggregate-values:
+            - '*'
+  outbox:
+    poll-interval: PT0.2S
+    attempt-frequency: PT0.5S
+    housekeeping:
+      start: 00:01
+      end: 00:00
+      zone: Europe/Vienna
+upgrade-cost-module:
+  nothing: there
