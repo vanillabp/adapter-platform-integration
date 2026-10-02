@@ -2902,6 +2902,12 @@ derived cancellation with it. With the definition the refusal is per record. A p
 implements `stillExists(workflowId, taskId)` alone is asked through the default and decides as it
 always did.
 
+The record says the kind of task outright since `TaskInvocationContext.getTaskKind()` exists, and
+the argument stays the definition all the same: the kind cannot say whether a single ELEMENT may
+be probed, which is what the Camunda 8 adapter reads off the definition for a user task carrying
+an `updating` listener nobody serves. The reasoning sits in the javadoc of `stillExists` so the
+question is not asked again.
+
 What this does not promise: a workflow which walks into a timer or a message wait after the
 boundary event produces no job, so nothing wakes the application up and the cancellation waits.
 Three things catch it later - the next job of that workflow, the end of the workflow, and the next

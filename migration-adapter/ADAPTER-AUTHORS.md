@@ -743,6 +743,14 @@ their derived cancellation with it. With the definition you answer `CANNOT_SAY` 
 you cannot ask about and ask your BPMS for the rest. A probe which implements
 `stillExists(workflowId, taskId)` alone is asked through the default and decides as it always did.
 
+It is the definition and not `TaskKind`, although the delivery record says the kind outright. The
+kind cannot carry the answer which matters most here: whether THIS element may be probed at all.
+On Camunda 8 a user task carrying an `updating` listener nobody serves must be left alone, because
+the empty update fires that listener and leaves the task standing in `UPDATING`, and that is a
+property of single elements of the model. An adapter holding only `USER_TASK` would have to refuse
+every user task of a process which holds one such element, which is the refusal per BPMN process
+this argument was added to get rid of.
+
 What you may not do with it is read a negative answer as more than it is. `GONE` is the only
 answer which cancels the application's task, and the same rule holds for the election next door: a
 workflow which ended is `COMPLETED` and never `UNKNOWN_TO_BPMS`, because the unknown answer is what
