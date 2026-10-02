@@ -32,8 +32,9 @@ import jakarta.inject.Inject;
  * the startup names them with the statement which creates each one.
  * <p>
  * The message itself is held by the test of the core which writes it. What is tested here
- * is the half only a database answers: an index VanillaBP created has to be an index
- * VanillaBP recognizes again, or every startup would name indexes which are there.
+ * is the half only a database answers: no index was created, and an index VanillaBP
+ * created has to be an index VanillaBP recognizes again, or every startup would name
+ * indexes which are there.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoIndexesOfAnApplicationManagingItsOwnSchemaTest {
@@ -41,12 +42,18 @@ public class MongoIndexesOfAnApplicationManagingItsOwnSchemaTest {
   private static final String DATABASE = "missing-indexes-it";
 
   /**
-   * A database of its own for the round trip below, so the assertion that the startup
-   * created nothing does not meet the indexes this test creates itself.
+   * A database of its own for the round trip below, so the assertion about what the
+   * startup created does not meet the indexes this test creates itself.
    */
   private static final String DATABASE_OF_THE_ROUND_TRIP = "indexes-read-back-it";
 
   private static final String OUTBOX_COLLECTION = PhaseTwoOutboxProperties.MongoOutboxProperties.DEFAULT_COLLECTION;
+
+  /**
+   * The index MongoDB creates itself, over the id of a document. Every collection carries
+   * it and nobody asked VanillaBP for it.
+   */
+  private static final String THE_INDEX_MONGODB_CREATES_ITSELF = "_id_";
 
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
@@ -58,22 +65,45 @@ public class MongoIndexesOfAnApplicationManagingItsOwnSchemaTest {
           .addClass(RecordingPhaseTwoListener.class)
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .overrideConfigKey("quarkus.mongodb.database", DATABASE)
-      .overrideConfigKey("vanillabp.outbox.create-schema", "false");
+      .overrideConfigKey("vanillabp.outbox.create-schema", "false")
+      // the housekeeping window is held open on purpose, the way the two tests which
+      // watch the housekeeping do it. A window which ends before it starts crosses
+      // midnight, so this one is open all day but for the first minute of it.
+      //
+      // The housekeeping claims its store by a write, and on MongoDB a write makes the
+      // collection it goes to. So the lease collection appears here although nobody
+      // created a schema. An assertion over the collection names was green all day and
+      // red between 04:00 and 05:00, which is the default window read in the zone the
+      // test JVMs of this build stand in. Holding the window open makes that write
+      // happen in every run, and what is asserted below is the promise itself: no index
+      .overrideConfigKey("vanillabp.outbox.housekeeping.start", "00:01")
+      .overrideConfigKey("vanillabp.outbox.housekeeping.end", "00:00")
+      .overrideConfigKey("vanillabp.outbox.housekeeping.zone", "Europe/Vienna");
 
   @Inject
   MongoClient mongoClient;
 
   @Test
-  @DisplayName("Nothing is created where the application said that it looks after its schema")
-  public void theStartupCreatesNothing() {
+  @DisplayName("No index is created where the application said that it looks after its schema")
+  public void theStartupCreatesNoIndex() {
 
-    final var collections = new ArrayList<String>();
-    mongoClient
-        .getDatabase(DATABASE)
+    final var database = mongoClient.getDatabase(DATABASE);
+
+    final var created = new ArrayList<String>();
+    database
         .listCollectionNames()
-        .forEach(collections::add);
+        .forEach(collection -> database
+            .getCollection(collection, Document.class)
+            .listIndexes()
+            .forEach(index -> {
+              final var name = index.getString("name");
+              if (!THE_INDEX_MONGODB_CREATES_ITSELF.equals(name)) {
+                created.add("%s.%s".formatted(collection, name));
+              }
+            }));
 
-    assertEquals(List.of(), collections, "a collection here would carry an index VanillaBP created");
+    assertEquals(
+        List.of(), created, "VanillaBP created these although the application looks after its schema");
 
   }
 
