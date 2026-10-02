@@ -342,6 +342,13 @@ Mermaid block of the repository, because a block which does not parse shows an e
 the picture should be. A red check is a finding about your change. Read the
 log and fix what it says rather than pushing again to see whether it goes away.
 
+`main` carries a ruleset, and it requires three green checks before a merge: `publish`, which is the
+build of the first workflow, `orphaned-javadoc-check`, which looks for the dropped javadoc block
+described above, and `diagrams-verified`, the one name which answers on every pull request whether
+there was a diagram to render or not. While one of them is red, GitHub does not offer the merge.
+`decision-citation-check` runs beside them without being required, and a red one there is a finding
+all the same.
+
 ## License
 
 VanillaBP is published under the [Apache License, Version 2.0](./LICENSE), and by contributing you
