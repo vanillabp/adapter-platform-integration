@@ -1155,13 +1155,14 @@ contributor-facing and carries the rationale, the alternatives you considered an
 mechanics. A deliberate mode which conforms fully is not a deviation; document it with the
 configuration which enables it.
 
-One rule about the classes themselves, because it is about what a reader of your documentation sees.
-A class in the `src/main` of a module you publish carries no Lombok and no MapStruct annotation
-(decision 81 of this repository). Javadoc does not run either of them, so a configuration class with
-`@Getter` is published as a class with no accessor at all, and the person reading it cannot call what
-you shipped. The second half costs more than a wrong page: a code generator whose annotations reach
-your published POM puts its runtime library on the classpath of every application which adds your
-adapter, and they never asked for it. Both tools are welcome in your tests and in your build tools.
+One rule about what you publish, because it is about what a reader of your documentation sees and
+what an application has to fetch. A published artifact never makes an application fetch Lombok or
+MapStruct (decision 81 of this repository): no POM which names either tool at a scope a consumer
+resolves, and no bytecode which calls a method of either tool, reads a field of it or names one of
+its types in a signature. An annotation may stay where its retention is `CLASS`. Watch the javadoc
+either way: it does not run these tools, so a configuration class whose accessors only exist because
+of `@Getter` is published as a class with no accessor at all, and the person reading it cannot call
+what you shipped. Both tools are welcome in your tests and in your build tools.
 
 `DECISIONS.md` holds the numbered decisions several places in your repository rely on, and it is
 the only thing your code is allowed to cite, in the plain form `see decision 7 in the repository's
