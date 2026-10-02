@@ -884,7 +884,8 @@ task is wired lives in them and nowhere else. So the core answers two things and
 `taskWiringOfProcessesNobodyDeployed` says WHICH ids a workflow module declares without a model
 and WHAT its `@WorkflowTask` methods serve for each of them, and the adapter composes its BPMS'
 own identifiers from that answer. Deciding it here would put one engine's notion of a
-subscription into the core, which is the mistake version 1 made with the outbox.
+subscription into the core, which is the mistake version 1 made with the eventual-consistency
+handling.
 
 The method is named after the question rather than after today's answer, and that is deliberate.
 What an application may name its wiring by belongs to the surface of `spi-for-java` and can
@@ -2545,11 +2546,11 @@ rather than losing them quietly.
 The entries of one workflow aggregate are dispatched by one thread, and the aggregate decides
 which of them (`DispatchLanes`, `vanillabp.outbox.dispatch-threads`, four by default). Until now
 every store dispatched on a single thread per node, so an application which completed tasks from
-twenty job executor threads in version 1 handed every completion to one dispatcher. A pool giving
-the next free thread the next entry would fix the throughput and break the order: two operations
-of one workflow would reach the BPMS the wrong way round, and nothing downstream would notice
-until a customer did. The number of threads is bounded because an unbounded one only moves the
-limit into the connection pool, where it is harder to see.
+twenty job executor threads under version 1 handed every completion to one dispatcher here. A pool
+giving the next free thread the next entry would fix the throughput and break the order: two
+operations of one workflow would reach the BPMS the wrong way round, and nothing downstream would
+notice until a customer did. The number of threads is bounded because an unbounded one only moves
+the limit into the connection pool, where it is harder to see.
 
 What this does not order is a FAILED entry. It waits for its backoff, and the next entry of the
 same aggregate passes it in the meantime - which is what a single thread did as well, because a
