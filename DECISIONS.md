@@ -2760,36 +2760,71 @@ written at, which is the same answer decision 66 gives for the permission to sha
 aggregate. Both are settings a level binds without reading, and a setting which can be written
 and does nothing is worse than one which cannot be written at all.
 
-### 81. A published class carries no Lombok and no MapStruct annotation
+### 81. No published artifact makes an application fetch Lombok or MapStruct
 
-Javadoc does not run Lombok. So the published documentation of every `config/*Properties` class shows a
-class without a single accessor, while the bytecode has one per field. The other direction happens too:
-`PhaseTwoOutboxEntry`, `TaskDeliveryDocument` and `PhaseTwoPayloadDocument` carry `@AllArgsConstructor`
-beside a hand-written constructor, so the jar has two public constructors and the documentation shows
-one. Whoever reads what we publish sees a different API from the one they can call, and that is the
-whole point of publishing javadoc.
+The rule: a published artifact never makes an application fetch Lombok or MapStruct. Two things are
+out of a module we publish. A POM which names either tool at a scope a consumer resolves, and
+bytecode which calls a method of either tool, reads a field of it or names one of its types in a
+signature. What the source does is free, and the test code and the build tools stay free as well.
 
-MapStruct is the heavier half, because it costs more than a wrong page. `org.mapstruct:mapstruct` sits
-in `quarkus-integration/runtime/pom.xml` with no scope, so it is on the compile classpath of every
-application which pulls our Quarkus integration - a library those applications never asked for, on the
-classpath only because we generate one properties mapper with it. Lombok is `provided` in the root POM
-and never reaches an application, so there the argument is the javadoc alone.
+An annotation of either tool may stay, in the source and in the published class file, as long as its
+retention is `CLASS`. An annotation with retention `RUNTIME` is not covered by the measurement below
+and needs one of its own before it may stay.
 
-The rule: a class in the `src/main` of a module we publish carries neither a Lombok nor a MapStruct
-annotation. Test code, integration-test modules and the build tools are free to use both. `@Slf4j` is
-included in the rule although it generates no API, because an exception nobody can check by looking at
-the class is an exception which grows.
+**What the published artifacts carry.** Measured on 2026-10-02 from outside every repository: a
+consumer project of its own, an empty local repository and `-Pvanillabp-snapshots -U`, so every file
+came off the registry and Maven's workspace reader answered none of it. 37 published jars of the
+platform, the three adapters, the SPI, the Gruelbox outbox and the Hazelcast cache, with 1038
+classes in them, plus the 51 published POMs. No class in them names MapStruct, and no POM does
+either. Lombok is a dependency of 23 POMs, 18 declared and five managed, every one of them at scope
+`provided`, which Maven never passes on. Another 15 POMs name it inside
+`annotationProcessorPaths`, where it is build configuration a consumer never reads. In the bytecode
+Lombok appears as one single thing, `@lombok.Generated` on the members Lombok generated, in 134 of
+the 1038 classes. It sits in `RuntimeInvisibleAnnotations`, so its retention is `CLASS` and the JVM
+does not read it at all. No call, no field access and no type in a signature names either tool.
 
-What this costs is written down rather than guessed: 136 files across the platform and the four adapter
-repositories, 85 of them carrying `@Slf4j` alone, 51 generating API, plus the MapStruct mapper of the
-Quarkus integration, whose generated implementation is 366 lines. The order to convert them in is the
-public API first - the configuration classes and the three MongoDB documents an application's javadoc
-shows - then the internal classes which generate API, then the loggers. The mapper waits for the
-portable-values work to land, because that work changes the same file.
+**The step which answers the question.** An application outside all repositories, with neither tool
+anywhere near its POM, depends on `vanillabp-spring-boot-integration` and
+`camunda8-adapter-spring-boot`. It resolves 79 artifacts at runtime scope, and neither
+`org.projectlombok:lombok` nor `org.mapstruct:mapstruct` is among them. It compiles against
+`WorkflowModule.builder()`, `getId()` and `getSourceUri()`, which Lombok generated, and it runs.
+`Class.forName("lombok.Generated")` throws there, and reading the annotations of those members back
+by reflection returns none, because the JVM skips what it cannot see.
 
-The check which catches the next case belongs beside `PublishedPoms` and `TestClassConventions` in
-`test-utils`, with one caller per repository, and it is switched on per stage rather than all at once:
-a gate which fails on 136 files on the day it is written is a gate nobody can merge.
+**What the rule already took out.** `org.mapstruct:mapstruct` sat in
+`quarkus-integration/runtime/pom.xml` with no scope, so it was on the compile classpath of every
+application which pulls our Quarkus integration, for one generated properties mapper. That is the
+first half of the rule, and the mapper is written by hand since then.
+
+**Why the Lombok annotation is better off staying.** `lombok.addLombokGeneratedAnnotation = false`
+in a `lombok.config` takes it out of every class file, and no source has to change for that.
+Measured on 2026-10-02 in a probe project: with the setting the constant pool is clean, and it costs
+coverage. JaCoCo 0.8.15 skips a member which carries an annotation named `Generated`, so a class
+with a Lombok getter and setter whose test calls neither reports no missed method. The same class
+compiled with the setting reports two missed methods and seven missed instructions, which is what
+the same accessors written by hand report. The gate sits at 85, and the setting would move 134
+classes across six repositories the wrong way for nothing an application can notice. So the
+annotation stays and `lombok.addLombokGeneratedAnnotation` stays unset.
+
+**Where the javadoc reason went.** The wording this entry replaces said that a class in the
+`src/main` of a module we publish carries neither a Lombok nor a MapStruct annotation. It was
+written for a real problem. Javadoc does not run Lombok, so the published page of a class whose
+accessors Lombok generates shows none of them. Stephan weighed that on 2026-09-29 and takes it: a
+javadoc comment on the field is enough while Lombok writes the getter and the setter, and a builder
+without javadoc is a pity he accepts, because the extra code weighs more and a builder only rarely
+reaches the end user. The help an IDE shows while somebody edits a YAML file is a second surface,
+and it does not depend on Lombok either. It comes from
+`META-INF/spring-configuration-metadata.json`. All 42 descriptions in the published file of
+`vanillabp-spring-boot-integration` are word for word the 42 entries of
+`spring-boot-integration/runtime/src/main/resources/META-INF/additional-spring-configuration-metadata.json`,
+which is written by hand and guarded by `AKeyIsDescribedInOnePlaceTest` and
+`EveryKeyOfASectionIsDescribedTest`. Not one of them comes from a javadoc comment, and the module
+layout is the reason: `VanillaBpConfigurationProperties` only carries the `@ConfigurationProperties`
+annotation, and every property comes from `MigrationAdapterProperties` in another module, whose
+javadoc the processor cannot read. So a Lombok accessor on a properties class costs nothing there.
+
+The thirteen configuration classes which lost their Lombok annotations before this wording stay as
+they are. Putting the annotations back costs more than it returns.
 
 ### 89. A setting written below the level it is read at ends the startup, and all of them say it the same way
 

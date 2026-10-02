@@ -162,9 +162,9 @@ as possible at **build time**, following Quarkus' extension philosophy:
    config files and env overrides need the runtime config), and the transformer
    copies it onto the core model via the hand-written mapper
    `QuarkusMigrationAdapterPropertiesMapper` (MapStruct wrote it until story 639;
-   it left because a class we publish carries no MapStruct annotation and because
-   the annotation put `org.mapstruct:mapstruct` on the classpath of every
-   application, see decision 81 in DECISIONS.md. What the generator caught at
+   it left because the annotation put `org.mapstruct:mapstruct` on the classpath of
+   every application, and no published artifact makes an application fetch
+   MapStruct, see decision 81 in DECISIONS.md. What the generator caught at
    compile time is caught by `QuarkusMigrationAdapterPropertiesMapperGuardTest`
    now: it walks both sides by reflection and fails on a value read nowhere or
    written nowhere). Defaulting and ALL guiding validation
