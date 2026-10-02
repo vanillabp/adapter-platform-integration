@@ -3353,3 +3353,399 @@ make the warning wrong.
 What follows for the wording is that the message must not claim the handlers run in parallel. It
 says they can be open at the same time, and the wiki page `Compensation` carries what each engine
 really does.
+
+### 102. The gruelbox store leaves the platform, and what stays is the bridge and one refusal
+
+Decision 75 said that gruelbox stays available inside this repository as an opt-in, behind
+`vanillabp.outbox.gruelbox.enabled`, and that nothing in the platform depends on it any more. The
+second half held. The first half is what this entry changes: the store is out, with its tests and
+its library, and it lives in `vanillabp/gruelbox-phase-two-outbox`.
+
+The opt-in was not enough, because a switch in the platform is a second decision. An application
+had to have the library AND set the key, and the platform then had to say something sensible about
+every combination of the two. It also kept paying for the library everybody carries:
+`com.gruelbox:transactionoutbox-core` and `-spring` were `optional`, so no application inherited
+them, but this repository still compiled against them, tested against them and answered for them.
+What the move costs an application is one dependency, and its configuration stays as it is. The
+section is still `vanillabp.outbox.gruelbox.*` and the table is still `TXNO_OUTBOX`.
+
+**The bridge stays.** `JdbcPhaseTwoOutboxAutoConfiguration` still counts what `TXNO_OUTBOX` holds
+undispatched and warns about it. An application coming from that store needs the message exactly
+now, when the code which read that table is gone. It names the artifact to add instead of a key,
+and it carries the table name as a literal, because the class which declared that constant is in the
+other repository. The name belongs to the library anyway: gruelbox defaults to it and its migration
+creates no other.
+
+**Nothing about the key stays.** Every artifact holds its own properties, and that is the
+developer's side of the bargain (Stephan, 2026-09-28). So `vanillabp.outbox.gruelbox.*` leaves this
+repository completely: no class binds it, no condition reads it, and
+`META-INF/additional-spring-configuration-metadata.json` does not describe it either. A development
+environment therefore proposes that key exactly where the artifact serving it is on the classpath,
+which is the artifact's own generated metadata doing the work.
+
+Two earlier drafts said something about the key. The first ended the boot of an application which
+set it without having the artifact, the second wrote a WARN instead. Both are gone, because a
+property of an artifact which is not there means nothing, and a platform which comments on every
+key it does not own would have to keep the list of them. What an application coming from that store
+still needs is not about the key at all. It is the message above about what `TXNO_OUTBOX` holds, and
+that one stays.
+
+The Quarkus refusal stays as it was, with one sentence added: the store is not just absent on
+Quarkus, it is not part of VanillaBP at all.
+
+The two stores take turns through one bean name, `vanillaBpJdbcPhaseTwoOutbox`, which is the outbox
+of a relational aggregate. The store of the other repository registers its outbox under that name
+and declares its auto-configuration `before` this one, and this one carries
+`@ConditionalOnMissingBean` on that name. So the dependency is the whole wiring, which is how
+`hazelcast-shared-election-cache` replaces the in-memory election cache, and
+`SpringPhaseTwoOutboxResolver` knows one JPA default name instead of two.
+
+The same name is what makes the way back work. An application which switches the other store off
+leaves the name free, so this configuration applies and serves the entries, which is one half of
+the rule and the half nothing would have noticed breaking. `TheDependencyIsTheSwitchTest` of the
+other repository holds both halves.
+
+Beyond the move it cost two dependencies which nobody had asked for. They came in through gruelbox
+and had to be asked for explicitly once it was gone: `jackson-databind` in test scope, which the
+tests reading the configuration metadata parse with, and `jackson-annotations` as `provided`, which
+javadoc needs to read the annotations of Spring Boot's health classes. Both were invisible while a
+third party dragged them in, which is one more argument for the move.
+
+One thing is still open. The wiki keeps a paragraph about the store, and this entry does not say
+which page it stands on. Nothing in the platform cites that paragraph.
+
+### 103. An expression in the model is named, and the rule which names it lives in the platform
+
+An expression like `${order.shipping.express}` binds a BPMN model twice over: to the shape of the
+objects behind the name, and to the expression language of the BPMS it is deployed to. Rename the
+attribute in Java and a model nobody touched stops working. Move the workflow to another BPMS and
+the expression stops working. The wiki has recommended the way round it for years, a getter on the
+workflow aggregate which answers the question the model asks, and nothing noticed when a model did
+it differently.
+
+VanillaBP now notices. Four things were open before it could, and this is how they are answered.
+
+**Which expressions are looked at, and who finds them.** Every place a modeller puts a data read:
+the conditions of sequence flows and of conditional events, timers, the cardinality, the collection
+and the completion condition of a multi-instance element, a loop condition, the correlation key of
+a message, the inputs of a decision, an input or output mapping. `ExpressionPlace` names them and
+carries the words a message uses for each. A place nothing there describes is `SOMEWHERE_ELSE`
+rather than the closest match, because a wrong place sends the reader to the wrong part of the model
+while the element id beside it is precise on its own.
+
+Finding them is each adapter's work, reported through
+`WorkflowTaskWiring#reportModelExpressions(module, process, expressions)` during `wireBpmn`: only
+the adapter can read its BPMN dialect, knows where its BPMS evaluates something and knows what
+delimits an expression. An adapter which cannot read its models reports nothing, and nothing is
+read into that silence.
+
+What is NOT reported is what the BPMS resolves for itself, an expression naming a wired task, a
+delegate class or a form key. Those are not data reads and the developer cannot replace them with a
+getter.
+
+**Which of them are harmless.** The name of one variable is harmless, and more than that: it is what
+VanillaBP recommends. Nothing is said about it. The rule which decides that is `ExpressionForm`,
+and it lives in the platform, not in the adapters. Every adapter has its own expression language,
+and what an expression costs must not depend on which of them a model is deployed to, otherwise
+each adapter says something different about the same model.
+
+The rule works on shape, not on a grammar. Both languages VanillaBP meets write a variable read as
+a bare name, a member access with a dot and a call with a parenthesis, and that is all it needs:
+
+|        Form        |                            Example                            |     Verdict     |
+|--------------------|---------------------------------------------------------------|-----------------|
+| `NAMES_A_VARIABLE` | `shippedAsNormalItem`                                         | nothing is said |
+| `WALKS_A_PATH`     | `order.shipping.express`, `orderItems[1].shippedAsNormalItem` | WARN            |
+| `CALLS_SOMETHING`  | `count(items) > 3`, `order.getShipping().isExpress()`         | WARN            |
+| `COMPUTES`         | `not bigItem`, `amount > 1000`, `'PT1H'`                      | NOTICE          |
+
+Two consequences of drawing the line there are deliberate.
+
+A name with a space is legal in FEEL and is still not read as a name. The variables VanillaBP hands
+a model are named after the accessors of a workflow aggregate, so a name which needs a space is not
+one VanillaBP put there.
+
+Anything the rule cannot place is `COMPUTES`, the mildest of the findings. A form nobody foresaw
+must not turn into the loudest message.
+
+How gentle: a WARN for what reaches into the data, a NOTICE for what only computes, and never a
+refusal.
+
+The two levels are the two halves of the binding. A path or a call binds the shape of the data, and
+a rename in Java breaks the model silently, which is worth a warning. A computation leaves the data
+model alone: what it binds is the language, whose word for "not" differs from the next one's. The
+way out is the same getter in both cases, so the texts are close and the level is what differs.
+
+Not a refusal, for two reasons. An existing model would stop deploying over a style we recommend,
+which is the opposite of gentle. And a check which reads expressions can misread one. A wrong
+warning about a model which works is bad, a wrong refusal is unusable.
+
+A third form was on the table, a report counting the expressions of a model, and it is not a
+message of its own. It is a sentence in the two messages: "2 of the 5 expressions of this process
+name a variable and nothing else." That is why an adapter reports the harmless expressions as well.
+A developer reads how far their model already is, and a process doing everything right stays
+silent.
+
+The exception the wiki names is named in the message too. A path into one item of a multi-instance
+subprocess is what some BPMS need, the page `Workflow-aggregates` shows it, and a check which
+warned about it without saying so would look wrong.
+
+The acceptance is written as `accept-expressions-in-the-model`, read at the workflow, the workflow
+module and the application, the most specific level winning. The message hands out the key at the
+workflow, the most careful of the three.
+
+Read at three levels, unlike `allow-full-sync-with-bpms` which is read at the workflow and nowhere
+else (decision 66). That permission lets values leave the application, so an inherited one would
+cover the workflow somebody adds next week. This one lets nothing out and changes no behaviour: it
+says that somebody looked at the expressions of a model and meant them, and a team decides that for
+a whole application as easily as for one process. Every level being read also means no line is
+silently ignored, so there is nothing for `MisplacedSettings` to refuse.
+
+The check leaves one thing alone, a BPMN process no `@WorkflowService` class claims. Its model
+travels to the BPMS because it shares a file with the process which IS served, and asking for its
+expressions to be rewritten asks for a file nobody in this application can change. The deployment
+reports such a process on its own.
+
+This is not the rule about portable values. That rule (`PortableValuesCheck`) asks whether the
+TYPES of the values travelling survive the way there and back, and it ends a start where a declared
+path does not resolve. Both can speak about one expression and they say different things: the other
+one ends the start, this one says what the path costs you next year. Nor is this a verdict on DMN.
+A decision gets its inputs as variables, and that is the intended way.
+
+The detection is still missing in all three adapters. The platform ships first, and then each
+adapter reports what it reads. The Camunda 7 adapter has most of it already, in
+`Camunda7ExpressionIdentifiers`, which collects expressions with their placement for the sync
+check. Until an adapter reports, nothing is said, which is the same silence as for an adapter which
+cannot read its models.
+
+### 104. A citation of a decision names its file while the decision waits for its number
+
+A decision is written before it has a number. It lives in `DECISIONS.pending/<story>.md` until the
+main session numbers it, and the code which needs it is written in the same branch. So a citation
+of a decision which has no number yet is a normal thing, and it has to survive the numbering.
+
+Two spellings of it grew side by side. One names the file, `DECISIONS.pending/<story>.md`. The
+other names the number in angle brackets, `<pending: n>`. A search for the path misses the second
+one, a search for the word misses the first, and the branch which numbered five decisions searched
+for one of them. Five citations stayed behind, two of them for weeks, in `NameClashAvoidanceSupport`
+and in `HousekeepingWindowConfigurationTest`.
+
+What holds now: a citation of a decision which is waiting names the file and nothing else. In
+javadoc the path stands in a `{@code}` tag, because a path is plain text there and needs no
+escaping. A citation of a numbered entry stays what it always was, `decision 7 in the repository's
+DECISIONS.md`, and that whole phrase is what a citation says. A bare number in brackets is no
+citation either, because nothing can tell it from any other number.
+
+The angle-bracket form is out, and two spellings being one too many is only half the reason.
+Javadoc wants the brackets escaped. The escaped form is three times as long as the number, so the
+formatter breaks it over two lines, and that is what defeated the search both times.
+
+**The check.** `bin/check-decision-citations.sh` reads the joined text of a file, not its lines. It
+takes the leading `*`, `//` or `#` off a continued line first, so a citation wrapped anywhere is
+one string again. It reports three things: a spelling which is not the file, a file which is gone
+because the decision got its number, and a number no entry of `DECISIONS.md` carries. It reads the
+whole repository in about a second, and it runs on every pull request.
+
+Its own promise is the joining, so `--self-test` builds a small repository, wraps a citation of
+each kind over two lines and checks that all of them are found. A line-by-line search finds none of
+them, which is the whole reason the script exists.
+
+One thing follows from the check for whoever writes such a document: a page which explains the
+convention writes its examples with a placeholder where the number goes. An example with digits in
+it is a citation as far as the check can tell, and it would report a file which was never meant to
+exist.
+
+What is open: the other five repositories keep decisions the same way and none of them has the
+script. Rolling it out is a piece of work of its own, because each of them needs the CI job too.
+
+### 105. A message an adapter asserts on is published as a phrase, and the adapter reads it from there
+
+Two findings of `DeployedProcessVersionsCheck` were reworded when the platform moved its startup
+findings into one block at the end of a start. What the sentence used to name, the subject line of
+the finding names now. The platform pulled its own tests along in the same commit. Four assertions
+in the Camunda 7 adapter stayed on the old words, and that came out two days later, in a pull
+request which had nothing to do with it.
+
+So: can the platform carry its startup messages as something an adapter imports, so that a
+rewording is a build error rather than a search? Yes for the phrase a test looks for, no for the
+whole message.
+
+**Why not the whole message.** A message is built where it is reported. `DeployedProcessVersionsCheck`
+writes text blocks with `%s` in them and picks between several of those, depending on what it
+found. `reportUnservedTasks` chooses one of two texts and glues a remedy onto it. None of that is a
+constant, and a constant holding the whole text would have to carry the same branches.
+
+It is also more than a test needs. An adapter test asserts a SHORT fragment with the values put in,
+such as `version '1' of process 'OldProcessVersionsProcess'` and `still run on this version`. One
+constant per phrase is enough, and the test formats it with its own values.
+
+The road is already there. An adapter compiles against `vanillabp-adapter-spi`, and that module
+depends on `vanillabp-integration-spi`, where `StartupReport` lives. A public constant in the
+integration SPI reaches the tests of every adapter at compile time. Reflection is not needed for
+it.
+
+The check itself lies in `migration-adapter/runtime`, and that module is on an adapter's test
+classpath too. The Camunda 7 core holds it in test scope, and the integration tests get it through
+the Spring Boot starter of the adapter. So the phrases may also stay beside the check which writes
+them.
+
+What cannot read them is `test-utils`. The modules which would declare them use test-utils in their
+own tests, so Maven refuses the dependency back. That is why `ConstantOfAnotherModule` reads the
+name of a VanillaBP table by reflection. A phrase needs that road only if test-utils has to read
+it, and an adapter test does not go through test-utils.
+
+**What it buys, and what it does not.** A constant which is renamed or removed is a compile error in
+every adapter which reads it. A constant whose TEXT changes is silent, and that is the point: the
+adapter test follows the new wording with no change at all. The wording is then tested in one
+place, the platform, where the person rewording it stands.
+
+It does not reach a message quoted outside a test, in a wiki page, a README or an `UPGRADE.md`
+entry. Those stay a search, and the contributor skill `vanillabp-code-review` carries the two greps
+for them.
+
+What it costs: a constant which only the tests of other repositories read is published API from the
+day it ships. It carries javadoc, and its name is one we keep. The precedent stands in the tree
+already, because the names of the tables VanillaBP writes are public constants and nothing but
+tests reads them.
+
+What is still open is whether this is built, and for how many messages. Stephan decides that. The
+default this entry carries: build it for the findings an adapter test asserts today, and leave the
+other startup messages as they are until later work reworks them.
+
+### 106. The delivery record says which kind of task an id is, and a record of the other kind elects nobody
+
+`completeTask` with the id of a user task is a mistake applications really make. The BPMS reads
+that key as a job key, no job carries it, and the answer is "not found" for a task which is
+perfectly alive. What the caller used to read was a list of three causes, that the id is wrong,
+that the task was completed long ago, that the workflow was canceled, and none of them was true.
+Nobody knew the real one, so nobody could write it down.
+
+VanillaBP can know it. A record is written per delivery, and the delivery knows whether it handed
+out a task or a user task. So the record carries the kind, and two places read it: the election,
+which must not route a command of the wrong kind, and the failure, which says what the id is.
+
+**The kind is reported, not derived.** A user task of a Camunda 8 cluster runs under a job type of
+VanillaBP's own, so the kind could be read off `TASK_DEFINITION`. That reading belongs to one
+adapter and moves with every rename of that job type, while the table belongs to the platform.
+`BpmnTaskSpec.optional` was the other candidate, and it is not the same question either: it says
+that a handler for this element is optional, which is true of user tasks today and is a rule about
+wiring, not about ids.
+
+So `TaskInvocationContext.getTaskKind()` reports it, `default null`, with the two values the
+platform tells apart anyway: `TaskKind.TASK` and `TaskKind.USER_TASK`, which is what
+`Election.HOLDS_THE_TASK` and `HOLDS_THE_USER_TASK` ask a BPMS about. The column is `TASK_KIND`,
+`VARCHAR(32)` and nullable, added by the changeset `vanillabp-task-delivery-kind-2.0.0`; the
+MongoDB stores keep a `taskKind` field. No index: a record is found by its task, and the kind is
+read from the row that lookup already returned.
+
+A record which names no kind says nothing, and nothing contradicts nothing. That covers an adapter
+which does not report the kind, a record written before the column existed, and a kind a newer
+version of VanillaBP wrote which this one does not know. All three keep today's behaviour.
+
+**The election is where the mix-up has to stop.** `DeliveryRecords.locate` answers the election from
+the record, and it used to answer it for the wrong kind too: the record of the user task names the
+adapter which holds it, so `completeTask` with that id was routed to that adapter and planned in
+the outbox. The caller saw no error at all. The failure came at dispatch time, in a retry loop,
+with nobody left to tell, and it was the BPMS saying "no such job", which is the message this
+decision set out to improve.
+
+So a record whose kind contradicts the operation does not answer the election. The adapters are
+asked instead, each of them says it knows no such id, and
+`MigrationProcessService.unknownToEveryBpms` reads the record again and answers. The walk costs one
+round trip per adapter, and it is paid only when an application made this mistake.
+
+What an adapter reporting the WRONG kind costs is the walk and nothing else. The probe of the other
+kind then answers that it holds the task, the operation runs, and the application notices none of
+it. That is the direction a mistake here has to fall in, and it is the reason the kind may be
+reported at all without a check behind it.
+
+What the message may say: which kind the id is and which method asks about that kind. It does not
+say that the other method would succeed, because whether the task is still open is a question only
+that call answers, and a message which promises otherwise is wrong half the time.
+
+Where no record holds the id the caller gets the list of causes it always got, word for word, plus
+one sentence naming `vanillabp.delivery.retention`. A record does not outlive it, so a task
+completed longer ago than that is a task nobody remembers. An application without a store hears
+nothing about a record, because there is none to miss.
+
+It is not an idempotency check. It reads the table the deduplication of a delivery reads, which is
+why it is tempting to call it one. The deduplication decides whether a delivery ran before. This
+looks up what a caller's id is known as. Nothing about idempotency hangs on it, and a missing
+record costs nothing but the sharper sentence.
+
+What is left for later: a workflow id used as a task id, and the other way round, has the same
+shape. The record carries `WORKFLOW_ID` next to `TASK_ID`, so `WorkflowNotFoundException` could
+answer the same way. It is not done here, and it is a small piece of its own once this side stands.
+
+### 107. A delivery nobody deduplicates is written down too, under a key which deduplicates nothing
+
+The record of a task delivery answers three questions and only one of them is the deduplication:
+which BPMS holds the task, which kind of id its id is, and whether this delivery was answered
+before. Until now the third question decided whether the first two were written down at all. An
+adapter which reported no delivery id got no row, so nothing could be read back about its tasks.
+
+Camunda 7 is that adapter. `Camunda7UserTaskInvocationContext.getDeliveryId()` answers `null` on
+purpose: a transaction of the engine creates every user task the token reaches, and the id comes
+into being while it is created, so there is nothing a repetition could be recognised by.
+`TaskDeliveryKey.of` answered `null` for a blank id, `DeliveryRecords.keyFor` passed it on, and
+`MigrationProcessService` read that as "no delivery log for this delivery". Measured on 2026-10-01:
+a user-task delivery reached its handler, the table held no row for it, and `completeTask` with
+that user task's id answered with the list of three guesses. Which is exactly the mistake decision
+106 wrote the kind of a task down for.
+
+So the row is written. The absence of a delivery id takes the deduplication away and nothing else.
+
+**The key says what the row is.** `TaskDeliveryKey.of` answers a `TaskDeliveryIdentity` now: the key
+plus whether a repetition is recognised by it. Where the adapter reports no id the key keeps the
+shape it always had and carries `(not-deduplicated)` with a random value where the id would stand:
+
+```
+c7|orders|Approval|CREATED|(not-deduplicated)7f3c…
+```
+
+The row is unique, so the primary key of the table and the `_id` of a MongoDB document hold without
+a word of new code in any store. Nothing is ever looked up by such a key either, because the core
+only reads a key it can build a second time. And whoever opens the table reads at the key itself
+that this row answers no repetition, instead of having to know which adapter reports ids.
+
+A key which simply left the last field empty was the other candidate. It is shorter and it is a
+lie: two deliveries of two tasks would collide on it, and the second one would be read as a
+repetition of the first.
+
+What the switch still turns off: `deduplicate-deliveries` set to `false` remains the one case
+which writes nothing at all. The property says the handlers of this application are idempotent
+themselves, and the BPMS behind it may well repeat a delivery, so a row per repetition would show
+one task as often as it was handed out to everything which reads the open work of a workflow. An
+adapter which reports no id repeats nothing, so one delivery is one row there.
+
+That is the whole reason the two cases are told apart rather than merged. Both look like "nothing is
+deduplicated" from the configuration, and only one of them can afford a row per delivery.
+
+The retention does with such a row the same thing it does with every other row, by the same
+statement: `LAST_SEEN_AT` plus `vanillabp.delivery.retention`. What differs is where the clock
+starts. A deduplicable row of an open task is kept alive by every redelivery it answers, so its
+clock starts when the BPMS stops handing that task out. A row nobody deduplicates gets no
+redelivery, so its clock runs from the moment the handler ran.
+
+Nothing about correctness hangs on that number here, which is the point. For a deduplicable row the
+retention IS the deduplication window and a row deleted too early runs business code twice. Here
+the row answers no repetition in the first place, so a deleted one costs the saved BPMS round trip
+of a task operation and the sharper sentence of a failure which names the kind of an id. An
+installation whose user tasks stay open longer than seven days and which wants both raises the
+retention; the startup says nothing about it, because there is nothing wrong to report.
+
+Keeping such a row alive as long as its task is open was the alternative. It would mean the
+retention asking which rows are open and never deleting those, and a task nobody ever completes
+would then keep its row for good, an unbounded table in exchange for a sharper error message.
+
+**What the startup check says.** `JdbcTaskDeliveryStore` used to explain the table by the
+deduplication alone: "VanillaBP remembers every task delivery it processed in it, so a BPMS
+repeating a delivery is answered from it instead of running the handler twice." That is now half
+the truth, and the half which does not apply to Camunda 7 at all. The message names the second
+purpose as well, so an operator asked to create the table learns why an embedded engine needs it
+too.
+
+Nothing new is reported. The warning about a missing store still fires only where an adapter may
+repeat a delivery and deduplication is on, because its whole text is about running a handler twice.
+An application whose only adapter reports no delivery id loses the two answers without a store, and
+that is worth no boot-time warning: it has no way of knowing which of them it will ever ask for.
