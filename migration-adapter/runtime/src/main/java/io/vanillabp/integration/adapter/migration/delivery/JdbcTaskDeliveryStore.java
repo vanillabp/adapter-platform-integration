@@ -25,7 +25,9 @@ import lombok.extern.slf4j.Slf4j;
  * A record is INSERTed once and never rewritten: the delivery key is the primary key, so
  * two nodes processing the same delivery concurrently end up with one record and the
  * loser learns it from the constraint violation ({@link #record(TaskDelivery)} returns
- * <code>false</code> then, exactly like a duplicate outbox entry). Two columns change
+ * <code>false</code> then, exactly like a duplicate outbox entry). A row of a delivery
+ * nobody deduplicates carries a key which belongs to that row alone, so it cannot be the
+ * loser of such a race and nothing here treats it differently. Two columns change
  * afterwards and nothing else does: <code>LAST_SEEN_AT</code>, the moment the BPMS last
  * redelivered the task the record answers - what the retention counts from - and
  * <code>TASK_CLOSED_AT</code>, the moment the application's completion of that task reached
@@ -983,7 +985,8 @@ public class JdbcTaskDeliveryStore {
           """
               The task-delivery table '%s' does not exist! VanillaBP remembers every task delivery \
               it processed in it, so a BPMS repeating a delivery is answered from it instead of \
-              running the handler twice. Either
+              running the handler twice, and so a later operation on one of those tasks knows which \
+              BPMS holds it and which kind of id its id is. Either
               - apply the schema of VanillaBP with your migration tool: the artifact \
               'io.vanillabp:vanillabp-schema' ships the Liquibase changelog \
               'vanillabp/schema/changelog.xml' and the SQL generated from it for Flyway, or

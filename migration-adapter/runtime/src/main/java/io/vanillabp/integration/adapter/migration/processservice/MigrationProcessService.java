@@ -877,17 +877,22 @@ public class MigrationProcessService<A> {
     // a BPMS repeating a delivery it never learned the result of must not run the
     // business code twice - what was processed is remembered, and a redelivery is
     // answered with the recorded outcome (leaving the task open instead would keep it
-    // open forever)
-    final var deliveryKey = deliveryRecords.keyFor(context);
-    final var deliveryLog = deliveryKey == null
+    // open forever). A delivery whose adapter reports no identity is remembered as well
+    // and simply answers no repetition: the row still says which BPMS holds the task and
+    // which kind of id its id is
+    final var identity = deliveryRecords.identityOf(context);
+    final var deliveryKey = identity == null
+        ? null
+        : identity.key();
+    final var deliveryLog = identity == null
         ? null
         : deliveryRecords.resolveLog();
-    if ((deliveryKey != null) && (deliveryLog == null)) {
+    if ((identity != null) && identity.deduplicates() && (deliveryLog == null)) {
       deliveryRecords.reportMissingLog(context.getAdapterId());
     }
 
     final Supplier<WorkflowTaskOutcome> transactionalWork = () -> {
-      if (deliveryLog != null) {
+      if ((deliveryLog != null) && identity.deduplicates()) {
         final var recorded = deliveryRecords.answerToARepeatedDelivery(deliveryLog, deliveryKey, context);
         if (recorded.isPresent()) {
           return recorded.get();

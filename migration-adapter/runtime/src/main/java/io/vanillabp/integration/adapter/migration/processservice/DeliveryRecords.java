@@ -14,6 +14,7 @@ import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
+import io.vanillabp.integration.adapter.migration.workflowtask.TaskDeliveryIdentity;
 import io.vanillabp.integration.adapter.migration.workflowtask.TaskDeliveryKey;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
@@ -43,6 +44,12 @@ import lombok.extern.slf4j.Slf4j;
  * <li>Which BPMS holds a task the application names? The record says which adapter
  * delivered it, which saves the election one round trip per operation.</li>
  * </ul>
+ * Only the first of the three is the deduplication, and it used to decide whether the other
+ * two were written down at all: an adapter which reports no delivery ID got no row, so
+ * nobody could read back which BPMS held the task or which kind of id its id was. Such a
+ * delivery now gets a row of its own which takes no part in the deduplication
+ * ({@link #identityOf(TaskInvocationContext)}).
+ * <p>
  * The store behind all of this is a {@link TaskDeliveryLog} of the application, resolved
  * for the workflow aggregate. There may be none: an application whose adapters never repeat
  * a delivery needs no store, and one which has not configured a store behaves as every
@@ -202,14 +209,22 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The identity under which this delivery is remembered, or <code>null</code> where the
-   * deliveries of this adapter and task are not deduplicated
-   * (<code>vanillabp.adapters.&lt;id&gt;.deduplicate-deliveries</code>).
+   * The identity under which this delivery is remembered, or <code>null</code> where
+   * nothing at all is remembered about it
+   * (<code>vanillabp.adapters.&lt;id&gt;.deduplicate-deliveries</code> switched off).
+   * <p>
+   * The property is the one case where no row is written. It says that the handlers of this
+   * application are idempotent themselves, and the BPMS behind it may well repeat a
+   * delivery - every repetition would add a row naming the same task, and whoever reads the
+   * open work of a workflow would read that task as many times as the BPMS handed it out.
+   * An adapter which reports no delivery ID is the other case and gets a row: it repeats
+   * nothing, so one delivery is one row (see
+   * {@link TaskDeliveryKey#of(String, String, TaskInvocationContext)}).
    *
    * @param context The invocation context of the delivery
-   * @return The delivery key or <code>null</code>
+   * @return The identity of the delivery or <code>null</code>
    */
-  public String keyFor(
+  public TaskDeliveryIdentity identityOf(
       final TaskInvocationContext context) {
 
     return deduplicates(context.getAdapterId(), context.getTaskDefinition())
@@ -221,8 +236,9 @@ public final class DeliveryRecords {
   /**
    * Whether deliveries of the given adapter are deduplicated for the given task
    * (resolvable per workflow module, workflow and task). The default is
-   * <code>true</code>; an adapter reporting no ID at all is not deduplicated, since
-   * neither the configuration nor the delivery key could be attributed to a BPMS then.
+   * <code>true</code>; a delivery whose adapter is not named at all is not deduplicated,
+   * since neither the configuration nor the delivery key could be attributed to a BPMS
+   * then.
    *
    * @param adapterId The ID of the adapter delivering the task or <code>null</code>
    * @param taskDefinition The task definition delivered

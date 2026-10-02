@@ -2,6 +2,7 @@ package io.vanillabp.integration.test.utils.delivery;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -66,7 +67,7 @@ public class TaskDeliveryLogReaderTest {
   @DisplayName("The record of a delivery says what the log wrote down about it")
   public void theRecordSaysWhatTheLogWroteDown() throws Exception {
 
-    givenADelivery("a-key", "the-task", "instance-4711", "TheTask", A_MOMENT, null);
+    givenADelivery("a-key", "the-task", "instance-4711", "TheTask", A_MOMENT, null, "USER_TASK");
 
     final var deliveries = readerOfThisTest().deliveriesOfTask("the-task");
 
@@ -81,6 +82,7 @@ public class TaskDeliveryLogReaderTest {
     assertEquals(TASK_DEFINITION, delivery.taskDefinition());
     assertEquals("TheTask", delivery.bpmnElementId());
     assertEquals(COMPLETION_PENDING, delivery.outcome());
+    assertEquals("USER_TASK", delivery.taskKind(), "and which kind of task the id is the id of");
     assertFalse(delivery.taskWasClosed(), "nothing closed this task yet");
 
   }
@@ -89,7 +91,7 @@ public class TaskDeliveryLogReaderTest {
   @DisplayName("A task nothing was delivered for has no record")
   public void aTaskNothingWasDeliveredForHasNoRecord() throws Exception {
 
-    givenADelivery("a-key", "the-task", "instance-4711", "TheTask", A_MOMENT, null);
+    givenADelivery("a-key", "the-task", "instance-4711", "TheTask", A_MOMENT, null, "USER_TASK");
 
     assertEquals(List.of(), readerOfThisTest().deliveriesOfTask("another-task"));
 
@@ -101,8 +103,9 @@ public class TaskDeliveryLogReaderTest {
 
     // one task, delivered twice: the BPMS handed it out again after its first turn was
     // cancelled, and the second turn ran at another element of the model
-    givenADelivery("the-older-key", "the-task", "instance-4711", "TheFirstTurn", A_MOMENT, null);
-    givenADelivery("the-newer-key", "the-task", "instance-4711", "TheSecondTurn", A_MOMENT.plusSeconds(60), null);
+    givenADelivery("the-older-key", "the-task", "instance-4711", "TheFirstTurn", A_MOMENT, null, "TASK");
+    givenADelivery(
+        "the-newer-key", "the-task", "instance-4711", "TheSecondTurn", A_MOMENT.plusSeconds(60), null, "TASK");
 
     final var deliveries = readerOfThisTest().deliveriesOfTask("the-task");
 
@@ -116,7 +119,7 @@ public class TaskDeliveryLogReaderTest {
   @DisplayName("A task whose completion reached the BPMS is reported as closed")
   public void aTaskWhoseCompletionReachedTheBpmsIsClosed() throws Exception {
 
-    givenADelivery("a-key", "the-task", "instance-4711", "TheTask", A_MOMENT, A_MOMENT.plusSeconds(5));
+    givenADelivery("a-key", "the-task", "instance-4711", "TheTask", A_MOMENT, A_MOMENT.plusSeconds(5), "TASK");
 
     assertTrue(readerOfThisTest().deliveriesOfTask("the-task").getFirst().taskWasClosed());
 
@@ -126,13 +129,23 @@ public class TaskDeliveryLogReaderTest {
   @DisplayName("Removing everything leaves the log empty for the next test")
   public void removingEverythingLeavesTheLogEmpty() throws Exception {
 
-    givenADelivery("a-key", "the-task", "instance-4711", "TheTask", A_MOMENT, null);
-    givenADelivery("another-key", "another-task", "instance-4712", "TheOtherTask", A_MOMENT, null);
+    givenADelivery("a-key", "the-task", "instance-4711", "TheTask", A_MOMENT, null, "USER_TASK");
+    givenADelivery("another-key", "another-task", "instance-4712", "TheOtherTask", A_MOMENT, null, null);
 
     final var reader = readerOfThisTest();
     reader.removeAllDeliveries();
 
     assertEquals(List.of(), reader.deliveries());
+
+  }
+
+  @Test
+  @DisplayName("A record written by an adapter which names no kind reports none")
+  public void aRecordWithoutAKindReportsNone() throws Exception {
+
+    givenADelivery("a-key", "the-task", "instance-4711", "TheTask", A_MOMENT, null, null);
+
+    assertNull(readerOfThisTest().deliveriesOfTask("the-task").getFirst().taskKind());
 
   }
 
@@ -177,7 +190,8 @@ public class TaskDeliveryLogReaderTest {
                   LAST_SEEN_AT TIMESTAMP NOT NULL, \
                   TASK_CLOSED_AT TIMESTAMP, \
                   BPMN_ELEMENT_ID VARCHAR(255), \
-                  WORKFLOW_ID VARCHAR(255))"""
+                  WORKFLOW_ID VARCHAR(255), \
+                  TASK_KIND VARCHAR(32))"""
                   .formatted(LOG_OF_THIS_TEST));
     }
 
@@ -193,6 +207,8 @@ public class TaskDeliveryLogReaderTest {
    * @param recordedAt The moment the handler ran
    * @param taskClosedAt The moment the completion reached the BPMS, <code>null</code>
    *          while the task is open
+   * @param taskKind Which kind of task the id is the id of, <code>null</code> where the
+   *          delivering adapter named none
    */
   private void givenADelivery(
       final String deliveryKey,
@@ -200,15 +216,16 @@ public class TaskDeliveryLogReaderTest {
       final String workflowId,
       final String bpmnElementId,
       final Instant recordedAt,
-      final Instant taskClosedAt) throws SQLException {
+      final Instant taskClosedAt,
+      final String taskKind) throws SQLException {
 
     try (var connection = dataSource.getConnection(); var insert = connection
         .prepareStatement(
             """
                 INSERT INTO %s (DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, \
                 AGGREGATE_ID, TASK_DEFINITION, TASK_ID, OUTCOME, RECORDED_AT, LAST_SEEN_AT, \
-                TASK_CLOSED_AT, BPMN_ELEMENT_ID, WORKFLOW_ID) \
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
+                TASK_CLOSED_AT, BPMN_ELEMENT_ID, WORKFLOW_ID, TASK_KIND) \
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"""
                 .formatted(LOG_OF_THIS_TEST))) {
       insert.setString(1, deliveryKey);
       insert.setString(2, ADAPTER);
@@ -225,6 +242,7 @@ public class TaskDeliveryLogReaderTest {
           : Timestamp.from(taskClosedAt));
       insert.setString(12, bpmnElementId);
       insert.setString(13, workflowId);
+      insert.setString(14, taskKind);
       insert.executeUpdate();
     }
 

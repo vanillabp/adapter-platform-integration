@@ -59,6 +59,26 @@ public interface OpenTaskProbe {
    * adapter already knows its own elements by, so with it the refusal narrows from the
    * process to the record.
    *
+   * <h4>Why the kind of task does not replace it</h4>
+   *
+   * The delivery record says the kind outright since
+   * {@link TaskInvocationContext#getTaskKind()} exists, so the question was asked whether
+   * this argument could become a {@link TaskKind} and the string could go. It cannot, and
+   * the reason is a third answer which the kind cannot carry. A user task carrying an
+   * <code>updating</code> listener no method of the application serves must not be probed at
+   * all: the empty update which asks whether the task is open fires that listener, nobody
+   * answers it, and the task then stands in <code>UPDATING</code> while assign and complete
+   * are refused. Which user tasks those are is a property of single ELEMENTS of the model,
+   * so an adapter holding only <code>USER_TASK</code> would have to refuse every user task
+   * of a process which holds one such element - the refusal would widen back from the record
+   * to the process, which is what this argument was added to prevent. The kind would also
+   * leave the records of a BPMN process the application declares without deploying a model
+   * exactly where they are, because nothing about those is known per task at all.
+   * <p>
+   * So the definition stays and the kind is not passed on top of it. An adapter which wants
+   * the kind reads it off its own models, which is where the element property above lives
+   * anyway, and the core keeps one argument instead of two which say almost the same thing.
+   *
    * <h4>What you may do with it, and what you may not</h4>
    *
    * You may answer {@link TaskExistence#CANNOT_SAY} for the definitions your BPMS cannot
