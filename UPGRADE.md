@@ -722,6 +722,57 @@ version 2 reads the name the persistence layer reports. And an attribute version
 field keeps its last version-1 value for good, because version 2 reads getters only. Give such an
 attribute a getter and share it.
 
+### What the upgrade costs under load
+
+An application on version 1 wrote no outbox entry and kept no record of a task delivery. The word
+outbox appears nowhere in the sources of the last version 1 releases, `camunda7-spring-boot-adapter`
+1.6.0 and `camunda8-spring-boot-adapter` 1.10.0 on `io.vanillabp:spring-boot-support` 1.4.0, so
+everything below is work version 2 does around code you do not touch.
+
+It is counted in rows, in transactions and in threads. No millisecond appears on purpose, because a
+time measured on a machine of today is read as a promise half a year later.
+
+A workflow start costs one outbox entry, written in your transaction, and your transaction still
+commits once. The call to the BPMS then runs after that commit, in a transaction of its own and on
+a thread which is not yours.
+
+On Camunda 8 that transaction is new. Version 1 sent the start from the thread which had just
+committed yours and retried in memory, so nothing was written down and a process which died in
+between lost the start. On Camunda 7 the count is what it was: version 1 also wrote a row in your
+transaction, a job of its own engine, and the job executor carried it out afterwards. What moved
+there is the table the row goes into and the thread which picks it up.
+
+Answering a message is where an application on Camunda 7 pays, and so is completing or cancelling
+a task. Version 1 called the embedded engine while your transaction was open, so your commit
+covered that work. Version 2 writes an entry for it, which is one row and one transaction more than
+before. On Camunda 8 those operations went out from the committing thread under version 1 and are
+entries now, like the start.
+
+Every task delivery costs one record. It is written in the transaction of your handler, so the
+delivery pays no transaction of its own, and a repeated delivery is answered from that record
+instead of running your `@WorkflowTask` method again.
+
+What your handler does is not in these numbers. On version 1 it ran inside the engine's job
+transaction on Camunda 7 and inside the transaction your own `@Transactional` opened on Camunda 8.
+Now it runs inside a transaction VanillaBP opens around it. How long that transaction stays open is
+still your handler's business.
+
+The threads are the number to size. Version 1 on Camunda 7 ran its own engine calls on the engine's
+job executor, which the Spring Boot starter starts with three threads and grows to ten, and version
+1 on Camunda 8 used the thread which committed, so it was as wide as the request threads of the
+application. Version 2 dispatches on four threads, `vanillabp.outbox.dispatch-threads`. On
+Camunda 7 that is a second pool rather than a replacement: the engine's job executor is still there
+and still delivers your tasks, and the dispatch carries the calls VanillaBP makes into the engine.
+An application which had raised the job executor because it was the narrow point now has two
+numbers to raise. Count both pools into the connections of the database your workflow aggregates
+live in.
+
+The version 2 side of all this is counted by `WhatAnUpgradeFromVersionOneCostsTest` in
+`spring-boot-integration/integration-tests/upgrade-cost-integration-test`, which pins the rows, the
+commits and the four dispatch threads. The version 1 side is read off the released artifacts named
+above. How long the two take on one machine is a measurement of its own and not a sentence of this
+file.
+
 ### What operations has to watch
 
 The outbox is the one new thing in the picture. Entries which cannot be dispatched are retried with
