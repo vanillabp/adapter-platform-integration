@@ -57,3 +57,6 @@ build/
 .vscode/
 
 .DS_Store
+
+# Scratch output of a local verification run
+.logs/
