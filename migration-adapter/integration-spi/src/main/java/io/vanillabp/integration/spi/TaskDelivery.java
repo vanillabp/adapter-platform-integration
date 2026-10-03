@@ -86,12 +86,6 @@ import java.time.Instant;
  *          the two the task is still open and its redeliveries still renew the BPMS' lock on
  *          it. Once it is set, a second completion of the same task is the warned no-op it
  *          always was, and no BPMS has to be asked for that either
- * @param recordKind What this row is about: a task delivery, or the start of a workflow (the
- *          names of {@link DeliveryRecordKind}). It is the KIND of the row and not a result, so
- *          {@link #outcome()} keeps meaning what a delivery reported and a start row leaves it
- *          empty. Every question about open work filters on it, because a start row carries no
- *          task and would be a phantom task in each of those answers. May be <code>null</code>
- *          in a record written before the field existed, which is a task delivery
  * @param taskKind Which kind of task {@link #taskId()} is the id of, as the delivering
  *          adapter named it: <code>TASK</code> for a task the application works off,
  *          <code>USER_TASK</code> for a user task a person works off (the names of
@@ -102,6 +96,12 @@ import java.time.Instant;
  *          be. A store keeps the text as it is. May be <code>null</code> where the adapter
  *          does not say or the record predates this field, and then the record is left out
  *          of that answer
+ * @param recordKind What this row is about: a task delivery, or the start of a workflow (the
+ *          names of {@link DeliveryRecordKind}). It is the KIND of the row and not a result, so
+ *          {@link #outcome()} keeps meaning what a delivery reported and a start row leaves it
+ *          empty. Every question about open work filters on it, because a start row carries no
+ *          task and would be a phantom task in each of those answers. May be <code>null</code>
+ *          in a record written before the field existed, which is a task delivery
  */
 public record TaskDelivery(
                            String deliveryKey,

@@ -268,9 +268,13 @@ public class JdbcTaskDeliveryStore {
   private static String kindOfTheRow(
       final TaskDelivery delivery) {
 
-    return delivery.recordKind() == null
+    // a kind this version does not know is written as a delivery rather than as itself: the
+    // questions about open work and the two retentions are equalities on the two kinds, so a third
+    // word would put the row in no answer and in no cleanup and leave it in the table for good
+    final var kind = io.vanillabp.integration.spi.DeliveryRecordKind.of(delivery.recordKind());
+    return kind == null
         ? TASK_DELIVERY
-        : delivery.recordKind();
+        : kind.name();
 
   }
 
@@ -338,6 +342,21 @@ public class JdbcTaskDeliveryStore {
       DELETE FROM %s \
       WHERE DELIVERY_KEY = ?""";
 
+  /**
+   * What a SECOND workflow of one aggregate writes: the row is keyed by the aggregate and the BPMN
+   * process, so the insert of such a start finds the row of the workflow which ended before it and
+   * the id in it has to be replaced. Bounded to a row which really is a start and whose id really
+   * differs, so a start dispatched twice updates nothing.
+   * <p>
+   * LAST_SEEN_AT moves with it, which is what the period of a start row counts from: the row is
+   * about the workflow which runs now, so its age is that workflow's age.
+   */
+  private static final String REPLACE_WORKFLOW_START = """
+      UPDATE %s \
+      SET WORKFLOW_ID = ?, ADAPTER_ID = ?, RECORDED_AT = ?, LAST_SEEN_AT = ? \
+      WHERE DELIVERY_KEY = ? AND RECORD_KIND = ? \
+      AND (WORKFLOW_ID IS NULL OR WORKFLOW_ID <> ?)""";
+
   private static final String DELETE_DELIVERIES_OF_WORKFLOW = """
       DELETE FROM %s \
       WHERE RECORD_KIND = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
@@ -364,6 +383,8 @@ public class JdbcTaskDeliveryStore {
   private final String selectExpiredWorkflowStarts;
 
   private final String deleteWorkflowStart;
+
+  private final String replaceWorkflowStart;
 
   private final String deleteDeliveriesOfWorkflow;
 
@@ -404,6 +425,7 @@ public class JdbcTaskDeliveryStore {
     this.deleteExpiredWorkflowStarts = DELETE_EXPIRED_WORKFLOW_STARTS.formatted(tableName);
     this.selectExpiredWorkflowStarts = SELECT_EXPIRED_WORKFLOW_STARTS.formatted(tableName);
     this.deleteWorkflowStart = DELETE_WORKFLOW_START.formatted(tableName);
+    this.replaceWorkflowStart = REPLACE_WORKFLOW_START.formatted(tableName);
     this.deleteDeliveriesOfWorkflow = DELETE_DELIVERIES_OF_WORKFLOW.formatted(tableName);
     this.selectAdapterIdsOfOpenTasks = SELECT_ADAPTER_IDS_OF_OPEN_TASKS.formatted(tableName);
     this.selectAnyOpenRecord = SELECT_ANY_OPEN_RECORD.formatted(tableName);
@@ -785,6 +807,73 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
+   * Writes the row about the start of a workflow, replacing the one of an earlier workflow of the
+   * same aggregate (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#recordWorkflowStart}).
+   * <p>
+   * The insert comes first, because the ordinary case is that there is no row: an aggregate carries
+   * one workflow. Only where the insert finds a row does the update run, and that update is bounded
+   * to a row which is a start and whose workflow id differs - so a start dispatched twice writes
+   * nothing and answers <code>false</code>.
+   *
+   * @param workflowStart The row to write
+   * @return Whether the store now holds this workflow's id for the first time
+   */
+  public boolean recordWorkflowStart(
+      final TaskDelivery workflowStart) {
+
+    if (record(workflowStart)) {
+      return true;
+    }
+    return replaceTheStartOfAnEarlierWorkflow(workflowStart);
+
+  }
+
+  /**
+   * Replaces the id in the row of an earlier workflow of the same aggregate.
+   *
+   * @param workflowStart The row of the workflow which runs now
+   * @return Whether a row was replaced, which is <code>false</code> where the row already named this
+   *         workflow
+   */
+  private boolean replaceTheStartOfAnEarlierWorkflow(
+      final TaskDelivery workflowStart) {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(replaceWorkflowStart)) {
+        final var startedAt = Timestamp.from(workflowStart.recordedAt() == null
+            ? Instant.now()
+            : workflowStart.recordedAt());
+        statement.setString(1, workflowStart.workflowId());
+        statement.setString(2, workflowStart.adapterId());
+        statement.setTimestamp(3, startedAt);
+        statement.setTimestamp(4, startedAt);
+        statement.setString(5, workflowStart.deliveryKey());
+        statement.setString(6, WORKFLOW_START);
+        statement.setString(7, workflowStart.workflowId());
+        return statement.executeUpdate() > 0;
+      }
+    } catch (final SQLException e) {
+      throw new RuntimeException(
+          """
+              Could not write down that workflow '%s' of aggregate '%s' (BPMN process '%s' of \
+              workflow module '%s') was started, over the row of an earlier workflow of that \
+              aggregate, in table '%s'!"""
+              .formatted(
+                  workflowStart.workflowId(),
+                  workflowStart.workflowAggregateId(),
+                  workflowStart.bpmnProcessId(),
+                  workflowStart.workflowModuleId(),
+                  tableName), e);
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
    * Remembers that the record of this delivery is still answering the redeliveries of an
    * open task, so the retention has to count from now rather than from the moment the
    * handler ran. Nothing is written here - the key is collected and the next
@@ -1046,7 +1135,7 @@ public class JdbcTaskDeliveryStore {
           new AddedColumn(
               "TASK_KIND", "VARCHAR(32) (nullable: a record written before the column existed names no kind)", "a record does not say whether its id is the id of a task or of a user task, so completing a task with the id of a user task is answered with everything it could be instead of what it is", null),
           new AddedColumn(
-              "RECORD_KIND", "VARCHAR(32) DEFAULT 'TASK_DELIVERY' NOT NULL (the default is what fills the rows which are there, all of which are task deliveries)", "VanillaBP cannot write down which workflow of the BPMS an aggregate belongs to, so every operation on a workflow asks each configured BPMS which of them holds it, and on a BPMS answering from a read model a report right after the start finds no workflow at all", null));
+              "RECORD_KIND", "VARCHAR(32) DEFAULT 'TASK_DELIVERY' NOT NULL (the default is what fills the rows which are there, all of which are task deliveries)", "VanillaBP cannot write down which workflow of the BPMS an aggregate belongs to, so every operation on a workflow asks each configured BPMS which of them holds it, and on a BPMS answering from a read model a report right after the start finds no workflow at all", "DROP INDEX %s_OPEN and then CREATE INDEX %s_OPEN ON %s (RECORD_KIND, OUTCOME, TASK_CLOSED_AT)"));
 
   /**
    * A column a later version of VanillaBP added: its name, the statement which adds it and
@@ -1225,7 +1314,7 @@ public class JdbcTaskDeliveryStore {
                   column.indexStatement() == null
                       ? ""
                       : " It is read on a path which must not scan the table, so add the index it is looked up by as well: %s."
-                          .formatted(column.indexStatement().formatted(tableName, tableName))));
+                          .formatted(column.indexStatement().formatted(tableName, tableName, tableName))));
     }
 
   }

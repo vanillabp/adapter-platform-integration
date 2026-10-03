@@ -434,7 +434,7 @@ public final class DeliveryRecords {
     }
     try {
       final var written = deliveryLog
-          .record(
+          .recordWorkflowStart(
               TaskDelivery
                   .workflowStart(
                       adapterId,
@@ -451,7 +451,7 @@ public final class DeliveryRecords {
           workflowModuleId,
           written
               ? "was written down, so nobody has to ask a BPMS which of them holds it"
-              : "was written down before - the row stands and this call added nothing");
+              : "was written down before - the row names this workflow already and nothing changed");
     } catch (final RuntimeException e) {
       // the workflow runs, and a row nobody could write costs the probing which happened
       // before this row existed. Failing the dispatch here would repeat a start which

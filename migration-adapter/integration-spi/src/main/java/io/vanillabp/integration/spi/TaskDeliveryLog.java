@@ -126,6 +126,38 @@ public interface TaskDeliveryLog {
       TaskDelivery delivery);
 
   /**
+   * Writes the row about the start of a workflow, REPLACING the one of an earlier workflow of the
+   * same aggregate. Invoked within the transaction which persists the aggregate where the BPMS
+   * reported the start itself, and within the transaction of the dispatch where VanillaBP started
+   * the workflow.
+   *
+   * <h4>Why this is not {@link #record(TaskDelivery)}</h4>
+   *
+   * One aggregate may carry a SECOND workflow once the first one ended, and the row is keyed by the
+   * aggregate and the BPMN process rather than by the workflow
+   * ({@link WorkflowStartKey}), which is what makes the read a lookup. An insert which refuses a
+   * duplicate would therefore leave the id of the FIRST workflow standing and answer every question
+   * about the second one with it. So a row whose workflow id differs is overwritten, and a row which
+   * already names this workflow is left alone - a start dispatched twice writes nothing.
+   * <p>
+   * The default inserts and keeps what is there, which is what a store written before this existed
+   * does. Such a store answers the id of a second workflow on one aggregate with the first one's
+   * until the retention takes the row, so a store which can update implements this. The stores
+   * VanillaBP ships do.
+   *
+   * @param workflowStart The row, built by
+   *          {@link TaskDelivery#workflowStart(String, String, String, String, String, java.time.Instant)}
+   * @return <code>true</code> where the store now holds this workflow's id, <code>false</code> where
+   *         it held it already
+   */
+  default boolean recordWorkflowStart(
+      final TaskDelivery workflowStart) {
+
+    return record(workflowStart);
+
+  }
+
+  /**
    * Reports that the BPMS delivered a task again whose record says the task is still
    * open, so this record is still in use and has to outlive the retention. Called by the
    * core within the transaction of that redelivery, for every delivery answered with

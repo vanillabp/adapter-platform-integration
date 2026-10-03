@@ -202,6 +202,48 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   }
 
   /**
+   * Writes the document about the start of a workflow, replacing the one of an earlier workflow of
+   * the same aggregate (see {@link TaskDeliveryLog#recordWorkflowStart}).
+   * <p>
+   * The insert comes first, because the ordinary case is that there is no document: an aggregate
+   * carries one workflow. Only where it finds one does the update run, and that update is bounded to
+   * a document which is a start and whose workflow id differs, so a start dispatched twice writes
+   * nothing. <code>lastSeenAt</code> moves with the id, which is what the period of such a document
+   * counts from.
+   */
+  @Override
+  public boolean recordWorkflowStart(
+      final TaskDelivery workflowStart) {
+
+    if (record(workflowStart)) {
+      return true;
+    }
+    final var startedAt = workflowStart.recordedAt() == null
+        ? Instant.now()
+        : workflowStart.recordedAt();
+    return mongoTemplate
+        .updateFirst(
+            Query
+                .query(
+                    Criteria
+                        .where("_id")
+                        .is(workflowStart.deliveryKey())
+                        .and("recordKind")
+                        .is(WORKFLOW_START)
+                        .and("workflowId")
+                        .ne(workflowStart.workflowId())),
+            Update
+                .update("workflowId", workflowStart.workflowId())
+                .set("adapterId", workflowStart.adapterId())
+                .set("recordedAt", startedAt)
+                .set("lastSeenAt", startedAt),
+            TaskDeliveryDocument.class,
+            collection)
+        .getModifiedCount() > 0;
+
+  }
+
+  /**
    * The adapter ids the OPEN records of one BPMN process belong to: asked once
    * per BPMN process at startup, so an adapter id which such a record still belongs to
    * while the configuration does not know it any more can be named.

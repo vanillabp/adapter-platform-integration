@@ -109,7 +109,7 @@ public class AStartIsNoOpenWorkTest {
       final Instant startedAt) {
 
     return store
-        .record(
+        .recordWorkflowStart(
             TaskDelivery.workflowStart(ADAPTER, MODULE, PROCESS, AGGREGATE, workflowId, startedAt));
 
   }
@@ -298,6 +298,35 @@ public class AStartIsNoOpenWorkTest {
       return true;
     }));
     assertTrue(testee.workflowStartOf(MODULE, PROCESS, AGGREGATE).isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("A SECOND workflow of one aggregate takes the row of the first one")
+  public void aSecondWorkflowOfOneAggregateTakesTheRow() {
+
+    // an aggregate may outlive its workflow and carry another one afterwards, which is what the
+    // release of an ended workflow is bounded by a moment for. The row is keyed by the aggregate and
+    // not by the workflow, so the second start meets the first one's row
+    givenAStartedWorkflow("instance-4711", Instant.now().minusSeconds(600));
+
+    assertTrue(
+        givenAStartedWorkflow("instance-4712", Instant.now()),
+        "a workflow which is not the one the row names is written over it");
+
+    final var start = testee
+        .workflowStartOf(MODULE, PROCESS, AGGREGATE)
+        .orElseThrow();
+    assertEquals(
+        "instance-4712",
+        start.workflowId(),
+        """
+            the id of the workflow which runs NOW - the first one would be handed to an adapter as \
+            a hint and send it looking for an instance which ended""");
+    assertEquals(
+        1,
+        store.deleteExpiredWorkflowStarts(java.time.Duration.ZERO, null),
+        "and there is one row, not two");
 
   }
 

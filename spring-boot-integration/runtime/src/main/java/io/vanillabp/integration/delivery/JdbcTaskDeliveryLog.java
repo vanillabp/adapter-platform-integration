@@ -163,6 +163,23 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   }
 
+  @Override
+  public boolean recordWorkflowStart(
+      final TaskDelivery workflowStart) {
+
+    if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+      throw new IllegalStateException(
+          """
+              No transaction active! The start of a workflow has to be written down within the \
+              still-running transaction which persists the workflow aggregate respectively which \
+              dispatches the start - a row committed on its own would name a workflow which was \
+              never created.""");
+    }
+    retentionCleanup.aDeliveryWasRecorded();
+    return store.recordWorkflowStart(workflowStart);
+
+  }
+
   /**
    * The adapter ids the OPEN records of one BPMN process belong to - the
    * shared store answers it with one query over the columns it indexes anyway.

@@ -312,6 +312,15 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   @Override
+  public boolean recordWorkflowStart(
+      final TaskDelivery workflowStart) {
+
+    aDeliveryWasRecorded();
+    return getStore().recordWorkflowStart(workflowStart);
+
+  }
+
+  @Override
   public boolean record(
       final TaskDelivery delivery) {
 

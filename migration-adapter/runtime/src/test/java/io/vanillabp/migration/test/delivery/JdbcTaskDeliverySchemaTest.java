@@ -127,7 +127,7 @@ public class JdbcTaskDeliverySchemaTest {
                   BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
                   AGGREGATE_ID VARCHAR(1024), \
                   TASK_DEFINITION VARCHAR(255), \
-                  OUTCOME VARCHAR(32) NOT NULL, \
+                  OUTCOME VARCHAR(32), \
                   BPMN_ERROR_CODE VARCHAR(255), \
                   BPMN_ERROR_NAME VARCHAR(255), \
                   RECORDED_AT TIMESTAMP NOT NULL, \

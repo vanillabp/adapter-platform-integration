@@ -2048,9 +2048,15 @@ caught up. An extension which only wants the id reads it through
   transaction which persists the aggregate, where `BpmsInitiatedStartContext#getNativeInstanceId`
   already carries the instance.
 - The key is derived from the workflow module, the BPMN process and the aggregate
-  (`WorkflowStartKey`), with `(workflow-start)` where a delivery key carries the lifecycle event.
-  So no delivery can fall on it, the read is a lookup by primary key and needs no index, and a
-  dispatch which runs twice writes nothing the second time instead of a second row.
+  (`WorkflowStartKey`), with `(workflow-start)` in the third part - where a delivery key carries its
+  BPMN process id, and no BPMN process can be called that. So no delivery can fall on it, the read
+  is a lookup by primary key and needs no index, and a dispatch which runs twice writes nothing the
+  second time instead of a second row.
+- What the key does not carry is the workflow, so an aggregate which carries a SECOND workflow once
+  the first one ended reaches the row of that first one. `recordWorkflowStart` overwrites it there
+  instead of refusing it, and a store which does not implement that method answers the second
+  workflow's id with the first one's until the period takes the row. The three stores VanillaBP
+  ships implement it.
 - `OUTCOME` is nullable since this row exists. Its only legal values are the names of
   `WorkflowTaskOutcome.Kind` and a start reports no outcome, so it would have to borrow one -
   which would make it look like a delivery to the code reading that column as such a name.

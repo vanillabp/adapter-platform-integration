@@ -712,6 +712,46 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
+   * Writes the document about the start of a workflow, replacing the one of an earlier workflow of
+   * the same aggregate (see {@link TaskDeliveryLog#recordWorkflowStart}).
+   * <p>
+   * The insert comes first, because the ordinary case is that there is no document. Only where it
+   * finds one does the update run, bounded to a document which is a start and whose workflow id
+   * differs, so a start dispatched twice writes nothing. The update goes through the session of the
+   * running transaction where MongoDB Panache provides one, like every other write here.
+   *
+   * @param workflowStart The row to write
+   * @return Whether the store now holds this workflow's id for the first time
+   */
+  @Override
+  public boolean recordWorkflowStart(
+      final TaskDelivery workflowStart) {
+
+    if (record(workflowStart)) {
+      return true;
+    }
+    final var startedAt = Date.from(workflowStart.recordedAt() == null
+        ? Instant.now()
+        : workflowStart.recordedAt());
+    final var filter = new Document("_id", workflowStart.deliveryKey())
+        .append("recordKind", WORKFLOW_START)
+        .append("workflowId", new Document("$ne", workflowStart.workflowId()));
+    final var replacement = new Document(
+        "$set", new Document("workflowId", workflowStart.workflowId())
+            .append("adapterId", workflowStart.adapterId())
+            .append("recordedAt", startedAt)
+            .append("lastSeenAt", startedAt));
+    final var session = MongoSessions
+        .activeSession(txRegistry);
+    final var collection = deliveryCollection();
+    final var result = session != null
+        ? collection.updateOne(session, filter, replacement)
+        : collection.updateOne(filter, replacement);
+    return result.getModifiedCount() > 0;
+
+  }
+
+  /**
    * The record one document holds.
    *
    * @param document The document read
