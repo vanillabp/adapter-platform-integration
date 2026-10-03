@@ -77,8 +77,33 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   private static final String COMPLETION_PENDING = WorkflowTaskOutcome.Kind.COMPLETION_PENDING
       .name();
 
+  /**
+   * The kind of document which says where a workflow runs. Every question about open work demands
+   * that a document is NOT this, rather than that it is a delivery: MongoDB has no statement which
+   * fills a field of the documents which are already there, and <code>$ne</code> matches a document
+   * whose field is absent while <code>$eq</code> does not. The relational store asks the other way
+   * round, because the ALTER which adds its column fills it.
+   */
+  private static final String WORKFLOW_START = io.vanillabp.integration.spi.DeliveryRecordKind.WORKFLOW_START
+      .name();
+
+  /**
+   * How many documents about started workflows one sieved run looks at. The sieve costs one read
+   * of the application's own database per document, so a run has an upper bound; the next hourly
+   * run continues, because what it kept is kept and what it deleted is gone.
+   */
+  private static final int WORKFLOW_STARTS_SIEVED_PER_RUN = 1000;
+
   @Inject
   Instance<MongoClient> mongoClient;
+
+  /**
+   * Where the process services are collected, asked by the sieve of the workflow-start documents
+   * and only where the application switched that sieve on. An {@link Instance} and not the bean
+   * itself, because the router is built from the process-service beans.
+   */
+  @Inject
+  Instance<io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter> phaseTwoRouter;
 
   @Inject
   TransactionSynchronizationRegistry txRegistry;
@@ -86,6 +111,10 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   private volatile PhaseTwoOutboxProperties properties;
 
   private volatile Duration deliveryRetention;
+
+  private volatile Duration workflowStartRetention;
+
+  private volatile io.vanillabp.integration.spi.WorkflowStartSieve workflowStartSieve;
 
   private volatile TaskDeliveryRetentionCleanup retentionCleanup;
 
@@ -227,7 +256,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       MongoIndexes.reportMissingOn(deliveryCollection(), MongoSchema.DELIVERY_INDEXES);
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
-        deliveryCollectionName(), getDeliveryRetention(), this::cleanUpExpiredRecords);
+        deliveryCollectionName(), getDeliveryRetention(), getWorkflowStartRetention(), this::cleanUpExpiredRecords);
     retentionCleanup.start();
 
   }
@@ -244,12 +273,118 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
     touches().flush();
 
-    return deliveryCollection()
+    final var expiredDeliveries = deliveryCollection()
         .deleteMany(
             new Document(
                 "lastSeenAt", new Document("$lt", Date
-                    .from(Instant.now().minus(getDeliveryRetention())))))
+                    .from(Instant.now().minus(getDeliveryRetention()))))
+                .append("recordKind", new Document("$ne", WORKFLOW_START)))
         .getDeletedCount();
+    return expiredDeliveries + cleanUpExpiredWorkflowStarts();
+
+  }
+
+  /**
+   * Deletes the documents about started workflows whose own period passed - a period of its own,
+   * because such a document is read for as long as somebody may ask which workflow an aggregate
+   * belongs to, which outlasts the workflow itself.
+   * <p>
+   * Without a sieve this is one delete. With one, the expired documents are read first and the
+   * sieve is asked per document, which costs a read of the application's own database each time
+   * (see {@link io.vanillabp.integration.spi.WorkflowStartSieve}). A document the sieve keeps stays
+   * where it is and is offered again at the next run.
+   *
+   * @return The number of documents deleted
+   */
+  private long cleanUpExpiredWorkflowStarts() {
+
+    final var retention = getWorkflowStartRetention();
+    if (retention.isZero()) {
+      // a zero period says the documents about started workflows are kept for good
+      return 0;
+    }
+    final var expired = new Document(
+        "lastSeenAt", new Document("$lt", Date.from(Instant.now().minus(retention))))
+        .append("recordKind", WORKFLOW_START);
+    final var sieve = getWorkflowStartSieve();
+    if (sieve == null) {
+      return deliveryCollection()
+          .deleteMany(expired)
+          .getDeletedCount();
+    }
+    final var mayGo = new java.util.ArrayList<String>();
+    deliveryCollection()
+        .find(expired)
+        .limit(WORKFLOW_STARTS_SIEVED_PER_RUN)
+        .forEach(document -> {
+          if (Boolean.TRUE.equals(sieve.mayBeDeleted(recordOf(document)))) {
+            mayGo.add(document.getString("_id"));
+          }
+        });
+    if (mayGo.isEmpty()) {
+      return 0;
+    }
+    return deliveryCollection()
+        .deleteMany(new Document("_id", new Document("$in", mayGo)))
+        .getDeletedCount();
+
+  }
+
+  /**
+   * How long the document about a started workflow is kept, counted from the start:
+   * <code>vanillabp.delivery.workflow-start-retention</code>, thirty days where nobody says
+   * anything.
+   *
+   * Public because it is what the tests of this wiring assert.
+   *
+   * @return The period a workflow-start document is kept
+   */
+  public Duration getWorkflowStartRetention() {
+
+    if (workflowStartRetention == null) {
+      workflowStartRetention = io.vanillabp.integration.adapter.migration.config.DeliveryProperties
+          .resolveWorkflowStartRetention(deliverySection());
+    }
+    return workflowStartRetention;
+
+  }
+
+  /**
+   * What decides per document whether it may really go once that period passed, and
+   * <code>null</code> where the application did not ask for the second sieve
+   * (<code>vanillabp.delivery.keep-workflow-start-while-aggregate-exists</code>).
+   *
+   * @return The sieve or <code>null</code>
+   */
+  private io.vanillabp.integration.spi.WorkflowStartSieve getWorkflowStartSieve() {
+
+    if ((workflowStartSieve == null) && io.vanillabp.integration.adapter.migration.config.DeliveryProperties
+        .resolveKeepWorkflowStartWhileAggregateExists(deliverySection())) {
+      workflowStartSieve = new io.vanillabp.integration.adapter.migration.delivery.AggregateBoundWorkflowStarts(
+          () -> phaseTwoRouter.isResolvable()
+              ? phaseTwoRouter.get()
+              : null, deliveryCollectionName());
+    }
+    return workflowStartSieve;
+
+  }
+
+  /**
+   * The <code>vanillabp.delivery</code> section of the whole application, as the core reads it.
+   * The two settings about the documents of started workflows are read there and nowhere else,
+   * like the retention beside them.
+   *
+   * @return The bound section
+   */
+  private io.vanillabp.integration.adapter.migration.config.DeliveryProperties deliverySection() {
+
+    return QuarkusMigrationAdapterPropertiesMapper.INSTANCE
+        .toCore(
+            ConfigProvider
+                .getConfig()
+                .unwrap(SmallRyeConfig.class)
+                .getConfigMapping(QuarkusMigrationAdapterProperties.class)
+                .delivery());
 
   }
 
@@ -367,6 +502,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         // which kind of task that id is the id of, so VanillaBP can say which method asks
         // for that kind of key when a caller named the id of the other kind
         .append("taskKind", delivery.taskKind())
+        // what the document is about: a task delivery, or the start of a workflow
+        .append("recordKind", delivery.recordKind())
         .append("outcome", delivery.outcome())
         .append("bpmnErrorCode", delivery.bpmnErrorCode())
         .append("bpmnErrorName", delivery.bpmnErrorName())
@@ -497,6 +634,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
     final var filter = new Document("workflowModuleId", workflowModuleId)
         .append("bpmnProcessId", bpmnProcessId)
         .append("aggregateId", workflowAggregateId)
+        .append("recordKind", new Document("$ne", WORKFLOW_START))
         .append("outcome", COMPLETION_PENDING)
         .append("taskClosedAt", null);
     final var oldestFirst = new Document("recordedAt", 1);
@@ -526,6 +664,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
     final var collection = deliveryCollection();
     final var filter = new Document("workflowModuleId", workflowModuleId)
         .append("workflowId", workflowId)
+        .append("recordKind", new Document("$ne", WORKFLOW_START))
         .append("outcome", COMPLETION_PENDING)
         .append("taskClosedAt", null);
     final var oldestFirst = new Document("recordedAt", 1);
@@ -588,7 +727,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
                     .getString("taskId"), document.getString("outcome"), document
                         .getString("bpmnErrorCode"), document.getString("bpmnErrorName"), instantOf(
                             document.getDate("recordedAt")), instantOf(
-                                document.getDate("taskClosedAt")), document.getString("taskKind"));
+                                document.getDate("taskClosedAt")), document.getString("taskKind"), document
+                                    .getString("recordKind"));
 
   }
 
@@ -616,6 +756,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
     final var filter = new Document("workflowModuleId", workflowModuleId)
         .append("bpmnProcessId", bpmnProcessId)
+        .append("recordKind", new Document("$ne", WORKFLOW_START))
         .append("outcome", COMPLETION_PENDING)
         .append("adapterId", new Document("$ne", null));
     final var adapterIds = new LinkedHashSet<String>();
@@ -633,6 +774,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
     final var filter = new Document("workflowModuleId", workflowModuleId)
         .append("bpmnProcessId", bpmnProcessId)
+        .append("recordKind", new Document("$ne", WORKFLOW_START))
         .append("outcome", COMPLETION_PENDING);
     return deliveryCollection().countDocuments(filter) > 0;
 
@@ -655,6 +797,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         .append("workflowModuleId", workflowModuleId)
         .append("bpmnProcessId", bpmnProcessId)
         .append("aggregateId", workflowAggregateId)
+        // the row about the start of that workflow is NOT released: changes to the aggregate keep
+        // arriving after its workflow ended, and each of them may want to name the workflow
+        .append("recordKind", new Document("$ne", WORKFLOW_START))
         .append("recordedAt", new Document("$lt", Date.from(recordedBefore)));
     final var result = session != null
         ? collection.deleteMany(session, filter)

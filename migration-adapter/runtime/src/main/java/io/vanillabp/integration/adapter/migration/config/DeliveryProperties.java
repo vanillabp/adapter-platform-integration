@@ -13,12 +13,16 @@ import java.time.Duration;
  * ({@link #releaseOnWorkflowEnd}), how long a task may stay open before VanillaBP says so
  * ({@link #maxTaskAge}), whether a delivery looks at the other tasks of its workflow
  * ({@link #checkOpenTasksOnDelivery}) and how many of them it probes
- * ({@link #maxOpenTasksChecked}), and how long a record is kept ({@link #retention}). The
+ * ({@link #maxOpenTasksChecked}), how long a record is kept ({@link #retention}), how long the
+ * row about a started workflow is kept ({@link #workflowStartRetention}) and whether that row
+ * outlives the period while its aggregate is still there
+ * ({@link #keepWorkflowStartWhileAggregateExists}). The
  * release is overridable per workflow module, and the other three additionally per workflow
  * and per task, since how long a task may legitimately wait and what one delivery may cost
  * are properties of that task rather than of the application.
  * <p>
- * The retention is the exception and is read globally only, which is decision 24 in the
+ * The three settings about what is DELETED are the exception and are read globally only, which
+ * for the retention is decision 24 in the
  * repository's DECISIONS.md: what deletes the records is one cleanup per store,
  * constructed with one period and deleting by age across the whole table respectively
  * collection, so a value per workflow module would have to be honored by a different
@@ -158,6 +162,63 @@ public class DeliveryProperties {
       + ".retention";
 
   /**
+   * How long the row about a started workflow is kept, counted from the start.
+   * <p>
+   * That row says which workflow of the BPMS a workflow aggregate belongs to, and it is read for
+   * as long as somebody may ask - which is LONGER than the workflow runs. Changes to an aggregate
+   * keep arriving after its workflow ended, from the application's own code and from whoever
+   * maintains the business data of a finished case, and each of them may want to report the
+   * change towards a cockpit. So this is not the retention of a delivery, which may go as soon as
+   * nobody can repeat it, and it is a period of its own.
+   * <p>
+   * Defaults to {@value #DEFAULT_WORKFLOW_START_RETENTION_ISO}. Nothing about correctness hangs
+   * on the number: when it passed, the id of that workflow is not known any more, so a report
+   * finds no id and is dropped without a word. Generous rather than tight, because nobody knows
+   * what an application does with a case it finished, and
+   * {@link #keepWorkflowStartWhileAggregateExists} is the exact answer for an installation which
+   * wants one. {@link Duration#ZERO} keeps the rows for good, which is how an application whose
+   * aggregates live forever says so.
+   * <p>
+   * Read for the whole application only, like {@link #retention} and for the same reason.
+   */
+  private Duration workflowStartRetention;
+
+  /**
+   * The key of {@link #workflowStartRetention}:
+   * <code>vanillabp.delivery.workflow-start-retention</code>. A constant because the startup
+   * names it and a test reads it from here.
+   */
+  public static final String WORKFLOW_START_RETENTION_PROPERTY = SECTION
+      + ".workflow-start-retention";
+
+  /**
+   * Whether the row about a started workflow is kept past
+   * {@link #workflowStartRetention} while the workflow aggregate it names still exists.
+   * <p>
+   * A period is a guess, and this is the exact question: the row is read to say which workflow an
+   * aggregate belongs to, so it is needed exactly as long as the application keeps the aggregate.
+   * Switched on, the cleanup loads the aggregate by its id before it deletes such a row, and a
+   * persistence which answers an aggregate keeps the row. A persistence which cannot answer -
+   * a custom one which does not implement <code>loadById</code> - keeps it as well, and the
+   * startup says so once.
+   * <p>
+   * Defaults to <code>false</code>, because it costs one read of the application's own database
+   * per expired row and a cleanup which does that without being asked would surprise an
+   * installation with many short-lived workflows. The period alone is the rule an installation can
+   * rely on either way.
+   * <p>
+   * Read for the whole application only, like the two periods above.
+   */
+  private Boolean keepWorkflowStartWhileAggregateExists;
+
+  /**
+   * The key of {@link #keepWorkflowStartWhileAggregateExists}:
+   * <code>vanillabp.delivery.keep-workflow-start-while-aggregate-exists</code>.
+   */
+  public static final String KEEP_WORKFLOW_START_WHILE_AGGREGATE_EXISTS_PROPERTY = SECTION
+      + ".keep-workflow-start-while-aggregate-exists";
+
+  /**
    * Resolves the retention of delivery records: what this section says, or the outbox
    * retention it was split off from.
    *
@@ -176,6 +237,36 @@ public class DeliveryProperties {
   }
 
   /**
+   * Resolves how long the row about a started workflow is kept: what this section says, and thirty
+   * days where it says nothing.
+   *
+   * @param delivery The <code>vanillabp.delivery</code> section or <code>null</code>
+   * @return The period a workflow-start row is kept
+   */
+  public static Duration resolveWorkflowStartRetention(
+      final DeliveryProperties delivery) {
+
+    return ((delivery == null) || (delivery.getWorkflowStartRetention() == null))
+        ? DEFAULT_WORKFLOW_START_RETENTION
+        : delivery.getWorkflowStartRetention();
+
+  }
+
+  /**
+   * Resolves whether the row about a started workflow is kept past its period while the workflow
+   * aggregate it names still exists.
+   *
+   * @param delivery The <code>vanillabp.delivery</code> section or <code>null</code>
+   * @return Whether the cleanup asks the aggregate before it deletes such a row
+   */
+  public static boolean resolveKeepWorkflowStartWhileAggregateExists(
+      final DeliveryProperties delivery) {
+
+    return (delivery != null) && Boolean.TRUE.equals(delivery.getKeepWorkflowStartWhileAggregateExists());
+
+  }
+
+  /**
    * The default of {@link #maxTaskAge} in ISO-8601 notation, for javadoc and messages.
    */
   public static final String DEFAULT_MAX_TASK_AGE_ISO = "P30D";
@@ -184,6 +275,18 @@ public class DeliveryProperties {
    * The default of {@link #maxTaskAge}: thirty days, report only.
    */
   public static final Duration DEFAULT_MAX_TASK_AGE = Duration.parse(DEFAULT_MAX_TASK_AGE_ISO);
+
+  /**
+   * The default of {@link #workflowStartRetention} in ISO-8601 notation, for javadoc and
+   * messages.
+   */
+  public static final String DEFAULT_WORKFLOW_START_RETENTION_ISO = "P30D";
+
+  /**
+   * The default of {@link #workflowStartRetention}: thirty days after the workflow started.
+   */
+  public static final Duration DEFAULT_WORKFLOW_START_RETENTION = Duration
+      .parse(DEFAULT_WORKFLOW_START_RETENTION_ISO);
 
   /**
    * The default of {@link #maxOpenTasksChecked}: ten probes per wake-up.
@@ -234,6 +337,18 @@ public class DeliveryProperties {
      * {@link io.vanillabp.integration.spi.TaskDeliveryLog#stillOpen}).
      */
     private Duration retention;
+
+    /**
+     * How long the row about a started workflow is kept, counted from the start (see
+     * {@link DeliveryProperties#workflowStartRetention}).
+     */
+    private Duration workflowStartRetention;
+
+    /**
+     * Whether that row is kept past the period while its workflow aggregate still exists (see
+     * {@link DeliveryProperties#keepWorkflowStartWhileAggregateExists}).
+     */
+    private Boolean keepWorkflowStartWhileAggregateExists;
 
     /**
      * The builder of a subclass calls this while it is built. Nobody else needs one:
@@ -323,6 +438,38 @@ public class DeliveryProperties {
     }
 
     /**
+     * How long the row about a started workflow is kept, counted from the start (see
+     * {@link DeliveryProperties#workflowStartRetention}).
+     *
+     * @param workflowStartRetention The value of
+     *          {@link DeliveryProperties#workflowStartRetention}
+     * @return This builder, so the calls chain
+     */
+    public B workflowStartRetention(
+        final Duration workflowStartRetention) {
+
+      this.workflowStartRetention = workflowStartRetention;
+      return self();
+
+    }
+
+    /**
+     * Whether that row is kept past the period while its workflow aggregate still exists (see
+     * {@link DeliveryProperties#keepWorkflowStartWhileAggregateExists}).
+     *
+     * @param keepWorkflowStartWhileAggregateExists The value of
+     *          {@link DeliveryProperties#keepWorkflowStartWhileAggregateExists}
+     * @return This builder, so the calls chain
+     */
+    public B keepWorkflowStartWhileAggregateExists(
+        final Boolean keepWorkflowStartWhileAggregateExists) {
+
+      this.keepWorkflowStartWhileAggregateExists = keepWorkflowStartWhileAggregateExists;
+      return self();
+
+    }
+
+    /**
      * The builder itself, typed as the builder of the subclass. Every method of the
      * chain returns it, which is what keeps a chain started on a subclass builder at
      * that subclass.
@@ -361,6 +508,12 @@ public class DeliveryProperties {
           + ", "
           + "retention="
           + retention
+          + ", "
+          + "workflowStartRetention="
+          + workflowStartRetention
+          + ", "
+          + "keepWorkflowStartWhileAggregateExists="
+          + keepWorkflowStartWhileAggregateExists
           + ")";
 
     }
@@ -420,6 +573,8 @@ public class DeliveryProperties {
     this.checkOpenTasksOnDelivery = b.checkOpenTasksOnDelivery;
     this.maxOpenTasksChecked = b.maxOpenTasksChecked;
     this.retention = b.retention;
+    this.workflowStartRetention = b.workflowStartRetention;
+    this.keepWorkflowStartWhileAggregateExists = b.keepWorkflowStartWhileAggregateExists;
 
   }
 
@@ -567,6 +722,57 @@ public class DeliveryProperties {
       final Duration retention) {
 
     this.retention = retention;
+
+  }
+
+  /**
+   * How long the row about a started workflow is kept, counted from the start (see
+   * {@link #workflowStartRetention}).
+   *
+   * @return The value of {@link #workflowStartRetention}
+   */
+  public Duration getWorkflowStartRetention() {
+
+    return workflowStartRetention;
+
+  }
+
+  /**
+   * How long the row about a started workflow is kept, counted from the start (see
+   * {@link #workflowStartRetention}).
+   *
+   * @param workflowStartRetention The value of {@link #workflowStartRetention}
+   */
+  public void setWorkflowStartRetention(
+      final Duration workflowStartRetention) {
+
+    this.workflowStartRetention = workflowStartRetention;
+
+  }
+
+  /**
+   * Whether that row is kept past the period while its workflow aggregate still exists (see
+   * {@link #keepWorkflowStartWhileAggregateExists}).
+   *
+   * @return The value of {@link #keepWorkflowStartWhileAggregateExists}
+   */
+  public Boolean getKeepWorkflowStartWhileAggregateExists() {
+
+    return keepWorkflowStartWhileAggregateExists;
+
+  }
+
+  /**
+   * Whether that row is kept past the period while its workflow aggregate still exists (see
+   * {@link #keepWorkflowStartWhileAggregateExists}).
+   *
+   * @param keepWorkflowStartWhileAggregateExists The value of
+   *          {@link #keepWorkflowStartWhileAggregateExists}
+   */
+  public void setKeepWorkflowStartWhileAggregateExists(
+      final Boolean keepWorkflowStartWhileAggregateExists) {
+
+    this.keepWorkflowStartWhileAggregateExists = keepWorkflowStartWhileAggregateExists;
 
   }
 

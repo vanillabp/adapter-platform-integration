@@ -53,9 +53,22 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   @Inject
   TransactionSynchronizationRegistry txRegistry;
 
+  /**
+   * Where the process services are collected, asked by the sieve of the workflow-start rows and
+   * only where the application switched that sieve on. An {@link Instance} and not the bean
+   * itself, because the router is built from the process-service beans and this log must not pull
+   * them in while it is created.
+   */
+  @Inject
+  Instance<io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter> phaseTwoRouter;
+
   private volatile PhaseTwoOutboxProperties properties;
 
   private volatile java.time.Duration deliveryRetention;
+
+  private volatile java.time.Duration workflowStartRetention;
+
+  private volatile io.vanillabp.integration.spi.WorkflowStartSieve workflowStartSieve;
 
   private volatile JdbcTaskDeliveryStore store;
 
@@ -140,6 +153,65 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   }
 
+  /**
+   * How long the row about a started workflow is kept, counted from the start:
+   * <code>vanillabp.delivery.workflow-start-retention</code>, thirty days where nobody says
+   * anything. A period of its own, because that row is read for as long as somebody may ask which
+   * workflow an aggregate belongs to, which outlasts the workflow.
+   *
+   * Public because it is what the tests of this wiring assert.
+   *
+   * @return The period a workflow-start row is kept
+   */
+  public java.time.Duration getWorkflowStartRetention() {
+
+    if (workflowStartRetention == null) {
+      workflowStartRetention = io.vanillabp.integration.adapter.migration.config.DeliveryProperties
+          .resolveWorkflowStartRetention(deliverySection());
+    }
+    return workflowStartRetention;
+
+  }
+
+  /**
+   * What decides per row whether it may really go once that period passed, and
+   * <code>null</code> where the application did not ask for the second sieve
+   * (<code>vanillabp.delivery.keep-workflow-start-while-aggregate-exists</code>).
+   *
+   * @return The sieve or <code>null</code>
+   */
+  private io.vanillabp.integration.spi.WorkflowStartSieve getWorkflowStartSieve() {
+
+    if ((workflowStartSieve == null) && io.vanillabp.integration.adapter.migration.config.DeliveryProperties
+        .resolveKeepWorkflowStartWhileAggregateExists(deliverySection())) {
+      workflowStartSieve = new io.vanillabp.integration.adapter.migration.delivery.AggregateBoundWorkflowStarts(
+          () -> phaseTwoRouter.isResolvable()
+              ? phaseTwoRouter.get()
+              : null, getStore().getTableName());
+    }
+    return workflowStartSieve;
+
+  }
+
+  /**
+   * The <code>vanillabp.delivery</code> section of the whole application, as the core reads it.
+   * The two settings about the rows of started workflows are read there and nowhere else, like
+   * the retention beside them.
+   *
+   * @return The bound section, carrying only what this log asks of it
+   */
+  private io.vanillabp.integration.adapter.migration.config.DeliveryProperties deliverySection() {
+
+    return QuarkusMigrationAdapterPropertiesMapper.INSTANCE
+        .toCore(
+            ConfigProvider
+                .getConfig()
+                .unwrap(SmallRyeConfig.class)
+                .getConfigMapping(QuarkusMigrationAdapterProperties.class)
+                .delivery());
+
+  }
+
   private JdbcTaskDeliveryStore getStore() {
 
     if (store == null) {
@@ -173,7 +245,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
       getStore().validateSchemaExists();
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
-        getStore().getTableName(), getDeliveryRetention(), this::cleanUpExpiredRecords);
+        getStore().getTableName(), getDeliveryRetention(), getWorkflowStartRetention(), this::cleanUpExpiredRecords);
     retentionCleanup.start();
 
   }
@@ -187,7 +259,13 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
    */
   public int cleanUpExpiredRecords() {
 
-    return getStore().deleteExpired(getDeliveryRetention());
+    final var expiredDeliveries = getStore().deleteExpired(getDeliveryRetention());
+    final var startRetention = getWorkflowStartRetention();
+    if (startRetention.isZero()) {
+      // a zero period says the rows about started workflows are kept for good
+      return expiredDeliveries;
+    }
+    return expiredDeliveries + getStore().deleteExpiredWorkflowStarts(startRetention, getWorkflowStartSieve());
 
   }
 

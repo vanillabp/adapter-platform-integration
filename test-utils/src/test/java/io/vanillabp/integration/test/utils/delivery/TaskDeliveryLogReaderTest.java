@@ -183,7 +183,7 @@ public class TaskDeliveryLogReaderTest {
                   AGGREGATE_ID VARCHAR(1024), \
                   TASK_DEFINITION VARCHAR(255), \
                   TASK_ID VARCHAR(255), \
-                  OUTCOME VARCHAR(32) NOT NULL, \
+                  OUTCOME VARCHAR(32), \
                   BPMN_ERROR_CODE VARCHAR(255), \
                   BPMN_ERROR_NAME VARCHAR(255), \
                   RECORDED_AT TIMESTAMP NOT NULL, \
@@ -191,7 +191,8 @@ public class TaskDeliveryLogReaderTest {
                   TASK_CLOSED_AT TIMESTAMP, \
                   BPMN_ELEMENT_ID VARCHAR(255), \
                   WORKFLOW_ID VARCHAR(255), \
-                  TASK_KIND VARCHAR(32))"""
+                  TASK_KIND VARCHAR(32), \
+                  RECORD_KIND VARCHAR(32) DEFAULT 'TASK_DELIVERY' NOT NULL)"""
                   .formatted(LOG_OF_THIS_TEST));
     }
 

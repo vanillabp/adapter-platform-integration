@@ -70,8 +70,14 @@ public interface BpmsInitiatedStartContext {
   }
 
   /**
-   * The BPMS' own ID of the started workflow instance. Used for log and error
-   * messages only - VanillaBP addresses workflows by the aggregate's ID.
+   * The BPMS' own ID of the started workflow instance. VanillaBP addresses workflows by the
+   * aggregate's ID, so nothing it does depends on this value - but it is WRITTEN DOWN next to
+   * the aggregate when the start is processed, which is what lets a later operation on this
+   * workflow skip asking every configured BPMS which of them holds it, and what lets an
+   * extension name the workflow on a BPMS whose read model has not caught up yet.
+   * <p>
+   * The instance meant is the one this start event created, which is the workflow the aggregate
+   * IS. Beside that it still names the workflow in every message about it.
    *
    * @return The native instance ID or <code>null</code>
    */

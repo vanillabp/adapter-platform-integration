@@ -193,6 +193,18 @@
       "description": "How long the record of a processed task delivery is kept, counted from the last redelivery it answered. This is a correctness setting: a delivery arriving later than this finds no record and runs the @WorkflowTask method a second time, so the period has to cover the longest gap between a handler running and the last redelivery of that work, including however long the application is stopped. Unset means 'vanillabp.outbox.retention', which is where this number lived before the two were told apart."
     },
     {
+      "name": "vanillabp.delivery.workflow-start-retention",
+      "type": "java.time.Duration",
+      "description": "How long the row about a started workflow is kept, counted from the start. That row says which workflow of the BPMS a workflow aggregate belongs to, and it is read for longer than the workflow runs: changes to an aggregate keep arriving after its workflow ended, and each of them may want to name the workflow. When the period passed, the id is not known any more, so such a report finds no id and is dropped without a word. '0' keeps the rows for good.",
+      "defaultValue": "30d"
+    },
+    {
+      "name": "vanillabp.delivery.keep-workflow-start-while-aggregate-exists",
+      "type": "java.lang.Boolean",
+      "description": "Whether the row about a started workflow is kept past 'vanillabp.delivery.workflow-start-retention' while the workflow aggregate it names still exists. The period is a guess and this is the exact question, but it costs one read of the application's own database per expired row, so it is off unless the application asks for it.",
+      "defaultValue": false
+    },
+    {
       "name": "vanillabp.election.guessing-adapters",
       "type": "io.vanillabp.integration.adapter.migration.config.ElectionProperties$GuessingAdapters",
       "description": "What VanillaBP does about a prioritized adapter which cannot say whether it holds a workflow, next to at least one other adapter: 'rejected' ends the boot with a message naming the adapter and the fix, 'accepted' routes operations on existing workflows by list order instead and logs a warning. Overridable per workflow module.",

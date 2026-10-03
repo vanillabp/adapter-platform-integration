@@ -1216,6 +1216,28 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * Writes down which workflow of the BPMS the given aggregate belongs to - called where a
+   * workflow was started and both values are known in one transaction.
+   * <p>
+   * The start of the application does it after phase two reported the id. A workflow the BPMS
+   * started on its own does it in the transaction which persists the aggregate, which is where
+   * the notification already carries the id of the instance. Nothing is written where no store
+   * serves this aggregate or where the adapter names no workflow.
+   *
+   * @param adapterId The ID of the adapter which started the workflow
+   * @param workflowAggregateId The workflow aggregate of the started workflow
+   * @param workflowId The BPMS' own id of the started workflow or <code>null</code>
+   */
+  public void recordWorkflowStart(
+      final String adapterId,
+      final Object workflowAggregateId,
+      final String workflowId) {
+
+    deliveryRecords.recordWorkflowStart(adapterId, workflowAggregateId, workflowId);
+
+  }
+
+  /**
    * Takes back the hint of a delivery which turned out to be about a workflow of another
    * application. The hint is written before the aggregate is read, because it has to hold
    * for a delivery the handler does not subscribe to as well, and only the read tells
@@ -1792,14 +1814,22 @@ public class MigrationProcessService<A> {
     if (previouslyAttempted && skipRedispatchedStart(adapter, workflowAggregateId, operation.describe(args))) {
       return;
     }
+    // where the adapter says which workflow it created, this is the one moment anybody ever
+    // learns it: phase two returns nothing, and the instance was created on the other side of
+    // the commit
+    final var startedWorkflowId = new java.util.concurrent.atomic.AtomicReference<String>();
     runPhaseTwo(
         adapter,
         "%s of %s".formatted(operation.describe(args), subject),
-        () -> handlerOf(adapter, operation, args).phaseTwo(phaseTwoRequest(workflowAggregateId, args)));
+        () -> handlerOf(adapter, operation, args)
+            .phaseTwo(phaseTwoRequest(workflowAggregateId, args, startedWorkflowId::set)));
     // the workflow exists now, and this adapter created it: the next operation on it
     // (the classic one is correlating the message which lets it continue) probes this
     // adapter first and waits out its BPMS' visibility delay instead of failing
-    rememberWorkflowAdapter(workflowAggregateId, adapterId);
+    rememberWorkflowAdapter(workflowAggregateId, adapterId, startedWorkflowId.get());
+    // and it is written down, because a cache is bounded and does not survive a restart while
+    // the question "which workflow does this aggregate belong to" outlives both
+    deliveryRecords.recordWorkflowStart(adapterId, workflowAggregateId, startedWorkflowId.get());
 
   }
 
@@ -1948,7 +1978,7 @@ public class MigrationProcessService<A> {
               location.hintedAdapterId(),
               subject,
               operation.describe(args),
-              workflowIdKnownFor(workflowAggregateId));
+              workflowIdOf(workflowAggregateId));
         }
         log.warn(
             "Skipped phase two of {} of {}: no configured BPMS knows it any more (a stale outbox "
@@ -2383,7 +2413,7 @@ public class MigrationProcessService<A> {
       final Object workflowAggregateId) {
 
     final var subject = subjectOf(workflowAggregateId);
-    final var workflowId = workflowIdKnownFor(workflowAggregateId);
+    final var workflowId = workflowIdOf(workflowAggregateId);
     final var location = workflowLocator
         .locate(
             adapterProcessServices,
@@ -2420,7 +2450,8 @@ public class MigrationProcessService<A> {
   /**
    * The BPMS' own id of the given workflow, as far as VanillaBP holds one - a hint handed
    * to an adapter so it can ask its engine by key instead of searching a read model, and
-   * handed to an extension which asked where a workflow is.
+   * handed to an extension which asked where a workflow is, or which only asked for the id
+   * ({@link io.vanillabp.integration.extension.spi.election.WorkflowElection#workflowIdOf}).
    * <p>
    * Two sources, in this order. The record of a task delivery of that workflow is the first
    * one: it is written per delivery, it survives a restart and it names the id the BPMS
@@ -2433,7 +2464,7 @@ public class MigrationProcessService<A> {
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return The workflow's id in the BPMS or <code>null</code>
    */
-  private String workflowIdKnownFor(
+  public String workflowIdOf(
       final Object workflowAggregateId) {
 
     final var recorded = deliveryRecords.workflowIdOf(workflowAggregateId);
@@ -2472,6 +2503,21 @@ public class MigrationProcessService<A> {
 
     return new PhaseTwoRequest<>(
         workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, args);
+
+  }
+
+  /**
+   * The same request, with the sink phase two of a START says the created workflow's id into.
+   * Only a start gets one: every other operation has nothing to report, and a sink which is
+   * never called would only invite an adapter to call it.
+   */
+  private PhaseTwoRequest<A> phaseTwoRequest(
+      final Object workflowAggregateId,
+      final Map<String, String> args,
+      final io.vanillabp.integration.adapter.spi.workflowstart.WorkflowStartReport startReport) {
+
+    return new PhaseTwoRequest<>(
+        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, args, startReport);
 
   }
 

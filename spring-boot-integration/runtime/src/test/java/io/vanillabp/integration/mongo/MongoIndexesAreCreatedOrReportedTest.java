@@ -192,7 +192,7 @@ public class MongoIndexesAreCreatedOrReportedTest {
         .vanillaBpMongoPhaseTwoOutbox(mongoTemplate, null, vanillaBpProperties);
     final var deliveryLogAutoConfiguration = new MongoTaskDeliveryLogAutoConfiguration();
     deliveryLog = deliveryLogAutoConfiguration
-        .vanillaBpMongoTaskDeliveryLog(mongoTemplate, vanillaBpProperties);
+        .vanillaBpMongoTaskDeliveryLog(mongoTemplate, vanillaBpProperties, noPhaseTwoRouter());
     deliveryLogAutoConfiguration
         .vanillaBpMongoTaskDeliveryLogStartup(mongoTemplate, deliveryLog, vanillaBpProperties)
         .afterSingletonsInstantiated();
@@ -255,6 +255,28 @@ public class MongoIndexesAreCreatedOrReportedTest {
         .getOutbox()
         .setCreateSchema(createSchema);
     return vanillaBpProperties;
+
+  }
+
+  /**
+   * No router: the sieve of the workflow-start rows is off unless an application asks for it, so
+   * nothing here ever looks for one.
+   *
+   * @return A provider which has nothing
+   */
+  private static org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter> noPhaseTwoRouter() {
+
+    return new org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter>() {
+
+      @Override
+      public io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter getObject() {
+
+        throw new org.springframework.beans.factory.NoSuchBeanDefinitionException(
+            io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter.class);
+
+      }
+
+    };
 
   }
 

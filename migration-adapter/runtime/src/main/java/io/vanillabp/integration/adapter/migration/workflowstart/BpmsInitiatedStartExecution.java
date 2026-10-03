@@ -188,7 +188,7 @@ public final class BpmsInitiatedStartExecution {
                 processService.getBpmnProcessId(),
                 processService.getWorkflowModuleId(),
                 context.getStartEventId());
-        return result(processService, existing, false);
+        return result(processService, context, existing, false);
       }
     }
 
@@ -208,7 +208,7 @@ public final class BpmsInitiatedStartExecution {
                   context.getStartEventId(),
                   handler.describe()));
     }
-    return result(processService, attached, true);
+    return result(processService, context, attached, true);
 
   }
 
@@ -258,7 +258,7 @@ public final class BpmsInitiatedStartExecution {
             processService.getWorkflowModuleId(),
             context.getStartEventId(),
             nameTheBpmsHolds);
-    return result(processService, existing, false);
+    return result(processService, context, existing, false);
 
   }
 
@@ -284,7 +284,8 @@ public final class BpmsInitiatedStartExecution {
   }
 
   /**
-   * The aggregate's id and the variables the adapter writes back.
+   * The aggregate's id and the variables the adapter writes back, and the place where the pair
+   * "this aggregate, that workflow" is written down.
    * <p>
    * The id variable travels even where nothing was built: an adapter completing a listener
    * job writes what it is handed, and writing the name a workflow already has changes
@@ -292,11 +293,18 @@ public final class BpmsInitiatedStartExecution {
    */
   private static <A> BpmsInitiatedStartResult result(
       final MigrationProcessService<A> processService,
+      final BpmsInitiatedStartContext context,
       final A workflowAggregate,
       final boolean created) {
 
     final var aggregateIdName = processService.getAggregateIdName();
     final var serializedId = String.valueOf(processService.getWorkflowAggregateId(workflowAggregate));
+    // the aggregate and the workflow which runs it are both known right here, in the
+    // transaction which persists the aggregate, so this is where the pair is written down. It
+    // happens for every outcome of the decision above, including the workflow which was ours
+    // already: the row is keyed by the aggregate, so writing it again writes nothing
+    processService
+        .recordWorkflowStart(context.getAdapterId(), serializedId, context.getNativeInstanceId());
     final Map<String, Object> variables = new LinkedHashMap<>();
     variables.put(aggregateIdName, serializedId);
     return new BpmsInitiatedStartResult(serializedId, aggregateIdName, variables, created);

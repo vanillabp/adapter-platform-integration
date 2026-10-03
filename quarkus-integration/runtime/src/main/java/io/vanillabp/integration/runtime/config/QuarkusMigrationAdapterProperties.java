@@ -884,6 +884,27 @@ public interface QuarkusMigrationAdapterProperties {
      */
     Optional<Duration> retention();
 
+    /**
+     * How long the row about a started workflow is kept, counted from the start. It is read
+     * GLOBALLY only, under <code>vanillabp.delivery.workflow-start-retention</code>, and defaults
+     * to thirty days, see the core's
+     * {@link io.vanillabp.integration.adapter.migration.config.DeliveryProperties#getWorkflowStartRetention()}.
+     *
+     * @return The setting, an empty Optional meaning "thirty days"
+     */
+    Optional<Duration> workflowStartRetention();
+
+    /**
+     * Whether that row is kept past its period while the workflow aggregate it names still
+     * exists. It is read GLOBALLY only, under
+     * <code>vanillabp.delivery.keep-workflow-start-while-aggregate-exists</code>, and defaults to
+     * <code>false</code> because it costs one read of the application's own database per expired
+     * row.
+     *
+     * @return The setting, an empty Optional meaning "no, the period decides alone"
+     */
+    Optional<Boolean> keepWorkflowStartWhileAggregateExists();
+
   }
 
   /**

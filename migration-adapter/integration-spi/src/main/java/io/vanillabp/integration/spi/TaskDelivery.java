@@ -9,6 +9,11 @@ import java.time.Instant;
  * aggregate, and read again when the BPMS delivers the same task a second time (see
  * the deduplication contract of {@link TaskDeliveryLog}).
  * <p>
+ * A row may also be about the START of a workflow rather than about a delivery, and
+ * {@link #recordKind()} is what says which of the two it is. Such a row carries the workflow
+ * aggregate and the BPMS' own id of its workflow and nothing else - see
+ * {@link #workflowStart(String, String, String, String, String, Instant)}.
+ * <p>
  * Everything besides {@link #deliveryKey()} and {@link #outcome()} is context: it
  * makes a record readable for whoever looks into the store while investigating a
  * workflow, and it is what a store may index by. Stores persist the values as they
@@ -81,6 +86,12 @@ import java.time.Instant;
  *          the two the task is still open and its redeliveries still renew the BPMS' lock on
  *          it. Once it is set, a second completion of the same task is the warned no-op it
  *          always was, and no BPMS has to be asked for that either
+ * @param recordKind What this row is about: a task delivery, or the start of a workflow (the
+ *          names of {@link DeliveryRecordKind}). It is the KIND of the row and not a result, so
+ *          {@link #outcome()} keeps meaning what a delivery reported and a start row leaves it
+ *          empty. Every question about open work filters on it, because a start row carries no
+ *          task and would be a phantom task in each of those answers. May be <code>null</code>
+ *          in a record written before the field existed, which is a task delivery
  * @param taskKind Which kind of task {@link #taskId()} is the id of, as the delivering
  *          adapter named it: <code>TASK</code> for a task the application works off,
  *          <code>USER_TASK</code> for a user task a person works off (the names of
@@ -107,15 +118,96 @@ public record TaskDelivery(
                            String bpmnErrorName,
                            Instant recordedAt,
                            Instant taskClosedAt,
-                           String taskKind) {
+                           String taskKind,
+                           String recordKind) {
+
+  /**
+   * The row about the START of a workflow: the workflow aggregate and the BPMS' own id of the
+   * workflow it runs as, and nothing about a task.
+   * <p>
+   * It is written in the transaction which persists the aggregate, under a key no delivery can
+   * ever fall on ({@link WorkflowStartKey}), and it is what lets the BPMS election and an
+   * extension read that id without asking a BPMS. The id is the SUPER-PARENT instance - the
+   * workflow of this aggregate - so the instances a call activity creates underneath are not in
+   * it; those stand on the task they are delivered with.
+   * <p>
+   * {@link #outcome()} stays empty, because a start reports nothing. So do the task, the task
+   * definition, the element and the kind of task: a start is not a delivery and the row says so
+   * in {@link #recordKind()}.
+   *
+   * @param adapterId The ID of the adapter which started the workflow
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The workflow aggregate's ID in serialized form
+   * @param workflowId The BPMS' own id of the started workflow
+   * @param startedAt When the workflow was started
+   * @return The row to hand to {@link TaskDeliveryLog#record(TaskDelivery)}
+   */
+  public static TaskDelivery workflowStart(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String workflowId,
+      final Instant startedAt) {
+
+    return new TaskDelivery(
+        WorkflowStartKey.of(workflowModuleId, bpmnProcessId,
+            workflowAggregateId), adapterId, workflowModuleId, bpmnProcessId, workflowAggregateId, workflowId, null, null, null, null, null, null, startedAt, null, null, DeliveryRecordKind.WORKFLOW_START
+                .name());
+
+  }
+
+  /**
+   * A record of a task delivery, which is what every caller wrote before a row said its kind.
+   *
+   * @param deliveryKey The identity of the delivery
+   * @param adapterId The ID of the adapter which delivered the task
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param workflowAggregateId The workflow aggregate's ID in serialized form
+   * @param workflowId The BPMS' own id of the workflow the task belongs to
+   * @param taskDefinition The task definition (or BPMN activity ID) delivered
+   * @param bpmnElementId The <code>id</code> attribute of the BPMN element delivered
+   * @param taskId The BPMS' identity of the task this delivery was about
+   * @param outcome The outcome reported to the BPMS, as the core names it
+   * @param bpmnErrorCode The BPMN error code of an outcome carrying one
+   * @param bpmnErrorName The BPMN error name of an outcome carrying one
+   * @param recordedAt When the delivery was processed
+   * @param taskClosedAt When the completion of this task reached the BPMS
+   * @param taskKind Which kind of task the id belongs to
+   */
+  public TaskDelivery(
+      final String deliveryKey,
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId,
+      final String workflowId,
+      final String taskDefinition,
+      final String bpmnElementId,
+      final String taskId,
+      final String outcome,
+      final String bpmnErrorCode,
+      final String bpmnErrorName,
+      final Instant recordedAt,
+      final Instant taskClosedAt,
+      final String taskKind) {
+
+    this(
+        deliveryKey, adapterId, workflowModuleId, bpmnProcessId, workflowAggregateId, workflowId, taskDefinition, bpmnElementId, taskId, outcome, bpmnErrorCode, bpmnErrorName, recordedAt, taskClosedAt, taskKind, DeliveryRecordKind.TASK_DELIVERY
+            .name());
+
+  }
 
   /**
    * A record which names no kind of task, which is what every caller wrote before the kind
    * existed.
    * <p>
-   * {@link #taskKind()} stands LAST although it belongs next to {@link #taskId()}: it was
-   * added to a record whose other components every store and every test already writes, and
-   * appending it keeps those callers as they are. The same reason put
+   * {@link #taskKind()} stands behind the timestamps although it belongs next to
+   * {@link #taskId()}, and {@link #recordKind()} behind it: each was added to a record whose
+   * other components every store and every test already writes, and appending keeps those
+   * callers as they are. The same reason put
    * {@code io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec#name()} at the end
    * of its record.
    *

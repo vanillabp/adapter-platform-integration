@@ -958,13 +958,15 @@ public class MigrationAdapterPropertiesTest {
 
       assertEquals(
           """
-              How long the records of processed task deliveries are kept is read for the whole application, but it is configured at:
+              What the housekeeping of the delivery log deletes is read for the whole application, but it is configured at:
                 vanillabp.workflow-modules.test-module.delivery.retention
                 vanillabp.workflow-modules.test-module.workflows.testProcess.delivery.retention
                 vanillabp.workflow-modules.test-module.workflows.testProcess.tasks.scoreApplicant.delivery.retention
               Move each of them to the section of the whole application:
                 vanillabp.delivery.retention: 7d
-              One sweep of the housekeeping removes the records of every workflow module, and it asks for one number before it knows whose records it is about.""",
+                vanillabp.delivery.workflow-start-retention: P30D
+                vanillabp.delivery.keep-workflow-start-while-aggregate-exists: false
+              One sweep of the housekeeping removes the rows of every workflow module, and it asks for its settings before it knows whose rows it is about.""",
           refusal.getMessage());
 
     }

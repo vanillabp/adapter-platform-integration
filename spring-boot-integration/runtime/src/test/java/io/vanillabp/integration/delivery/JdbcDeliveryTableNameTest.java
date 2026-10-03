@@ -111,7 +111,8 @@ public class JdbcDeliveryTableNameTest {
         .getJdbc()
         .setDeliveryTable(deliveryTable);
     final var autoConfiguration = new JdbcTaskDeliveryLogAutoConfiguration();
-    final var deliveryLog = autoConfiguration.vanillaBpJdbcTaskDeliveryLog(dataSource, vanillaBpProperties);
+    final var deliveryLog = autoConfiguration
+        .vanillaBpJdbcTaskDeliveryLog(dataSource, vanillaBpProperties, noPhaseTwoRouter());
     autoConfiguration
         .vanillaBpJdbcTaskDeliveryLogStartup(deliveryLog, vanillaBpProperties)
         .afterSingletonsInstantiated();
@@ -140,6 +141,28 @@ public class JdbcDeliveryTableNameTest {
     return new TaskDelivery(
         "job-1", "demo1", "test-module", "TestProcess", "4711", "workflow-4711", "processTask", "Activity_processTask", null, "COMPLETED", null, null, Instant
             .now(), null);
+
+  }
+
+  /**
+   * No router: the sieve of the workflow-start rows is off unless an application asks for it, so
+   * nothing here ever looks for one.
+   *
+   * @return A provider which has nothing
+   */
+  private static org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter> noPhaseTwoRouter() {
+
+    return new org.springframework.beans.factory.ObjectProvider<io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter>() {
+
+      @Override
+      public io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter getObject() {
+
+        throw new org.springframework.beans.factory.NoSuchBeanDefinitionException(
+            io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter.class);
+
+      }
+
+    };
 
   }
 

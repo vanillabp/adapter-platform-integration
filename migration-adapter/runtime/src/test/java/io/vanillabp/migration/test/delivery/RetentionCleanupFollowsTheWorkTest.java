@@ -26,7 +26,7 @@ public class RetentionCleanupFollowsTheWorkTest {
   private final AtomicInteger deletions = new AtomicInteger();
 
   private TaskDeliveryRetentionCleanup cleanup = new TaskDeliveryRetentionCleanup(
-      "a-table", Duration.ofDays(7), deletions::incrementAndGet);
+      "a-table", Duration.ofDays(7), Duration.ofDays(30), deletions::incrementAndGet);
 
   @AfterEach
   public void stopTheCleanup() {
@@ -76,7 +76,7 @@ public class RetentionCleanupFollowsTheWorkTest {
   @DisplayName("A failed deletion is tried again in the next hour rather than at the next record")
   public void aFailedDeletionIsTriedAgain() {
 
-    cleanup = new TaskDeliveryRetentionCleanup("a-table", Duration.ofDays(7), () -> {
+    cleanup = new TaskDeliveryRetentionCleanup("a-table", Duration.ofDays(7), Duration.ofDays(30), () -> {
       deletions.incrementAndGet();
       throw new IllegalStateException("the table cannot be reached");
     });

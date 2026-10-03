@@ -1,5 +1,6 @@
 package io.vanillabp.integration.delivery;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -11,7 +12,9 @@ import org.springframework.data.mongodb.MongoDatabaseFactory;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.repository.MongoRepository;
 
+import io.vanillabp.integration.adapter.migration.delivery.AggregateBoundWorkflowStarts;
 import io.vanillabp.integration.adapter.migration.mongo.MongoSchema;
+import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.mongo.MongoIndexes;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
@@ -82,17 +85,28 @@ public class MongoTaskDeliveryLogAutoConfiguration {
    * @param mongoTemplate The template writing the records within the current transaction
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, asked for the
    *          retention of delivery records (<code>vanillabp.delivery.retention</code>,
-   *          falling back to <code>vanillabp.outbox.retention</code>)
+   *          falling back to <code>vanillabp.outbox.retention</code>) and for the one of the
+   *          documents about started workflows
+   * @param phaseTwoRouter Where the process services are collected, asked by the sieve of the
+   *          workflow-start documents and only where the application switched that sieve on. A
+   *          provider and not the bean itself, because the router is built from the
+   *          process-service beans
    * @return The {@link TaskDeliveryLog} used for MongoDB-persisted aggregates
    */
   @Bean(name = DEFAULT_DELIVERY_LOG_BEAN_NAME, destroyMethod = "stop")
   public MongoTaskDeliveryLog vanillaBpMongoTaskDeliveryLog(
       final MongoTemplate mongoTemplate,
-      final VanillaBpConfigurationProperties vanillaBpProperties) {
+      final VanillaBpConfigurationProperties vanillaBpProperties,
+      final ObjectProvider<PhaseTwoRouter> phaseTwoRouter) {
 
+    final var collection = collectionOf(vanillaBpProperties);
     return new MongoTaskDeliveryLog(
-        mongoTemplate, collectionOf(vanillaBpProperties), vanillaBpProperties
-            .resolvedDeliveryRetention());
+        mongoTemplate, collection, vanillaBpProperties.resolvedDeliveryRetention(), vanillaBpProperties
+            .resolvedWorkflowStartRetention(), vanillaBpProperties
+                .keepsWorkflowStartWhileAggregateExists()
+                    ? new AggregateBoundWorkflowStarts(
+                        () -> phaseTwoRouter.getIfAvailable(), collection)
+                    : null);
 
   }
 

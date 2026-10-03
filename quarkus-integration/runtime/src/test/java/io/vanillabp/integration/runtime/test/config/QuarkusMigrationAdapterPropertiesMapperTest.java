@@ -330,7 +330,9 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                     Optional<Duration> maxTaskAge,
                                     Optional<Boolean> checkOpenTasksOnDelivery,
                                     Optional<Integer> maxOpenTasksChecked,
-                                    Optional<Duration> retention) implements QuarkusMigrationAdapterProperties.DeliveryProperties {
+                                    Optional<Duration> retention,
+                                    Optional<Duration> workflowStartRetention,
+                                    Optional<Boolean> keepWorkflowStartWhileAggregateExists) implements QuarkusMigrationAdapterProperties.DeliveryProperties {
 
     /**
      * Only the release setting, which is what the fixtures written before the maximum
@@ -364,7 +366,9 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
         final Optional<Duration> maxTaskAge,
         final Optional<Duration> retention) {
 
-      this(releaseOnWorkflowEnd, maxTaskAge, Optional.empty(), Optional.empty(), retention);
+      this(
+          releaseOnWorkflowEnd, maxTaskAge, Optional.empty(), Optional.empty(), retention, Optional.empty(), Optional
+              .empty());
 
     }
 

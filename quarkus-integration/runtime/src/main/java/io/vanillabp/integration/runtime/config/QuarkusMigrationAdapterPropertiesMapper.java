@@ -323,6 +323,10 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.releaseOnWorkflowEnd(unwrap(deliveryProperties.releaseOnWorkflowEnd()));
     core.maxTaskAge(unwrap(deliveryProperties.maxTaskAge()));
     core.retention(unwrap(deliveryProperties.retention()));
+    core.workflowStartRetention(unwrap(deliveryProperties.workflowStartRetention()));
+    core
+        .keepWorkflowStartWhileAggregateExists(
+            unwrap(deliveryProperties.keepWorkflowStartWhileAggregateExists()));
     core.checkOpenTasksOnDelivery(unwrap(deliveryProperties.checkOpenTasksOnDelivery()));
     core.maxOpenTasksChecked(unwrap(deliveryProperties.maxOpenTasksChecked()));
 
