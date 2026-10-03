@@ -400,7 +400,8 @@ public class MongoTaskDeliveryLogTest {
    */
   private MongoTaskDeliveryLog anHourOfRetention() {
 
-    return new MongoTaskDeliveryLog(mongoTemplate, COLLECTION, java.time.Duration.ofHours(1));
+    return new MongoTaskDeliveryLog(
+        mongoTemplate, COLLECTION, java.time.Duration.ofHours(1), java.time.Duration.ofDays(30), null);
 
   }
 
