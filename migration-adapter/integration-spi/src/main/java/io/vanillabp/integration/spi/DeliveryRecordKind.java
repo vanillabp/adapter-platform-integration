@@ -11,8 +11,8 @@ package io.vanillabp.integration.spi;
  * value borrowed from the outcome, because every question about open work filters on it and a
  * borrowed value would make a start look like a delivery to each of them.
  * <p>
- * Why the row says its kind in a field of its own is decision
- * {@code DECISIONS.pending/889.md}.
+ * Why the row says its kind in a field of its own is decision 108 in the repository's
+ * DECISIONS.md.
  */
 public enum DeliveryRecordKind {
 
