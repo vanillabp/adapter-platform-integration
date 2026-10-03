@@ -2,6 +2,7 @@ package io.vanillabp.integration.delivery;
 
 import javax.sql.DataSource;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -10,7 +11,9 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.transaction.PlatformTransactionManager;
 
+import io.vanillabp.integration.adapter.migration.delivery.AggregateBoundWorkflowStarts;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore;
+import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 
@@ -67,17 +70,28 @@ public class JdbcTaskDeliveryLogAutoConfiguration {
    * @param dataSource The data source holding the records
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, asked for the
    *          retention of delivery records (<code>vanillabp.delivery.retention</code>,
-   *          falling back to <code>vanillabp.outbox.retention</code>)
+   *          falling back to <code>vanillabp.outbox.retention</code>) and for the one of the rows
+   *          about started workflows
+   * @param phaseTwoRouter Where the process services are collected, asked by the sieve of the
+   *          workflow-start rows and only where the application switched that sieve on. A
+   *          provider and not the bean itself, because the router is built from the
+   *          process-service beans and this log must not pull them in while it is created
    * @return The {@link TaskDeliveryLog} used for JPA/JDBC-persisted aggregates
    */
   @Bean(name = DEFAULT_DELIVERY_LOG_BEAN_NAME, destroyMethod = "stop")
   public JdbcTaskDeliveryLog vanillaBpJdbcTaskDeliveryLog(
       final DataSource dataSource,
-      final VanillaBpConfigurationProperties vanillaBpProperties) {
+      final VanillaBpConfigurationProperties vanillaBpProperties,
+      final ObjectProvider<PhaseTwoRouter> phaseTwoRouter) {
 
+    final var tableName = JdbcTaskDeliveryStore.tableName(vanillaBpProperties.getOutbox());
     return new JdbcTaskDeliveryLog(
-        dataSource, JdbcTaskDeliveryStore.tableName(vanillaBpProperties.getOutbox()), vanillaBpProperties
-            .resolvedDeliveryRetention());
+        dataSource, tableName, vanillaBpProperties.resolvedDeliveryRetention(), vanillaBpProperties
+            .resolvedWorkflowStartRetention(), vanillaBpProperties
+                .keepsWorkflowStartWhileAggregateExists()
+                    ? new AggregateBoundWorkflowStarts(
+                        () -> phaseTwoRouter.getIfAvailable(), tableName)
+                    : null);
 
   }
 

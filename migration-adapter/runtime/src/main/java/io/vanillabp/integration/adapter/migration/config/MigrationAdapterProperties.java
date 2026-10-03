@@ -485,6 +485,36 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   }
 
+  /**
+   * How long the row about a started workflow is kept, counted from the start: what
+   * <code>vanillabp.delivery.workflow-start-retention</code> says, and
+   * {@value DeliveryProperties#DEFAULT_WORKFLOW_START_RETENTION_ISO} where nobody says anything.
+   * <p>
+   * A period of its own and not the retention of a delivery: changes to a workflow aggregate keep
+   * arriving after its workflow ended, and each of them may want to name the workflow.
+   *
+   * @return The period a workflow-start row is kept
+   */
+  public java.time.Duration resolvedWorkflowStartRetention() {
+
+    return DeliveryProperties.resolveWorkflowStartRetention(delivery);
+
+  }
+
+  /**
+   * Whether the row about a started workflow is kept past its period while the workflow aggregate
+   * it names still exists
+   * (<code>vanillabp.delivery.keep-workflow-start-while-aggregate-exists</code>, off unless the
+   * application asks for it).
+   *
+   * @return Whether the cleanup asks the aggregate before it deletes such a row
+   */
+  public boolean keepsWorkflowStartWhileAggregateExists() {
+
+    return DeliveryProperties.resolveKeepWorkflowStartWhileAggregateExists(delivery);
+
+  }
+
   private java.time.Duration resolvedOutboxRetention() {
 
     return outbox == null
@@ -1693,17 +1723,18 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Refuses the retention of the delivery records written below the application. The
-   * delivery section binds at all four levels, and everything in it but this one key is
-   * read at the level it stands at. The retention is not: the records of every workflow
-   * module are removed by one sweep of the housekeeping, so there is one number and it is
-   * read from <code>vanillabp.delivery.retention</code> alone (see
-   * {@link #resolvedDeliveryRetention()}). A line at a workflow module, a workflow or a
-   * task would do nothing at all, so it is answered instead of ignored. It reads like
-   * every other misplaced setting, see {@link MisplacedSettings}.
+   * Refuses the settings about what the housekeeping of the delivery log deletes where they were
+   * written below the application. The delivery section binds at all four levels, and everything
+   * in it but these three keys is read at the level it stands at. They are not: the rows of every
+   * workflow module are removed by one sweep of the housekeeping, so there is one set of settings
+   * and it is read from the application's own section alone (see
+   * {@link #resolvedDeliveryRetention()}, {@link #resolvedWorkflowStartRetention()} and
+   * {@link #keepsWorkflowStartWhileAggregateExists()}). A line at a workflow module, a workflow or
+   * a task would do nothing at all, so it is answered instead of ignored. It reads like every
+   * other misplaced setting, see {@link MisplacedSettings}.
    *
-   * @throws IllegalStateException Naming every place a retention was written at and the
-   *           one key it may be written at
+   * @throws IllegalStateException Naming every place such a setting was written at and the keys
+   *           it may be written at
    */
   private void refuseDeliveryRetentionsBelowTheApplication() {
 
@@ -1711,29 +1742,26 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     workflowModules.forEach((
         moduleId,
         module) -> {
-      if ((module.getDelivery() != null) && (module.getDelivery().getRetention() != null)) {
-        misplaced.add("%s.workflow-modules.%s.delivery.retention".formatted(PREFIX, moduleId));
-      }
+      globalOnlyDeliveryKeys(module.getDelivery())
+          .forEach(key -> misplaced.add("%s.workflow-modules.%s.delivery.%s".formatted(PREFIX, moduleId, key)));
       module
           .getWorkflows()
           .forEach((
               processId,
               workflow) -> {
-            if ((workflow.getDelivery() != null) && (workflow.getDelivery().getRetention() != null)) {
-              misplaced
-                  .add("%s.workflow-modules.%s.workflows.%s.delivery.retention"
-                      .formatted(PREFIX, moduleId, processId));
-            }
+            globalOnlyDeliveryKeys(workflow.getDelivery())
+                .forEach(key -> misplaced
+                    .add("%s.workflow-modules.%s.workflows.%s.delivery.%s"
+                        .formatted(PREFIX, moduleId, processId, key)));
             workflow
                 .getTasks()
                 .forEach((
                     taskId,
                     task) -> {
-                  if ((task.getDelivery() != null) && (task.getDelivery().getRetention() != null)) {
-                    misplaced
-                        .add("%s.workflow-modules.%s.workflows.%s.tasks.%s.delivery.retention"
-                            .formatted(PREFIX, moduleId, processId, taskId));
-                  }
+                  globalOnlyDeliveryKeys(task.getDelivery())
+                      .forEach(key -> misplaced
+                          .add("%s.workflow-modules.%s.workflows.%s.tasks.%s.delivery.%s"
+                              .formatted(PREFIX, moduleId, processId, taskId, key)));
                 });
           });
     });
@@ -1741,13 +1769,50 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       return;
     }
     throw MisplacedSettings.refuse(
-        "How long the records of processed task deliveries are kept is read for the whole application",
+        "What the housekeeping of the delivery log deletes is read for the whole application",
         misplaced,
         "the section of the whole application",
-        List.of("%s: 7d".formatted(DeliveryProperties.RETENTION_PROPERTY)),
+        List
+            .of(
+                "%s: 7d".formatted(DeliveryProperties.RETENTION_PROPERTY),
+                "%s: %s".formatted(
+                    DeliveryProperties.WORKFLOW_START_RETENTION_PROPERTY,
+                    DeliveryProperties.DEFAULT_WORKFLOW_START_RETENTION_ISO),
+                "%s: false"
+                    .formatted(DeliveryProperties.KEEP_WORKFLOW_START_WHILE_AGGREGATE_EXISTS_PROPERTY)),
         """
-            One sweep of the housekeeping removes the records of every workflow module, and it \
-            asks for one number before it knows whose records it is about.""");
+            One sweep of the housekeeping removes the rows of every workflow module, and it \
+            asks for its settings before it knows whose rows it is about.""");
+
+  }
+
+  /**
+   * The keys of the delivery section which are read for the whole application only, as far as the
+   * given section writes one. All three decide what the housekeeping of the log DELETES, and the
+   * housekeeping runs once per store with one set of settings, so a value further down would do
+   * nothing at all.
+   *
+   * @param delivery The delivery section of a workflow module, a workflow or a task, or
+   *          <code>null</code>
+   * @return The keys which were written there, empty where none was
+   */
+  private static List<String> globalOnlyDeliveryKeys(
+      final DeliveryProperties delivery) {
+
+    if (delivery == null) {
+      return List.of();
+    }
+    final var written = new LinkedList<String>();
+    if (delivery.getRetention() != null) {
+      written.add("retention");
+    }
+    if (delivery.getWorkflowStartRetention() != null) {
+      written.add("workflow-start-retention");
+    }
+    if (delivery.getKeepWorkflowStartWhileAggregateExists() != null) {
+      written.add("keep-workflow-start-while-aggregate-exists");
+    }
+    return written;
 
   }
 

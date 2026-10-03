@@ -61,4 +61,21 @@ public final class ExtensionWorkflowElection implements WorkflowElection {
 
   }
 
+  @Override
+  public java.util.Optional<String> workflowIdOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId) {
+
+    final var processService = router.processServiceOf(workflowModuleId, bpmnProcessId);
+    if (processService == null) {
+      // a read answers what it knows, and about a BPMN process this application does not serve it
+      // knows nothing. The two methods above refuse instead, because whoever elects is about to
+      // talk to a BPMS and a wrong process id would send the command somewhere else
+      return java.util.Optional.empty();
+    }
+    return java.util.Optional.ofNullable(processService.workflowIdOf(workflowAggregateId));
+
+  }
+
 }

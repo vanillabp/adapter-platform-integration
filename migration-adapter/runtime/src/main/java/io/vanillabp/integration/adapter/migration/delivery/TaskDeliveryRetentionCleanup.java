@@ -40,6 +40,8 @@ public class TaskDeliveryRetentionCleanup {
 
   private final Duration retention;
 
+  private final Duration workflowStartRetention;
+
   private final Runnable cleanup;
 
   /**
@@ -59,15 +61,19 @@ public class TaskDeliveryRetentionCleanup {
    *
    * @param name Names the store cleaned up (thread name and log messages)
    * @param retention How long a record is kept
-   * @param cleanup Deletes the expired records of one store
+   * @param workflowStartRetention How long the row about a started workflow is kept, which is a
+   *          period of its own and is said at startup for the same reason the first one is
+   * @param cleanup Deletes the expired rows of one store, both kinds
    */
   public TaskDeliveryRetentionCleanup(
       final String name,
       final Duration retention,
+      final Duration workflowStartRetention,
       final Runnable cleanup) {
 
     this.name = name;
     this.retention = retention;
+    this.workflowStartRetention = workflowStartRetention;
     this.cleanup = cleanup;
 
   }
@@ -85,10 +91,15 @@ public class TaskDeliveryRetentionCleanup {
     // the first question a support case about a handler running twice asks
     log
         .info(
-            "Records of processed task deliveries in '{}' are kept for {} ('{}')",
+            "Records of processed task deliveries in '{}' are kept for {} ('{}'), and what a "
+                + "started workflow left behind {} ('{}')",
             name,
             retention,
-            DeliveryProperties.RETENTION_PROPERTY);
+            DeliveryProperties.RETENTION_PROPERTY,
+            (workflowStartRetention == null) || workflowStartRetention.isZero()
+                ? "is kept for good"
+                : "for %s".formatted(workflowStartRetention),
+            DeliveryProperties.WORKFLOW_START_RETENTION_PROPERTY);
     executor = Executors.newSingleThreadScheduledExecutor(runnable -> {
       final var thread = new Thread(runnable, "vanillabp-task-deliveries");
       thread.setDaemon(true);

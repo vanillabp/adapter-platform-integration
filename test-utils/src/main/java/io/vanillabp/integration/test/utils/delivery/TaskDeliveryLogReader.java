@@ -46,6 +46,17 @@ public final class TaskDeliveryLogReader {
       TASK_DEFINITION, BPMN_ELEMENT_ID, OUTCOME, TASK_CLOSED_AT, TASK_KIND""";
 
   /**
+   * The kind of row a delivery is written as. A row of the log is either that or the start of a
+   * workflow, so every question about deliveries says which one it means instead of counting both.
+   */
+  private static final String TASK_DELIVERY = "TASK_DELIVERY";
+
+  /**
+   * The kind of row the start of a workflow is written as.
+   */
+  private static final String WORKFLOW_START = "WORKFLOW_START";
+
+  /**
    * What the log wrote down about one delivery of one task.
    * <p>
    * A task can carry more than one record: the delivery which handed it to the
@@ -127,15 +138,45 @@ public final class TaskDeliveryLogReader {
   }
 
   /**
-   * Every record of the log. A test asking about something this reader has no question
-   * for reads them all and picks its own, which a test database can afford: it holds the
+   * Every record of a DELIVERY in the log. A test asking about something this reader has no
+   * question for reads them all and picks its own, which a test database can afford: it holds the
    * records of that test and of nothing else.
+   * <p>
+   * The rows about started workflows are not in it. They are no deliveries, they are written once
+   * per workflow rather than once per handler, and a test counting what its handlers did would
+   * otherwise count them too - see {@link #workflowStarts()}.
    *
    * @return The records, the newest first
    */
   public List<Delivery> deliveries() {
 
-    return read("");
+    return read(" WHERE RECORD_KIND = ?", TASK_DELIVERY);
+
+  }
+
+  /**
+   * What the log wrote down about the workflows which were STARTED: one row per workflow of one
+   * aggregate, carrying the aggregate and the id that workflow has in the BPMS. Those rows are no
+   * deliveries and are in none of the answers above, so a test which wants them asks here.
+   *
+   * @return The rows, the newest first, empty where the log holds none
+   */
+  public List<Delivery> workflowStarts() {
+
+    return read(" WHERE RECORD_KIND = ?", WORKFLOW_START);
+
+  }
+
+  /**
+   * What the log wrote down about the started workflow of one aggregate.
+   *
+   * @param aggregateId The workflow aggregate as the application names it
+   * @return Its row, or an empty list where the log holds none
+   */
+  public List<Delivery> workflowStartsOfAggregate(
+      final String aggregateId) {
+
+    return read(" WHERE RECORD_KIND = ? AND AGGREGATE_ID = ?", WORKFLOW_START, aggregateId);
 
   }
 
@@ -148,7 +189,7 @@ public final class TaskDeliveryLogReader {
   public List<Delivery> deliveriesOfTask(
       final String taskId) {
 
-    return read(" WHERE TASK_ID = ?", taskId);
+    return read(" WHERE RECORD_KIND = ? AND TASK_ID = ?", TASK_DELIVERY, taskId);
 
   }
 

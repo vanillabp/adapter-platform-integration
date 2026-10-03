@@ -22,6 +22,11 @@ import lombok.extern.slf4j.Slf4j;
  * persists the workflow aggregate, otherwise the record and the aggregate would not
  * commit together.
  * <p>
+ * A row of this table is either a task delivery or the start of a workflow, and
+ * <code>RECORD_KIND</code> is what says which. Every question about open work filters on it
+ * first, so a start - which carries no task - is in none of those answers, and the retention of
+ * the deliveries leaves it alone because it has a period of its own.
+ * <p>
  * A record is INSERTed once and never rewritten: the delivery key is the primary key, so
  * two nodes processing the same delivery concurrently end up with one record and the
  * loser learns it from the constraint violation ({@link #record(TaskDelivery)} returns
@@ -82,7 +87,7 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_DELIVERY = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      TASK_CLOSED_AT, TASK_KIND \
+      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND \
       FROM %s \
       WHERE DELIVERY_KEY = ?""";
 
@@ -102,7 +107,7 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_RECORD_OF_TASK = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      TASK_CLOSED_AT, TASK_KIND \
+      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND \
       FROM %s \
       WHERE TASK_ID = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
       AND OUTCOME = ? \
@@ -120,8 +125,8 @@ public class JdbcTaskDeliveryStore {
    * application, and no moment saying the completion reached the BPMS. Ordered oldest first,
    * which is the order the tasks were handed out in.
    * <p>
-   * The index this reads is {@link #INDEX_OF_OPEN_RECORDS}, over the two columns which say
-   * "open". AGGREGATE_ID is not part of it: the column holds up to 1024 characters, and an
+   * The index this reads is {@link #INDEX_OF_OPEN_RECORDS}, over the kind of the row and the two
+   * columns which say "open". AGGREGATE_ID is not part of it: the column holds up to 1024 characters, and an
    * index over it exceeds the key-length limit of MySQL (3072 bytes with utf8mb4) and of a
    * DB2 database using 4K pages - the same reason the release of an ended workflow ships
    * without one. So the index narrows the read to the tasks which are open right now, whose
@@ -143,17 +148,22 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_OPEN_TASKS_OF_AGGREGATE = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      TASK_CLOSED_AT, TASK_KIND \
+      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND \
       FROM %s \
-      WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
+      WHERE RECORD_KIND = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
       AND OUTCOME = ? AND TASK_CLOSED_AT IS NULL \
       ORDER BY RECORDED_AT ASC""";
 
   /**
    * The statement creating the index the open tasks of an aggregate are read through. Two
    * placeholders for the table name, like every other DDL of this class.
+   * <p>
+   * RECORD_KIND stands FIRST, which is the question asked first: is this row about a task at
+   * all. Two equality columns can stand in either order without changing what the database does
+   * with them - what has to stand last is TASK_CLOSED_AT, which is read as a range - so the
+   * order is the one a reader follows.
    */
-  private static final String INDEX_OF_OPEN_RECORDS = "CREATE INDEX %s_OPEN ON %s (OUTCOME, TASK_CLOSED_AT)";
+  private static final String INDEX_OF_OPEN_RECORDS = "CREATE INDEX %s_OPEN ON %s (RECORD_KIND, OUTCOME, TASK_CLOSED_AT)";
 
   /**
    * The OPEN records of ONE workflow of the BPMS, read on every wake-up of that workflow.
@@ -173,9 +183,9 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_OPEN_TASKS_OF_WORKFLOW = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      TASK_CLOSED_AT, TASK_KIND \
+      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND \
       FROM %s \
-      WHERE WORKFLOW_MODULE_ID = ? AND WORKFLOW_ID = ? \
+      WHERE RECORD_KIND = ? AND WORKFLOW_MODULE_ID = ? AND WORKFLOW_ID = ? \
       AND OUTCOME = ? AND TASK_CLOSED_AT IS NULL \
       ORDER BY RECORDED_AT ASC""";
 
@@ -193,7 +203,8 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_ADAPTER_IDS_OF_OPEN_TASKS = """
       SELECT DISTINCT ADAPTER_ID \
       FROM %s \
-      WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND OUTCOME = ? AND ADAPTER_ID IS NOT NULL""";
+      WHERE RECORD_KIND = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND OUTCOME = ? \
+      AND ADAPTER_ID IS NOT NULL""";
 
   /**
    * Whether ANY open record of one BPMN process exists. The question is about existence,
@@ -204,7 +215,7 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_ANY_OPEN_RECORD = """
       SELECT DELIVERY_KEY \
       FROM %s \
-      WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND OUTCOME = ?""";
+      WHERE RECORD_KIND = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND OUTCOME = ?""";
 
   /**
    * How many rows a question about EXISTENCE fetches.
@@ -231,12 +242,48 @@ public class JdbcTaskDeliveryStore {
   private static final String COMPLETION_PENDING = io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
       .name();
 
+  /**
+   * The kind of row every question about open work filters on, and the kind the retention of
+   * deliveries deletes by age. A row which says nothing about its kind was written before the
+   * column existed and is a delivery, which is why the column is NOT NULL with this as its
+   * default: an ALTER of an existing table fills it, and from then on the filter is a plain
+   * equality.
+   */
+  private static final String TASK_DELIVERY = io.vanillabp.integration.spi.DeliveryRecordKind.TASK_DELIVERY
+      .name();
+
+  /**
+   * The kind of row which says where a workflow runs, and the only one the retention of started
+   * workflows deletes.
+   */
+  private static final String WORKFLOW_START = io.vanillabp.integration.spi.DeliveryRecordKind.WORKFLOW_START
+      .name();
+
+  /**
+   * The kind a row is written under: what the record says, and a delivery where it says nothing.
+   *
+   * @param delivery The record about to be written
+   * @return The text of the kind, never <code>null</code>
+   */
+  private static String kindOfTheRow(
+      final TaskDelivery delivery) {
+
+    // a kind this version does not know is written as a delivery rather than as itself: the
+    // questions about open work and the two retentions are equalities on the two kinds, so a third
+    // word would put the row in no answer and in no cleanup and leave it in the table for good
+    final var kind = io.vanillabp.integration.spi.DeliveryRecordKind.of(delivery.recordKind());
+    return kind == null
+        ? TASK_DELIVERY
+        : kind.name();
+
+  }
+
   private static final String INSERT_DELIVERY = """
       INSERT INTO %s \
       (DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      LAST_SEEN_AT, TASK_KIND) \
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+      LAST_SEEN_AT, TASK_KIND, RECORD_KIND) \
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
 
   // TASK_CLOSED_AT is not written here: a record is born open, and the moment the
   // application's completion reached the BPMS is the one thing about a task which is known
@@ -257,11 +304,63 @@ public class JdbcTaskDeliveryStore {
 
   private static final String DELETE_EXPIRED_DELIVERIES = """
       DELETE FROM %s \
-      WHERE LAST_SEEN_AT < ?""";
+      WHERE RECORD_KIND = ? AND LAST_SEEN_AT < ?""";
+
+  /**
+   * The rows about started workflows whose own retention passed. LAST_SEEN_AT and not
+   * RECORDED_AT, although the two hold the same moment in such a row: nothing ever moves
+   * LAST_SEEN_AT of a start row - only a redelivery of an open task does that, and a start row
+   * answers no redelivery - and deleting by the column the AGE index spans is what keeps this an
+   * indexed delete rather than a scan.
+   */
+  private static final String DELETE_EXPIRED_WORKFLOW_STARTS = """
+      DELETE FROM %s \
+      WHERE RECORD_KIND = ? AND LAST_SEEN_AT < ?""";
+
+  /**
+   * The rows about started workflows the sieve is asked about, read instead of deleted where an
+   * application asked for the sieve. The row limit of one run is
+   * {@link #WORKFLOW_STARTS_SIEVED_PER_RUN}; what is not reached is reached by the next run.
+   */
+  private static final String SELECT_EXPIRED_WORKFLOW_STARTS = """
+      SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
+      TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
+      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND \
+      FROM %s \
+      WHERE RECORD_KIND = ? AND LAST_SEEN_AT < ? \
+      ORDER BY LAST_SEEN_AT ASC""";
+
+  /**
+   * How many rows one sieved run looks at. The sieve costs one read of the application's own
+   * database per row, so a run has an upper bound instead of taking however many rows expired
+   * while the application was stopped; the next hourly run continues where this one stopped,
+   * because what it kept is kept and what it deleted is gone.
+   */
+  private static final int WORKFLOW_STARTS_SIEVED_PER_RUN = 1000;
+
+  private static final String DELETE_WORKFLOW_START = """
+      DELETE FROM %s \
+      WHERE DELIVERY_KEY = ?""";
+
+  /**
+   * What a SECOND workflow of one aggregate writes: the row is keyed by the aggregate and the BPMN
+   * process, so the insert of such a start finds the row of the workflow which ended before it and
+   * the id in it has to be replaced. Bounded to a row which really is a start and whose id really
+   * differs, so a start dispatched twice updates nothing.
+   * <p>
+   * LAST_SEEN_AT moves with it, which is what the period of a start row counts from: the row is
+   * about the workflow which runs now, so its age is that workflow's age.
+   */
+  private static final String REPLACE_WORKFLOW_START = """
+      UPDATE %s \
+      SET WORKFLOW_ID = ?, ADAPTER_ID = ?, RECORDED_AT = ?, LAST_SEEN_AT = ? \
+      WHERE DELIVERY_KEY = ? AND RECORD_KIND = ? \
+      AND (WORKFLOW_ID IS NULL OR WORKFLOW_ID <> ?)""";
 
   private static final String DELETE_DELIVERIES_OF_WORKFLOW = """
       DELETE FROM %s \
-      WHERE WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? AND RECORDED_AT < ?""";
+      WHERE RECORD_KIND = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
+      AND RECORDED_AT < ?""";
 
   private final JdbcConnectionAccess connectionAccess;
 
@@ -278,6 +377,14 @@ public class JdbcTaskDeliveryStore {
   private final String touchDelivery;
 
   private final String deleteExpiredDeliveries;
+
+  private final String deleteExpiredWorkflowStarts;
+
+  private final String selectExpiredWorkflowStarts;
+
+  private final String deleteWorkflowStart;
+
+  private final String replaceWorkflowStart;
 
   private final String deleteDeliveriesOfWorkflow;
 
@@ -315,6 +422,10 @@ public class JdbcTaskDeliveryStore {
     this.closeTask = CLOSE_TASK.formatted(tableName);
     this.touchDelivery = TOUCH_DELIVERY.formatted(tableName);
     this.deleteExpiredDeliveries = DELETE_EXPIRED_DELIVERIES.formatted(tableName);
+    this.deleteExpiredWorkflowStarts = DELETE_EXPIRED_WORKFLOW_STARTS.formatted(tableName);
+    this.selectExpiredWorkflowStarts = SELECT_EXPIRED_WORKFLOW_STARTS.formatted(tableName);
+    this.deleteWorkflowStart = DELETE_WORKFLOW_START.formatted(tableName);
+    this.replaceWorkflowStart = REPLACE_WORKFLOW_START.formatted(tableName);
     this.deleteDeliveriesOfWorkflow = DELETE_DELIVERIES_OF_WORKFLOW.formatted(tableName);
     this.selectAdapterIdsOfOpenTasks = SELECT_ADAPTER_IDS_OF_OPEN_TASKS.formatted(tableName);
     this.selectAnyOpenRecord = SELECT_ANY_OPEN_RECORD.formatted(tableName);
@@ -442,10 +553,11 @@ public class JdbcTaskDeliveryStore {
     try {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(selectOpenTasksOfAggregate)) {
-        statement.setString(1, workflowModuleId);
-        statement.setString(2, bpmnProcessId);
-        statement.setString(3, workflowAggregateId);
-        statement.setString(4, COMPLETION_PENDING);
+        statement.setString(1, TASK_DELIVERY);
+        statement.setString(2, workflowModuleId);
+        statement.setString(3, bpmnProcessId);
+        statement.setString(4, workflowAggregateId);
+        statement.setString(5, COMPLETION_PENDING);
         try (var resultSet = statement.executeQuery()) {
           final var records = new java.util.ArrayList<TaskDelivery>();
           while (resultSet.next()) {
@@ -486,9 +598,10 @@ public class JdbcTaskDeliveryStore {
     try {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(selectOpenTasksOfWorkflow)) {
-        statement.setString(1, workflowModuleId);
-        statement.setString(2, workflowId);
-        statement.setString(3, COMPLETION_PENDING);
+        statement.setString(1, TASK_DELIVERY);
+        statement.setString(2, workflowModuleId);
+        statement.setString(3, workflowId);
+        statement.setString(4, COMPLETION_PENDING);
         try (var resultSet = statement.executeQuery()) {
           final var records = new java.util.ArrayList<TaskDelivery>();
           while (resultSet.next()) {
@@ -577,7 +690,8 @@ public class JdbcTaskDeliveryStore {
                             ? null
                             : recordedAt.toInstant(), taskClosedAt == null
                                 ? null
-                                : taskClosedAt.toInstant(), resultSet.getString(15));
+                                : taskClosedAt.toInstant(), resultSet.getString(15), resultSet
+                                    .getString(16));
 
   }
 
@@ -599,9 +713,10 @@ public class JdbcTaskDeliveryStore {
     try {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(selectAdapterIdsOfOpenTasks)) {
-        statement.setString(1, workflowModuleId);
-        statement.setString(2, bpmnProcessId);
-        statement.setString(3, COMPLETION_PENDING);
+        statement.setString(1, TASK_DELIVERY);
+        statement.setString(2, workflowModuleId);
+        statement.setString(3, bpmnProcessId);
+        statement.setString(4, COMPLETION_PENDING);
         try (var resultSet = statement.executeQuery()) {
           final var adapterIds = new java.util.LinkedHashSet<String>();
           while (resultSet.next()) {
@@ -663,6 +778,7 @@ public class JdbcTaskDeliveryStore {
         // stays open moves this one and leaves RECORDED_AT where it is
         statement.setTimestamp(14, recordedAt);
         statement.setString(15, delivery.taskKind());
+        statement.setString(16, kindOfTheRow(delivery));
         statement.executeUpdate();
       }
       return true;
@@ -683,6 +799,73 @@ public class JdbcTaskDeliveryStore {
                   delivery.deliveryKey(),
                   delivery.bpmnProcessId(),
                   delivery.workflowModuleId(),
+                  tableName), e);
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * Writes the row about the start of a workflow, replacing the one of an earlier workflow of the
+   * same aggregate (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#recordWorkflowStart}).
+   * <p>
+   * The insert comes first, because the ordinary case is that there is no row: an aggregate carries
+   * one workflow. Only where the insert finds a row does the update run, and that update is bounded
+   * to a row which is a start and whose workflow id differs - so a start dispatched twice writes
+   * nothing and answers <code>false</code>.
+   *
+   * @param workflowStart The row to write
+   * @return Whether the store now holds this workflow's id for the first time
+   */
+  public boolean recordWorkflowStart(
+      final TaskDelivery workflowStart) {
+
+    if (record(workflowStart)) {
+      return true;
+    }
+    return replaceTheStartOfAnEarlierWorkflow(workflowStart);
+
+  }
+
+  /**
+   * Replaces the id in the row of an earlier workflow of the same aggregate.
+   *
+   * @param workflowStart The row of the workflow which runs now
+   * @return Whether a row was replaced, which is <code>false</code> where the row already named this
+   *         workflow
+   */
+  private boolean replaceTheStartOfAnEarlierWorkflow(
+      final TaskDelivery workflowStart) {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(replaceWorkflowStart)) {
+        final var startedAt = Timestamp.from(workflowStart.recordedAt() == null
+            ? Instant.now()
+            : workflowStart.recordedAt());
+        statement.setString(1, workflowStart.workflowId());
+        statement.setString(2, workflowStart.adapterId());
+        statement.setTimestamp(3, startedAt);
+        statement.setTimestamp(4, startedAt);
+        statement.setString(5, workflowStart.deliveryKey());
+        statement.setString(6, WORKFLOW_START);
+        statement.setString(7, workflowStart.workflowId());
+        return statement.executeUpdate() > 0;
+      }
+    } catch (final SQLException e) {
+      throw new RuntimeException(
+          """
+              Could not write down that workflow '%s' of aggregate '%s' (BPMN process '%s' of \
+              workflow module '%s') was started, over the row of an earlier workflow of that \
+              aggregate, in table '%s'!"""
+              .formatted(
+                  workflowStart.workflowId(),
+                  workflowStart.workflowAggregateId(),
+                  workflowStart.bpmnProcessId(),
+                  workflowStart.workflowModuleId(),
                   tableName), e);
     } finally {
       release(connection);
@@ -771,7 +954,8 @@ public class JdbcTaskDeliveryStore {
     try {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(deleteExpiredDeliveries)) {
-        statement.setTimestamp(1, Timestamp.from(Instant.now().minus(retention)));
+        statement.setString(1, TASK_DELIVERY);
+        statement.setTimestamp(2, Timestamp.from(Instant.now().minus(retention)));
         return statement.executeUpdate();
       }
     } catch (final SQLException e) {
@@ -779,6 +963,103 @@ public class JdbcTaskDeliveryStore {
       return 0;
     } finally {
       release(connection);
+    }
+
+  }
+
+  /**
+   * Deletes the rows about started workflows whose own retention passed. Called by the same
+   * hourly run which deletes the expired deliveries, with a period of its own: such a row is
+   * read for as long as somebody may ask which workflow an aggregate belongs to, which outlasts
+   * the workflow itself.
+   * <p>
+   * Without a sieve this is one indexed DELETE. With one, the expired rows are read first and
+   * the sieve is asked per row, which costs a read of the application's own database per row and
+   * is why an application switches it on rather than finding it on (see
+   * {@link io.vanillabp.integration.spi.WorkflowStartSieve}). A row the sieve keeps is simply
+   * left where it is and offered again at the next run.
+   * <p>
+   * A failure is swallowed like the one of the deliveries: it costs disk space, and the next run
+   * tries again.
+   *
+   * @param retention How long the row about a started workflow is kept
+   * @param sieve What decides per row whether it may go, or <code>null</code> to delete every
+   *          expired row
+   * @return The number of rows deleted
+   */
+  public int deleteExpiredWorkflowStarts(
+      final Duration retention,
+      final io.vanillabp.integration.spi.WorkflowStartSieve sieve) {
+
+    final var expiredBefore = Timestamp.from(Instant.now().minus(retention));
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      if (sieve == null) {
+        try (var statement = connection.prepareStatement(deleteExpiredWorkflowStarts)) {
+          statement.setString(1, WORKFLOW_START);
+          statement.setTimestamp(2, expiredBefore);
+          return statement.executeUpdate();
+        }
+      }
+      return deleteWhatTheSieveLetsGo(connection, expiredBefore, sieve);
+    } catch (final SQLException e) {
+      log
+          .warn(
+              "Could not clean up the expired rows about started workflows of table '{}'",
+              tableName,
+              e);
+      return 0;
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * Reads the expired rows about started workflows, asks the sieve about each of them and
+   * deletes the ones it lets go, as one JDBC batch.
+   *
+   * @param connection The connection of this run
+   * @param expiredBefore The moment a row has to be older than
+   * @param sieve What decides per row
+   * @return The number of rows deleted
+   */
+  private int deleteWhatTheSieveLetsGo(
+      final Connection connection,
+      final Timestamp expiredBefore,
+      final io.vanillabp.integration.spi.WorkflowStartSieve sieve) throws SQLException {
+
+    final var expired = new java.util.ArrayList<TaskDelivery>();
+    try (var statement = connection.prepareStatement(selectExpiredWorkflowStarts)) {
+      statement.setMaxRows(WORKFLOW_STARTS_SIEVED_PER_RUN);
+      statement.setString(1, WORKFLOW_START);
+      statement.setTimestamp(2, expiredBefore);
+      try (var resultSet = statement.executeQuery()) {
+        while (resultSet.next()) {
+          expired.add(readRecord(resultSet));
+        }
+      }
+    }
+    final var mayGo = expired
+        .stream()
+        .filter(row -> Boolean.TRUE.equals(sieve.mayBeDeleted(row)))
+        .map(TaskDelivery::deliveryKey)
+        .toList();
+    if (mayGo.isEmpty()) {
+      return 0;
+    }
+    try (var statement = connection.prepareStatement(deleteWorkflowStart)) {
+      for (final var deliveryKey : mayGo) {
+        statement.setString(1, deliveryKey);
+        statement.addBatch();
+      }
+      final var deleted = statement.executeBatch();
+      var count = 0;
+      for (final var rows : deleted) {
+        count += Math.max(rows, 0);
+      }
+      return count;
     }
 
   }
@@ -813,10 +1094,11 @@ public class JdbcTaskDeliveryStore {
     try {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(deleteDeliveriesOfWorkflow)) {
-        statement.setString(1, workflowModuleId);
-        statement.setString(2, bpmnProcessId);
-        statement.setString(3, workflowAggregateId);
-        statement.setTimestamp(4, Timestamp.from(recordedBefore));
+        statement.setString(1, TASK_DELIVERY);
+        statement.setString(2, workflowModuleId);
+        statement.setString(3, bpmnProcessId);
+        statement.setString(4, workflowAggregateId);
+        statement.setTimestamp(5, Timestamp.from(recordedBefore));
         return statement.executeUpdate();
       }
     } catch (final SQLException e) {
@@ -851,7 +1133,9 @@ public class JdbcTaskDeliveryStore {
           new AddedColumn(
               "WORKFLOW_ID", "VARCHAR(255) (nullable: a record written before the column existed names no workflow)", "a record does not say which workflow of the BPMS it belongs to, so nobody can follow a task into the tooling of that BPMS and VanillaBP cannot read the other tasks it still believes are open in that workflow", INDEX_OF_WORKFLOW),
           new AddedColumn(
-              "TASK_KIND", "VARCHAR(32) (nullable: a record written before the column existed names no kind)", "a record does not say whether its id is the id of a task or of a user task, so completing a task with the id of a user task is answered with everything it could be instead of what it is", null));
+              "TASK_KIND", "VARCHAR(32) (nullable: a record written before the column existed names no kind)", "a record does not say whether its id is the id of a task or of a user task, so completing a task with the id of a user task is answered with everything it could be instead of what it is", null),
+          new AddedColumn(
+              "RECORD_KIND", "VARCHAR(32) DEFAULT 'TASK_DELIVERY' NOT NULL (the default is what fills the rows which are there, all of which are task deliveries)", "VanillaBP cannot write down which workflow of the BPMS an aggregate belongs to, so every operation on a workflow asks each configured BPMS which of them holds it, and on a BPMS answering from a read model a report right after the start finds no workflow at all", "DROP INDEX %s_OPEN and then CREATE INDEX %s_OPEN ON %s (RECORD_KIND, OUTCOME, TASK_CLOSED_AT)"));
 
   /**
    * A column a later version of VanillaBP added: its name, the statement which adds it and
@@ -902,7 +1186,7 @@ public class JdbcTaskDeliveryStore {
             "CREATE INDEX %s_TASK ON %s (TASK_ID)".formatted(tableName, tableName));
         // the open tasks of one workflow aggregate are asked for once per screen an
         // extension builds, so that read must not walk everything ever recorded. Over
-        // OUTCOME and TASK_CLOSED_AT rather than over AGGREGATE_ID, which is 1024
+        // RECORD_KIND, OUTCOME and TASK_CLOSED_AT rather than over AGGREGATE_ID, which is 1024
         // characters wide and would exceed the key-length limit of MySQL and of DB2 with
         // 4K pages - see SELECT_OPEN_TASKS_OF_AGGREGATE
         statement.executeUpdate(INDEX_OF_OPEN_RECORDS.formatted(tableName, tableName));
@@ -1030,7 +1314,7 @@ public class JdbcTaskDeliveryStore {
                   column.indexStatement() == null
                       ? ""
                       : " It is read on a path which must not scan the table, so add the index it is looked up by as well: %s."
-                          .formatted(column.indexStatement().formatted(tableName, tableName))));
+                          .formatted(column.indexStatement().formatted(tableName, tableName, tableName))));
     }
 
   }
@@ -1102,7 +1386,7 @@ public class JdbcTaskDeliveryStore {
         AGGREGATE_ID VARCHAR(1024), \
         TASK_DEFINITION VARCHAR(255), \
         TASK_ID VARCHAR(255), \
-        OUTCOME VARCHAR(32) NOT NULL, \
+        OUTCOME VARCHAR(32), \
         BPMN_ERROR_CODE VARCHAR(255), \
         BPMN_ERROR_NAME VARCHAR(255), \
         RECORDED_AT %s NOT NULL, \
@@ -1110,8 +1394,9 @@ public class JdbcTaskDeliveryStore {
         TASK_CLOSED_AT %s, \
         BPMN_ELEMENT_ID VARCHAR(255), \
         WORKFLOW_ID VARCHAR(255), \
-        TASK_KIND VARCHAR(32))"""
-        .formatted(tableName, timestampType, timestampType, timestampType);
+        TASK_KIND VARCHAR(32), \
+        RECORD_KIND VARCHAR(32) DEFAULT '%s' NOT NULL)"""
+        .formatted(tableName, timestampType, timestampType, timestampType, TASK_DELIVERY);
 
   }
 
@@ -1135,9 +1420,10 @@ public class JdbcTaskDeliveryStore {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(selectAnyOpenRecord)) {
         statement.setMaxRows(ROWS_OF_AN_EXISTENCE_QUESTION);
-        statement.setString(1, workflowModuleId);
-        statement.setString(2, bpmnProcessId);
-        statement.setString(3, COMPLETION_PENDING);
+        statement.setString(1, TASK_DELIVERY);
+        statement.setString(2, workflowModuleId);
+        statement.setString(3, bpmnProcessId);
+        statement.setString(4, COMPLETION_PENDING);
         try (var resultSet = statement.executeQuery()) {
           return resultSet.next();
         }

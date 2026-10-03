@@ -38,6 +38,18 @@ import java.util.Optional;
  * {@link #recordedDelivery(String)} is never called with it and nothing can land on it twice.
  * A store needs no code for this: it writes and reads the key as the text it always was.
  * <p>
+ * <strong>The start of a workflow:</strong> the log also holds one row per workflow which was
+ * started, written in the transaction which persists the aggregate. It carries the workflow
+ * aggregate and the BPMS' own id of the workflow and nothing about a task, so the BPMS election
+ * and an extension read that id without asking a BPMS (see
+ * {@link #workflowStartOf(String, String, String)}). Three things follow for a store, and all
+ * three are about telling the row apart from a delivery by {@link TaskDelivery#recordKind()}:
+ * no question about open work may count it, because a row without a task would be a phantom
+ * task in every one of those answers; {@link #releaseRecordsOf} must leave it where it is,
+ * because changes to an aggregate keep arriving after its workflow ended; and it has a
+ * retention of its own, because it is not a delivery which may go as soon as nobody can repeat
+ * it.
+ * <p>
  * <strong>Retention:</strong> records are deleted asynchronously once
  * <code>vanillabp.delivery.retention</code> passed, which defaults to
  * <code>vanillabp.outbox.retention</code> (7 days) and is a property of its own since the
@@ -59,6 +71,13 @@ import java.util.Optional;
  * round trip of a task operation and the sharper sentence of a failure which names the kind
  * of an id. An installation whose tasks stay open longer than the retention and which wants
  * both raises the retention.
+ * <p>
+ * The row about the start of a workflow is kept for
+ * <code>vanillabp.delivery.workflow-start-retention</code> instead, counted from the moment the
+ * workflow started, and the release at the end of a workflow does not take it. Nothing about
+ * correctness hangs on that number either: what a deleted row costs is that the id of that
+ * workflow is not known any more, so a caller which wanted to report a changed aggregate finds
+ * no id and the report is dropped without a word.
  * <p>
  * <strong>Release at the end of a workflow:</strong> where
  * <code>vanillabp.delivery.release-on-workflow-end</code> is switched on, the records of
@@ -105,6 +124,38 @@ public interface TaskDeliveryLog {
    */
   boolean record(
       TaskDelivery delivery);
+
+  /**
+   * Writes the row about the start of a workflow, REPLACING the one of an earlier workflow of the
+   * same aggregate. Invoked within the transaction which persists the aggregate where the BPMS
+   * reported the start itself, and within the transaction of the dispatch where VanillaBP started
+   * the workflow.
+   *
+   * <h4>Why this is not {@link #record(TaskDelivery)}</h4>
+   *
+   * One aggregate may carry a SECOND workflow once the first one ended, and the row is keyed by the
+   * aggregate and the BPMN process rather than by the workflow
+   * ({@link WorkflowStartKey}), which is what makes the read a lookup. An insert which refuses a
+   * duplicate would therefore leave the id of the FIRST workflow standing and answer every question
+   * about the second one with it. So a row whose workflow id differs is overwritten, and a row which
+   * already names this workflow is left alone - a start dispatched twice writes nothing.
+   * <p>
+   * The default inserts and keeps what is there, which is what a store written before this existed
+   * does. Such a store answers the id of a second workflow on one aggregate with the first one's
+   * until the retention takes the row, so a store which can update implements this. The stores
+   * VanillaBP ships do.
+   *
+   * @param workflowStart The row, built by
+   *          {@link TaskDelivery#workflowStart(String, String, String, String, String, java.time.Instant)}
+   * @return <code>true</code> where the store now holds this workflow's id, <code>false</code> where
+   *         it held it already
+   */
+  default boolean recordWorkflowStart(
+      final TaskDelivery workflowStart) {
+
+    return record(workflowStart);
+
+  }
 
   /**
    * Reports that the BPMS delivered a task again whose record says the task is still
@@ -406,6 +457,45 @@ public interface TaskDeliveryLog {
       final String workflowId) {
 
     return List.of();
+
+  }
+
+  /**
+   * The row about the START of the workflow of one aggregate: where that workflow runs in the
+   * BPMS, as far as this store was told.
+   *
+   * <h4>What the core does with it</h4>
+   *
+   * The BPMS election of an operation about a WORKFLOW probes every configured adapter until one
+   * says it holds it, and nothing is written down about the result. The id this row carries is
+   * what makes the probing unnecessary, and on a BPMS which answers such a question from a read
+   * model it is also the only answer available shortly after the start, because the read model
+   * has not caught up yet. An extension asking where a workflow is gets the same value.
+   * <p>
+   * It says what was true when the workflow started, not whether that workflow still runs. So it
+   * does not make an operation on an instance the BPMS has forgotten succeed: knowing the id and
+   * sending something to it are two uses of one row.
+   *
+   * <h4>What a store has to answer</h4>
+   *
+   * The row is stored under a key derived from the three arguments
+   * ({@link WorkflowStartKey}), so the default answers it with the lookup by key every store
+   * implements already - no store needs code for this and none needs an index. A store which
+   * holds no such row answers {@link Optional#empty()}, and so does one whose retention took it.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param bpmnProcessId The BPMN process of the workflow
+   * @param workflowAggregateId The workflow aggregate's ID in serialized form
+   * @return The row, or {@link Optional#empty()} where there is none
+   */
+  default Optional<TaskDelivery> workflowStartOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId) {
+
+    return recordedDelivery(
+        WorkflowStartKey.of(workflowModuleId, bpmnProcessId, workflowAggregateId))
+        .filter(row -> DeliveryRecordKind.of(row.recordKind()) == DeliveryRecordKind.WORKFLOW_START);
 
   }
 

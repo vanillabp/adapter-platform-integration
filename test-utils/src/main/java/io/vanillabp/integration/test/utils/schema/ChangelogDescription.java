@@ -12,6 +12,8 @@ import liquibase.change.ColumnConfig;
 import liquibase.change.core.AddColumnChange;
 import liquibase.change.core.CreateIndexChange;
 import liquibase.change.core.CreateTableChange;
+import liquibase.change.core.DropIndexChange;
+import liquibase.change.core.DropNotNullConstraintChange;
 import liquibase.changelog.ChangeLogParameters;
 import liquibase.parser.ChangeLogParserFactory;
 import liquibase.resource.ClassLoaderResourceAccessor;
@@ -148,6 +150,28 @@ public class ChangelogDescription {
               new Index(
                   upperCase(createIndex.getTableName()), upperCase(createIndex.getIndexName()), namesOf(
                       createIndex.getColumns())));
+    } else if (change instanceof final DropIndexChange dropIndex) {
+      // an index rebuilt over other columns is dropped and created again, and what the database
+      // holds afterwards is what the second half says
+      final var name = upperCase(dropIndex.getIndexName());
+      if (!indexes.removeIf(index -> index.name().equals(name))) {
+        throw new IllegalStateException(
+            "Changeset '%s' drops the index '%s', which no changeset before it creates."
+                .formatted(changeSetId, name));
+      }
+    } else if (change instanceof final DropNotNullConstraintChange dropNotNull) {
+      // what a column accepts is not what this description is about: it collects the columns per
+      // table and the indexes, and the column stays where it is
+      if (!columnsPerTable
+          .getOrDefault(upperCase(dropNotNull.getTableName()), List.of())
+          .contains(upperCase(dropNotNull.getColumnName()))) {
+        throw new IllegalStateException(
+            "Changeset '%s' lets the column '%s' of '%s' accept nothing, and no changeset before it creates that column."
+                .formatted(
+                    changeSetId,
+                    upperCase(dropNotNull.getColumnName()),
+                    upperCase(dropNotNull.getTableName())));
+      }
     } else {
       throw new IllegalStateException(
           """

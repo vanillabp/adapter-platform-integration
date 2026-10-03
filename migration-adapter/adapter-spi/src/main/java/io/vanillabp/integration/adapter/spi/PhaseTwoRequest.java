@@ -2,6 +2,7 @@ package io.vanillabp.integration.adapter.spi;
 
 import java.util.Map;
 
+import io.vanillabp.integration.adapter.spi.workflowstart.WorkflowStartReport;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 
@@ -23,21 +24,69 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
  *        broadcast signal)
  * @param args The operation's arguments, read through the accessors below rather than
  *        by key
+ * @param workflowStartReport Where phase two of a START says which workflow the BPMS created,
+ *        reported through {@link #reportStartedWorkflow(String)} rather than read from here.
+ *        {@link WorkflowStartReport#NOBODY_LISTENS} for every other operation
  */
 public record PhaseTwoRequest<A>(
                                  String workflowModuleId,
                                  String bpmnProcessId,
                                  AggregatePersistenceAware<A> aggregatePersistence,
                                  Object workflowAggregateId,
-                                 Map<String, String> args) {
+                                 Map<String, String> args,
+                                 WorkflowStartReport workflowStartReport) {
 
   /**
    * Copies the arguments, so what a handler reads cannot be changed by whoever built the
    * request, and reads a <code>null</code> map as an empty one. A handler may therefore
    * ask for any argument and gets <code>null</code> for one its operation does not carry.
+   * A request without a report sink gets the one which drops what it is told.
    */
   public PhaseTwoRequest {
     args = args == null ? Map.of() : Map.copyOf(args);
+    workflowStartReport = workflowStartReport == null
+        ? WorkflowStartReport.NOBODY_LISTENS
+        : workflowStartReport;
+  }
+
+  /**
+   * A request nobody listens to the start of, which is what every caller built before the
+   * report existed. The sink stands LAST for that reason, the way a component appended to
+   * {@code io.vanillabp.integration.spi.TaskDelivery} did.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregateId The ID of the workflow aggregate in its own type
+   * @param args The operation's arguments
+   */
+  public PhaseTwoRequest(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final Map<String, String> args) {
+
+    this(
+        workflowModuleId, bpmnProcessId, aggregatePersistence, workflowAggregateId, args, WorkflowStartReport.NOBODY_LISTENS);
+
+  }
+
+  /**
+   * Says which workflow of the BPMS the start just created, so VanillaBP can answer later which
+   * workflow this aggregate belongs to without asking any BPMS. Called by the handler of a
+   * START operation, once, with the id of the instance the aggregate IS (on a BPMS with call
+   * activities the super-parent). Every other handler leaves it alone, and so does an adapter
+   * which has nothing to report: the call is then simply not made.
+   *
+   * @param workflowId The BPMS' own id of the started workflow, <code>null</code> where the
+   *          adapter names none
+   */
+  public void reportStartedWorkflow(
+      final String workflowId) {
+
+    workflowStartReport.startedWorkflow(workflowId);
+
   }
 
   /**

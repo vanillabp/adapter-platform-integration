@@ -113,6 +113,15 @@ public class TaskDeliveryDocument {
   private String taskKind;
 
   /**
+   * What this document is about: a task delivery, or the start of a workflow (the names of
+   * {@link io.vanillabp.integration.spi.DeliveryRecordKind}). Every question about open work
+   * demands that it is not a start, because a document without a task would be a phantom task in
+   * each of those answers. Absent in a document written before this existed, which is a task
+   * delivery - which is why those questions ask for "not a start" rather than for "a delivery".
+   */
+  private String recordKind;
+
+  /**
    * What Spring Data starts from when it reads a document of the collection: it builds the
    * empty record and fills the fields afterwards. A log writing a record uses the
    * constructor taking every field.
@@ -139,6 +148,7 @@ public class TaskDeliveryDocument {
    * @param lastSeenAt The moment of the last redelivery
    * @param taskClosedAt The moment the task was closed, or <code>null</code>
    * @param taskKind The kind of task the id belongs to, or <code>null</code>
+   * @param recordKind What the document is about: a task delivery or the start of a workflow
    */
   public TaskDeliveryDocument(
       final String id,
@@ -156,7 +166,8 @@ public class TaskDeliveryDocument {
       final Instant recordedAt,
       final Instant lastSeenAt,
       final Instant taskClosedAt,
-      final String taskKind) {
+      final String taskKind,
+      final String recordKind) {
 
     this.id = id;
     this.adapterId = adapterId;
@@ -174,6 +185,7 @@ public class TaskDeliveryDocument {
     this.lastSeenAt = lastSeenAt;
     this.taskClosedAt = taskClosedAt;
     this.taskKind = taskKind;
+    this.recordKind = recordKind;
 
   }
 
@@ -549,6 +561,30 @@ public class TaskDeliveryDocument {
       final String taskKind) {
 
     this.taskKind = taskKind;
+
+  }
+
+  /**
+   * What this document is about, see {@link #recordKind}
+   *
+   * @return The kind of the row, or <code>null</code> in a document written before the field
+   *         existed, which is a task delivery
+   */
+  public String getRecordKind() {
+
+    return recordKind;
+
+  }
+
+  /**
+   * What this document is about, see {@link #recordKind}
+   *
+   * @param recordKind The kind of the row, or <code>null</code>
+   */
+  public void setRecordKind(
+      final String recordKind) {
+
+    this.recordKind = recordKind;
 
   }
 }

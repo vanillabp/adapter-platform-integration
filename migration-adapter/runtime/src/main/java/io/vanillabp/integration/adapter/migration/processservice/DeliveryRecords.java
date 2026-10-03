@@ -390,6 +390,86 @@ public final class DeliveryRecords {
   }
 
   /**
+   * Writes down which workflow of the BPMS the aggregate of a started workflow belongs to, so
+   * the BPMS election and an extension can read that id without asking a BPMS.
+   *
+   * <h4>Why the log and not a store of its own</h4>
+   *
+   * The row answers the same kind of question the row of a delivery answers - where is this
+   * workflow - and it lives in the database of the workflow aggregate for the same reason. What
+   * tells the two apart is {@link TaskDelivery#recordKind()}, and every question about open work
+   * filters on it.
+   *
+   * <h4>When it is written, and when it is not</h4>
+   *
+   * At the earliest moment both values are known. For a start of the application that is phase
+   * two, because a remote BPMS creates the instance after the caller's transaction committed, and
+   * the row is written in the transaction of that dispatch. So a report of a changed aggregate
+   * between the two finds no id, which is right: the instance does not exist yet either. For a
+   * workflow the BPMS started on its own it is the transaction which persists the aggregate,
+   * where the notification carries both values at once.
+   * <p>
+   * Nothing is written where no store serves this aggregate, or where the adapter names no
+   * workflow - then everything stays as it was and the election probes.
+   * <p>
+   * The key is derived from the workflow module, the BPMN process and the aggregate
+   * ({@link io.vanillabp.integration.spi.WorkflowStartKey}), so a dispatch which runs twice
+   * writes nothing the second time instead of a second row.
+   *
+   * @param adapterId The ID of the adapter which started the workflow
+   * @param workflowAggregateId The workflow aggregate of the started workflow
+   * @param workflowId The BPMS' own id of the started workflow, or <code>null</code>
+   */
+  public void recordWorkflowStart(
+      final String adapterId,
+      final Object workflowAggregateId,
+      final String workflowId) {
+
+    if ((workflowAggregateId == null) || (workflowId == null) || workflowId.isBlank()) {
+      return;
+    }
+    final var deliveryLog = resolveLog();
+    if (deliveryLog == null) {
+      return;
+    }
+    try {
+      final var written = deliveryLog
+          .recordWorkflowStart(
+              TaskDelivery
+                  .workflowStart(
+                      adapterId,
+                      workflowModuleId,
+                      bpmnProcessId,
+                      workflowAggregateId.toString(),
+                      workflowId,
+                      Instant.now()));
+      log.debug(
+          "Workflow '{}' of aggregate '{}' (BPMN process '{}' of workflow module '{}') {}",
+          workflowId,
+          workflowAggregateId,
+          bpmnProcessId,
+          workflowModuleId,
+          written
+              ? "was written down, so nobody has to ask a BPMS which of them holds it"
+              : "was written down before - the row names this workflow already and nothing changed");
+    } catch (final RuntimeException e) {
+      // the workflow runs, and a row nobody could write costs the probing which happened
+      // before this row existed. Failing the dispatch here would repeat a start which
+      // succeeded
+      log.warn(
+          "The start of workflow '{}' of aggregate '{}' (BPMN process '{}' of workflow module "
+              + "'{}') could not be written down - every operation on this workflow asks the "
+              + "configured BPMS which of them holds it, as it did before the row existed",
+          workflowId,
+          workflowAggregateId,
+          bpmnProcessId,
+          workflowModuleId,
+          e);
+    }
+
+  }
+
+  /**
    * Says that the handler of this task ran twice at the same time, which is the one case
    * a record written after the work cannot prevent: a delivery starting while another
    * one is still running finds no record yet, so both run and only the one committing
@@ -1181,11 +1261,14 @@ public final class DeliveryRecords {
   /**
    * The BPMS' own id of the workflow of the given aggregate, as far as a record knows one.
    * <p>
-   * Read from the OPEN records of that aggregate, under every BPMN process id this workflow
-   * service serves: a record is written per delivery and the adapter names the workflow in
-   * it, so a workflow VanillaBP ever heard from is named here even after a restart, which
-   * the election cache cannot promise. The first record naming a workflow answers - the
-   * records of one aggregate and one BPMN process belong to one workflow.
+   * Two reads, in this order, under every BPMN process id this workflow service serves. The row
+   * about the START of that workflow comes first: it is a lookup by key, it exists from the
+   * moment the workflow was created, and it holds the id of the workflow this aggregate IS. The
+   * OPEN records of the aggregate are the second read, which answers for a workflow started
+   * before the start row existed and for one whose start row the retention took. Either way a
+   * workflow VanillaBP heard about is named here after a restart, which the election cache
+   * cannot promise. The first row naming a workflow answers - the rows of one aggregate and one
+   * BPMN process belong to one workflow.
    * <p>
    * A hint and never an answer. It says what was true when the delivery ran, not whether the
    * workflow still runs, and an adapter which reports no workflow id leaves nothing here.
@@ -1204,6 +1287,16 @@ public final class DeliveryRecords {
       return null;
     }
     try {
+      for (final var candidate : bpmnProcessIdsToReadUnder) {
+        final var started = deliveryLog
+            .workflowStartOf(workflowModuleId, candidate, workflowAggregateId.toString())
+            .map(TaskDelivery::workflowId)
+            .filter(java.util.Objects::nonNull)
+            .orElse(null);
+        if (started != null) {
+          return started;
+        }
+      }
       for (final var candidate : bpmnProcessIdsToReadUnder) {
         final var known = deliveryLog
             .openTasksOfAggregate(workflowModuleId, candidate, workflowAggregateId.toString())

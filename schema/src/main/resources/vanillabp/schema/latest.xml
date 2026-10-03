@@ -406,4 +406,45 @@
     </addColumn>
   </changeSet>
 
+  <changeSet author="VanillaBP" id="vanillabp-task-delivery-row-kind-2.0.0" labels="2.0.0">
+    <comment>
+      What a row of this table is about: TASK_DELIVERY for a task the application was handed,
+      WORKFLOW_START for the row written when a workflow begins, which carries the aggregate and
+      the BPMS' own id of its workflow and nothing about a task. With that row the BPMS election
+      stops asking every configured adapter which of them holds a workflow, and an extension can
+      name the workflow on a BPMS whose read model has not caught up with the start yet.
+
+      NOT NULL with a default, unlike the columns added before it: every row which is there is a
+      task delivery, the ALTER fills them, and from then on each of the questions about open work
+      filters on a plain equality instead of asking twice to catch an empty value as well. The
+      questions have to filter, because a row without a task would be a phantom task in every one
+      of those answers, and the core reads them when it wakes up.
+
+      OUTCOME loses its NOT NULL in the same step. Its only legal values are the names of
+      WorkflowTaskOutcome.Kind and a start reports no outcome, so a start row would have to borrow
+      one - which would make it look like a delivery to the deduplication, which reads that column
+      as such a name. It cannot reach the deduplication (a start row is keyed by its aggregate and
+      nothing is ever looked up under that key), and leaving the column empty is what keeps that
+      true no matter what is written later.
+
+      The index over the open rows is rebuilt with RECORD_KIND in front, because that is the
+      question the readers ask first. Two equality columns can stand in either order; what has to
+      stand last is TASK_CLOSED_AT, which is read as a range. The retention of the start rows
+      needs no index of its own: it deletes by LAST_SEEN_AT, which the AGE index already spans.
+    </comment>
+    <addColumn tableName="${vanillabp.delivery.table}">
+      <column name="RECORD_KIND" type="VARCHAR(32)" defaultValue="TASK_DELIVERY">
+        <constraints nullable="false" />
+      </column>
+    </addColumn>
+    <dropNotNullConstraint tableName="${vanillabp.delivery.table}" columnName="OUTCOME"
+        columnDataType="VARCHAR(32)" />
+    <dropIndex tableName="${vanillabp.delivery.table}" indexName="${vanillabp.delivery.table}_OPEN" />
+    <createIndex tableName="${vanillabp.delivery.table}" indexName="${vanillabp.delivery.table}_OPEN">
+      <column name="RECORD_KIND" />
+      <column name="OUTCOME" />
+      <column name="TASK_CLOSED_AT" />
+    </createIndex>
+  </changeSet>
+
 </databaseChangeLog>

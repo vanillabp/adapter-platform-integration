@@ -2021,6 +2021,112 @@ among them. The record of that task's delivery knows it: it says which kind of t
 - `TheRecordSaysWhichKindOfTaskAnIdIsTest` holds all four methods and the counter-probe,
   `TaskRecordLookupTest#theKindOfTaskRidesAlong` the way through the SQL statements.
 
+##### The log also says where a workflow runs
+
+A row of the log was always a task delivery. It can now also be the start of a workflow, and
+`RECORD_KIND` says which of the two it is (`TASK_DELIVERY` or `WORKFLOW_START`, the names of
+`DeliveryRecordKind`). A start row carries the workflow aggregate and the BPMS' own id of its
+workflow and nothing about a task.
+
+What it is for is the election of an operation about a WORKFLOW. That election probes every
+configured adapter until one says it holds the workflow, and it writes nothing down - its javadoc
+says so: "No adapter ID is persisted - the executing adapter is elected at dispatch time by
+probing". The row makes the probing unnecessary, and on a BPMS which answers such a question from a
+read model it is the only answer available shortly after the start, because the read model has not
+caught up. An extension which only wants the id reads it through
+`WorkflowElection#workflowIdOf`, which asks no BPMS at all.
+
+- The id is the one of the workflow the AGGREGATE is, which on a BPMS with call activities is the
+  super-parent instance. The instances created underneath belong to tasks and stand on those tasks
+  (`TaskDelivery.workflowId` of a delivery row), so nothing here walks a parent chain.
+- Written at the earliest moment both values are known. For a start of the application that is
+  phase two: the instance is created after the caller's transaction committed, and `phaseTwo`
+  returns nothing, so the adapter reports the id into
+  `PhaseTwoRequest#reportStartedWorkflow(String)` and the row is written in the transaction of that
+  dispatch. A report of a changed aggregate between the two finds no id, which is right - the
+  instance does not exist yet either. For a workflow the BPMS started on its own it is the
+  transaction which persists the aggregate, where `BpmsInitiatedStartContext#getNativeInstanceId`
+  already carries the instance.
+- The key is derived from the workflow module, the BPMN process and the aggregate
+  (`WorkflowStartKey`), with `(workflow-start)` in the third part - where a delivery key carries its
+  BPMN process id, and no BPMN process can be called that. So no delivery can fall on it, the read
+  is a lookup by primary key and needs no index, and a dispatch which runs twice writes nothing the
+  second time instead of a second row.
+- What the key does not carry is the workflow, so an aggregate which carries a SECOND workflow once
+  the first one ended reaches the row of that first one. `recordWorkflowStart` overwrites it there
+  instead of refusing it, and a store which does not implement that method answers the second
+  workflow's id with the first one's until the period takes the row. The three stores VanillaBP
+  ships implement it.
+- `OUTCOME` is nullable since this row exists. Its only legal values are the names of
+  `WorkflowTaskOutcome.Kind` and a start reports no outcome, so it would have to borrow one -
+  which would make it look like a delivery to the code reading that column as such a name.
+- Every question about open work filters on the kind: `openTasksOfAggregate`,
+  `openTasksOfWorkflow`, `adapterIdsOfOpenTasks` and `hasOpenRecords`. A row without a task would
+  be a phantom task in each of those answers, and the core reads them when a workflow wakes up. The
+  read by workflow is where it would have shown first, because a start row carries a workflow id
+  and that read is keyed by exactly that. `releaseRecordsOf` leaves the row where it is, because
+  changes to an aggregate keep arriving after its workflow ended.
+- The relational store filters `RECORD_KIND = 'TASK_DELIVERY'` and the MongoDB stores filter
+  `recordKind != 'WORKFLOW_START'`, which is not an inconsistency: the `ALTER` of the changeset
+  fills the column of every row which is already there, while MongoDB has no statement which fills
+  a field, and `$ne` matches a document whose field is absent while `$eq` does not.
+- The index `_OPEN` is `(RECORD_KIND, OUTCOME, TASK_CLOSED_AT)` since then. Two equality columns
+  can stand in either order without changing what a database does with them, and what has to stand
+  last is `TASK_CLOSED_AT`, which is read as a range - so the order is the one a reader follows.
+- `AStartIsNoOpenWorkTest` holds one test per reader plus the two periods,
+  `TheStartOfAWorkflowLeavesItsBpmsIdBehindTest` the way through the start itself.
+
+##### How long a start row is kept
+
+`vanillabp.delivery.workflow-start-retention` decides it, thirty days by default, counted from the
+start. A period of its own and not `vanillabp.delivery.retention`, because the two are about
+different things: a delivery row may go as soon as nobody can repeat that delivery, while a start
+row is read for as long as somebody may ask which workflow an aggregate belongs to - and that
+outlasts the workflow. Changes to an aggregate keep arriving after its workflow ended, from the
+application's own `@WorkflowEnded` method and from whoever maintains the business data of a
+finished case.
+
+Nothing about correctness hangs on the number. When the period passed, the id of that workflow is
+not known any more, so a caller which wanted to report a changed aggregate finds no id and the
+report is dropped without a word. `0` keeps the rows for good. It is read for the whole application
+only, like the retention beside it and for the same reason.
+
+The deletion counts by `LAST_SEEN_AT`, although that column holds the same moment as `RECORDED_AT`
+in such a row: nothing ever moves it there - only a redelivery of an open task does that, and a
+start row answers no redelivery - and deleting by the column the `_AGE` index spans is what keeps
+this an indexed delete rather than a scan. So the period needs no index of its own.
+
+##### The aggregate as a second sieve
+
+A period is a guess. The exact question is whether anybody can still ask about that aggregate, and
+the application's own persistence answers it: `AggregatePersistenceAware#loadById` returns the
+aggregate or `null`. `vanillabp.delivery.keep-workflow-start-while-aggregate-exists` switches that
+question on, and then a row past its period is deleted only where the aggregate is gone.
+
+- The path from a row to a persistence is `PhaseTwoRouter#processServiceOf(module, process)`, which
+  is where both platforms register every process service while their beans are created, and then
+  `MigrationProcessService#loadWorkflowAggregate`, which converts the serialized id into the
+  aggregate's own type. That is the path a dispatched outbox entry walks, so nothing new is asked
+  of an application. The load runs in the transaction runner serving that aggregate, because the
+  cleanup has a thread and no transaction.
+- Three answers KEEP the row, and that is the whole point: the process is not part of this
+  application any more, the router has not been built yet, and `loadById` is not implemented. The
+  last one is a custom persistence which did not override the method, and it answers with an
+  `UnsupportedOperationException` - reading that as "the aggregate is gone" would delete exactly
+  the rows nobody can write again. It is said once per store and not once per run.
+- It is OFF by default, because it costs one read of the application's own database per expired
+  row. One run looks at a thousand rows at most and the next hourly run continues, because what it
+  kept is kept and what it deleted is gone.
+- What the store side of it costs, measured on H2 in memory in October 2026 with every row expired:
+  the plain delete took 11 ms at 100 rows, 14 ms at 1000 and 67 ms at 10000, while the sieved pass
+  took 15 ms at 100, 22 ms at 1000 and 23 ms at 10000 - the last one being the cap, which deleted
+  1000 of the 10000 and left the rest to the next run. A pass which keeps everything is cheaper
+  than either, 2 to 8 ms, because it deletes nothing. What this does not pay is the read of the
+  aggregate itself: that one belongs to the application's own database, it is a read by primary
+  key, and the cap is what bounds how many of them one run makes.
+- `TheAggregateDecidesWhenAStartRowMayGoTest` holds the three answers which keep a row and the one
+  which lets it go.
+
 ##### What the log does not hold
 
 The records are the work the APPLICATION was handed. A user task the application has no

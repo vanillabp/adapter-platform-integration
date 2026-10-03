@@ -102,7 +102,7 @@ public class JdbcTaskDeliverySchemaTest {
     assertEquals(java.util.List.of("LAST_SEEN_AT"), indexes.get("VANILLABP_TASK_DELIVERY_AGE"), indexes::toString);
     assertEquals(java.util.List.of("TASK_ID"), indexes.get("VANILLABP_TASK_DELIVERY_TASK"), indexes::toString);
     assertEquals(
-        java.util.List.of("OUTCOME", "TASK_CLOSED_AT"),
+        java.util.List.of("RECORD_KIND", "OUTCOME", "TASK_CLOSED_AT"),
         indexes.get("VANILLABP_TASK_DELIVERY_OPEN"),
         "an extension reads the open tasks of one workflow aggregate per screen it builds: "
             + indexes);
@@ -127,7 +127,7 @@ public class JdbcTaskDeliverySchemaTest {
                   BPMN_PROCESS_ID VARCHAR(255) NOT NULL, \
                   AGGREGATE_ID VARCHAR(1024), \
                   TASK_DEFINITION VARCHAR(255), \
-                  OUTCOME VARCHAR(32) NOT NULL, \
+                  OUTCOME VARCHAR(32), \
                   BPMN_ERROR_CODE VARCHAR(255), \
                   BPMN_ERROR_NAME VARCHAR(255), \
                   RECORDED_AT TIMESTAMP NOT NULL, \
@@ -137,6 +137,7 @@ public class JdbcTaskDeliverySchemaTest {
                   BPMN_ELEMENT_ID VARCHAR(255), \
                   WORKFLOW_ID VARCHAR(255), \
                   TASK_KIND VARCHAR(32), \
+                  RECORD_KIND VARCHAR(32) DEFAULT 'TASK_DELIVERY' NOT NULL, \
                   CONSTRAINT PK_VANILLABP_TASK_DELIVERY PRIMARY KEY (DELIVERY_KEY))""");
     }
 

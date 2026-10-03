@@ -274,6 +274,21 @@ says so. Read it if your BPMS deduplicates messages in a net of its own: three e
 multi-instance call activity reach the outbox as three operations and would reach such a BPMS as
 one message otherwise, and VanillaBP cannot repair that from its side.
 
+Phase two of a START says which workflow it created. `PhaseTwoRequest#reportStartedWorkflow(String)`
+is where that goes, and it is the only moment anybody ever learns the id: `phaseTwo` returns
+nothing, and the instance comes into existence after the caller's transaction committed. The core
+writes the pair down next to the aggregate, and from then on an operation about that workflow is
+not elected by probing every configured adapter, and an extension can name the workflow on a BPMS
+whose read model has not caught up with the start yet.
+
+Call it once, with the id of the instance the AGGREGATE is - on a BPMS with call activities the
+super-parent. The instances created underneath belong to tasks and travel with those tasks, so
+nothing here walks a parent chain. Every other operation leaves the sink alone, and an adapter
+which has nothing to report simply does not call it: no row is written, and everything stays as it
+was before the sink existed. The same holds for a workflow your BPMS started on its own, where
+`BpmsInitiatedStartContext#getNativeInstanceId` is the value the core writes down - that one is no
+longer for messages only.
+
 What your BPMS is asked about are the four awareness probes and the read-only viewer methods.
 The probes are section 4. The viewer methods, `getProcessDefinitions`, `getBpmnXml` and
 `getWorkflowHistory`, have no phases and no transaction; their defaults throw a guiding message,

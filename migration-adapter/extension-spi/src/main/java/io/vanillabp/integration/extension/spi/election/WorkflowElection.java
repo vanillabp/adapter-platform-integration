@@ -90,4 +90,51 @@ public interface WorkflowElection {
 
   }
 
+  /**
+   * The BPMS' own id of this workflow, as far as VanillaBP wrote it down - and NO election.
+   *
+   * <h4>How this differs from the two above</h4>
+   *
+   * They elect, which means they ask a BPMS and they fail where none knows the workflow. This
+   * only reads what VanillaBP persisted: the row written when the workflow started, and the rows
+   * of the task deliveries of that workflow. No BPMS is asked, nothing is waited for, and nothing
+   * is thrown. An extension which wants the id to put into its own report asks this one; an
+   * extension which is about to talk to a BPMS asks one of the two above.
+   * <p>
+   * The id is the one of the workflow the AGGREGATE is. On a BPMS with call activities that is the
+   * super-parent instance, and the instances created underneath are not in this answer: they
+   * belong to tasks and travel with those tasks.
+   *
+   * <h4>What an empty answer means, and what it does not</h4>
+   *
+   * One answer for several situations, and they are NOT distinguishable: this application never
+   * started that workflow, the start happened before this version was deployed, the adapter names
+   * no workflow id, the row's retention passed
+   * (<code>vanillabp.delivery.workflow-start-retention</code>), or there is no store for that
+   * aggregate at all. Empty therefore means "VanillaBP does not know", never "there is no such
+   * workflow".
+   * <p>
+   * A non-empty answer says what was true when the workflow started. It does not say that the
+   * workflow still runs, and it must not be sent to a BPMS: the shape of the id belongs to the
+   * adapter, and an extension addressing an engine behind the adapter's back is outside
+   * everything this platform promises.
+   * <p>
+   * The default answers nothing, which is what an implementation written before this existed
+   * answers.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param bpmnProcessId The BPMN process of the workflow
+   * @param workflowAggregateId The ID of its workflow aggregate
+   * @return The workflow's id in the BPMS, or {@link java.util.Optional#empty()} where VanillaBP
+   *         holds none
+   */
+  default java.util.Optional<String> workflowIdOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId) {
+
+    return java.util.Optional.empty();
+
+  }
+
 }

@@ -55,11 +55,34 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   private static final String COMPLETION_PENDING = WorkflowTaskOutcome.Kind.COMPLETION_PENDING
       .name();
 
+  /**
+   * The kind of document which says where a workflow runs. Every question about open work demands
+   * that a document is NOT this, rather than that it is a delivery: MongoDB has no statement which
+   * fills a field of the documents which are already there, so a document written before the field
+   * existed carries none - and <code>$ne</code> matches a document whose field is absent while
+   * <code>$eq</code> does not. The relational store asks the other way round, because the ALTER
+   * which adds the column fills it.
+   */
+  private static final String WORKFLOW_START = io.vanillabp.integration.spi.DeliveryRecordKind.WORKFLOW_START
+      .name();
+
   private final MongoTemplate mongoTemplate;
 
   private final String collection;
 
   private final Duration retention;
+
+  private final Duration workflowStartRetention;
+
+  private final io.vanillabp.integration.spi.WorkflowStartSieve workflowStartSieve;
+
+  /**
+   * How many documents about started workflows one sieved run looks at. The sieve costs one read
+   * of the application's own database per document, so a run has an upper bound instead of taking
+   * however many expired while the application was stopped; the next hourly run continues, because
+   * what it kept is kept and what it deleted is gone.
+   */
+  private static final int WORKFLOW_STARTS_SIEVED_PER_RUN = 1000;
 
   private final TaskDeliveryRetentionCleanup retentionCleanup;
 
@@ -77,17 +100,26 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
    *          a redelivery is answered from the record instead of running the
    *          <code>@WorkflowTask</code> method again, which is why it is a setting of its
    *          own - see decision 24 in the repository's DECISIONS.md
+   * @param workflowStartRetention How long the document about a started workflow is kept, counted
+   *          from the start. A period of its own, because that document is read for as long as
+   *          somebody may ask which workflow an aggregate belongs to
+   * @param workflowStartSieve What decides per document whether it may really go once that period
+   *          passed, or <code>null</code> where the application did not ask for the second sieve
    */
   public MongoTaskDeliveryLog(
       final MongoTemplate mongoTemplate,
       final String collection,
-      final Duration retention) {
+      final Duration retention,
+      final Duration workflowStartRetention,
+      final io.vanillabp.integration.spi.WorkflowStartSieve workflowStartSieve) {
 
     this.mongoTemplate = mongoTemplate;
     this.collection = collection;
     this.retention = retention;
+    this.workflowStartRetention = workflowStartRetention;
+    this.workflowStartSieve = workflowStartSieve;
     this.retentionCleanup = new TaskDeliveryRetentionCleanup(
-        collection, retention, this::cleanUpExpiredRecords);
+        collection, retention, workflowStartRetention, this::cleanUpExpiredRecords);
     this.touches = new OpenTaskTouches(collection, this::refreshLastSeen);
 
   }
@@ -156,7 +188,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                   .bpmnProcessId(), delivery.workflowAggregateId(), delivery.workflowId(), delivery
                       .taskDefinition(), delivery.bpmnElementId(), delivery.taskId(), delivery
                           .outcome(), delivery.bpmnErrorCode(), delivery
-                              .bpmnErrorName(), recordedAt, recordedAt, null, delivery.taskKind()),
+                              .bpmnErrorName(), recordedAt, recordedAt, null, delivery
+                                  .taskKind(), delivery.recordKind()),
           collection);
       compensateUnlessCommitted(delivery);
       return true;
@@ -165,6 +198,48 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
       logRecordedAlready(delivery);
       return false;
     }
+
+  }
+
+  /**
+   * Writes the document about the start of a workflow, replacing the one of an earlier workflow of
+   * the same aggregate (see {@link TaskDeliveryLog#recordWorkflowStart}).
+   * <p>
+   * The insert comes first, because the ordinary case is that there is no document: an aggregate
+   * carries one workflow. Only where it finds one does the update run, and that update is bounded to
+   * a document which is a start and whose workflow id differs, so a start dispatched twice writes
+   * nothing. <code>lastSeenAt</code> moves with the id, which is what the period of such a document
+   * counts from.
+   */
+  @Override
+  public boolean recordWorkflowStart(
+      final TaskDelivery workflowStart) {
+
+    if (record(workflowStart)) {
+      return true;
+    }
+    final var startedAt = workflowStart.recordedAt() == null
+        ? Instant.now()
+        : workflowStart.recordedAt();
+    return mongoTemplate
+        .updateFirst(
+            Query
+                .query(
+                    Criteria
+                        .where("_id")
+                        .is(workflowStart.deliveryKey())
+                        .and("recordKind")
+                        .is(WORKFLOW_START)
+                        .and("workflowId")
+                        .ne(workflowStart.workflowId())),
+            Update
+                .update("workflowId", workflowStart.workflowId())
+                .set("adapterId", workflowStart.adapterId())
+                .set("recordedAt", startedAt)
+                .set("lastSeenAt", startedAt),
+            TaskDeliveryDocument.class,
+            collection)
+        .getModifiedCount() > 0;
 
   }
 
@@ -185,6 +260,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                 .is(workflowModuleId)
                 .and("bpmnProcessId")
                 .is(bpmnProcessId)
+                .and("recordKind")
+                .ne(WORKFLOW_START)
                 .and("outcome")
                 .is(COMPLETION_PENDING)
                 .and("adapterId")
@@ -252,6 +329,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                 .is(bpmnProcessId)
                 .and("aggregateId")
                 .is(workflowAggregateId)
+                .and("recordKind")
+                .ne(WORKFLOW_START)
                 .and("outcome")
                 .is(COMPLETION_PENDING)
                 .and("taskClosedAt")
@@ -284,6 +363,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                 .is(workflowModuleId)
                 .and("workflowId")
                 .is(workflowId)
+                .and("recordKind")
+                .ne(WORKFLOW_START)
                 .and("outcome")
                 .is(COMPLETION_PENDING)
                 .and("taskClosedAt")
@@ -351,7 +432,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
             .getBpmnElementId(), document
                 .getTaskId(), document.getOutcome(), document.getBpmnErrorCode(), document
                     .getBpmnErrorName(), document.getRecordedAt(), document
-                        .getTaskClosedAt(), document.getTaskKind());
+                        .getTaskClosedAt(), document.getTaskKind(), document.getRecordKind());
 
   }
 
@@ -369,6 +450,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                         .is(workflowModuleId)
                         .and("bpmnProcessId")
                         .is(bpmnProcessId)
+                        .and("recordKind")
+                        .ne(WORKFLOW_START)
                         .and("outcome")
                         .is(COMPLETION_PENDING)),
             collection);
@@ -393,6 +476,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                         .is(bpmnProcessId)
                         .and("aggregateId")
                         .is(workflowAggregateId)
+                        .and("recordKind")
+                        .ne(WORKFLOW_START)
                         .and("recordedAt")
                         .lt(recordedBefore)),
             TaskDeliveryDocument.class,
@@ -471,9 +556,65 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
 
     touches.flush();
 
+    final var expiredDeliveries = mongoTemplate
+        .remove(
+            Query
+                .query(
+                    Criteria
+                        .where("lastSeenAt")
+                        .lt(Instant.now().minus(retention))
+                        .and("recordKind")
+                        .ne(WORKFLOW_START)),
+            TaskDeliveryDocument.class,
+            collection)
+        .getDeletedCount();
+    return expiredDeliveries + cleanUpExpiredWorkflowStarts();
+
+  }
+
+  /**
+   * Deletes the documents about started workflows whose own period passed - a period of its own,
+   * because such a document is read for as long as somebody may ask which workflow an aggregate
+   * belongs to, which outlasts the workflow itself.
+   * <p>
+   * Without a sieve this is one delete. With one, the expired documents are read first and the
+   * sieve is asked per document, which costs a read of the application's own database each time
+   * (see {@link io.vanillabp.integration.spi.WorkflowStartSieve}). A document the sieve keeps
+   * stays where it is and is offered again at the next run.
+   *
+   * @return The number of documents deleted
+   */
+  private long cleanUpExpiredWorkflowStarts() {
+
+    if ((workflowStartRetention == null) || workflowStartRetention.isZero()) {
+      // a zero period says the documents about started workflows are kept for good
+      return 0;
+    }
+    final var expired = Query
+        .query(
+            Criteria
+                .where("lastSeenAt")
+                .lt(Instant.now().minus(workflowStartRetention))
+                .and("recordKind")
+                .is(WORKFLOW_START));
+    if (workflowStartSieve == null) {
+      return mongoTemplate
+          .remove(expired, TaskDeliveryDocument.class, collection)
+          .getDeletedCount();
+    }
+    final var mayGo = mongoTemplate
+        .find(expired.limit(WORKFLOW_STARTS_SIEVED_PER_RUN), TaskDeliveryDocument.class, collection)
+        .stream()
+        .map(MongoTaskDeliveryLog::recordOf)
+        .filter(row -> Boolean.TRUE.equals(workflowStartSieve.mayBeDeleted(row)))
+        .map(TaskDelivery::deliveryKey)
+        .toList();
+    if (mayGo.isEmpty()) {
+      return 0;
+    }
     return mongoTemplate
         .remove(
-            Query.query(Criteria.where("lastSeenAt").lt(Instant.now().minus(retention))),
+            Query.query(Criteria.where("_id").in(mayGo)),
             TaskDeliveryDocument.class,
             collection)
         .getDeletedCount();

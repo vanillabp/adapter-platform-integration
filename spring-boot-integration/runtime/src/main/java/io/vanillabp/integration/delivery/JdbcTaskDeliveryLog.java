@@ -39,6 +39,10 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   private final Duration retention;
 
+  private final Duration workflowStartRetention;
+
+  private final io.vanillabp.integration.spi.WorkflowStartSieve workflowStartSieve;
+
   private final TaskDeliveryRetentionCleanup retentionCleanup;
 
   /**
@@ -53,17 +57,26 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
    *          answered from the record instead of running the <code>@WorkflowTask</code>
    *          method again, which is why it is a setting of its own - see decision 24 in the
    *          repository's DECISIONS.md
+   * @param workflowStartRetention How long the row about a started workflow is kept, counted from
+   *          the start. A period of its own, because that row is read for as long as somebody may
+   *          ask which workflow an aggregate belongs to, which outlasts the workflow
+   * @param workflowStartSieve What decides per row whether it may really go once that period
+   *          passed, or <code>null</code> where the application did not ask for the second sieve
    */
   public JdbcTaskDeliveryLog(
       final DataSource dataSource,
       final String tableName,
-      final Duration retention) {
+      final Duration retention,
+      final Duration workflowStartRetention,
+      final io.vanillabp.integration.spi.WorkflowStartSieve workflowStartSieve) {
 
     this.dataSource = dataSource;
     this.store = new JdbcTaskDeliveryStore(this, tableName);
     this.retention = retention;
+    this.workflowStartRetention = workflowStartRetention;
+    this.workflowStartSieve = workflowStartSieve;
     this.retentionCleanup = new TaskDeliveryRetentionCleanup(
-        tableName, retention, this::cleanUpExpiredRecords);
+        tableName, retention, workflowStartRetention, this::cleanUpExpiredRecords);
 
   }
 
@@ -87,15 +100,22 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * Refreshes the records of the open tasks redelivered since the last run and deletes the
-   * records whose retention period passed - run by the background cleanup and usable on
-   * demand (e.g. by tests). Both are the store's business and happen in that order.
+   * Refreshes the records of the open tasks redelivered since the last run, deletes the records
+   * whose retention period passed and then the rows about started workflows whose own period
+   * passed - run by the background cleanup and usable on demand (e.g. by tests). All of it is the
+   * store's business and happens in that order.
    *
-   * @return The number of records deleted
+   * @return The number of rows deleted
    */
   public int cleanUpExpiredRecords() {
 
-    return store.deleteExpired(retention);
+    final var expiredDeliveries = store.deleteExpired(retention);
+    if ((workflowStartRetention == null) || workflowStartRetention.isZero()) {
+      // a zero period says the rows about started workflows are kept for good, which is what an
+      // application whose aggregates live forever asks for
+      return expiredDeliveries;
+    }
+    return expiredDeliveries + store.deleteExpiredWorkflowStarts(workflowStartRetention, workflowStartSieve);
 
   }
 
@@ -140,6 +160,23 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
     // left to delete which an earlier run did not already delete
     retentionCleanup.aDeliveryWasRecorded();
     return store.record(delivery);
+
+  }
+
+  @Override
+  public boolean recordWorkflowStart(
+      final TaskDelivery workflowStart) {
+
+    if (!TransactionSynchronizationManager.isActualTransactionActive()) {
+      throw new IllegalStateException(
+          """
+              No transaction active! The start of a workflow has to be written down within the \
+              still-running transaction which persists the workflow aggregate respectively which \
+              dispatches the start - a row committed on its own would name a workflow which was \
+              never created.""");
+    }
+    retentionCleanup.aDeliveryWasRecorded();
+    return store.recordWorkflowStart(workflowStart);
 
   }
 

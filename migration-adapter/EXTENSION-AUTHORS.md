@@ -228,6 +228,20 @@ The record is history, the election is the answer about now.
 `DerivedCancelationTest#theElectionCarriesTheWorkflowId` runs it against a booted application on
 both platforms.
 
+`WorkflowElection#workflowIdOf` answers the id and NOTHING else, and it elects nothing: no BPMS is
+asked, nothing is waited for, and nothing is thrown. Ask it where you want the id for your own
+report rather than because you are about to talk to an engine. It reads what VanillaBP persisted,
+first the row written when the workflow started and then the rows of that workflow's task
+deliveries, so it answers from the moment the workflow came into existence - which is the window in
+which a BPMS answering from a read model reports nothing at all.
+
+`Optional.empty()` covers several situations and tells none of them apart: this application never
+started that workflow, the start happened before the row existed, the adapter names no id, the
+period `vanillabp.delivery.workflow-start-retention` passed, there is no store for that aggregate,
+or the BPMN process is not part of this application. So empty means "VanillaBP does not know" and
+never "there is no such workflow". Everything the paragraph above says about what you may do with
+the id holds here as well.
+
 ## 4. Where your settings live
 
 Your settings are written at four levels, and each level has two positions: what the level says, and
