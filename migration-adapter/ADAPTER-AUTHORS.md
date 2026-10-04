@@ -1113,9 +1113,9 @@ entry.
 the stores VanillaBP writes itself leave the attempts as they are and block the entry only once
 `vanillabp.outbox.wait-for-visibility-at-most` passed since it was written. Not set, that is the
 time the attempts take with the growing backoff, about four hours, which is what ends a workflow
-which never becomes searchable (`DECISIONS.pending/898.md`). Because the answer is not counted, the store does not remember it
-either, and the next dispatch looks like a first one. So throw it only before your operation
-reached the BPMS. `WaitingForAReadModelUsesNoAttemptsTest` holds it for the relational store,
+which never becomes searchable (decision 113 in the repository's DECISIONS.md). Because the
+answer is not counted, the store does not remember it either, and the next dispatch looks like a
+first one. So throw it only before your operation reached the BPMS. `WaitingForAReadModelUsesNoAttemptsTest` holds it for the relational store,
 `MongoWaitingForAReadModelUsesNoAttemptsTest` for the MongoDB store of each platform,
 `ARejectedDispatchIsPlannedAgainTest` on Spring Boot and `NotVisibleWorkflowDoesNotStallDispatchTest`
 for the core.

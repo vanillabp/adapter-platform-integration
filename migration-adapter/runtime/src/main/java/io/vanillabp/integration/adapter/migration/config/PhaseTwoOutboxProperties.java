@@ -139,8 +139,8 @@ public class PhaseTwoOutboxProperties {
    * Key <code>vanillabp.outbox.wait-for-visibility-at-most</code>. Not set by default, and
    * then it is the time the attempts of {@link #blockAfterAttempts} take with the growing
    * backoff, see {@link #waitForVisibilityAtMost()}: about four hours with the defaults, so
-   * a stopped read model is given as long as a BPMS which is away. See
-   * {@code DECISIONS.pending/898.md} in the repository.
+   * a stopped read model is given as long as a BPMS which is away. See decision 113 in the
+   * repository's DECISIONS.md.
    */
   private Duration waitForVisibilityAtMost = null;
 

@@ -67,8 +67,8 @@ import lombok.extern.slf4j.Slf4j;
  * answers with {@link io.vanillabp.integration.spi.PhaseTwoRetryLater} is written back with
  * the window the adapter named, and <code>attempts</code> stays as it was. What ends that
  * wait is time: once <code>vanillabp.outbox.wait-for-visibility-at-most</code> passed since
- * the entry was written, the entry is blocked (see {@code DECISIONS.pending/898.md} in the
- * repository).
+ * the entry was written, the entry is blocked (see decision 113 in the repository's
+ * DECISIONS.md).
  * <p>
  * <strong><code>attempts</code> counts attempts, not claims.</strong> The field is written
  * when an attempt ENDED, together with what became of the entry, so a dispatch which takes
