@@ -203,8 +203,9 @@ public interface MigratableProcessService<A> {
       Object workflowAggregateId);
 
   /**
-   * The same question, with the BPMS' own id of the workflow where VanillaBP holds one -
-   * what the election passes on the paths which WAIT for an eventually consistent BPMS.
+   * The same question, with the BPMS' own id of the workflow where VanillaBP holds one.
+   * The election asks this one wherever the question is about a workflow: for an operation
+   * on it, in both phases, and on the paths which wait for an eventually consistent BPMS.
    *
    * <h4>Why the id is worth having</h4>
    *
@@ -214,8 +215,8 @@ public interface MigratableProcessService<A> {
    * finds it after 167 to 1324 ms. After a cancellation the engine says "gone" after 21 ms
    * and the search needs 176 to 2068 ms to agree. So an engine answers far earlier than its
    * index, and every command which asks it addresses a KEY. VanillaBP keeps that key next
-   * to the workflow it belongs to, in the record of a delivery and in the election cache,
-   * and hands it here.
+   * to the workflow it belongs to, in the row written when the workflow started, in the
+   * record of a delivery and in the election cache, and hands it here.
    *
    * <h4>What you may do with it, and what you may not</h4>
    *
