@@ -979,6 +979,14 @@ aggregate does. The same rule holds: it is a hint, and where your BPMS does not 
 what you would have done without it. It is `null` for a task operation, for a workflow another
 adapter started and wherever no start row exists.
 
+A push of a changed aggregate into the scope of a task also gets the row of that task, as
+`PhaseTwoRequest#taskRecord()`, where YOUR adapter delivered the task. The row exists only for a
+task your adapter left open, and `taskClosedAt` says whether the application closed it since. It
+names your BPMS' id of the workflow the task runs in, the BPMN element and the kind of task, so you
+can address the task without searching for it, and you know whether the task rests. A task which
+rests is safe to ask your engine about. A task without such a row may be in the hands of a handler
+right now. It is a hint as well, and it is `null` wherever there is no such row.
+
 ### 4.2 The window may be answered per workflow
 
 `workflowVisibilityDelay(workflowId)` is the same window asked for one workflow, and the core

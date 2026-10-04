@@ -40,6 +40,7 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
 import io.vanillabp.integration.spi.PhaseTwoRetryLater;
 import io.vanillabp.integration.spi.RunningActivation;
+import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
@@ -2111,11 +2112,14 @@ public class MigrationProcessService<A> {
         final var workflowId = addressesTheWorkflow(operation)
             ? workflowIdStartedBy(location.adapter(), workflowAggregateId)
             : null;
+        final var taskRow = addressesTheWorkflow(operation)
+            ? taskRowDeliveredBy(location.adapter(), workflowAggregateId, args)
+            : null;
         runPhaseTwo(
             location.adapter(),
             "%s of %s".formatted(operation.describe(args), subject),
             () -> handlerOf(location.adapter(), operation, args)
-                .phaseTwo(phaseTwoRequestAbout(workflowAggregateId, args, workflowId)));
+                .phaseTwo(phaseTwoRequestAbout(workflowAggregateId, args, workflowId, taskRow)));
         deliveryRecords
             .writeDownThatTheTaskIsClosed(operation, workflowAggregateId, args, subject);
       }
@@ -2762,15 +2766,34 @@ public class MigrationProcessService<A> {
 
   /**
    * The same request, with the BPMS' own id of the workflow where the adapter which runs phase two
-   * started that workflow.
+   * started that workflow, and with the row of the task the operation names where that adapter
+   * delivered the task.
    */
   private PhaseTwoRequest<A> phaseTwoRequestAbout(
       final Object workflowAggregateId,
       final Map<String, String> args,
-      final String workflowId) {
+      final String workflowId,
+      final TaskDelivery taskRow) {
 
     return new PhaseTwoRequest<>(
-        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, args, null, workflowId);
+        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, args, null, workflowId, taskRow);
+
+  }
+
+  /**
+   * The row of the task the operation names, where the given adapter is the one which delivered
+   * that task. A row another BPMS wrote names ids which mean nothing to this adapter, so it is not
+   * handed over.
+   */
+  private TaskDelivery taskRowDeliveredBy(
+      final MigratableProcessService<A> adapter,
+      final Object workflowAggregateId,
+      final Map<String, String> args) {
+
+    final var row = deliveryRecords.taskRowOf(workflowAggregateId, args);
+    return (row != null) && adapter.getAdapterId().equals(row.adapterId())
+        ? row
+        : null;
 
   }
 

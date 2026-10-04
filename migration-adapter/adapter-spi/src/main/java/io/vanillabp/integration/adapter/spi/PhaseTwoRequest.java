@@ -5,6 +5,7 @@ import java.util.Map;
 import io.vanillabp.integration.adapter.spi.workflowstart.WorkflowStartReport;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoCall;
+import io.vanillabp.integration.spi.TaskDelivery;
 
 /**
  * What phase two of an operation is given. It is phase one's request with the
@@ -34,6 +35,16 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
  *        an adapter may
  *        address the workflow by it instead of searching for it, and where the BPMS does not know
  *        that id it does what it would have done without one
+ * @param taskRecord The row of the delivery log about the task the operation names
+ *        ({@link #taskId()}), where that row names THIS adapter, otherwise <code>null</code>.
+ *        Handed to an operation about a workflow which names a task, which is a task-scoped
+ *        push of a changed aggregate. The row exists only for a task the adapter left open
+ *        ({@code TaskDelivery#outcome()} is <code>COMPLETION_PENDING</code>), and
+ *        {@code TaskDelivery#taskClosedAt()} says whether the application closed it since. It
+ *        names the BPMS' own id of the workflow the task runs in, its element and its kind, so
+ *        an adapter can address the task without searching for it. Like
+ *        {@link #workflowId()} it is a hint: an adapter whose BPMS does not know what the row
+ *        names does what it would have done without one
  */
 public record PhaseTwoRequest<A>(
                                  String workflowModuleId,
@@ -42,7 +53,8 @@ public record PhaseTwoRequest<A>(
                                  Object workflowAggregateId,
                                  Map<String, String> args,
                                  WorkflowStartReport workflowStartReport,
-                                 String workflowId) {
+                                 String workflowId,
+                                 TaskDelivery taskRecord) {
 
   /**
    * Copies the arguments, so what a handler reads cannot be changed by whoever built the
@@ -76,7 +88,7 @@ public record PhaseTwoRequest<A>(
       final Map<String, String> args) {
 
     this(
-        workflowModuleId, bpmnProcessId, aggregatePersistence, workflowAggregateId, args, WorkflowStartReport.NOBODY_LISTENS, null);
+        workflowModuleId, bpmnProcessId, aggregatePersistence, workflowAggregateId, args, WorkflowStartReport.NOBODY_LISTENS, null, null);
 
   }
 
@@ -99,7 +111,33 @@ public record PhaseTwoRequest<A>(
       final Map<String, String> args,
       final WorkflowStartReport workflowStartReport) {
 
-    this(workflowModuleId, bpmnProcessId, aggregatePersistence, workflowAggregateId, args, workflowStartReport, null);
+    this(workflowModuleId, bpmnProcessId, aggregatePersistence, workflowAggregateId, args, workflowStartReport, null, null);
+
+  }
+
+  /**
+   * A request which knows no row of the task it names, which is what every caller built before
+   * the row was handed over. The row stands LAST for that reason.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregateId The ID of the workflow aggregate in its own type
+   * @param args The operation's arguments
+   * @param workflowStartReport Where phase two of a START says which workflow the BPMS created
+   * @param workflowId The BPMS' own id of the workflow the operation is about
+   */
+  public PhaseTwoRequest(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final Map<String, String> args,
+      final WorkflowStartReport workflowStartReport,
+      final String workflowId) {
+
+    this(
+        workflowModuleId, bpmnProcessId, aggregatePersistence, workflowAggregateId, args, workflowStartReport, workflowId, null);
 
   }
 

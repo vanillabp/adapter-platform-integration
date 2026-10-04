@@ -1521,6 +1521,47 @@ public final class DeliveryRecords {
   }
 
   /**
+   * The row of the task an operation names, where the operation names one. That row was written
+   * when the adapter left the task open, and it names the BPMS' own id of the workflow the task
+   * runs in, its element and its kind. Phase two hands it to the adapter, which can then address
+   * the task without searching for it, see {@code DECISIONS.pending/903.md}.
+   *
+   * @param workflowAggregateId The workflow aggregate the operation is about
+   * @param args The arguments of the operation
+   * @return The row, or <code>null</code> where the operation names no task, there is no row or
+   *         it cannot be read
+   */
+  public TaskDelivery taskRowOf(
+      final Object workflowAggregateId,
+      final Map<String, String> args) {
+
+    final var taskId = theTaskNamedBy(args);
+    if ((workflowAggregateId == null) || (taskId == null)) {
+      return null;
+    }
+    final var deliveryLog = resolveLog();
+    if (deliveryLog == null) {
+      return null;
+    }
+    try {
+      return recordOfTaskUnderAnyServedId(deliveryLog, workflowAggregateId.toString(), taskId);
+    } catch (final RuntimeException e) {
+      // a row nobody can read is a row nobody has: the adapter searches as it did before
+      log
+          .debug(
+              "Could not read the row of task '{}' of aggregate '{}' (BPMN process '{}' of workflow "
+                  + "module '{}')",
+              taskId,
+              workflowAggregateId,
+              bpmnProcessId,
+              workflowModuleId,
+              e);
+      return null;
+    }
+
+  }
+
+  /**
    * The start row of the workflow of that aggregate, under every BPMN process id this workflow
    * service serves, the own id first.
    */
