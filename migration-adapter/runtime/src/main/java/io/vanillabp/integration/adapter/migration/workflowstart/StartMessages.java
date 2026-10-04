@@ -20,7 +20,7 @@ import io.vanillabp.integration.adapter.migration.workflowtask.DeclaredBpmnProce
  * A process service starts its own process and no other. A message which starts another
  * process is refused before phase one, because the core would otherwise write down the
  * new workflow under the process of the caller. Why the check is made here and not left
- * to the BPMS is decision {@code DECISIONS.pending/890.md}.
+ * to the BPMS is decision 109 in the repository's DECISIONS.md.
  * <p>
  * Three things decide how the check works:
  * <ul>

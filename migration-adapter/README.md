@@ -3316,8 +3316,8 @@ Process-Engine-API. `sayWhereStartMessagesAreNotCheckedAfterDeployment` says so 
 after the deployment, at INFO, and leaves out an id the application only declares: no model was
 deployed for it, so there is nothing to report.
 
-The decision behind it is `DECISIONS.pending/890.md`. The cases are `StartMessagesTest` and, per
-platform, `AMessageStartsOnlyItsOwnProcessTest`.
+The decision behind it is decision 109 in the repository's DECISIONS.md. The cases are
+`StartMessagesTest` and, per platform, `AMessageStartsOnlyItsOwnProcessTest`.
 
 ### Viewer/history API (read path)
 
