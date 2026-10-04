@@ -3895,3 +3895,145 @@ H2 in memory, against 11, 14 and 67 ms for the plain delete; the 10000 case is t
 a thousand rows per run and leaves the rest to the next hour. The read of the aggregate itself is
 not in those numbers and belongs to the application's database, where it is a read by primary key,
 and the cap is what bounds how many of them one run makes.
+
+### 109. A message starts only the process of its own process service
+
+`ProcessService#startWorkflowByMessage` starts the process of the process service it is called on,
+and no other. A message which does not start that process is refused before phase one, with an
+`IllegalArgumentException` which names the process and the messages which do start it.
+
+Version 1 handed the message to the BPMS. Camunda 7 correlated it as a start message and Camunda 8
+published it, so any process with a start event for that name started. Since the delivery log
+remembers which workflow an aggregate belongs to, that became wrong in a quiet way. After phase two
+the core writes the started workflow down under the process of the CALLER. When the message starts
+another process, that row points at a workflow of a different process, and `workflowIdOf` under the
+caller's process answers an id which does not belong to it. On Camunda 7 a second row for the same
+instance also appears, written by the start listener under the right process.
+
+Three other ways were weighed. Writing no row after a start by message keeps the row correct, but it
+leaves the call itself free to start anything. Reporting the process id of the started instance
+next to its id is an SPI change in the adapters' phase two and still lets the call start a foreign
+process. Documenting the wrong answer leaves a trap. Refusing the call removes the case itself, and
+it does so where the application made the mistake, with a message saying how to fix it.
+
+How the check works:
+
+- Adapters report the plain names of the message start events of each process while they wire it,
+  through `BpmsInitiatedStartInvoker#reportStartMessages(adapterId, module, process, names)`. It is
+  a report of its own and not a field of `BpmsInitiatedStartSpec`. The spec arrives without an
+  adapter id, and the check has to ask the adapter which starts the workflow, because during a
+  migration two adapters may deploy two versions of one process. A report of its own also makes
+  "this adapter said nothing" plain to see: it never called. In a field, an old adapter which
+  leaves it empty and a name the adapter could not read would look the same.
+- The adapter asked is the first of the prioritized adapters, the one phase one elects for a start.
+- The names come from the model the adapter deploys while the application starts. A message always
+  starts the newest version of a process, and the newest version this application knows is the one
+  it deploys.
+- Names are compared plain, as the application passes them. An adapter strips its name-clash prefix
+  before it reports and scopes the passed name before it correlates. The mode for message names is
+  resolved at the workflow module, in both directions, so both sides are the same name.
+- An adapter which does not report a process is not checked for it, and the start says so once per
+  process, at INFO. That keeps an adapter running which does not make the call yet, and covers an
+  adapter which cannot read models at all, such as the Process-Engine-API. An adapter which cannot
+  name every message start event of a process (a name given as an expression) does not report that
+  process either.
+- The check runs at the call and not at the start of the application, because the name is only
+  known at the call.
+
+A Camunda 7 adapter also narrows the correlation itself to the process definition it deployed. Then
+the rule still holds where the core cannot check, for example for a start event whose name is an
+expression.
+
+### 110. Every row of the delivery log carries the version of its process, and the core knows whether a missing one may still come
+
+The log of processed task deliveries carries the version of the process definition a workflow runs
+on, in a column of its own, `PROCESS_VERSION`. It is written for a delivery row and for the row about
+the start of a workflow alike, wherever the adapter names it. An extension reads it together with
+the BPMS' own id of the workflow, through `WorkflowElection#workflowStartOf`. The same answer names
+the adapter of that row, the adapter which started the workflow. A workflow does not change its BPMS,
+so that adapter holds the workflow until its end, and an extension learns it without an election.
+`adapterIdOfWorkflow` and `locationOfWorkflow` stay as they are and still elect.
+
+An extension may show details per version of a process: an implementation for version 3 of a model
+and another one for version 4. To pick one it needs the version of the workflow, and it needs it from
+the moment the workflow starts. On a BPMS which answers such a question from a read model, that is
+the moment the read model knows nothing yet. The row written at the start is already the place where
+the id of the workflow is known in that window, so the version goes into the same row. Without the
+version an extension has two bad choices. It can report with an empty set of details, which replaces
+the details already shown. Or it can report nothing and warn. Neither helps a user.
+
+The version is written wherever the BPMS gives it, which includes every delivery row, and not only
+in the start row. `TaskInvocationContext#getProcessVersion` delivers it with every task already, so
+writing it costs nothing, and a delivery is often the first moment anybody hears of a workflow which
+the application did not start itself. A start row without a version is answered with the version of
+an open delivery of the same workflow, where one has it. Only rows of the BPMN process asked about
+count for that, because a task of a called process carries the version of the called process.
+
+An empty version means one of two things, and a reader has to tell them apart: "not yet" or "never".
+The core asks the adapter instead of reading null, and it adds no new statement for that. The answer
+exists already, per adapter and process. An adapter which counts versions registers a
+`ProcessVersionCatalog` while it wires its BPMN, and an adapter which does not says so with
+`reportNoProcessVersionCatalog`, naming whether its deliveries carry a version tag.
+`ProcessVersions#reportsVersions` reads both, and the answer travels to the reader as
+`WorkflowStart#versionsAreReported`. An adapter which said nothing either way counts as one which
+reports none, because a reader waiting on such an adapter would wait forever.
+
+An adapter which keeps a catalog and still writes a row without a version has a defect. The core says
+so in a WARN, once per adapter and BPMN process, and writes the row all the same. Dropping a delivery
+or a start because a piece of information is missing would cost far more than the information is
+worth.
+
+`PhaseTwoRequest#reportStartedWorkflow(String, String)` stands beside
+`reportStartedWorkflow(String)`. The sink behind it, `WorkflowStartReport`, gets a default method with
+two arguments which drops the version and passes the id on, so the interface stays a functional one.
+An adapter which calls the old method compiles and runs as before, and its rows carry no version. A
+test of an adapter which hands a lambda into a request keeps compiling too.
+
+The same start may be reported twice. On Camunda 8 the adapter opens a worker at every start event,
+so a start of the application is reported once by phase two and once by the BPMS. Only one of the two
+may know the version. So a second report of the same workflow ADDS the version to a row which has
+none, and it never changes a version which is there: that one is the version the workflow started
+on. A second workflow of the same aggregate replaces the version together with the id, also with an
+empty one, because the version of the workflow which ended says nothing about the one which runs now.
+
+What it costs: a nullable `VARCHAR(255)` column in the relational table, added by a changeset of its
+own, and a field in the MongoDB documents. No index, because the version is always read with the row
+it stands in, and the key or an index which is there already finds that row. A store written by an
+application gets the value through the new last component of `TaskDelivery`; the constructor without
+it stays, so such a store keeps compiling and writes no version.
+
+Stephan decided it on 2026-10-04: into the gate, and always carried where the BPMS gives it.
+
+### 111. The election of an extension reads the start row before it asks a BPMS
+
+`WorkflowElection#adapterIdOfWorkflow` and `#locationOfWorkflow` read the row written when the
+workflow started before they elect. Where that row names an adapter which is still one of the
+workflow's adapters, its adapter id and its workflow id are the answer. No BPMS is asked, and nothing
+is waited for. Otherwise the election runs as it did before.
+
+The row may answer because the adapter of the start row is the adapter which started the workflow. A
+workflow does not change its BPMS: a new workflow starts in the first adapter of the list, and a
+running one stays where it is and is looked for there. So the adapter which started a workflow holds
+it until its end, and the row says the same thing the election would find out, only without the
+round trip.
+
+What it saves: an extension asks this while the application's transaction is open, for example when
+it reports a changed aggregate. On Camunda 8 the election waits for the read model when the exporter
+is behind, up to ten seconds, and the transaction, its database connection and its locks wait with
+it. With the row that wait is gone.
+
+No signature changes for a caller. What changes is that the two methods do not throw after a
+workflow ended, for as long as its start row lives (`vanillabp.delivery.workflow-start-retention`).
+Before, a BPMS which had forgotten an ended workflow made them throw, so an extension could not name
+the adapter of a workflow whose aggregate changed after its end, although the start row lives longer
+than the workflow exactly for that case. The answer says who started the workflow, not whether it
+still runs, which is what the javadoc of both methods says.
+
+The election runs as before where there is no row: a workflow started before the row existed, a row
+past its period, a start whose adapter reports no workflow id, or the window after a first dispatch
+which crashed before the row was written. It also runs where the row names an adapter which is not
+configured for the workflow any more, because sending an extension to an adapter which is not there
+helps nobody. Only the start row counts here; an open task row is not read for this, so the rule
+stays the one stated above: who started the workflow.
+
+Stephan decided it on 2026-10-04: into the gate, built together with the version in the rows.
