@@ -58,6 +58,8 @@ public class AnOperationReadsTheStartRowTest {
 
   private static final String AGGREGATE = "4711";
 
+  private static final String TASK = "2251799813685300";
+
   /**
    * An adapter whose read model is behind: it answers what the test sets, counts its phase two
    * per operation and writes down the workflow id it was handed.
@@ -71,6 +73,8 @@ public class AnOperationReadsTheStartRowTest {
     final List<String> workflowIdsHanded = new CopyOnWriteArrayList<>();
 
     final List<String> workflowIdsInPhaseTwo = new CopyOnWriteArrayList<>();
+
+    final List<Optional<TaskDelivery>> taskRowsInPhaseTwo = new CopyOnWriteArrayList<>();
 
     final AtomicInteger redispatchProbes = new AtomicInteger();
 
@@ -100,6 +104,7 @@ public class AnOperationReadsTheStartRowTest {
                   runs.incrementAndGet();
                   if (operation != PhaseOperation.START_WORKFLOW) {
                     workflowIdsInPhaseTwo.add(String.valueOf(request.workflowId()));
+                    taskRowsInPhaseTwo.add(Optional.ofNullable(request.taskRecord()));
                   }
                 }));
           });
@@ -187,6 +192,22 @@ public class AnOperationReadsTheStartRowTest {
         final TaskDelivery delivery) {
 
       return records.putIfAbsent(delivery.deliveryKey(), delivery) == null;
+
+    }
+
+    @Override
+    public Optional<TaskDelivery> recordOfTask(
+        final String workflowModuleId,
+        final String bpmnProcessId,
+        final String workflowAggregateId,
+        final String taskId) {
+
+      return records
+          .values()
+          .stream()
+          .filter(row -> taskId.equals(row.taskId()))
+          .filter(row -> workflowAggregateId.equals(row.workflowAggregateId()))
+          .findFirst();
 
     }
 
@@ -448,6 +469,67 @@ public class AnOperationReadsTheStartRowTest {
 
     assertEquals(1, adapter.redispatchProbes.get());
     assertEquals(1, adapter.phaseTwoRunsOf(PhaseOperation.START_WORKFLOW), "the probe said unknown, so it starts");
+
+  }
+
+  private TaskDelivery theUserTaskWasLeftOpenBy(
+      final String adapterId) {
+
+    final var row = new TaskDelivery(
+        "delivery-of-"
+            + TASK, adapterId, MODULE, PROCESS, AGGREGATE, WORKFLOW, "approve", "Approve", TASK, "COMPLETION_PENDING", null, null, Instant
+                .now(), null, "USER_TASK");
+    deliveryLog.record(row);
+    return row;
+
+  }
+
+  @Test
+  @DisplayName("Phase two of a task-scoped push is handed the row of the task the adapter left open")
+  public void aTaskScopedPushIsHandedTheRowOfItsTask() {
+
+    theWorkflowWasStartedBy(ADAPTER);
+    final var row = theUserTaskWasLeftOpenBy(ADAPTER);
+    adapter.answer = WorkflowAwareness.ACTIVE;
+    final var processService = aNodeWithoutAHint();
+
+    processService
+        .executePhaseTwo(
+            PhaseOperation.AGGREGATE_CHANGED,
+            AGGREGATE,
+            null,
+            Map.of(PhaseTwoCall.ARG_TASK_ID, TASK),
+            false);
+
+    assertEquals(
+        List.of(Optional.of(row)),
+        adapter.taskRowsInPhaseTwo,
+        "the row names the workflow the task runs in, so the adapter does not have to search for it");
+
+  }
+
+  @Test
+  @DisplayName("Phase two of a task-scoped push is not handed a row another adapter wrote, nor a row of no task")
+  public void aRowOfAnotherAdapterOrOfNoTaskIsNotHandedOver() {
+
+    theWorkflowWasStartedBy(ADAPTER);
+    theUserTaskWasLeftOpenBy("c7-retired");
+    adapter.answer = WorkflowAwareness.ACTIVE;
+    final var processService = aNodeWithoutAHint();
+
+    processService
+        .executePhaseTwo(
+            PhaseOperation.AGGREGATE_CHANGED,
+            AGGREGATE,
+            null,
+            Map.of(PhaseTwoCall.ARG_TASK_ID, TASK),
+            false);
+    processService.executePhaseTwo(PhaseOperation.AGGREGATE_CHANGED, AGGREGATE, null, Map.of(), false);
+
+    assertEquals(
+        List.of(Optional.empty(), Optional.empty()),
+        adapter.taskRowsInPhaseTwo,
+        "ids another BPMS gave its task mean nothing to this adapter, and a global push names no task");
 
   }
 
