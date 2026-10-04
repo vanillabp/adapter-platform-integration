@@ -2417,12 +2417,13 @@ public class MigrationProcessService<A> {
    * aggregate. With the ten-second window of a Camunda 8 cluster whose exporter is behind,
    * as few concurrent reports as the connection pool is wide empty it for everybody. The
    * measurement is in {@code migration-adapter/README.md}, under "What an election costs a
-   * caller which holds a transaction".
+   * caller which holds a transaction". Where the row about the start of the workflow is there,
+   * nothing of this is paid: see {@link #locationOfWorkflow(Object)}.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return The id of the adapter holding the workflow
-   * @throws IllegalStateException If no configured BPMS knows the workflow, or if the
-   *           BPMS which should hold it is unreachable
+   * @throws IllegalStateException If there is no start row naming a configured adapter, and no
+   *           configured BPMS knows the workflow, or the BPMS which should hold it is unreachable
    */
   public String adapterIdOfWorkflow(
       final Object workflowAggregateId) {
@@ -2440,14 +2441,34 @@ public class MigrationProcessService<A> {
    * holds and nothing new is asked of any BPMS for it: the record of a task delivery of
    * that workflow first, then the election cache. A <code>null</code> id is a regular
    * answer.
+   * <p>
+   * The row written when the workflow started is read FIRST. Its adapter started the workflow, and
+   * a workflow does not change its BPMS: a new workflow starts in the first adapter of the list,
+   * and a running one stays where it is. So where that adapter is still one of this workflow's
+   * adapters, its id and the workflow id of the row are the answer, without asking any BPMS and
+   * without waiting for a read model. That is also why this does not throw after the workflow
+   * ended, for as long as the row lives (<code>vanillabp.delivery.workflow-start-retention</code>):
+   * the row says who started the workflow, not whether it still runs. Without such a row (a
+   * workflow started before the row existed, a row past its period, an adapter which reports no
+   * workflow id, or an adapter which is not configured any more), the election runs as it always
+   * did.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return Where the workflow is
-   * @throws IllegalStateException If no configured BPMS knows the workflow, or if the
-   *           BPMS which should hold it is unreachable
+   * @throws IllegalStateException If there is no start row naming a configured adapter, and no
+   *           configured BPMS knows the workflow, or the BPMS which should hold it is unreachable
    */
   public io.vanillabp.integration.extension.spi.election.WorkflowLocation locationOfWorkflow(
       final Object workflowAggregateId) {
+
+    // the adapter which started the workflow holds it until its end, so the row about the start
+    // answers without a round trip and without the wait for a read model. The election would give
+    // the same answer later, and on a BPMS which forgot an ended workflow it would throw instead
+    final var started = deliveryRecords.workflowStartRowOf(workflowAggregateId);
+    if ((started != null) && isAdapterOfThisWorkflow(started.adapterId())) {
+      return new io.vanillabp.integration.extension.spi.election.WorkflowLocation(
+          started.adapterId(), started.workflowId());
+    }
 
     final var subject = subjectOf(workflowAggregateId);
     final var workflowId = workflowIdOf(workflowAggregateId);
@@ -2508,6 +2529,20 @@ public class MigrationProcessService<A> {
     return recorded != null
         ? recorded
         : workflowLocator.rememberedWorkflowId(workflowAggregateId);
+
+  }
+
+  /**
+   * Whether the given adapter is one this workflow is elected among. A start row names the adapter
+   * which started the workflow, and an id the configuration dropped since would send an extension
+   * to an adapter which is not there.
+   */
+  private boolean isAdapterOfThisWorkflow(
+      final String adapterId) {
+
+    return (adapterId != null) && adapterProcessServices
+        .stream()
+        .anyMatch(adapter -> adapterId.equals(adapter.getAdapterId()));
 
   }
 

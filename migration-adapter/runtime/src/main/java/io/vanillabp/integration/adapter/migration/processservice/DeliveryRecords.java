@@ -1444,19 +1444,14 @@ public final class DeliveryRecords {
       return null;
     }
     try {
-      for (final var candidate : bpmnProcessIdsToReadUnder) {
-        final var started = deliveryLog
-            .workflowStartOf(workflowModuleId, candidate, workflowAggregateId.toString())
-            .filter(row -> row.workflowId() != null)
-            .orElse(null);
-        if (started != null) {
-          return startOf(
-              started.adapterId(),
-              started.workflowId(),
-              versionOfThisProcess(started) != null
-                  ? versionOfThisProcess(started)
-                  : versionOfAnOpenTask(deliveryLog, workflowAggregateId, started.workflowId()));
-        }
+      final var started = startRowOf(deliveryLog, workflowAggregateId);
+      if (started != null) {
+        return startOf(
+            started.adapterId(),
+            started.workflowId(),
+            versionOfThisProcess(started) != null
+                ? versionOfThisProcess(started)
+                : versionOfAnOpenTask(deliveryLog, workflowAggregateId, started.workflowId()));
       }
       for (final var candidate : bpmnProcessIdsToReadUnder) {
         final var known = deliveryLog
@@ -1484,6 +1479,63 @@ public final class DeliveryRecords {
               bpmnProcessId,
               workflowModuleId,
               e);
+    }
+    return null;
+
+  }
+
+  /**
+   * The row written when the workflow of the given aggregate started, and nothing else: no open
+   * task stands in for it. The adapter of that row started the workflow, and a workflow does not
+   * change its BPMS, so this is what the election reads before it asks any BPMS.
+   *
+   * @param workflowAggregateId The workflow aggregate the caller is asking about
+   * @return The start row naming a workflow, or <code>null</code> where there is none or it
+   *         cannot be read
+   */
+  public TaskDelivery workflowStartRowOf(
+      final Object workflowAggregateId) {
+
+    if (workflowAggregateId == null) {
+      return null;
+    }
+    final var deliveryLog = resolveLog();
+    if (deliveryLog == null) {
+      return null;
+    }
+    try {
+      return startRowOf(deliveryLog, workflowAggregateId);
+    } catch (final RuntimeException e) {
+      // a row nobody can read is a row nobody has: the election asks the BPMS as it did before
+      log
+          .debug(
+              "Could not read the start of the workflow of aggregate '{}' (BPMN process '{}' of "
+                  + "workflow module '{}')",
+              workflowAggregateId,
+              bpmnProcessId,
+              workflowModuleId,
+              e);
+      return null;
+    }
+
+  }
+
+  /**
+   * The start row of the workflow of that aggregate, under every BPMN process id this workflow
+   * service serves, the own id first.
+   */
+  private TaskDelivery startRowOf(
+      final TaskDeliveryLog deliveryLog,
+      final Object workflowAggregateId) {
+
+    for (final var candidate : bpmnProcessIdsToReadUnder) {
+      final var started = deliveryLog
+          .workflowStartOf(workflowModuleId, candidate, workflowAggregateId.toString())
+          .filter(row -> row.workflowId() != null)
+          .orElse(null);
+      if (started != null) {
+        return started;
+      }
     }
     return null;
 

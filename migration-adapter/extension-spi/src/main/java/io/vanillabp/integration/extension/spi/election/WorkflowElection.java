@@ -19,7 +19,8 @@ package io.vanillabp.integration.extension.spi.election;
  * window is ten seconds. An extension which asks this while a transaction of the
  * application is open keeps that transaction open for as long as the wait lasts, and
  * with it the database connection it took. Reporting a change out of a service task is
- * exactly that case.
+ * exactly that case. None of this is paid where the row VanillaBP writes when a workflow starts
+ * names a configured adapter: see {@link #adapterIdOfWorkflow}.
  * <p>
  * Both platforms provide this as a bean.
  */
@@ -30,13 +31,21 @@ public interface WorkflowElection {
    * asks holds a workflow already, so a workflow no BPMS knows is a mistake somewhere and
    * says so instead of turning into a <code>null</code> nobody checks. What asking may cost
    * is written at the type.
+   * <p>
+   * The row VanillaBP writes when a workflow starts is read first. It names the adapter which
+   * started the workflow, and a workflow does not change its BPMS, so where that adapter is still
+   * configured for the workflow it is the answer: no BPMS is asked and nothing is waited for. That
+   * also means this does not throw after the workflow ended, for as long as that row lives
+   * (<code>vanillabp.delivery.workflow-start-retention</code>). Without the row the election
+   * asks the BPMS as described at the type.
    *
    * @param workflowModuleId The workflow module of the workflow
    * @param bpmnProcessId The BPMN process of the workflow
    * @param workflowAggregateId The ID of its workflow aggregate
    * @return The id of the adapter holding the workflow - never <code>null</code>
-   * @throws IllegalStateException If no BPMS knows the workflow, or if the BPMS which
-   *           should hold it is unreachable (both messages name what to do)
+   * @throws IllegalStateException If there is no start row naming a configured adapter, and no
+   *           BPMS knows the workflow or the BPMS which should hold it is unreachable (both
+   *           messages name what to do)
    */
   String adapterIdOfWorkflow(
       String workflowModuleId,
@@ -69,16 +78,18 @@ public interface WorkflowElection {
    * id, because no delivery was recorded for that workflow or the record expired.
    * <p>
    * This runs exactly the election {@link #adapterIdOfWorkflow} runs, and costs exactly the
-   * same - the workflow id rides along, it does not replace the question. The default
-   * delegates and leaves the id empty, which is what an implementation written before this
-   * existed answers.
+   * same - the workflow id rides along, it does not replace the question. Where the row about
+   * the start of the workflow answers, both values come from that row, and this does not throw
+   * after the workflow ended either. The default delegates and leaves the id empty, which is
+   * what an implementation written before this existed answers.
    *
    * @param workflowModuleId The workflow module of the workflow
    * @param bpmnProcessId The BPMN process of the workflow
    * @param workflowAggregateId The ID of its workflow aggregate
    * @return Where the workflow is - never <code>null</code>
-   * @throws IllegalStateException If no BPMS knows the workflow, or if the BPMS which
-   *           should hold it is unreachable (both messages name what to do)
+   * @throws IllegalStateException If there is no start row naming a configured adapter, and no
+   *           BPMS knows the workflow or the BPMS which should hold it is unreachable (both
+   *           messages name what to do)
    */
   default WorkflowLocation locationOfWorkflow(
       final String workflowModuleId,

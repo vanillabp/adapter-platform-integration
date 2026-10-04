@@ -449,6 +449,14 @@ searchable yet.
 
 ### What an election costs a caller which holds a transaction
 
+Where the row written when the workflow started names an adapter which is still configured for the
+workflow, `adapterIdOfWorkflow` and `locationOfWorkflow` answer from that row and nothing below is
+paid: no BPMS is asked and nothing is waited for. The adapter of that row started the workflow, and a
+workflow does not change its BPMS, so it holds the workflow until its end. The same row is also why
+the two methods do not throw after a workflow ended, for as long as the row lives. Without such a
+row, or where it names an adapter the configuration dropped, the election runs as measured here.
+`TheElectionReadsTheStartRowFirstTest` holds both ways.
+
 Measured on 2026-09-14 against the BPMS double, Spring Boot, H2 and a HikariCP pool of
 four connections, with the double reporting the window and the probe interval the Camunda
 8 adapter reports out of the box (ten seconds, 250 ms). The caller opens a transaction,
