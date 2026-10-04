@@ -1465,6 +1465,8 @@ a connection pool survives.
 entry is ticked off, and the workflow which is searchable is served first while the other one waits.
 `GruelboxWritesTheDueTimeADispatchAskedForTest` holds the due time in the row.
 
+*Superseded in part by decision 113: the sentence saying the attempt is counted like any other, since an answer `PhaseTwoRetryLater` uses no attempt now and `wait-for-visibility-at-most` ends a workflow which never becomes visible.*
+
 ### 50. An extension may say while it is wired that a handler never writes
 
 Entry 45 warns about a handler an extension may have VanillaBP save. That warning is about what is
@@ -2996,6 +2998,8 @@ and on the outbox page of both platform wikis.
 `GruelboxWritesTheDueTimeADispatchAskedForTest#aLongerWindowIsWrittenToo` holds the case which
 used to go the other way.
 
+*Superseded in part by decision 113: the part of a sentence saying that asking earlier costs a failed attempt, since asking earlier costs no attempt now and only asks in vain.*
+
 ### 94. A held version says which of its elements never name the item of a round
 
 A multi-instance element which names no item - a Camunda 7 element without
@@ -4037,3 +4041,112 @@ helps nobody. Only the start row counts here; an open task row is not read for t
 stays the one stated above: who started the workflow.
 
 Stephan decided it on 2026-10-04: into the gate, built together with the version in the rows.
+
+### 112. An operation on a workflow reads the start row before it searches
+
+The election of an operation about a workflow (`Election.HOLDS_THE_WORKFLOW`: correlating a
+message, pushing a changed aggregate) reads the row written when the workflow started, in phase one
+and in phase two. Where the election cache has no hint and that row names an adapter which is still
+one of the workflow's adapters, the row is the hint. Its adapter is probed first, and an unknown
+answer means "not visible yet": phase one plans the operation, and phase two gives the entry back
+instead of consuming it. The BPMS' own id of the workflow goes to the probe as well, through the
+four-argument `awarenessOfWorkflow`, so an adapter can ask its engine by key instead of searching.
+
+Phase two of such an operation hands the workflow id of the row to the adapter, as
+`PhaseTwoRequest#workflowId()`, where the row names the adapter which runs that phase two. An
+adapter which addresses a workflow by its key can then skip the search for it.
+
+The re-dispatch of a START reads the same row before it probes. Where the row names the adapter the
+entry was written for, the earlier attempt created the workflow, and the entry is consumed without
+asking anybody.
+
+Before this, only the hint in the election cache told "not visible yet" apart from "nobody knows
+this workflow". That hint lives in the memory of one node and expires after an hour. Measured
+against Camunda 8.10.0 with a stopped exporter on 2026-10-04: after a restart, all 480 waiting
+`aggregateChanged` entries were consumed as stale, and the values never arrived. The application got
+`WorkflowNotFoundException` for workflows which were running. The same happens on a second node
+which takes over an entry, and after the hint expired. The row is in the application's database,
+it names the adapter which started the workflow, and a workflow does not change its BPMS (decision
+111 states the same for an extension). So the row says what the cache said, and it says it after a
+restart too.
+
+For the re-dispatch it closes a quieter gap. The probe there is a search, and while the read model
+is behind it answers "unknown" for a workflow the first attempt created. The start then runs again.
+A second instance has jobs of its own, so the delivery log sees no repetition, and the window was as
+long as the outage instead of the usual second.
+
+The cache comes first, because it costs nothing to read and an election wrote it more recently than
+the start. The row is read when the cache has nothing. Where the row proved right, its adapter and
+workflow id go into the cache, so the next operation does not read the row again.
+
+An operation about a task asks by the task's id, which is an exact question, and reads no row. A row
+naming an adapter which is not configured for the workflow any more does not count, and its
+workflow id is not handed to other adapters either. Without a row everything is as before.
+
+What it costs, and what is accepted:
+
+- A hint now lives as long as the row (`vanillabp.delivery.workflow-start-retention`, thirty days)
+  instead of an hour. A workflow which ended and which its BPMS already forgot inside that period
+  is not refused at the call any more. Its operation is planned, repeated and finally blocked, which
+  is where it becomes visible. That is the residual a cached hint always had, only for longer.
+- Neither the row nor the probe tells an earlier, ended workflow of the same aggregate from the one
+  a re-dispatched START is about. With the row, a second start whose first attempt failed before it
+  created anything is skipped, as the probes of the Camunda adapters already do today (both find the
+  earlier instance). This is not new, and it is written down so nobody reads the row as the cause.
+- One read by primary key per operation on a workflow, and only where the cache has no hint.
+
+### 113. Waiting for a read model uses time, not attempts
+
+An entry whose dispatch an adapter answers with `PhaseTwoRetryLater` uses no attempt. The store
+writes the window the adapter named as the next due time and leaves `ATTEMPTS` as it was. The
+entry is blocked once `vanillabp.outbox.wait-for-visibility-at-most` passed since it was written.
+The key is not set by default, and then it is the time the attempts of
+`vanillabp.outbox.block-after-attempts` take with the growing backoff: forty-nine distances
+between fifty attempts, 3 hours and 52.5 minutes with the defaults.
+
+Until now every answer "not yet" counted an attempt, like a failure. On 2026-10-04 this was measured
+against `camunda/camunda:8.10.0` with the exporter paused for twelve minutes and the application
+running on. The adapter answered once every ten seconds, and the first entry was blocked after eight
+minutes and eleven seconds. 153 entries of `aggregateChanged` ended blocked, and none of them came
+back after the exporter caught up. Only an update of the row by hand opened them again. A database
+which was away for the same twelve minutes blocked nothing, because the growing backoff spreads
+fifty attempts over four hours. So a stopped exporter did more harm after eight minutes than a dead
+database after four hours.
+
+A read model which is behind is no failure of the entry. The attempt budget is there to stop an
+entry which keeps failing, and it is measured in failures. A wait is measured in time, so it gets a
+budget of time. The default gives a read model as long as a BPMS which is away, which is the outage
+the attempt budget was chosen for.
+
+How it works:
+
+- `PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough` is the one rule. The relational store
+  of the core and the MongoDB store of each platform ask it when a dispatch is answered with
+  `PhaseTwoRetryLater`, so all three behave the same.
+- The clock starts at `CREATED_AT` respectively `createdAt`. No column was added. A younger call
+  which replaces a waiting entry writes that moment anew, so the replacement starts the clock again,
+  which is right: it is a new call. Earlier failures of the entry count toward that time as well.
+  An entry which failed for three hours and then waits for a read model is blocked after one more
+  hour. That is accepted, because both waits are spent by the same entry.
+- The answer is handled before the attempt budget is looked at. An entry which used up attempts
+  earlier is not blocked by an answer "not yet".
+- The block itself counts one attempt, the same write every other block uses.
+- Because the answer is not counted and the lease is given back, the next dispatch of the entry
+  looks like a first one. A START is then not checked against the BPMS before it runs again. So an
+  adapter throws `PhaseTwoRetryLater` only before its operation reached the BPMS. The javadoc of
+  `PhaseTwoRetryLater` says so. The core throws it only before it calls an adapter, so nothing
+  changes for the adapters of this workspace.
+- A value of zero or less ends the startup with a message naming the key.
+
+Two sentences of earlier entries stop being true, and this entry replaces them. Both entries stay
+as they are and carry a note pointing here.
+
+- Decision 49, the sentence "The attempt is counted like any other, so `block-after-attempts` still
+  ends a workflow which never becomes visible." An answer `PhaseTwoRetryLater` is no attempt now,
+  and what ends such a workflow is `wait-for-visibility-at-most`.
+- Decision 93, the part of a sentence "asking earlier than that costs a failed attempt out of the
+  budget which blocks the entry". Asking earlier costs no attempt now. It only asks in vain, and the
+  window stays the adapter's statement about its BPMS.
+
+The gruelbox store lives in its own repository since decision 102. It still counts the answer as an
+attempt and has to follow in that repository.

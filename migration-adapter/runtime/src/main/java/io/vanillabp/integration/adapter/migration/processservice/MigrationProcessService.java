@@ -2280,8 +2280,8 @@ public class MigrationProcessService<A> {
    * from a read model that has not caught up reads as "nobody knows this workflow", and the
    * operation fails in phase one or is consumed as stale in phase two. With it the same answer
    * reads as "not visible yet", like it does with a cached hint. A row naming an adapter which
-   * is not configured for this workflow any more does not count. See
-   * {@code DECISIONS.pending/897.md} in the repository.
+   * is not configured for this workflow any more does not count. See decision 112 in the
+   * repository's DECISIONS.md.
    * <p>
    * The BPMS' own id of the workflow goes to the probe as well, so an adapter can ask its
    * engine by key instead of searching. An operation about a task asks by the task's id and

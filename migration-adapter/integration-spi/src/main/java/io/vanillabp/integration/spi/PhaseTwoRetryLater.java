@@ -31,8 +31,7 @@ import java.time.Duration;
  * Because the answer is not counted, the store does not remember it either: the next
  * dispatch of the entry looks like its first one. So throw this only before the operation
  * reached the BPMS. An operation which may have reached it and then failed is an ordinary
- * failure, and it is counted. See {@code DECISIONS.pending/898.md} in the repository
- * <code>adapter-platform-integration</code>.
+ * failure, and it is counted. See decision 113 in the repository's DECISIONS.md.
  * <p>
  * <b>What this promises an adapter.</b> Every store VanillaBP ships makes the entry due
  * after the window, and none of them shortens it or stretches it: the relational store of

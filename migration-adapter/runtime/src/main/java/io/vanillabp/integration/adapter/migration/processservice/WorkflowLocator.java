@@ -56,7 +56,7 @@ import lombok.extern.slf4j.Slf4j;
  * has no hint the row is the hint: its adapter is probed first, and an unknown answer
  * means "not visible yet" just as it does with a cached hint. The cache keeps the first
  * word, because it is free to read and an election wrote it more recently than the
- * start. See {@code DECISIONS.pending/897.md} in the repository.
+ * start. See decision 112 in the repository's DECISIONS.md.
  * <p>
  * <b>What the walk cannot do.</b> It stops at the first
  * {@link WorkflowAwareness#ACTIVE} and is therefore only as right as the answers it

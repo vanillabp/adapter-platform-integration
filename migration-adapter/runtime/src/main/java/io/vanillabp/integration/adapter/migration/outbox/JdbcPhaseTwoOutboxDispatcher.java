@@ -62,7 +62,7 @@ import lombok.extern.slf4j.Slf4j;
  * <code>vanillabp.outbox.wait-for-visibility-at-most</code> passed since the entry was
  * written, the entry is blocked (see
  * {@link PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough} and
- * {@code DECISIONS.pending/898.md} in the repository).
+ * decision 113 in the repository's DECISIONS.md).
  * <p>
  * <strong><code>ATTEMPTS</code> counts attempts, not claims.</strong> The column is
  * written when an attempt ENDED - together with the mark which says how it ended - so a

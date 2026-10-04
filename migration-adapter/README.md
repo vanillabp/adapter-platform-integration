@@ -2390,7 +2390,7 @@ answer blocks the entry. Not set, it is the time the attempts of
 `vanillabp.outbox.block-after-attempts` take with the growing backoff, about four hours. Counting
 the answers had blocked entries after fifty windows, which were eight minutes of a stopped
 Camunda 8 exporter, while a database which was away for hours blocked nothing
-(`DECISIONS.pending/898.md`).
+(decision 113 in the repository's DECISIONS.md).
 `PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough` is the one rule all three stores of
 this repository ask. `WaitingForAReadModelUsesNoAttemptsTest` holds it for the relational store, and
 `MongoWaitingForAReadModelUsesNoAttemptsTest` for the MongoDB store of each platform. The gruelbox store
