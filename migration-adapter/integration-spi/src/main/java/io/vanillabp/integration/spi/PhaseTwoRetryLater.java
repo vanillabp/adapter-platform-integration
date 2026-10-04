@@ -35,8 +35,8 @@ import java.time.Duration;
  * <p>
  * <b>What this promises an adapter.</b> Every store VanillaBP ships makes the entry due
  * after the window, and none of them shortens it or stretches it: the relational store of
- * the core, the two MongoDB stores and the gruelbox store a Spring Boot application with JPA
- * may opt into. A window longer than <code>vanillabp.outbox.attempt-frequency</code> is
+ * the core, the two MongoDB stores and the gruelbox store which a Spring Boot application
+ * with JPA gets from <code>io.vanillabp:gruelbox-phase-two-outbox</code>. A window longer than <code>vanillabp.outbox.attempt-frequency</code> is
  * therefore waited out, and a window shorter than it is not waited past, so an adapter
  * naming thirty seconds gets the same answer whichever store the application chose
  * (decision 93 of <code>adapter-platform-integration</code>). What a store adds on top is

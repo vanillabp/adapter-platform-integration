@@ -231,10 +231,11 @@ public class PhaseTwoOutboxProperties {
    * longer buys nothing there.
    * <p>
    * The stores VanillaBP owns compute their next attempt with this method, so the
-   * curve is the same on every platform and on every persistence. An application which
-   * kept gruelbox (<code>vanillabp.outbox.gruelbox.enabled</code>) gets the retry policy
-   * of that library, which knows one fixed distance - the per-store table of the platform
-   * pages owns that difference.
+   * curve is the same on every platform and on every persistence. The gruelbox store is
+   * not one of them. It lives in the artifact
+   * <code>io.vanillabp:gruelbox-phase-two-outbox</code>, and an application which adds that
+   * artifact gets the retry policy of the gruelbox library. That library knows one fixed
+   * distance, and the README of that artifact says what follows from it.
    *
    * @param attemptsSoFar The number of attempts already made, zero before the first
    *        retry
@@ -588,8 +589,8 @@ public class PhaseTwoOutboxProperties {
      * own store - two dispatchers polling the same table would compete and
      * double-dispatch. <code>null</code> means
      * <code>VANILLABP_PHASE_TWO_OUTBOX</code>, on both platforms. The table meant here
-     * is the one VanillaBP writes itself. An application which kept gruelbox
-     * (<code>vanillabp.outbox.gruelbox.enabled</code>) stores its entries in gruelbox'
+     * is the one VanillaBP writes itself. An application which uses the gruelbox store of
+     * <code>io.vanillabp:gruelbox-phase-two-outbox</code> stores its entries in gruelbox'
      * own <code>TXNO_OUTBOX</code>, which this key does not rename, because that table
      * and its columns belong to the library.
      * <p>

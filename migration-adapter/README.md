@@ -2394,9 +2394,12 @@ Camunda 8 exporter, while a database which was away for hours blocked nothing
 `PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough` is the one rule all three stores of
 this repository ask. `WaitingForAReadModelUsesNoAttemptsTest` holds it for the relational store, and
 `MongoWaitingForAReadModelUsesNoAttemptsTest` for the MongoDB store of each platform. The gruelbox store
-schedules every failed attempt from the one distance it knows, so the window is
-written onto its row afterwards, by the listener which also blocks a permanent failure: the entry is
-due there when it is due on the other stores, and the next poll picks it up.
+lives in `io.vanillabp:gruelbox-phase-two-outbox` and asks the same method. gruelbox counts every
+failed attempt and schedules it at the one distance it knows. So the listener which also blocks a
+permanent failure fixes the row afterwards: it writes the window, takes the counted attempt back,
+and blocks the entry once the wait is over. gruelbox has no column for the moment an entry was
+written, so that store keeps the moment inside the stored call. An entry written before it did so
+has no such moment, and there the answer still counts as an attempt.
 `NotVisibleWorkflowDoesNotStallDispatchTest` holds the core's half: the entry of a findable
 workflow dispatched while the other one waits, and the same window on every repetition.
 `ARejectedDispatchIsPlannedAgainTest` holds the same on Spring Boot, where a store used to ask again
@@ -4462,12 +4465,14 @@ does is inside it, and nothing had to be repeated per BPMS.
   moment an operation was lost, so it alone reads as if the backlog had drained. Every store
   counts one where it writes the block, whether the adapter called the failure permanent,
   `vanillabp.outbox.block-after-attempts` ran out or the entry waited longer than
-  `vanillabp.outbox.wait-for-visibility-at-most` for its BPMS, so the number is the same on all four.
+  `vanillabp.outbox.wait-for-visibility-at-most` for its BPMS. The three stores of this repository
+  do it, and so does the gruelbox store of `io.vanillabp:gruelbox-phase-two-outbox`, so the number
+  means the same on every store.
 - The outbox backlog is `PhaseTwoOutbox#pendingCalls()`, an `OptionalLong` defaulting to empty.
   A store which cannot count publishes no gauge, which is honest where a zero would not be.
-  All four stores VanillaBP ships implement it with one indexed count; gruelbox has no API for
-  it, so the store of its own artifact reads the table gruelbox created, along the index gruelbox
-  created with it.
+  The three stores of this repository implement it with one indexed count. gruelbox has no API for
+  it, so the gruelbox store of its own artifact reads the table gruelbox created, along the index
+  gruelbox created with it.
   On Quarkus the gauges are registered by a `StartupEvent` observer running AFTER the outbox
   dispatchers, because a store asked before its table exists cannot count.
 - A count cannot tell a backlog being worked off from one standing still, so two more meters
