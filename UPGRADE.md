@@ -587,6 +587,19 @@ shared election cache, see [what operations has to watch](#what-operations-has-t
 The ids the viewer API hands out are namespaced `<adapter id>#<BPMS specific id>` and opaque. Pass
 them back unchanged and never parse or compose one.
 
+#### A message starts only the process of its own `ProcessService`
+
+`startWorkflowByMessage` of a `ProcessService` starts the process of that service and no other.
+Version 1 passed the message to the BPMS, so any process with a start event for that message
+started. Version 2 checks the name before anything is saved. Where the model of that process has no
+message start event with this name, the call throws an `IllegalArgumentException`. It names the
+process and the messages which do start it.
+
+Where your code starts a process through the `ProcessService` of another one, call the
+`ProcessService` of the process the message is meant for instead. The name is the plain one, the
+same name version 1 took. An adapter which cannot name the messages of its model is not checked,
+and the start says so once per process.
+
 #### One error contract for `@WorkflowTask` methods
 
 Every BPMS follows the same rule now. A normal return completes the task. A `TaskException` becomes

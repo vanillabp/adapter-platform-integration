@@ -110,6 +110,12 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   private final BpmsInitiatedStarts bpmsInitiatedStarts;
 
   /**
+   * The messages the adapters reported as starting each deployed BPMN process, which is
+   * what the process services check <code>startWorkflowByMessage</code> against.
+   */
+  private final io.vanillabp.integration.adapter.migration.workflowstart.StartMessages startMessages;
+
+  /**
    * The <code>&#64;WorkflowEnded</code> methods of the same workflow service classes.
    */
   private final WorkflowEndedHandlers workflowEndedHandlers;
@@ -287,6 +293,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     // box, and where the box is only follows from the configuration handed in
     this.processVersions = new ProcessVersions(findings);
     this.bpmsInitiatedStarts = new BpmsInitiatedStarts(processVersions, this);
+    this.startMessages = new io.vanillabp.integration.adapter.migration.workflowstart.StartMessages(this);
     this.workflowEndedHandlers = new WorkflowEndedHandlers(processVersions);
     this.concurrentTokenCheck = new io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck(
         findings);
@@ -365,6 +372,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final Supplier<Object> workflowServiceBean,
       final Function<Class<?>, Object> beanResolver,
       final MigrationProcessService<?> processService) {
+
+    // every process service of a declared id checks its message starts against what the
+    // adapters report, also one whose class is ignored below: the application may still
+    // call it
+    processService.checkStartMessagesAgainst(startMessages);
 
     // STARTUP validation of the sync model: an aggregate whose
     // attributes are annotated both ways without the class stating its own mode is
@@ -1331,6 +1343,17 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
             (entry != null) && (entry.processService != null)
                 ? entry.processService.getWorkflowAggregateClass()
                 : null);
+
+  }
+
+  @Override
+  public void reportStartMessages(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<String> messageNames) {
+
+    startMessages.report(adapterId, workflowModuleId, bpmnProcessId, messageNames);
 
   }
 

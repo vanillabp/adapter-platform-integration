@@ -500,6 +500,19 @@ application learns that a start event of its process has no `@WorkflowStartedByB
 is why the call matters even for an application which wrote none. Ask `WorkflowEndedInvoker` whether a
 handler for the end of a workflow exists at all, and attach your listener only where it does.
 
+If you can read your model, report the messages which start a process with
+`BpmsInitiatedStartInvoker.reportStartMessages(adapterId, module, process, names)`, once per
+executable process. The names are the plain ones, so strip your prefix the way you do for signal
+names. Report an empty collection for a process without a message start event, and leave out the
+start events of event subprocesses. The core then refuses a `startWorkflowByMessage` whose message
+does not start the process of the caller, before phase one. A process where you cannot name every
+message start event, because a name is an expression for instance, gets no call at all. The core
+does not check that process then, and it says so once while the application starts. The same
+happens to every process of an adapter which never makes the call.
+
+Where your BPMS can narrow the start itself, do it too. A correlation which can only reach the
+process it was meant for is still right when the check of the core does not apply.
+
 If your BPMS counts no versions of a process, say so with `reportNoProcessVersionCatalog`. It costs
 one call per process and it buys the application a straight answer. A method whose `version` names
 a number or a range cannot run on such a BPMS, and until you say this nobody knows whether that is

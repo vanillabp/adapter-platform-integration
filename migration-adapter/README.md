@@ -3284,6 +3284,41 @@ Building and validating are `BpmsInitiatedStartTest`
 `aSecondDeliveryBuildsNoSecondAggregate`, `aStartNobodyBuildsIsRefusedWithTheMethodToWrite`,
 `methodNamingAnUnknownStartEventFailsTheBoot`).
 
+#### A message starts only the process of its own process service
+
+`ProcessService#startWorkflowByMessage` starts the process of its own process service and no
+other. Without that rule a message which starts ANOTHER process would start that one, and the core
+would write the new workflow down under the process of the caller: `workflowIdOf` would then answer
+an id which belongs to a different process.
+
+So adapters report the messages which start each process while they wire it
+(`BpmsInitiatedStartInvoker#reportStartMessages`), and `StartMessages` keeps them per adapter,
+workflow module and process. `MigrationProcessService#startWorkflowByMessage` asks it before
+anything is saved, and a message which is not among the names is refused with an
+`IllegalArgumentException` naming the process and the messages which start it.
+
+Three choices shape the check:
+
+- The names are kept per ADAPTER, and the adapter which starts the workflow is asked, which is the
+  first of the prioritized adapters. During a migration two adapters may deploy two versions of one
+  process, and only the starting one decides what a start reaches.
+- The names come from the model the adapter deploys during this start. A message always starts the
+  newest version of a process, and the newest version this application knows is the one it
+  deploys. A node of a rolling deployment which still runs the older code checks against its older
+  model, which is what that code expects.
+- The names are the plain ones. An adapter strips its name-clash prefix before it reports, and it
+  scopes the name the application passes before it correlates. So the check compares the name the
+  application passed with the name the model holds, both without the prefix.
+
+An adapter which reports nothing for a process is not checked for it. That keeps an adapter
+working which does not know the report yet, and one which cannot read a model at all, such as the
+Process-Engine-API. `sayWhereStartMessagesAreNotCheckedAfterDeployment` says so once per process
+after the deployment, at INFO, and leaves out an id the application only declares: no model was
+deployed for it, so there is nothing to report.
+
+The decision behind it is `DECISIONS.pending/890.md`. The cases are `StartMessagesTest` and, per
+platform, `AMessageStartsOnlyItsOwnProcessTest`.
+
 ### Viewer/history API (read path)
 
 `ProcessService#getProcessDefinitions`, `#getBpmnXml` and `#getWorkflowHistory` are
