@@ -87,7 +87,7 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_DELIVERY = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND \
+      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND, PROCESS_VERSION \
       FROM %s \
       WHERE DELIVERY_KEY = ?""";
 
@@ -107,7 +107,7 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_RECORD_OF_TASK = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND \
+      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND, PROCESS_VERSION \
       FROM %s \
       WHERE TASK_ID = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
       AND OUTCOME = ? \
@@ -148,7 +148,7 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_OPEN_TASKS_OF_AGGREGATE = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND \
+      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND, PROCESS_VERSION \
       FROM %s \
       WHERE RECORD_KIND = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
       AND OUTCOME = ? AND TASK_CLOSED_AT IS NULL \
@@ -183,7 +183,7 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_OPEN_TASKS_OF_WORKFLOW = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND \
+      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND, PROCESS_VERSION \
       FROM %s \
       WHERE RECORD_KIND = ? AND WORKFLOW_MODULE_ID = ? AND WORKFLOW_ID = ? \
       AND OUTCOME = ? AND TASK_CLOSED_AT IS NULL \
@@ -282,8 +282,8 @@ public class JdbcTaskDeliveryStore {
       INSERT INTO %s \
       (DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      LAST_SEEN_AT, TASK_KIND, RECORD_KIND) \
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
+      LAST_SEEN_AT, TASK_KIND, RECORD_KIND, PROCESS_VERSION) \
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
 
   // TASK_CLOSED_AT is not written here: a record is born open, and the moment the
   // application's completion reached the BPMS is the one thing about a task which is known
@@ -325,7 +325,7 @@ public class JdbcTaskDeliveryStore {
   private static final String SELECT_EXPIRED_WORKFLOW_STARTS = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
       TASK_DEFINITION, BPMN_ELEMENT_ID, TASK_ID, OUTCOME, BPMN_ERROR_CODE, BPMN_ERROR_NAME, RECORDED_AT, \
-      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND \
+      TASK_CLOSED_AT, TASK_KIND, RECORD_KIND, PROCESS_VERSION \
       FROM %s \
       WHERE RECORD_KIND = ? AND LAST_SEEN_AT < ? \
       ORDER BY LAST_SEEN_AT ASC""";
@@ -349,13 +349,26 @@ public class JdbcTaskDeliveryStore {
    * differs, so a start dispatched twice updates nothing.
    * <p>
    * LAST_SEEN_AT moves with it, which is what the period of a start row counts from: the row is
-   * about the workflow which runs now, so its age is that workflow's age.
+   * about the workflow which runs now, so its age is that workflow's age. PROCESS_VERSION moves as
+   * well, also to empty: a version of the workflow which ended says nothing about the one which
+   * runs now.
    */
   private static final String REPLACE_WORKFLOW_START = """
       UPDATE %s \
-      SET WORKFLOW_ID = ?, ADAPTER_ID = ?, RECORDED_AT = ?, LAST_SEEN_AT = ? \
+      SET WORKFLOW_ID = ?, ADAPTER_ID = ?, RECORDED_AT = ?, LAST_SEEN_AT = ?, PROCESS_VERSION = ? \
       WHERE DELIVERY_KEY = ? AND RECORD_KIND = ? \
       AND (WORKFLOW_ID IS NULL OR WORKFLOW_ID <> ?)""";
+
+  /**
+   * What a second report of the SAME start adds: the version, where the row names this workflow
+   * and no version yet. The start of one workflow may be reported by the adapter which started it
+   * and again by the BPMS itself, and only one of the two may know the version. A version which is
+   * there already stays: it is the one the workflow started on.
+   */
+  private static final String ADD_THE_VERSION_OF_A_WORKFLOW_START = """
+      UPDATE %s \
+      SET PROCESS_VERSION = ? \
+      WHERE DELIVERY_KEY = ? AND RECORD_KIND = ? AND WORKFLOW_ID = ? AND PROCESS_VERSION IS NULL""";
 
   private static final String DELETE_DELIVERIES_OF_WORKFLOW = """
       DELETE FROM %s \
@@ -385,6 +398,8 @@ public class JdbcTaskDeliveryStore {
   private final String deleteWorkflowStart;
 
   private final String replaceWorkflowStart;
+
+  private final String addTheVersionOfAWorkflowStart;
 
   private final String deleteDeliveriesOfWorkflow;
 
@@ -426,6 +441,7 @@ public class JdbcTaskDeliveryStore {
     this.selectExpiredWorkflowStarts = SELECT_EXPIRED_WORKFLOW_STARTS.formatted(tableName);
     this.deleteWorkflowStart = DELETE_WORKFLOW_START.formatted(tableName);
     this.replaceWorkflowStart = REPLACE_WORKFLOW_START.formatted(tableName);
+    this.addTheVersionOfAWorkflowStart = ADD_THE_VERSION_OF_A_WORKFLOW_START.formatted(tableName);
     this.deleteDeliveriesOfWorkflow = DELETE_DELIVERIES_OF_WORKFLOW.formatted(tableName);
     this.selectAdapterIdsOfOpenTasks = SELECT_ADAPTER_IDS_OF_OPEN_TASKS.formatted(tableName);
     this.selectAnyOpenRecord = SELECT_ANY_OPEN_RECORD.formatted(tableName);
@@ -691,7 +707,7 @@ public class JdbcTaskDeliveryStore {
                             : recordedAt.toInstant(), taskClosedAt == null
                                 ? null
                                 : taskClosedAt.toInstant(), resultSet.getString(15), resultSet
-                                    .getString(16));
+                                    .getString(16), resultSet.getString(17));
 
   }
 
@@ -779,6 +795,7 @@ public class JdbcTaskDeliveryStore {
         statement.setTimestamp(14, recordedAt);
         statement.setString(15, delivery.taskKind());
         statement.setString(16, kindOfTheRow(delivery));
+        statement.setString(17, delivery.processVersion());
         statement.executeUpdate();
       }
       return true;
@@ -814,10 +831,11 @@ public class JdbcTaskDeliveryStore {
    * The insert comes first, because the ordinary case is that there is no row: an aggregate carries
    * one workflow. Only where the insert finds a row does the update run, and that update is bounded
    * to a row which is a start and whose workflow id differs - so a start dispatched twice writes
-   * nothing and answers <code>false</code>.
+   * nothing and answers <code>false</code>. A row which names this workflow already may still get
+   * the version it lacks, and nothing else.
    *
    * @param workflowStart The row to write
-   * @return Whether the store now holds this workflow's id for the first time
+   * @return Whether the store now holds this workflow's id or its version for the first time
    */
   public boolean recordWorkflowStart(
       final TaskDelivery workflowStart) {
@@ -825,7 +843,50 @@ public class JdbcTaskDeliveryStore {
     if (record(workflowStart)) {
       return true;
     }
-    return replaceTheStartOfAnEarlierWorkflow(workflowStart);
+    if (replaceTheStartOfAnEarlierWorkflow(workflowStart)) {
+      return true;
+    }
+    return addTheVersionOfTheSameWorkflow(workflowStart);
+
+  }
+
+  /**
+   * Writes the version into the row of the same workflow, where that row has none yet.
+   *
+   * @param workflowStart The row of the workflow which runs now
+   * @return Whether the version was added
+   */
+  private boolean addTheVersionOfTheSameWorkflow(
+      final TaskDelivery workflowStart) {
+
+    if (workflowStart.processVersion() == null) {
+      return false;
+    }
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(addTheVersionOfAWorkflowStart)) {
+        statement.setString(1, workflowStart.processVersion());
+        statement.setString(2, workflowStart.deliveryKey());
+        statement.setString(3, WORKFLOW_START);
+        statement.setString(4, workflowStart.workflowId());
+        return statement.executeUpdate() > 0;
+      }
+    } catch (final SQLException e) {
+      throw new RuntimeException(
+          """
+              Could not write down version '%s' of workflow '%s' of aggregate '%s' (BPMN process \
+              '%s' of workflow module '%s') in table '%s'!"""
+              .formatted(
+                  workflowStart.processVersion(),
+                  workflowStart.workflowId(),
+                  workflowStart.workflowAggregateId(),
+                  workflowStart.bpmnProcessId(),
+                  workflowStart.workflowModuleId(),
+                  tableName), e);
+    } finally {
+      release(connection);
+    }
 
   }
 
@@ -850,9 +911,10 @@ public class JdbcTaskDeliveryStore {
         statement.setString(2, workflowStart.adapterId());
         statement.setTimestamp(3, startedAt);
         statement.setTimestamp(4, startedAt);
-        statement.setString(5, workflowStart.deliveryKey());
-        statement.setString(6, WORKFLOW_START);
-        statement.setString(7, workflowStart.workflowId());
+        statement.setString(5, workflowStart.processVersion());
+        statement.setString(6, workflowStart.deliveryKey());
+        statement.setString(7, WORKFLOW_START);
+        statement.setString(8, workflowStart.workflowId());
         return statement.executeUpdate() > 0;
       }
     } catch (final SQLException e) {
@@ -1135,7 +1197,9 @@ public class JdbcTaskDeliveryStore {
           new AddedColumn(
               "TASK_KIND", "VARCHAR(32) (nullable: a record written before the column existed names no kind)", "a record does not say whether its id is the id of a task or of a user task, so completing a task with the id of a user task is answered with everything it could be instead of what it is", null),
           new AddedColumn(
-              "RECORD_KIND", "VARCHAR(32) DEFAULT 'TASK_DELIVERY' NOT NULL (the default is what fills the rows which are there, all of which are task deliveries)", "VanillaBP cannot write down which workflow of the BPMS an aggregate belongs to, so every operation on a workflow asks each configured BPMS which of them holds it, and on a BPMS answering from a read model a report right after the start finds no workflow at all", "DROP INDEX %s_OPEN and then CREATE INDEX %s_OPEN ON %s (RECORD_KIND, OUTCOME, TASK_CLOSED_AT)"));
+              "RECORD_KIND", "VARCHAR(32) DEFAULT 'TASK_DELIVERY' NOT NULL (the default is what fills the rows which are there, all of which are task deliveries)", "VanillaBP cannot write down which workflow of the BPMS an aggregate belongs to, so every operation on a workflow asks each configured BPMS which of them holds it, and on a BPMS answering from a read model a report right after the start finds no workflow at all", "DROP INDEX %s_OPEN and then CREATE INDEX %s_OPEN ON %s (RECORD_KIND, OUTCOME, TASK_CLOSED_AT)"),
+          new AddedColumn(
+              "PROCESS_VERSION", "VARCHAR(255) (nullable: a record written before the column existed names no version)", "a row does not say which version of its process a workflow runs on, so an extension which shows details per version cannot tell which details belong to a workflow until the BPMS itself can be asked", null));
 
   /**
    * A column a later version of VanillaBP added: its name, the statement which adds it and
@@ -1395,7 +1459,8 @@ public class JdbcTaskDeliveryStore {
         BPMN_ELEMENT_ID VARCHAR(255), \
         WORKFLOW_ID VARCHAR(255), \
         TASK_KIND VARCHAR(32), \
-        RECORD_KIND VARCHAR(32) DEFAULT '%s' NOT NULL)"""
+        RECORD_KIND VARCHAR(32) DEFAULT '%s' NOT NULL, \
+        PROCESS_VERSION VARCHAR(255))"""
         .formatted(tableName, timestampType, timestampType, timestampType, TASK_DELIVERY);
 
   }

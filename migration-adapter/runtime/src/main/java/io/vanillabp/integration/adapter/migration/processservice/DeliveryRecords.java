@@ -125,6 +125,21 @@ public final class DeliveryRecords {
    */
   private volatile VanillaBpMetrics metrics = VanillaBpMetrics.NONE;
 
+  /**
+   * What the adapters said about the versions of their BPMN processes, handed over by the
+   * registry of the workflow tasks once it registered this process. <code>null</code> until
+   * then and in a test which builds a process service on its own: nothing is said about a
+   * missing version then, and every version counts as one that may never come.
+   */
+  private volatile io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions processVersions;
+
+  /**
+   * The adapters which were named already for writing a row without a version although they
+   * keep a catalog, so the WARN comes once per adapter of this BPMN process and not once per row.
+   */
+  private final Set<String> adaptersReportedForAMissingVersion = java.util.concurrent.ConcurrentHashMap
+      .newKeySet();
+
   private final Map<String, Boolean> reportedTaskAges = Collections
       .synchronizedMap(new LinkedHashMap<String, Boolean>(16, 0.75f, true) {
 
@@ -205,6 +220,20 @@ public final class DeliveryRecords {
     this.metrics = metrics == null
         ? VanillaBpMetrics.NONE
         : metrics;
+
+  }
+
+  /**
+   * Hands over what the adapters said about the versions of their BPMN processes. It is what
+   * decides whether a row without a version is a defect worth a WARN, and what a reader of the
+   * start of a workflow is told about an empty version.
+   *
+   * @param processVersions What the adapters registered while they wired their BPMN
+   */
+  public void setProcessVersions(
+      final io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions processVersions) {
+
+    this.processVersions = processVersions;
 
   }
 
@@ -376,13 +405,19 @@ public final class DeliveryRecords {
     // reader: they are what an extension and an operator address this task by outside
     // VanillaBP, and an adapter which names neither leaves both empty. The KIND of task is
     // what lets VanillaBP answer a caller who named the id of the other kind, which is a
-    // mistake an application really makes
+    // mistake an application really makes. The version of the process definition travels for
+    // an extension which shows details per version: the delivery is often the first moment
+    // anybody hears it, and the BPMS reported it with the delivery anyway
     final var recordWasWritten = deliveryLog.record(
         new TaskDelivery(deliveryKey, context.getAdapterId(), workflowModuleId, bpmnProcessId, context
             .getWorkflowAggregateId(), context
                 .getWorkflowId(), context.getTaskDefinition(), context.getBpmnElementId(), context
                     .getTaskId(), outcome.kind().name(), outcome.errorCode(), outcome
-                        .errorName(), Instant.now(), null, nameOf(context.getTaskKind())));
+                        .errorName(), Instant.now(), null, nameOf(
+                            context.getTaskKind()), io.vanillabp.integration.spi.DeliveryRecordKind.TASK_DELIVERY
+                                .name(), context.getProcessVersion()));
+    reportAMissingVersion(context.getAdapterId(), context.getProcessVersion(), "the delivery of task '%s'"
+        .formatted(context.getTaskDefinition()));
     if (!recordWasWritten) {
       reportHandlerRanTwiceAtTheSameTime(deliveryKey, context);
     }
@@ -415,15 +450,22 @@ public final class DeliveryRecords {
    * The key is derived from the workflow module, the BPMN process and the aggregate
    * ({@link io.vanillabp.integration.spi.WorkflowStartKey}), so a dispatch which runs twice
    * writes nothing the second time instead of a second row.
+   * <p>
+   * The version of the process definition is written with the id where the adapter names one. An
+   * adapter which keeps a catalog of versions and names none is told so once in a WARN,
+   * and the row is written all the same.
    *
    * @param adapterId The ID of the adapter which started the workflow
    * @param workflowAggregateId The workflow aggregate of the started workflow
    * @param workflowId The BPMS' own id of the started workflow, or <code>null</code>
+   * @param processVersion The version of the process definition the workflow was started on, or
+   *          <code>null</code>
    */
   public void recordWorkflowStart(
       final String adapterId,
       final Object workflowAggregateId,
-      final String workflowId) {
+      final String workflowId,
+      final String processVersion) {
 
     if ((workflowAggregateId == null) || (workflowId == null) || workflowId.isBlank()) {
       return;
@@ -432,6 +474,7 @@ public final class DeliveryRecords {
     if (deliveryLog == null) {
       return;
     }
+    reportAMissingVersion(adapterId, processVersion, "the start of workflow '%s'".formatted(workflowId));
     try {
       final var written = deliveryLog
           .recordWorkflowStart(
@@ -442,6 +485,7 @@ public final class DeliveryRecords {
                       bpmnProcessId,
                       workflowAggregateId.toString(),
                       workflowId,
+                      processVersion,
                       Instant.now()));
       log.debug(
           "Workflow '{}' of aggregate '{}' (BPMN process '{}' of workflow module '{}') {}",
@@ -466,6 +510,55 @@ public final class DeliveryRecords {
           workflowModuleId,
           e);
     }
+
+  }
+
+  /**
+   * Says once per adapter of this BPMN process that a row was written without the version of the
+   * process definition, although the adapter keeps a catalog of those versions.
+   * <p>
+   * Such an adapter counts the versions of its BPMS, so it can name the version of every workflow
+   * it runs, and a row without one is a defect of that adapter. The row is written all the same:
+   * dropping a delivery or a start over a missing piece of information would cost far more than
+   * the information is worth. A reader of the start of that workflow is told that a version may
+   * still come, because the adapter is one which reports versions.
+   * <p>
+   * An adapter which keeps no catalog is never named here. Whether its deliveries carry a version
+   * tag depends on the engine behind it, and an empty one is no defect.
+   *
+   * @param adapterId The adapter which wrote the row
+   * @param processVersion The version it named, <code>null</code> where it named none
+   * @param whatWasWritten What the row is about, for the message
+   */
+  private void reportAMissingVersion(
+      final String adapterId,
+      final String processVersion,
+      final String whatWasWritten) {
+
+    if ((processVersion != null) && !processVersion.isBlank()) {
+      return;
+    }
+    final var versions = processVersions;
+    if ((versions == null) || !versions.keepsACatalog(adapterId, workflowModuleId, bpmnProcessId)) {
+      return;
+    }
+    if (!adaptersReportedForAMissingVersion.add(adapterId)) {
+      return;
+    }
+    log.warn(
+        """
+            Adapter '{}' wrote {} (BPMN process '{}' of workflow module '{}') without the version \
+            of the process definition, although it keeps a catalog of the versions of that \
+            process. The row is written anyway and nothing is stopped, but an extension which shows \
+            details per version cannot tell which details belong to that workflow. The adapter has \
+            to report the version: with PhaseTwoRequest#reportStartedWorkflow(String, String) for a \
+            start, with BpmsInitiatedStartContext#getProcessVersion() for a start by the BPMS and \
+            with TaskInvocationContext#getProcessVersion() for a delivery. This is said once per \
+            adapter and BPMN process.""",
+        adapterId,
+        whatWasWritten,
+        bpmnProcessId,
+        workflowModuleId);
 
   }
 
@@ -1322,6 +1415,126 @@ public final class DeliveryRecords {
               e);
     }
     return null;
+
+  }
+
+  /**
+   * The BPMS' own id of the workflow of the given aggregate together with the version of the
+   * process definition it runs on and the adapter of the row, as far as a record knows them.
+   * <p>
+   * The id comes from where {@link #workflowIdOf(Object)} takes it, in the same order. The
+   * version comes from the same row. Where the start row names no version, an OPEN delivery of
+   * that same workflow may, and it is read second: the start may have been reported by an adapter
+   * which did not know the version yet, while every delivery of that workflow brings it along.
+   * A version is only taken from a row of THIS BPMN process. A task of a called process belongs
+   * to the same workflow but carries the version of the called process, which says nothing about
+   * this one.
+   *
+   * @param workflowAggregateId The workflow aggregate the caller is asking about
+   * @return The workflow's id and version, or <code>null</code> where no record knows the id
+   */
+  public io.vanillabp.integration.extension.spi.election.WorkflowStart workflowStartOf(
+      final Object workflowAggregateId) {
+
+    if (workflowAggregateId == null) {
+      return null;
+    }
+    final var deliveryLog = resolveLog();
+    if (deliveryLog == null) {
+      return null;
+    }
+    try {
+      for (final var candidate : bpmnProcessIdsToReadUnder) {
+        final var started = deliveryLog
+            .workflowStartOf(workflowModuleId, candidate, workflowAggregateId.toString())
+            .filter(row -> row.workflowId() != null)
+            .orElse(null);
+        if (started != null) {
+          return startOf(
+              started.adapterId(),
+              started.workflowId(),
+              versionOfThisProcess(started) != null
+                  ? versionOfThisProcess(started)
+                  : versionOfAnOpenTask(deliveryLog, workflowAggregateId, started.workflowId()));
+        }
+      }
+      for (final var candidate : bpmnProcessIdsToReadUnder) {
+        final var known = deliveryLog
+            .openTasksOfAggregate(workflowModuleId, candidate, workflowAggregateId.toString())
+            .stream()
+            .filter(row -> row.workflowId() != null)
+            .findFirst()
+            .orElse(null);
+        if (known != null) {
+          return startOf(
+              known.adapterId(),
+              known.workflowId(),
+              versionOfThisProcess(known) != null
+                  ? versionOfThisProcess(known)
+                  : versionOfAnOpenTask(deliveryLog, workflowAggregateId, known.workflowId()));
+        }
+      }
+    } catch (final RuntimeException e) {
+      // the same as for the id alone: a record nobody can read is a record nobody has
+      log
+          .debug(
+              "Could not read which workflow of the BPMS aggregate '{}' (BPMN process '{}' of "
+                  + "workflow module '{}') belongs to",
+              workflowAggregateId,
+              bpmnProcessId,
+              workflowModuleId,
+              e);
+    }
+    return null;
+
+  }
+
+  /**
+   * What a reader is told about a workflow, including whether an empty version may still come.
+   */
+  private io.vanillabp.integration.extension.spi.election.WorkflowStart startOf(
+      final String adapterId,
+      final String workflowId,
+      final String processVersion) {
+
+    final var versions = processVersions;
+    return new io.vanillabp.integration.extension.spi.election.WorkflowStart(
+        adapterId, workflowId, processVersion, (versions != null) && versions
+            .reportsVersions(adapterId, workflowModuleId, bpmnProcessId));
+
+  }
+
+  /**
+   * The version a row names, where the row belongs to this BPMN process. A row of a called
+   * process carries the version of THAT process.
+   */
+  private String versionOfThisProcess(
+      final TaskDelivery row) {
+
+    final var version = row.processVersion();
+    return bpmnProcessId.equals(row.bpmnProcessId()) && (version != null) && !version.isBlank()
+        ? version
+        : null;
+
+  }
+
+  /**
+   * The version an open delivery of the given workflow names, read under this BPMN process
+   * only, or <code>null</code> where none does.
+   */
+  private String versionOfAnOpenTask(
+      final TaskDeliveryLog deliveryLog,
+      final Object workflowAggregateId,
+      final String workflowId) {
+
+    return deliveryLog
+        .openTasksOfAggregate(workflowModuleId, bpmnProcessId, workflowAggregateId.toString())
+        .stream()
+        .filter(row -> workflowId.equals(row.workflowId()))
+        .map(this::versionOfThisProcess)
+        .filter(java.util.Objects::nonNull)
+        .findFirst()
+        .orElse(null);
 
   }
 

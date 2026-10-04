@@ -402,4 +402,67 @@ public class MongoTaskDeliveryLogTest {
 
   }
 
+  private TaskDelivery theStartOf(
+      final String workflowId,
+      final String processVersion) {
+
+    return TaskDelivery
+        .workflowStart("test-adapter", "test-module", "TestProcess", "4711", workflowId, processVersion,
+            java.time.Instant
+                .now());
+
+  }
+
+  @Test
+  @DisplayName("The version of the process definition travels with a delivery and with a start")
+  public void theVersionTravelsWithEveryRow() throws Exception {
+
+    userTransaction.begin();
+    deliveryLog
+        .record(
+            new TaskDelivery(
+                "job-v", "test-adapter", "test-module", "TestProcess", "4711", "workflow-4711", "processTask", null, "task-v", "COMPLETION_PENDING", null, null, java.time.Instant
+                    .now(), null, "TASK", io.vanillabp.integration.spi.DeliveryRecordKind.TASK_DELIVERY.name(), "7"));
+    deliveryLog.recordWorkflowStart(theStartOf("workflow-4711", "3"));
+    userTransaction.commit();
+
+    assertEquals("7", deliveryLog.recordedDelivery("job-v").orElseThrow().processVersion());
+    assertEquals(
+        "7",
+        deliveryLog.openTasksOfAggregate("test-module", "TestProcess", "4711").getFirst().processVersion());
+    assertEquals(
+        "3",
+        deliveryLog.workflowStartOf("test-module", "TestProcess", "4711").orElseThrow().processVersion());
+
+  }
+
+  @Test
+  @DisplayName("A second report of one start adds the version it lacked, and a second workflow brings its own")
+  public void aStartGetsItsVersionOnceAndASecondWorkflowItsOwn() throws Exception {
+
+    userTransaction.begin();
+    assertTrue(deliveryLog.recordWorkflowStart(theStartOf("workflow-1", null)));
+    userTransaction.commit();
+    userTransaction.begin();
+    assertTrue(deliveryLog.recordWorkflowStart(theStartOf("workflow-1", "3")));
+    userTransaction.commit();
+    userTransaction.begin();
+    assertFalse(
+        deliveryLog.recordWorkflowStart(theStartOf("workflow-1", "4")),
+        "a version the row holds is the one the workflow started on");
+    userTransaction.commit();
+
+    assertEquals(
+        "3",
+        deliveryLog.workflowStartOf("test-module", "TestProcess", "4711").orElseThrow().processVersion());
+
+    userTransaction.begin();
+    assertTrue(deliveryLog.recordWorkflowStart(theStartOf("workflow-2", null)));
+    userTransaction.commit();
+
+    final var second = deliveryLog.workflowStartOf("test-module", "TestProcess", "4711").orElseThrow();
+    assertEquals("workflow-2", second.workflowId());
+    assertNull(second.processVersion(), "the version of the ended workflow does not stay behind");
+
+  }
 }

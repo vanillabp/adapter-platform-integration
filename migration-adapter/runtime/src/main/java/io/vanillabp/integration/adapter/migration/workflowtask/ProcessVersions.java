@@ -173,6 +173,64 @@ public class ProcessVersions {
   }
 
   /**
+   * Whether one adapter reports the version of the process definition for that BPMN process: it
+   * registered a catalog, or it said it keeps none and its deliveries carry the version tag.
+   * <p>
+   * This is the answer to "may an empty version still come?". An adapter which counts versions
+   * and reports none for a workflow has a defect, and one which counts none never will. An
+   * adapter which said nothing either way answers <code>false</code> here: a reader waiting for
+   * a version from it would wait forever.
+   *
+   * @param adapterId The adapter ID
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @return Whether that adapter reports a version for that process
+   */
+  public boolean reportsVersions(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    if (adapterId == null) {
+      return false;
+    }
+    final var key = new RegistryKey(workflowModuleId, bpmnProcessId);
+    final var registered = catalogs.getOrDefault(key, List.of());
+    if (registered
+        .stream()
+        .anyMatch(catalog -> adapterId.equals(catalog.adapterId()))) {
+      return true;
+    }
+    return withoutACatalog
+        .getOrDefault(key, List.of())
+        .stream()
+        .anyMatch(statement -> adapterId
+            .equals(statement.adapterId()) && (statement.reported() == ReportedProcessVersion.VERSION_TAG));
+
+  }
+
+  /**
+   * Whether one adapter keeps a catalog of the versions of that BPMN process, which means its
+   * BPMS counts them and can name the version of every workflow it runs.
+   *
+   * @param adapterId The adapter ID
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @return Whether that adapter registered a catalog for that process
+   */
+  public boolean keepsACatalog(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return (adapterId != null) && catalogs
+        .getOrDefault(new RegistryKey(workflowModuleId, bpmnProcessId), List.of())
+        .stream()
+        .anyMatch(catalog -> adapterId.equals(catalog.adapterId()));
+
+  }
+
+  /**
    * What the BPMS of that process said about their missing catalog, and only where NONE
    * of them registered one. A process a second BPMS can be asked about is served by that
    * BPMS, so nothing is reported about the first.

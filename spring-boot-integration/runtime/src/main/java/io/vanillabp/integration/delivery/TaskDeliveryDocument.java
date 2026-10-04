@@ -122,6 +122,13 @@ public class TaskDeliveryDocument {
   private String recordKind;
 
   /**
+   * The version of the process definition the workflow runs on, as the BPMS counts it (see
+   * {@link io.vanillabp.integration.spi.TaskDelivery#processVersion()}). Absent where the adapter
+   * does not say and in a document written before this existed.
+   */
+  private String processVersion;
+
+  /**
    * What Spring Data starts from when it reads a document of the collection: it builds the
    * empty record and fills the fields afterwards. A log writing a record uses the
    * constructor taking every field.
@@ -149,6 +156,7 @@ public class TaskDeliveryDocument {
    * @param taskClosedAt The moment the task was closed, or <code>null</code>
    * @param taskKind The kind of task the id belongs to, or <code>null</code>
    * @param recordKind What the document is about: a task delivery or the start of a workflow
+   * @param processVersion The version of the process definition, or <code>null</code>
    */
   public TaskDeliveryDocument(
       final String id,
@@ -167,7 +175,8 @@ public class TaskDeliveryDocument {
       final Instant lastSeenAt,
       final Instant taskClosedAt,
       final String taskKind,
-      final String recordKind) {
+      final String recordKind,
+      final String processVersion) {
 
     this.id = id;
     this.adapterId = adapterId;
@@ -186,6 +195,7 @@ public class TaskDeliveryDocument {
     this.taskClosedAt = taskClosedAt;
     this.taskKind = taskKind;
     this.recordKind = recordKind;
+    this.processVersion = processVersion;
 
   }
 
@@ -587,4 +597,28 @@ public class TaskDeliveryDocument {
     this.recordKind = recordKind;
 
   }
+
+  /**
+   * The version of the process definition, see {@link #processVersion}
+   *
+   * @return The version, or <code>null</code> where the document names none
+   */
+  public String getProcessVersion() {
+
+    return processVersion;
+
+  }
+
+  /**
+   * The version of the process definition, see {@link #processVersion}
+   *
+   * @param processVersion The version, or <code>null</code>
+   */
+  public void setProcessVersion(
+      final String processVersion) {
+
+    this.processVersion = processVersion;
+
+  }
+
 }

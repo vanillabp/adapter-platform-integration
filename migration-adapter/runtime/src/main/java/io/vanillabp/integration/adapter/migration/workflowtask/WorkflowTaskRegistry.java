@@ -448,6 +448,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       entry.workflowServiceClasses.add(workflowServiceClass);
       entry.processService = processService;
     }
+    // the adapters report their catalogs of versions to this registry while they wire their
+    // BPMN, and the process service needs them to judge a row written without a version
+    processService.setProcessVersions(processVersions);
 
     bpmsInitiatedStarts
         .registerWorkflowService(

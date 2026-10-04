@@ -242,6 +242,18 @@ or the BPMN process is not part of this application. So empty means "VanillaBP d
 never "there is no such workflow". Everything the paragraph above says about what you may do with
 the id holds here as well.
 
+`WorkflowElection#workflowStartOf` reads the same rows and answers the id together with the version
+of the process definition the workflow runs on, as a `WorkflowStart`. Ask it where you pick an
+implementation per version. It also names the adapter which started the workflow. A workflow does
+not change its BPMS, so that adapter holds it until its end, and you learn it without an election.
+The adapter is empty where VanillaBP knows the id from its election cache only. It is empty in exactly the cases `workflowIdOf` is empty. An empty
+version inside a non-empty answer means one of two things, and `versionsAreReported` tells them
+apart. Where it is `true`, the adapter of that workflow reports versions, and the version may still
+come: a later report of the same start brings it, and so does a task of that workflow which waits
+for your application. Where it
+is `false`, the adapter has no versions, or said nothing about them, and waiting means waiting
+forever.
+
 ## 4. Where your settings live
 
 Your settings are written at four levels, and each level has two positions: what the level says, and

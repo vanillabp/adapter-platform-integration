@@ -137,4 +137,38 @@ public interface WorkflowElection {
 
   }
 
+  /**
+   * The BPMS' own id of this workflow, the version of the process definition it runs on and the
+   * adapter which started it, as far as VanillaBP wrote them down. This is NO election.
+   * <p>
+   * It reads exactly what {@link #workflowIdOf} reads and answers empty in exactly the same
+   * situations. What it adds is the version, and whether an empty version may still come (see
+   * {@link WorkflowStart}). An extension which needs the version to pick the right
+   * implementation for a workflow asks this one, and it may ask right after the start: the row
+   * is written when the workflow begins, which is the window in which a BPMS answering from a
+   * read model has nothing to say.
+   * <p>
+   * The adapter in the answer is read from the same row and is no election either. It is the
+   * adapter which started the workflow, and a workflow does not change its BPMS, so that adapter
+   * holds the workflow until its end.
+   * <p>
+   * The default answers the id of {@link #workflowIdOf} without an adapter and without a version,
+   * which is all an implementation written before this existed knows.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param bpmnProcessId The BPMN process of the workflow
+   * @param workflowAggregateId The ID of its workflow aggregate
+   * @return What VanillaBP holds about the start, or {@link java.util.Optional#empty()} where it
+   *         holds no workflow id
+   */
+  default java.util.Optional<WorkflowStart> workflowStartOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId) {
+
+    return workflowIdOf(workflowModuleId, bpmnProcessId, workflowAggregateId)
+        .map(workflowId -> new WorkflowStart(null, workflowId, null, false));
+
+  }
+
 }

@@ -504,6 +504,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         .append("taskKind", delivery.taskKind())
         // what the document is about: a task delivery, or the start of a workflow
         .append("recordKind", delivery.recordKind())
+        .append("processVersion", delivery.processVersion())
         .append("outcome", delivery.outcome())
         .append("bpmnErrorCode", delivery.bpmnErrorCode())
         .append("bpmnErrorName", delivery.bpmnErrorName())
@@ -717,11 +718,14 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
    * <p>
    * The insert comes first, because the ordinary case is that there is no document. Only where it
    * finds one does the update run, bounded to a document which is a start and whose workflow id
-   * differs, so a start dispatched twice writes nothing. The update goes through the session of the
-   * running transaction where MongoDB Panache provides one, like every other write here.
+   * differs, so a start dispatched twice writes nothing. The version moves with the id: one of the
+   * workflow which ended says nothing about the one which runs now. A document which names this
+   * workflow already may still get the version it lacks, and nothing else. The updates go through
+   * the session of the running transaction where MongoDB Panache provides one, like every other
+   * write here.
    *
    * @param workflowStart The row to write
-   * @return Whether the store now holds this workflow's id for the first time
+   * @return Whether the store now holds this workflow's id or its version for the first time
    */
   @Override
   public boolean recordWorkflowStart(
@@ -740,14 +744,28 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         "$set", new Document("workflowId", workflowStart.workflowId())
             .append("adapterId", workflowStart.adapterId())
             .append("recordedAt", startedAt)
-            .append("lastSeenAt", startedAt));
+            .append("lastSeenAt", startedAt)
+            .append("processVersion", workflowStart.processVersion()));
     final var session = MongoSessions
         .activeSession(txRegistry);
     final var collection = deliveryCollection();
     final var result = session != null
         ? collection.updateOne(session, filter, replacement)
         : collection.updateOne(filter, replacement);
-    return result.getModifiedCount() > 0;
+    if ((result.getModifiedCount() > 0) || (workflowStart.processVersion() == null)) {
+      return result.getModifiedCount() > 0;
+    }
+    // the same workflow reported a second time, by the BPMS where the adapter started it or the
+    // other way round, and only one of the two may have known the version
+    final var sameWorkflowWithoutAVersion = new Document("_id", workflowStart.deliveryKey())
+        .append("recordKind", WORKFLOW_START)
+        .append("workflowId", workflowStart.workflowId())
+        .append("processVersion", null);
+    final var addTheVersion = Updates.set("processVersion", workflowStart.processVersion());
+    final var added = session != null
+        ? collection.updateOne(session, sameWorkflowWithoutAVersion, addTheVersion)
+        : collection.updateOne(sameWorkflowWithoutAVersion, addTheVersion);
+    return added.getModifiedCount() > 0;
 
   }
 
@@ -768,7 +786,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
                         .getString("bpmnErrorCode"), document.getString("bpmnErrorName"), instantOf(
                             document.getDate("recordedAt")), instantOf(
                                 document.getDate("taskClosedAt")), document.getString("taskKind"), document
-                                    .getString("recordKind"));
+                                    .getString("recordKind"), document.getString("processVersion"));
 
   }
 
