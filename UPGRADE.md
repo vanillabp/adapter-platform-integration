@@ -766,7 +766,10 @@ file.
 The outbox is the one new thing in the picture. Entries which cannot be dispatched are retried with
 a growing distance, `vanillabp.outbox.attempt-frequency` to the first retry and doubling up to
 `vanillabp.outbox.max-attempt-frequency`, and an entry is blocked after
-`vanillabp.outbox.block-after-attempts` tries. A blocked entry waits for somebody, so watching for
+`vanillabp.outbox.block-after-attempts` tries. An entry whose BPMS does not report its workflow
+yet, such as a Camunda 8 cluster whose exporter is behind, uses no tries while it waits. It is
+blocked once `vanillabp.outbox.wait-for-visibility-at-most` passed since it was written, about four
+hours by default. A blocked entry waits for somebody, so watching for
 one is an operations duty. Dispatched entries are marked done and cleaned up after
 `vanillabp.outbox.retention`, seven days by default.
 

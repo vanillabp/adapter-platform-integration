@@ -184,18 +184,17 @@ public class ARejectedDispatchIsPlannedAgainTest {
   }
 
   /**
-   * Waits until the store counted an attempt on that entry. The store writes the count
-   * when the attempt ENDED, so this is what says that a rejection was used up and which
-   * entry used it.
+   * Waits until the extension was asked once, which is the rejection it was told to give.
+   * The store counts no attempt for a rejection of this kind, so the number on the entry
+   * cannot say it, and the extension's own count is what says which entry used the
+   * rejection up.
    */
-  private void awaitAttempted(
-      final String idempotencyKey) throws InterruptedException {
+  private void awaitRejected() throws InterruptedException {
 
     final var deadline = System.currentTimeMillis() + PATIENCE;
-    while (attemptsOf(idempotencyKey) == 0) {
+    while (extension.getAttempts() == 0) {
       if (System.currentTimeMillis() > deadline) {
-        throw new AssertionError(
-            "The outbox entry of '%s' was never attempted".formatted(idempotencyKey));
+        throw new AssertionError("The extension was never asked");
       }
       Thread.sleep(50);
     }
@@ -239,6 +238,11 @@ public class ARejectedDispatchIsPlannedAgainTest {
         extension.getAttempts(),
         "one rejected attempt and one which went through is what this case costs");
     assertEquals(
+        1,
+        attemptsOf(key),
+        "the store counts the attempt which went through and not the rejection: waiting for a "
+            + "read model is no failure, and counting it blocked entries after minutes");
+    assertEquals(
         SampleWorkflowService.REPORTED_BY_THE_HANDLER,
         aggregates
             .findById(aggregate.getId())
@@ -268,9 +272,9 @@ public class ARejectedDispatchIsPlannedAgainTest {
     extension.rejectNextDispatches(1, LONGER_THAN_THIS_TEST_CAN_TAKE);
 
     final var waiting = startWorkflowAndSchedule("not-searchable-yet", "created");
-    // the rejection belongs to this workflow, and the store counting the attempt is what
-    // says so. Scheduling the second workflow before that could hand the rejection to it
-    awaitAttempted(idempotencyKeyOf(waiting, "created"));
+    // the rejection belongs to this workflow, and the extension being asked is what says
+    // so. Scheduling the second workflow before that could hand the rejection to it
+    awaitRejected();
     final var passing = startWorkflowAndSchedule("searchable", "created");
 
     final var dispatched = extension.awaitDispatched(1, PATIENCE);

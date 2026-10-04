@@ -233,7 +233,8 @@ they claim an entry.
 
 This module provides two
 default implementations, both configured by the `vanillabp.outbox.*` properties
-(`poll-interval`, `attempt-frequency`, `block-after-attempts`, `dispatch-threads`,
+(`poll-interval`, `attempt-frequency`, `block-after-attempts`, `wait-for-visibility-at-most`,
+`dispatch-threads`,
 `create-schema`,
 `retention`, plus per-default `jdbc.*`/`mongo.*` sections with `enabled` flags and
 store names). The defaults coexist with user-defined `PhaseTwoOutbox` beans -

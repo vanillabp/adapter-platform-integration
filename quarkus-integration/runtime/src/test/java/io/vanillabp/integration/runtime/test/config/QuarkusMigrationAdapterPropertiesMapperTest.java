@@ -401,6 +401,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                   Duration attemptFrequency,
                                   Duration maxAttemptFrequency,
                                   int blockAfterAttempts,
+                                  Optional<Duration> waitForVisibilityAtMost,
                                   int dispatchThreads,
                                   boolean createSchema,
                                   Duration retention,
@@ -596,30 +597,33 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                                                                                                                             .ofSeconds(
                                                                                                                                                 2), Duration
                                                                                                                                                     .ofSeconds(
-                                                                                                                                                        20), 3, 2, false, Duration
-                                                                                                                                                            .ofDays(
-                                                                                                                                                                1), new HousekeepingProperties(
-                                                                                                                                                                    java.time.LocalTime
-                                                                                                                                                                        .of(
-                                                                                                                                                                            1,
-                                                                                                                                                                            30), java.time.LocalTime
-                                                                                                                                                                                .of(
-                                                                                                                                                                                    2,
-                                                                                                                                                                                    45), Optional
-                                                                                                                                                                                        .of("Europe/Vienna")), new JdbcOutboxProperties(false, Optional
-                                                                                                                                                                                            .of("HOT_OUTBOX"), Optional
-                                                                                                                                                                                                .of(
-                                                                                                                                                                                                    "HOT_PAYLOAD"), Optional
-                                                                                                                                                                                                        .of("HOT_DELIVERY"), Optional
-                                                                                                                                                                                                            .of("HOT_HOUSEKEEPING")), new MongoOutboxProperties(
-                                                                                                                                                                                                                false, "hot-outbox", Optional
-                                                                                                                                                                                                                    .of(
-                                                                                                                                                                                                                        "hot-payloads"), "hot-deliveries", "hot-housekeeping")), new WorkflowAdapterCacheProperties(
-                                                                                                                                                                                                                            50_000, Duration
-                                                                                                                                                                                                                                .ofMinutes(
-                                                                                                                                                                                                                                    30), Duration
-                                                                                                                                                                                                                                        .ofMinutes(
-                                                                                                                                                                                                                                            2), true));
+                                                                                                                                                        20), 3, Optional
+                                                                                                                                                            .of(Duration
+                                                                                                                                                                .ofHours(
+                                                                                                                                                                    2)), 2, false, Duration
+                                                                                                                                                                        .ofDays(
+                                                                                                                                                                            1), new HousekeepingProperties(
+                                                                                                                                                                                java.time.LocalTime
+                                                                                                                                                                                    .of(
+                                                                                                                                                                                        1,
+                                                                                                                                                                                        30), java.time.LocalTime
+                                                                                                                                                                                            .of(
+                                                                                                                                                                                                2,
+                                                                                                                                                                                                45), Optional
+                                                                                                                                                                                                    .of("Europe/Vienna")), new JdbcOutboxProperties(false, Optional
+                                                                                                                                                                                                        .of("HOT_OUTBOX"), Optional
+                                                                                                                                                                                                            .of(
+                                                                                                                                                                                                                "HOT_PAYLOAD"), Optional
+                                                                                                                                                                                                                    .of("HOT_DELIVERY"), Optional
+                                                                                                                                                                                                                        .of("HOT_HOUSEKEEPING")), new MongoOutboxProperties(
+                                                                                                                                                                                                                            false, "hot-outbox", Optional
+                                                                                                                                                                                                                                .of(
+                                                                                                                                                                                                                                    "hot-payloads"), "hot-deliveries", "hot-housekeeping")), new WorkflowAdapterCacheProperties(
+                                                                                                                                                                                                                                        50_000, Duration
+                                                                                                                                                                                                                                            .ofMinutes(
+                                                                                                                                                                                                                                                30), Duration
+                                                                                                                                                                                                                                                    .ofMinutes(
+                                                                                                                                                                                                                                                        2), true));
 
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
@@ -676,6 +680,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(Duration.ofSeconds(2), core.getOutbox().getAttemptFrequency());
     assertEquals(Duration.ofSeconds(20), core.getOutbox().getMaxAttemptFrequency());
     assertEquals(3, core.getOutbox().getBlockAfterAttempts());
+    assertEquals(Duration.ofHours(2), core.getOutbox().getWaitForVisibilityAtMost());
     assertFalse(core.getOutbox().isCreateSchema());
     assertEquals(Duration.ofDays(1), core.getOutbox().getRetention());
     assertFalse(core.getOutbox().getJdbc().isEnabled());
@@ -766,6 +771,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(coreDefaults.getAttemptFrequency(), mappedDefaults.getAttemptFrequency());
     assertEquals(coreDefaults.getMaxAttemptFrequency(), mappedDefaults.getMaxAttemptFrequency());
     assertEquals(coreDefaults.getBlockAfterAttempts(), mappedDefaults.getBlockAfterAttempts());
+    // not set on either side, which is what makes both read the time the attempts take
+    assertEquals(coreDefaults.getWaitForVisibilityAtMost(), mappedDefaults.getWaitForVisibilityAtMost());
     assertEquals(coreDefaults.getDispatchThreads(), mappedDefaults.getDispatchThreads());
     assertEquals(coreDefaults.isCreateSchema(), mappedDefaults.isCreateSchema());
     assertEquals(coreDefaults.getRetention(), mappedDefaults.getRetention());

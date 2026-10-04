@@ -1,5 +1,6 @@
 package io.vanillabp.integration.runtime.outbox;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Date;
@@ -82,6 +83,13 @@ import lombok.extern.slf4j.Slf4j;
  * after
  * <code>vanillabp.outbox.block-after-attempts</code> failed attempts it is marked
  * {@link MongoPhaseTwoOutbox#STATUS_BLOCKED} and has to be cleaned up manually.
+ * <p>
+ * <strong>Waiting for a read model is not an attempt.</strong> A dispatch which the adapter
+ * answers with {@link io.vanillabp.integration.spi.PhaseTwoRetryLater} is written back with
+ * the window the adapter named, and <code>attempts</code> stays as it was. What ends that
+ * wait is time: once <code>vanillabp.outbox.wait-for-visibility-at-most</code> passed since
+ * the entry was written, the entry is blocked (see {@code DECISIONS.pending/898.md} in the
+ * repository).
  * <p>
  * Unless <code>vanillabp.outbox.create-schema</code> is disabled, the indexes of
  * {@link MongoSchema#OUTBOX_INDEXES} and {@link MongoSchema#PAYLOAD_INDEXES} are created
@@ -729,7 +737,8 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   /**
    * Writes down what a failed dispatch means for the entry: blocked where repeating cannot
-   * help or where the attempts are used up, and a new due time otherwise.
+   * help, where the attempts are used up or where the entry waited too long for its
+   * BPMS, and a new due time otherwise.
    *
    * @param collection The outbox collection
    * @param entry The entry whose dispatch failed
@@ -760,6 +769,11 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           e);
       return;
     }
+    final var retryAfter = PhaseTwoRetryLater.retryAfter(e);
+    if (retryAfter != null) {
+      waitForTheReadModel(collection, entry, retryAfter, e);
+      return;
+    }
     if (entry.getInteger("attempts") + 1 >= properties.getBlockAfterAttempts()) {
       if (!writeAsTheHolder(collection, entry, blockEntry(entryId))) {
         return;
@@ -777,48 +791,87 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           e);
       return;
     }
-    final var retryAfter = PhaseTwoRetryLater.retryAfter(e);
-    if (retryAfter != null) {
-      // the dispatch knows when asking again can help - a workflow the BPMS has not
-      // made searchable yet is the case - so the entry waits that long instead of the
-      // configured backoff. What ends a reason which never goes away is the attempts
-      // counted above, not this due time
-      if (!writeAsTheHolder(collection, entry, dueAgainAt(Instant.now().plus(retryAfter)))) {
-        return;
-      }
-      log.info(
-          "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
-              + "run yet - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used): {}",
-          entry.getString("operation"),
-          entry.getString("bpmnProcessId"),
-          entry.getString("workflowModuleId"),
-          entry.getString("aggregateId"),
-          entryId,
-          retryAfter,
-          entry.getInteger("attempts") + 1,
-          properties.getBlockAfterAttempts(),
-          e.getMessage());
-    } else {
-      // the attempts of the entry are the ones which ended before this one, so
-      // attemptDelay(0) is the distance after the first failure: close, because most
-      // failures are momentary
-      final var retryIn = properties.attemptDelay(entry.getInteger("attempts"));
-      if (!writeAsTheHolder(collection, entry, dueAgainAt(Instant.now().plus(retryIn)))) {
-        return;
-      }
-      log.warn(
-          "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-              + "failed - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used)",
-          entry.getString("operation"),
-          entry.getString("bpmnProcessId"),
-          entry.getString("workflowModuleId"),
-          entry.getString("aggregateId"),
-          entryId,
-          retryIn,
-          entry.getInteger("attempts") + 1,
-          properties.getBlockAfterAttempts(),
-          e);
+    // the attempts of the entry are the ones which ended before this one, so
+    // attemptDelay(0) is the distance after the first failure: close, because most
+    // failures are momentary
+    final var retryIn = properties.attemptDelay(entry.getInteger("attempts"));
+    if (!writeAsTheHolder(collection, entry, dueAgainAt(Instant.now().plus(retryIn)))) {
+      return;
     }
+    log.warn(
+        "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
+            + "failed - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used)",
+        entry.getString("operation"),
+        entry.getString("bpmnProcessId"),
+        entry.getString("workflowModuleId"),
+        entry.getString("aggregateId"),
+        entryId,
+        retryIn,
+        entry.getInteger("attempts") + 1,
+        properties.getBlockAfterAttempts(),
+        e);
+
+  }
+
+  /**
+   * Writes down that the BPMS of the entry does not report its workflow yet. The entry
+   * waits the window the adapter named instead of the configured backoff, and the attempt
+   * is not counted, because a read model which is behind is no failure of the entry. What
+   * ends a wait which never ends is the time since the entry was written:
+   * <code>vanillabp.outbox.wait-for-visibility-at-most</code>.
+   *
+   * @param collection The outbox collection
+   * @param entry The entry whose dispatch was answered with "not yet"
+   * @param retryAfter The window the adapter named
+   * @param e What the dispatch threw
+   */
+  private void waitForTheReadModel(
+      final MongoCollection<Document> collection,
+      final Document entry,
+      final Duration retryAfter,
+      final RuntimeException e) {
+
+    final var entryId = entry.getString("_id");
+    final var createdAt = entry.getDate("createdAt") == null
+        ? null
+        : entry.getDate("createdAt").toInstant();
+    final var now = Instant.now();
+    if (properties.hasWaitedForVisibilityLongEnough(createdAt, now)) {
+      if (!writeAsTheHolder(collection, entry, blockEntry(entryId))) {
+        return;
+      }
+      countBlockedEntry(entry.getString("operation"), false);
+      log.error(
+          "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' waited {} "
+              + "for its BPMS to report the workflow, which is longer than '{}' allows - the outbox "
+              + "entry '{}' is now blocked and has to be cleaned up manually: {}",
+          entry.getString("operation"),
+          entry.getString("bpmnProcessId"),
+          entry.getString("workflowModuleId"),
+          entry.getString("aggregateId"),
+          Duration.between(createdAt, now),
+          PhaseTwoOutboxProperties.WAIT_FOR_VISIBILITY_AT_MOST_PROPERTY,
+          entryId,
+          e.getMessage());
+      return;
+    }
+    if (!writeAsTheHolder(collection, entry, dueAgainWithoutCountingAt(now.plus(retryAfter)))) {
+      return;
+    }
+    log.info(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
+            + "run yet - the outbox entry '{}' is dispatched again in {}, and it waits until {} at "
+            + "most: {}",
+        entry.getString("operation"),
+        entry.getString("bpmnProcessId"),
+        entry.getString("workflowModuleId"),
+        entry.getString("aggregateId"),
+        entryId,
+        retryAfter,
+        createdAt == null
+            ? null
+            : createdAt.plus(properties.waitForVisibilityAtMost()),
+        e.getMessage());
 
   }
 
@@ -983,6 +1036,27 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         .combine(
             Updates.set("nextAttemptAt", Date.from(nextAttempt)),
             Updates.inc("attempts", 1),
+            Updates.unset("leasedBy"),
+            Updates.unset("leasedUntil"));
+
+  }
+
+  /**
+   * Says when the entry is to be read again after its BPMS did not report the workflow yet,
+   * and gives the lease back. It is {@link #dueAgainAt(Instant)} without the count: waiting
+   * for a read model is not a failed attempt, and counting it blocked entries after a few
+   * minutes of a stopped exporter. The time the entry waited is read from
+   * <code>createdAt</code> instead.
+   *
+   * @param nextAttempt When the entry is to be read again
+   * @return The update to apply
+   */
+  private static Bson dueAgainWithoutCountingAt(
+      final Instant nextAttempt) {
+
+    return Updates
+        .combine(
+            Updates.set("nextAttemptAt", Date.from(nextAttempt)),
             Updates.unset("leasedBy"),
             Updates.unset("leasedUntil"));
 

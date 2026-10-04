@@ -19,6 +19,17 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   private final AtomicInteger failuresRemaining = new AtomicInteger(0);
 
   /**
+   * How many of the next dispatches are answered the way a BPMS answers whose read model is
+   * behind: "not yet, ask again in a while". Zero unless a test asked for it.
+   */
+  private final AtomicInteger notYetRemaining = new AtomicInteger(0);
+
+  /**
+   * The while such an answer names.
+   */
+  private volatile java.time.Duration notYetWindow = java.time.Duration.ofSeconds(1);
+
+  /**
    * How long every dispatch stays inside the adapter, for a test about a dispatch which takes
    * longer than the lease of its outbox entry. Zero unless a test asked for it, and the test
    * which asked puts it back.
@@ -57,6 +68,10 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
         Thread.currentThread().interrupt();
       }
     }
+    if (notYetRemaining.getAndUpdate(remaining -> remaining > 0 ? remaining - 1 : 0) > 0) {
+      throw new io.vanillabp.integration.spi.PhaseTwoRetryLater(
+          "the BPMS does not report the workflow yet, for testing purposes", notYetWindow);
+    }
     if (failuresRemaining.getAndUpdate(remaining -> remaining > 0 ? remaining - 1 : 0) > 0) {
       throw new RuntimeException("phase two failed for testing purposes");
     }
@@ -73,6 +88,22 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
       final long millis) {
 
     dispatchTakesMillis.set(millis);
+
+  }
+
+  /**
+   * Answers the next dispatches the way a BPMS answers whose read model is behind, which is
+   * what a Camunda 8 cluster with a stopped exporter does.
+   *
+   * @param howMany How many dispatches are answered "not yet"
+   * @param window How long each answer asks the outbox to wait
+   */
+  public void answerNotYet(
+      final int howMany,
+      final java.time.Duration window) {
+
+    notYetWindow = window;
+    notYetRemaining.set(howMany);
 
   }
 
@@ -202,6 +233,7 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
     invocations.clear();
     failuresRemaining.set(0);
+    notYetRemaining.set(0);
     dispatchTakesMillis.set(0);
     meetingPoint = null;
     final var neverTaken = holdTheNextDispatch.getAndSet(null);

@@ -1441,11 +1441,12 @@ public class MigrationProcessService<A> {
    * findable. So the entry goes back with the window of the adapter which should hold
    * it, which is the time that adapter itself says its read model may need.
    * <p>
-   * What ends this for a workflow which never becomes visible is the ATTEMPT COUNTER,
-   * not the due time: every repetition counts an attempt, and
-   * <code>vanillabp.outbox.block-after-attempts</code> of them leave the entry blocked,
-   * which is where an exporter nobody noticed becomes visible. The due time only
-   * decides how often the question is asked in between.
+   * What ends this for a workflow which never becomes visible is TIME, not the number of
+   * repetitions: a store counts no attempt for this answer, and it blocks the entry once
+   * <code>vanillabp.outbox.wait-for-visibility-at-most</code> passed since the entry was
+   * written, which is where an exporter nobody noticed becomes visible. The due time only
+   * decides how often the question is asked in between. Counting the repetitions blocked
+   * an entry after fifty windows, which were eight minutes of a stopped Camunda 8 exporter.
    * <p>
    * The window is asked for THIS workflow: an adapter which knows the workflow by its
    * own id may name a shorter one than a freshly started workflow needs, and the entry

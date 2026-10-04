@@ -130,6 +130,9 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.attemptFrequency(outboxProperties.attemptFrequency());
     core.maxAttemptFrequency(outboxProperties.maxAttemptFrequency());
     core.blockAfterAttempts(outboxProperties.blockAfterAttempts());
+    core.waitForVisibilityAtMost(outboxProperties
+        .waitForVisibilityAtMost()
+        .orElse(null));
     core.dispatchThreads(outboxProperties.dispatchThreads());
     core.createSchema(outboxProperties.createSchema());
     core.retention(outboxProperties.retention());

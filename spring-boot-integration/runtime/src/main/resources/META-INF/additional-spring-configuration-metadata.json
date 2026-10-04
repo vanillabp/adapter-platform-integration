@@ -40,6 +40,11 @@
       "defaultValue": 50
     },
     {
+      "name": "vanillabp.outbox.wait-for-visibility-at-most",
+      "type": "java.time.Duration",
+      "description": "How long an entry may wait for a BPMS which does not report its workflow yet, for example a Camunda 8 cluster whose exporter is behind. It is counted from the moment the entry was written, and the entry is blocked after it. Waiting like this uses no attempts. Not set by default, which means the time the attempts of 'block-after-attempts' take with the growing backoff, about four hours with the defaults."
+    },
+    {
       "name": "vanillabp.outbox.dispatch-threads",
       "type": "java.lang.Integer",
       "description": "How many entries an outbox of VanillaBP's own dispatches at the same time. The workflow aggregate decides which thread takes an entry, so two operations of one workflow keep the order they were written in. Every dispatch costs a database connection and a call to the BPMS, so a large number here only moves the limit into the connection pool.",

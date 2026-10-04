@@ -2356,13 +2356,22 @@ The case which used to spend the most is a workflow its BPMS has not made search
 yet: the election waited out the adapter's `workflowVisibilityDelay`, ten seconds on Camunda 8,
 and a burst of "start, then correlate" pairs stalled in batches. Such an entry goes back to the
 store with that window as its due time (`PhaseTwoRetryLater`) and the thread takes the next one.
-The attempt is counted like any other, which is what ends a workflow that never becomes visible:
-after `vanillabp.outbox.block-after-attempts` attempts the entry is blocked. The gruelbox store
+This answer is not counted as an attempt, because a read model which is behind is no failure of
+the entry. What ends a workflow that never becomes visible is time: once
+`vanillabp.outbox.wait-for-visibility-at-most` passed since the entry was written, the next such
+answer blocks the entry. Not set, it is the time the attempts of
+`vanillabp.outbox.block-after-attempts` take with the growing backoff, about four hours. Counting
+the answers had blocked entries after fifty windows, which were eight minutes of a stopped
+Camunda 8 exporter, while a database which was away for hours blocked nothing
+(`DECISIONS.pending/898.md`).
+`PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough` is the one rule all three stores of
+this repository ask. `WaitingForAReadModelUsesNoAttemptsTest` holds it for the relational store, and
+`MongoWaitingForAReadModelUsesNoAttemptsTest` for the MongoDB store of each platform. The gruelbox store
 schedules every failed attempt from the one distance it knows, so the window is
 written onto its row afterwards, by the listener which also blocks a permanent failure: the entry is
 due there when it is due on the other stores, and the next poll picks it up.
-`NotVisibleWorkflowDoesNotStallDispatchTest` holds both halves: the entry of a findable workflow
-dispatched while the other one waits, and the bound which finally blocks it.
+`NotVisibleWorkflowDoesNotStallDispatchTest` holds the core's half: the entry of a findable
+workflow dispatched while the other one waits, and the same window on every repetition.
 `ARejectedDispatchIsPlannedAgainTest` holds the same on Spring Boot, where a store used to ask again
 on the dispatching thread instead - what that cost is decision 49.
 
@@ -4414,8 +4423,9 @@ does is inside it, and nothing had to be repeated per BPMS.
   `operation` and `permanent`. It has to exist next to the backlog gauge rather than being read
   off it, because a blocked entry stops waiting: `vanillabp.outbox.pending` falls at the very
   moment an operation was lost, so it alone reads as if the backlog had drained. Every store
-  counts one where it writes the block, whether the adapter called the failure permanent or
-  `vanillabp.outbox.block-after-attempts` ran out, so the number is the same on all four.
+  counts one where it writes the block, whether the adapter called the failure permanent,
+  `vanillabp.outbox.block-after-attempts` ran out or the entry waited longer than
+  `vanillabp.outbox.wait-for-visibility-at-most` for its BPMS, so the number is the same on all four.
 - The outbox backlog is `PhaseTwoOutbox#pendingCalls()`, an `OptionalLong` defaulting to empty.
   A store which cannot count publishes no gauge, which is honest where a zero would not be.
   All four stores VanillaBP ships implement it with one indexed count; gruelbox has no API for

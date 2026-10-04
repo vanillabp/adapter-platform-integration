@@ -4,6 +4,7 @@ import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -54,6 +55,14 @@ import lombok.extern.slf4j.Slf4j;
  * <code>vanillabp.outbox.retention</code> passed. After
  * <code>vanillabp.outbox.block-after-attempts</code> failed attempts an entry is
  * marked {@link #STATUS_BLOCKED} and has to be cleaned up manually.
+ * <p>
+ * <strong>Waiting for a read model is not an attempt.</strong> A dispatch which the adapter
+ * answers with {@link PhaseTwoRetryLater} is written back with the window the adapter named,
+ * and <code>ATTEMPTS</code> stays as it was. What ends that wait is time: once
+ * <code>vanillabp.outbox.wait-for-visibility-at-most</code> passed since the entry was
+ * written, the entry is blocked (see
+ * {@link PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough} and
+ * {@code DECISIONS.pending/898.md} in the repository).
  * <p>
  * <strong><code>ATTEMPTS</code> counts attempts, not claims.</strong> The column is
  * written when an attempt ENDED - together with the mark which says how it ended - so a
@@ -125,7 +134,8 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   /**
    * What the <code>STATUS</code> column holds after <code>block-after-attempts</code>
-   * failed attempts: the entry is not read by any poll any more and waits for a person.
+   * failed attempts, or after the entry waited longer than
+   * <code>wait-for-visibility-at-most</code> for its BPMS: the entry is not read by any poll any more and waits for a person.
    * Nothing in VanillaBP moves it back, which is the point - an entry which failed that
    * often is broken rather than unlucky.
    */
@@ -255,6 +265,18 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   private static final String RESCHEDULE_ENTRY = """
       UPDATE %s \
       SET NEXT_ATTEMPT_AT = ?, ATTEMPTS = ATTEMPTS + 1, LEASED_BY = NULL, LEASED_UNTIL = NULL \
+      WHERE ID = ? AND LEASED_BY = ?""";
+
+  /**
+   * Says when the entry is to be read again after its BPMS did not report the workflow yet,
+   * and gives the lease back. It is {@link #RESCHEDULE_ENTRY} without the count: waiting for
+   * a read model is not a failed attempt, and counting it blocked entries after a few
+   * minutes of a stopped exporter. The time the entry waited is read from
+   * <code>CREATED_AT</code> instead, so this write needs nothing else.
+   */
+  private static final String RESCHEDULE_ENTRY_WITHOUT_COUNTING = """
+      UPDATE %s \
+      SET NEXT_ATTEMPT_AT = ?, LEASED_BY = NULL, LEASED_UNTIL = NULL \
       WHERE ID = ? AND LEASED_BY = ?""";
 
   /**
@@ -434,6 +456,8 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   private final String rescheduleEntry;
 
+  private final String rescheduleEntryWithoutCounting;
+
   private final String countExpiredDoneEntries;
 
   /**
@@ -583,6 +607,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     this.markEntryDone = MARK_ENTRY_DONE.formatted(tableName, STATUS_DONE);
     this.markEntryBlocked = MARK_ENTRY_BLOCKED.formatted(tableName, STATUS_BLOCKED);
     this.rescheduleEntry = RESCHEDULE_ENTRY.formatted(tableName);
+    this.rescheduleEntryWithoutCounting = RESCHEDULE_ENTRY_WITHOUT_COUNTING.formatted(tableName);
     this.countExpiredDoneEntries = COUNT_EXPIRED_DONE_ENTRIES.formatted(tableName, STATUS_DONE);
     this.housekeepingLease = new JdbcHousekeepingLease(
         connections, properties
@@ -1436,7 +1461,8 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   /**
    * Writes down what a failed dispatch means for the entry: blocked where repeating
-   * cannot help or where the attempts are used up, and a new due time otherwise.
+   * cannot help, where the attempts are used up or where the entry waited too long for its
+   * BPMS, and a new due time otherwise.
    *
    * @param entry The entry whose dispatch failed
    * @param e What the dispatch threw
@@ -1464,6 +1490,11 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           e);
       return;
     }
+    final var retryAfter = PhaseTwoRetryLater.retryAfter(e);
+    if (retryAfter != null) {
+      waitForTheReadModel(entry, retryAfter, e);
+      return;
+    }
     if (entry.attempts() + 1 >= properties.getBlockAfterAttempts()) {
       if (!markBlocked(entry)) {
         return;
@@ -1479,29 +1510,6 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           entry.attempts() + 1,
           entry.id(),
           e);
-      return;
-    }
-    final var retryAfter = PhaseTwoRetryLater.retryAfter(e);
-    if (retryAfter != null) {
-      // the dispatch knows when asking again can help - a workflow the BPMS has not
-      // made searchable yet is the case - so the entry waits that long instead of the
-      // configured backoff. What ends a reason which never goes away is the attempts
-      // counted above, not this due time
-      if (!rescheduleAt(entry, Instant.now().plus(retryAfter))) {
-        return;
-      }
-      log.info(
-          "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
-              + "run yet - the outbox entry '{}' is dispatched again in {} ({} of {} attempts used): {}",
-          entry.operation(),
-          entry.bpmnProcessId(),
-          entry.workflowModuleId(),
-          entry.aggregateId(),
-          entry.id(),
-          retryAfter,
-          entry.attempts() + 1,
-          properties.getBlockAfterAttempts(),
-          e.getMessage());
       return;
     }
     // attempts() is the count of the attempts which ended before this one, so
@@ -1523,6 +1531,60 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         entry.attempts() + 1,
         properties.getBlockAfterAttempts(),
         e);
+
+  }
+
+  /**
+   * Writes down that the BPMS of the entry does not report its workflow yet. The entry
+   * waits the window the adapter named instead of the configured backoff, and the attempt
+   * is not counted, because a read model which is behind is no failure of the entry. What
+   * ends a wait which never ends is the time since the entry was written:
+   * <code>vanillabp.outbox.wait-for-visibility-at-most</code>.
+   *
+   * @param entry The entry whose dispatch was answered with "not yet"
+   * @param retryAfter The window the adapter named
+   * @param e What the dispatch threw
+   */
+  private void waitForTheReadModel(
+      final Entry entry,
+      final Duration retryAfter,
+      final Exception e) {
+
+    final var now = Instant.now();
+    if (properties.hasWaitedForVisibilityLongEnough(entry.createdAt(), now)) {
+      if (!markBlocked(entry)) {
+        return;
+      }
+      countBlockedEntry(entry.operation(), false);
+      log.error(
+          "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' waited {} "
+              + "for its BPMS to report the workflow, which is longer than '{}' allows - the outbox "
+              + "entry '{}' is now blocked and has to be cleaned up manually: {}",
+          entry.operation(),
+          entry.bpmnProcessId(),
+          entry.workflowModuleId(),
+          entry.aggregateId(),
+          Duration.between(entry.createdAt(), now),
+          PhaseTwoOutboxProperties.WAIT_FOR_VISIBILITY_AT_MOST_PROPERTY,
+          entry.id(),
+          e.getMessage());
+      return;
+    }
+    if (!rescheduleAt(entry, now.plus(retryAfter), rescheduleEntryWithoutCounting)) {
+      return;
+    }
+    log.info(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' cannot "
+            + "run yet - the outbox entry '{}' is dispatched again in {}, and it waits until {} at "
+            + "most: {}",
+        entry.operation(),
+        entry.bpmnProcessId(),
+        entry.workflowModuleId(),
+        entry.aggregateId(),
+        entry.id(),
+        retryAfter,
+        entry.createdAt().plus(properties.waitForVisibilityAtMost()),
+        e.getMessage());
 
   }
 
@@ -1587,7 +1649,27 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final Entry entry,
       final Instant nextAttempt) {
 
-    final var outcome = update(rescheduleEntry, statement -> {
+    return rescheduleAt(entry, nextAttempt, rescheduleEntry);
+
+  }
+
+  /**
+   * Writes when the next attempt of an entry is due with the given statement, which either
+   * counts the attempt or does not, and tells the poller about it.
+   *
+   * @param entry The entry whose dispatch did not get through
+   * @param nextAttempt When it is to be read again
+   * @param reschedule The update to run, {@link #RESCHEDULE_ENTRY} or
+   *          {@link #RESCHEDULE_ENTRY_WITHOUT_COUNTING}
+   * @return Whether the entry says its new due time, which it does where this node still
+   *         held it and the database wrote it down
+   */
+  private boolean rescheduleAt(
+      final Entry entry,
+      final Instant nextAttempt,
+      final String reschedule) {
+
+    final var outcome = update(reschedule, statement -> {
       statement.setTimestamp(1, Timestamp.from(nextAttempt));
       statement.setString(2, entry.id());
       statement.setString(3, lease.owner());

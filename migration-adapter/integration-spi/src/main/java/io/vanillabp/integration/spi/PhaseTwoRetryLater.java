@@ -17,10 +17,22 @@ import java.time.Duration;
  * the way {@link PhaseTwoPermanentFailure#isPermanent(Throwable)} does, and uses the
  * duration in place of its configured backoff for THIS attempt - the growing backoff of
  * a failed dispatch never stretches this window, because the two are written by
- * different branches of the same failure handling. It changes nothing
- * else: the attempt is counted like any other, so an entry coming back again and again
- * is blocked after <code>vanillabp.outbox.block-after-attempts</code> attempts, which is
- * what stops a workflow which never becomes visible.
+ * different branches of the same failure handling.
+ * <p>
+ * <b>It is not an attempt.</b> A store counts no attempt for this answer, so
+ * <code>vanillabp.outbox.block-after-attempts</code> does not end it. What stops a workflow
+ * which never becomes visible is time: once
+ * <code>vanillabp.outbox.wait-for-visibility-at-most</code> passed since the entry was
+ * written, the next answer of this kind blocks the entry. That time is about four hours by
+ * default, the span the attempts take with the growing backoff, so a read model which is
+ * behind gets as long as a BPMS which is away. Counting the answers blocked entries after
+ * fifty windows, which were eight minutes of a stopped Camunda 8 exporter.
+ * <p>
+ * Because the answer is not counted, the store does not remember it either: the next
+ * dispatch of the entry looks like its first one. So throw this only before the operation
+ * reached the BPMS. An operation which may have reached it and then failed is an ordinary
+ * failure, and it is counted. See {@code DECISIONS.pending/898.md} in the repository
+ * <code>adapter-platform-integration</code>.
  * <p>
  * <b>What this promises an adapter.</b> Every store VanillaBP ships makes the entry due
  * after the window, and none of them shortens it or stretches it: the relational store of

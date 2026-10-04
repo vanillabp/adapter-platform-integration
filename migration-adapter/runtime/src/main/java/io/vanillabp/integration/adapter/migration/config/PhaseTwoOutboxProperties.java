@@ -1,6 +1,7 @@
 package io.vanillabp.integration.adapter.migration.config;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.LinkedHashMap;
@@ -123,6 +124,105 @@ public class PhaseTwoOutboxProperties {
    */
   public static final String BLOCK_AFTER_ATTEMPTS_PROPERTY = SECTION
       + ".block-after-attempts";
+
+  /**
+   * How long an entry may wait for a BPMS which does not report its workflow yet, counted
+   * from the moment the entry was written. After that the entry is blocked.
+   * <p>
+   * Waiting for a read model is not a failure, so it uses no attempts: an adapter which
+   * answers with {@link io.vanillabp.integration.spi.PhaseTwoRetryLater} gets its entry back
+   * after the window it named, and <code>ATTEMPTS</code> stays as it was. Counting those
+   * answers blocked an entry after fifty windows, which is about eight minutes of a stopped
+   * Camunda 8 exporter, while a database which was away for hours blocked nothing. This
+   * setting is what ends the wait instead.
+   * <p>
+   * Key <code>vanillabp.outbox.wait-for-visibility-at-most</code>. Not set by default, and
+   * then it is the time the attempts of {@link #blockAfterAttempts} take with the growing
+   * backoff, see {@link #waitForVisibilityAtMost()}: about four hours with the defaults, so
+   * a stopped read model is given as long as a BPMS which is away. See
+   * {@code DECISIONS.pending/898.md} in the repository.
+   */
+  private Duration waitForVisibilityAtMost = null;
+
+  /**
+   * The key of {@link #waitForVisibilityAtMost}:
+   * <code>vanillabp.outbox.wait-for-visibility-at-most</code>. It is a constant because the
+   * message about an entry which waited too long names it.
+   */
+  public static final String WAIT_FOR_VISIBILITY_AT_MOST_PROPERTY = SECTION
+      + ".wait-for-visibility-at-most";
+
+  /**
+   * How long an entry may wait for a BPMS which does not report its workflow yet: the value
+   * of <code>vanillabp.outbox.wait-for-visibility-at-most</code> where it is set, and
+   * otherwise the time the attempts take until an entry which keeps failing is blocked.
+   * <p>
+   * That time is the sum of the distances between the attempts. The first attempt runs at
+   * once, and the entry is blocked when attempt number <code>block-after-attempts</code>
+   * failed, so there are <code>block-after-attempts - 1</code> distances. With the defaults
+   * these are 30 seconds, 1, 2 and 4 minutes, and 45 times 5 minutes, which is 3 hours and
+   * 52.5 minutes.
+   *
+   * @return How long an entry may wait, counted from the moment it was written
+   */
+  public Duration waitForVisibilityAtMost() {
+
+    if (waitForVisibilityAtMost != null) {
+      return waitForVisibilityAtMost;
+    }
+    var span = Duration.ZERO;
+    for (var attempt = 0; attempt < blockAfterAttempts - 1; attempt++) {
+      span = span.plus(attemptDelay(attempt));
+    }
+    return span;
+
+  }
+
+  /**
+   * Whether an entry has waited for its BPMS long enough to be blocked.
+   * <p>
+   * Every store asks this when a dispatch is answered with
+   * {@link io.vanillabp.integration.spi.PhaseTwoRetryLater}, so the rule is the same on all
+   * of them. The clock starts when the entry was written. A younger call which replaced the
+   * entry starts it again, because the replacement writes that moment anew.
+   *
+   * @param writtenAt When the entry was written, <code>null</code> where the store does not
+   *          know, which never counts as waited long enough
+   * @param now The moment the dispatch was answered
+   * @return Whether the entry is to be blocked instead of being dispatched again
+   */
+  public boolean hasWaitedForVisibilityLongEnough(
+      final Instant writtenAt,
+      final Instant now) {
+
+    if (writtenAt == null) {
+      return false;
+    }
+    return !now.isBefore(writtenAt.plus(waitForVisibilityAtMost()));
+
+  }
+
+  /**
+   * Refuses a time for waiting on a read model which is zero or negative. Such a value would
+   * block every entry the first time its BPMS was a moment behind, which is the opposite of
+   * what somebody writing the key wants.
+   *
+   * @throws IllegalStateException Naming the key and the way out
+   */
+  public void validateVisibilityWait() {
+
+    if ((waitForVisibilityAtMost == null) || waitForVisibilityAtMost.isPositive()) {
+      return;
+    }
+    throw new IllegalStateException(
+        """
+            The property '%s' is '%s', but it has to be longer than zero! It says how long an \
+            outbox entry may wait for a BPMS which does not report its workflow yet, for example \
+            a Camunda 8 cluster whose exporter is behind. Write a duration like '4h' or '30m', or \
+            remove the property to wait as long as the attempts of '%s' take."""
+            .formatted(WAIT_FOR_VISIBILITY_AT_MOST_PROPERTY, waitForVisibilityAtMost, BLOCK_AFTER_ATTEMPTS_PROPERTY));
+
+  }
 
   /**
    * The distance to the next attempt after a dispatch which failed, doubling per
@@ -1985,6 +2085,12 @@ public class PhaseTwoOutboxProperties {
     private int blockAfterAttempts = 50;
 
     /**
+     * How long an entry may wait for a BPMS which does not report its workflow yet. The
+     * builder starts from the same value the field does: not set.
+     */
+    private Duration waitForVisibilityAtMost = null;
+
+    /**
      * How many entries an outbox of VanillaBP's own dispatches at the same time - the
      * JDBC one and the MongoDB one of each platform. The builder starts from the same
      * value the field does.
@@ -2086,6 +2192,20 @@ public class PhaseTwoOutboxProperties {
         final int blockAfterAttempts) {
 
       this.blockAfterAttempts = blockAfterAttempts;
+      return self();
+
+    }
+
+    /**
+     * How long an entry may wait for a BPMS which does not report its workflow yet.
+     *
+     * @param waitForVisibilityAtMost The value of {@link #waitForVisibilityAtMost}
+     * @return This builder, so the calls chain
+     */
+    public B waitForVisibilityAtMost(
+        final Duration waitForVisibilityAtMost) {
+
+      this.waitForVisibilityAtMost = waitForVisibilityAtMost;
       return self();
 
     }
@@ -2220,6 +2340,9 @@ public class PhaseTwoOutboxProperties {
           + "blockAfterAttempts="
           + blockAfterAttempts
           + ", "
+          + "waitForVisibilityAtMost="
+          + waitForVisibilityAtMost
+          + ", "
           + "dispatchThreads="
           + dispatchThreads
           + ", "
@@ -2295,6 +2418,7 @@ public class PhaseTwoOutboxProperties {
     this.attemptFrequency = b.attemptFrequency;
     this.maxAttemptFrequency = b.maxAttemptFrequency;
     this.blockAfterAttempts = b.blockAfterAttempts;
+    this.waitForVisibilityAtMost = b.waitForVisibilityAtMost;
     this.dispatchThreads = b.dispatchThreads;
     this.createSchema = b.createSchema;
     this.retention = b.retention;
@@ -2357,6 +2481,19 @@ public class PhaseTwoOutboxProperties {
   public int getBlockAfterAttempts() {
 
     return blockAfterAttempts;
+
+  }
+
+  /**
+   * How long an entry may wait for a BPMS which does not report its workflow yet, as it was
+   * configured. Read {@link #waitForVisibilityAtMost()} for the time which applies.
+   *
+   * @return The value of {@link #waitForVisibilityAtMost}, <code>null</code> where it is not
+   *         set
+   */
+  public Duration getWaitForVisibilityAtMost() {
+
+    return waitForVisibilityAtMost;
 
   }
 
@@ -2480,6 +2617,19 @@ public class PhaseTwoOutboxProperties {
       final int blockAfterAttempts) {
 
     this.blockAfterAttempts = blockAfterAttempts;
+
+  }
+
+  /**
+   * How long an entry may wait for a BPMS which does not report its workflow yet.
+   *
+   * @param waitForVisibilityAtMost The value of {@link #waitForVisibilityAtMost},
+   *          <code>null</code> for the time the attempts take
+   */
+  public void setWaitForVisibilityAtMost(
+      final Duration waitForVisibilityAtMost) {
+
+    this.waitForVisibilityAtMost = waitForVisibilityAtMost;
 
   }
 
