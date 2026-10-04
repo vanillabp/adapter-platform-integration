@@ -1,10 +1,14 @@
 package io.vanillabp.migration.test.config;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import java.time.Instant;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -72,6 +76,63 @@ public class PhaseTwoOutboxPropertiesTest {
     // a cluster upgrade has to end inside it, not a network hiccup
     assertEquals(Duration.ofMinutes(237).plusSeconds(30), total);
     assertTrue(total.compareTo(Duration.ofHours(3)) > 0, "an outage of three hours is survived");
+
+  }
+
+  @Test
+  @DisplayName("Waiting for a read model lasts as long as the attempts would, unless it is set")
+  public void theWaitForAReadModelLastsAsLongAsTheAttempts() {
+
+    final var properties = new PhaseTwoOutboxProperties();
+
+    assertNull(properties.getWaitForVisibilityAtMost(), "nothing is set by default");
+    // the first attempt runs at once and the fiftieth failed one blocks the entry, so
+    // forty-nine distances lie between: the four hours the attempt budget is chosen for,
+    // given to a read model which is behind as well
+    assertEquals(Duration.ofMinutes(232).plusSeconds(30), properties.waitForVisibilityAtMost());
+
+    // the span follows the attempt settings, so an application which gives a failing
+    // BPMS less time gives a lagging read model less time too
+    properties.setBlockAfterAttempts(3);
+    assertEquals(Duration.ofSeconds(90), properties.waitForVisibilityAtMost());
+
+    properties.setWaitForVisibilityAtMost(Duration.ofMinutes(20));
+    assertEquals(Duration.ofMinutes(20), properties.waitForVisibilityAtMost(), "a value which is set wins");
+
+  }
+
+  @Test
+  @DisplayName("An entry has waited long enough once the time passed since it was written")
+  public void anEntryHasWaitedLongEnoughOnceTheTimePassed() {
+
+    final var properties = new PhaseTwoOutboxProperties();
+    properties.setWaitForVisibilityAtMost(Duration.ofMinutes(20));
+    final var writtenAt = Instant.parse("2026-10-04T13:55:20Z");
+
+    assertFalse(properties.hasWaitedForVisibilityLongEnough(writtenAt, writtenAt.plus(Duration.ofMinutes(19))));
+    assertTrue(properties.hasWaitedForVisibilityLongEnough(writtenAt, writtenAt.plus(Duration.ofMinutes(20))));
+    assertFalse(
+        properties.hasWaitedForVisibilityLongEnough(null, writtenAt.plus(Duration.ofDays(1))),
+        "an entry whose store does not know when it was written is never blocked for waiting");
+
+  }
+
+  @Test
+  @DisplayName("A time for waiting on a read model which is not longer than zero ends the startup")
+  public void aWaitOfZeroEndsTheStartup() {
+
+    final var properties = new PhaseTwoOutboxProperties();
+    properties.setWaitForVisibilityAtMost(Duration.ZERO);
+
+    final var refused = assertThrows(IllegalStateException.class, properties::validateVisibilityWait);
+    assertTrue(refused.getMessage().contains("'vanillabp.outbox.wait-for-visibility-at-most' is 'PT0S'"), refused
+        .getMessage());
+    assertTrue(refused.getMessage().contains("'vanillabp.outbox.block-after-attempts'"), refused.getMessage());
+
+    properties.setWaitForVisibilityAtMost(Duration.ofMinutes(1));
+    properties.validateVisibilityWait();
+    properties.setWaitForVisibilityAtMost(null);
+    properties.validateVisibilityWait();
 
   }
 

@@ -40,8 +40,9 @@ public class PhaseTwoOutboxEntry {
   public static final String STATUS_DONE = "DONE";
 
   /**
-   * An entry which used up <code>vanillabp.outbox.block-after-attempts</code> attempts, or
-   * whose failure the adapter called permanent. It waits for a person: no poll takes it
+   * An entry which used up <code>vanillabp.outbox.block-after-attempts</code> attempts, which
+   * waited longer than <code>vanillabp.outbox.wait-for-visibility-at-most</code> for its BPMS,
+   * or whose failure the adapter called permanent. It waits for a person: no poll takes it
    * again and no retention deletes it, which is why it is the one status somebody has to
    * clean up by hand.
    */

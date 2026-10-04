@@ -1106,10 +1106,19 @@ read model which is a second behind costs nine seconds per call.
 
 A failure which says nothing about a moment is retried at a growing distance instead, starting at
 `vanillabp.outbox.attempt-frequency` (an application running the gruelbox store keeps that one
-distance). Either way the
-attempt is counted, and `vanillabp.outbox.block-after-attempts` of them block the entry, which is what
-ends a workflow which never becomes searchable. `ARejectedDispatchIsPlannedAgainTest` holds it on
-Spring Boot and `NotVisibleWorkflowDoesNotStallDispatchTest` for the core.
+distance). That failure is counted, and `vanillabp.outbox.block-after-attempts` of them block the
+entry.
+
+`PhaseTwoRetryLater` is not counted. A read model which is behind is no failure of the entry, so
+the stores VanillaBP writes itself leave the attempts as they are and block the entry only once
+`vanillabp.outbox.wait-for-visibility-at-most` passed since it was written. Not set, that is the
+time the attempts take with the growing backoff, about four hours, which is what ends a workflow
+which never becomes searchable (`DECISIONS.pending/898.md`). Because the answer is not counted, the store does not remember it
+either, and the next dispatch looks like a first one. So throw it only before your operation
+reached the BPMS. `WaitingForAReadModelUsesNoAttemptsTest` holds it for the relational store,
+`MongoWaitingForAReadModelUsesNoAttemptsTest` for the MongoDB store of each platform,
+`ARejectedDispatchIsPlannedAgainTest` on Spring Boot and `NotVisibleWorkflowDoesNotStallDispatchTest`
+for the core.
 
 ## 6. Registering your adapter per platform
 

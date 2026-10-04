@@ -226,6 +226,7 @@ moment.
 
 Configuration (`QuarkusMigrationAdapterProperties`): `vanillabp.outbox.poll-interval`,
 `vanillabp.outbox.attempt-frequency`, `vanillabp.outbox.block-after-attempts`,
+`vanillabp.outbox.wait-for-visibility-at-most`,
 `vanillabp.outbox.dispatch-threads`,
 `vanillabp.outbox.retention` and
 `vanillabp.outbox.create-schema` (disable the `CREATE TABLE IF NOT EXISTS` DDL /

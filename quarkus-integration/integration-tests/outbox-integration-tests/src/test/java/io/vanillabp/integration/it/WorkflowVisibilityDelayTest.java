@@ -30,6 +30,7 @@ import io.vanillabp.integration.test.SteerableTaskAwarenessSource;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import io.vanillabp.spi.process.WorkflowNotFoundException;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
@@ -115,6 +116,36 @@ public class WorkflowVisibilityDelayTest {
   @Inject
   DataSource dataSource;
 
+  /**
+   * Waits until the outbox entry of the correlation of that aggregate is marked as
+   * dispatched. The listener reports the dispatch before the store writes the mark, so the
+   * entry is what has to be read.
+   *
+   * @param aggregate The aggregate the correlation was for
+   * @return The dispatched entry
+   */
+  private Entry awaitDispatchedCorrelationOf(
+      final Aggregate aggregate) throws InterruptedException {
+
+    final var deadline = System.currentTimeMillis() + UNTIL_A_DISPATCH_COUNTS_AS_LOST;
+    while (true) {
+      final var correlation = PhaseTwoOutboxReader
+          .ofTheVanillaBpOutbox(dataSource)
+          .entries()
+          .stream()
+          .filter(entry -> "CORRELATE_MESSAGE".equals(entry.operation()))
+          .filter(entry -> String.valueOf(aggregate.getId()).equals(entry.aggregateId()))
+          .filter(Entry::wasDispatched)
+          .findFirst();
+      if (correlation.isPresent()) {
+        return correlation.get();
+      }
+      assertTrue(System.currentTimeMillis() < deadline, "the correlation was never marked as dispatched");
+      Thread.sleep(50);
+    }
+
+  }
+
   @BeforeEach
   public void reset() {
 
@@ -195,6 +226,15 @@ public class WorkflowVisibilityDelayTest {
         .getCorrelatedMessages()
         .contains(aggregate.getId()
             + ":PaymentReceived:null"));
+
+    // the dispatch was told "not yet" twice and went through once. Only the last one is
+    // an attempt: waiting for a read model is no failure, and counting it blocked entries
+    // after a few minutes of a stopped exporter
+    final var correlation = awaitDispatchedCorrelationOf(aggregate);
+    assertEquals(
+        1,
+        correlation.attempts(),
+        "the answers 'not yet' were counted as attempts");
 
   }
 

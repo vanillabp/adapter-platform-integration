@@ -103,8 +103,9 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
   public static final String STATUS_DONE = "DONE";
 
   /**
-   * An entry which failed <code>vanillabp.outbox.block-after-attempts</code> times and
-   * is not retried any more. Somebody has to look at it - with the defaults, that many
+   * An entry which failed <code>vanillabp.outbox.block-after-attempts</code> times, or which
+   * waited longer than <code>vanillabp.outbox.wait-for-visibility-at-most</code> for its BPMS,
+   * and is not retried any more. Somebody has to look at it - with the defaults, that many
    * attempts span hours, so what ends up here is broken rather than waiting for a BPMS
    * which is away.
    */

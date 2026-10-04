@@ -425,6 +425,16 @@ public interface QuarkusMigrationAdapterProperties {
     int blockAfterAttempts();
 
     /**
+     * How long an entry may wait for a BPMS which does not report its workflow yet, counted
+     * from the moment the entry was written. Waiting like this uses no attempts, and the
+     * entry is blocked once this time passed. Not set by default, which means the time the
+     * attempts above take with the growing backoff, about four hours with the defaults.
+     *
+     * @return How long an entry may wait for its BPMS, empty for the time the attempts take
+     */
+    Optional<Duration> waitForVisibilityAtMost();
+
+    /**
      * How many entries the JDBC outbox dispatches at the same time. The workflow
      * aggregate decides which thread takes an entry, so two operations of one workflow
      * keep the order they were written in while operations of different workflows travel

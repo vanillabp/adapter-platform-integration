@@ -41,10 +41,10 @@ import io.vanillabp.migration.test.TestPhaseOperations;
  * to do with each other.
  * <p>
  * What happens instead is here: the entry is handed back with the window as its due
- * time, and the lane goes on to the next entry. The store counts the attempt like any
- * other, which is what ends a workflow that never becomes visible - after
- * <code>block-after-attempts</code> of them the entry is blocked, and with the defaults
- * that is ten attempts, one hundred seconds of a Camunda 8 window.
+ * time, and the lane goes on to the next entry. The store does not count that as an
+ * attempt. What ends a workflow that never becomes visible is the time since the entry was
+ * written, <code>vanillabp.outbox.wait-for-visibility-at-most</code>, which
+ * <code>WaitingForAReadModelUsesNoAttemptsTest</code> holds for the relational store.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class NotVisibleWorkflowDoesNotStallDispatchTest {
@@ -293,36 +293,29 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
   }
 
   @Test
-  @DisplayName("A workflow which never becomes visible is blocked after block-after-attempts windows")
-  public void aWorkflowWhichNeverBecomesVisibleIsBlocked() {
+  @DisplayName("A workflow which never becomes visible is handed back with the same window every time")
+  public void aWorkflowWhichNeverBecomesVisibleKeepsItsWindow() {
 
     final var adapter = new LaggingAdapter();
     final var service = serviceKnowingBothWorkflows(adapter);
 
-    final var attemptsAllowed = io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties
+    // more repetitions than the stores allow failed attempts by default: the core gives
+    // the entry back the same way each time, and it is the store which decides when the
+    // waiting is over, by the time the entry has waited and not by these answers
+    final var moreThanTheAttemptsAllowed = io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties
         .builder()
         .build()
-        .getBlockAfterAttempts();
-
-    // every repetition asks for the same window and never for a longer one, so what
-    // the entry costs before the store blocks it is the attempts times that window
-    for (var attempt = 1; attempt <= attemptsAllowed; attempt++) {
+        .getBlockAfterAttempts() + 1;
+    for (var repetition = 1; repetition <= moreThanTheAttemptsAllowed; repetition++) {
       final var retryLater = assertThrows(
           PhaseTwoRetryLater.class,
           () -> dispatchCorrelation(service, NOT_VISIBLE_YET));
-      assertEquals(WINDOW, retryLater.getRetryAfter(), "attempt "
-          + attempt
+      // the window is the adapter's and stays short: the growing backoff of a failing
+      // entry is NOT applied to it
+      assertEquals(WINDOW, retryLater.getRetryAfter(), "repetition "
+          + repetition
           + " asked for another due time");
     }
-
-    // said in numbers, for the defaults and a Camunda 8 window: fifty attempts of ten
-    // seconds, so an entry nobody can dispatch is blocked after eight and a half
-    // minutes. What the attempt budget costs here is a workflow which never becomes
-    // visible being asked about that long, which is cheap: the window is the adapter's
-    // and stays short, and the growing backoff of a failing entry is NOT applied to it
-    assertEquals(
-        Duration.ofSeconds(500),
-        Duration.ofSeconds(10).multipliedBy(attemptsAllowed));
 
   }
 

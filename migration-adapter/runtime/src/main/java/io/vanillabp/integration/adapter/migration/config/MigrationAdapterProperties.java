@@ -2469,6 +2469,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     }
     outbox.validateStoreNames();
     outbox.validateHousekeeping(startupFindings());
+    outbox.validateVisibilityWait();
     validateMaxTaskAge();
     refuseFullSyncPermissionsOutsideAWorkflow();
     refuseResourcesLocationsBelowTheWorkflowModule();
