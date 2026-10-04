@@ -4150,3 +4150,5 @@ as they are and carry a note pointing here.
 
 The gruelbox store lives in its own repository since decision 102. It still counts the answer as an
 attempt and has to follow in that repository.
+
+*Superseded in part by the repository of the gruelbox store: the last paragraph, saying that store still counts the answer as an attempt, since it now spends time instead of attempts as well, by the same rule `PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough`.*
