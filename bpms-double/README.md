@@ -104,16 +104,16 @@ The double holds no state of its own. Everything it answers comes from beans you
 each of them an interface with `default` methods for everything but its one core question, so a
 later VanillaBP release can add a question without breaking what you wrote.
 
-|              Hook               |                                                                       What it answers                                                                        |
-|---------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `DummyTaskWiringSource`         | Which BPMN tasks a process has, and which processes a file holds. The double parses nothing, so this is the model.                                           |
-| `DummyBpmsInitiatedStartSource` | Which start events the BPMS fires on its own, so `@WorkflowStartedByBpms` methods are validated against something.                                           |
-| `DummyProcessVersionSource`     | Which versions of a process the BPMS has deployed, so a version range or a version tag resolves.                                                             |
-| `DummyHealthSource`             | What the adapter contributes to the health endpoint, including an exception.                                                                                 |
-| `DummyTaskAwarenessSource`      | Whether this BPMS knows a task, a user task or a workflow. This is what drives the election across several adapters, and the visibility delay after a start. |
-| `DummyViewerSource`             | The process definitions, the BPMN XML and the workflow history the viewer API asks for.                                                                      |
-| `DummyPhaseTwoListener`         | Watches every phase-two operation, and fails one by throwing.                                                                                                |
-| `DummyDeploymentListener`       | Watches every call of the deployment pipeline, with the adapter id, the method, the workflow module and a detail.                                            |
+|              Hook               |                                                                              What it answers                                                                              |
+|---------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `DummyTaskWiringSource`         | Which BPMN tasks a process has, and which processes a file holds. The double parses nothing, so this is the model.                                                        |
+| `DummyBpmsInitiatedStartSource` | Which start events the BPMS fires on its own and which messages start a process, so `@WorkflowStartedByBpms` methods and starts by message are checked against something. |
+| `DummyProcessVersionSource`     | Which versions of a process the BPMS has deployed, so a version range or a version tag resolves.                                                                          |
+| `DummyHealthSource`             | What the adapter contributes to the health endpoint, including an exception.                                                                                              |
+| `DummyTaskAwarenessSource`      | Whether this BPMS knows a task, a user task or a workflow. This is what drives the election across several adapters, and the visibility delay after a start.              |
+| `DummyViewerSource`             | The process definitions, the BPMN XML and the workflow history the viewer API asks for.                                                                                   |
+| `DummyPhaseTwoListener`         | Watches every phase-two operation, and fails one by throwing.                                                                                                             |
+| `DummyDeploymentListener`       | Watches every call of the deployment pipeline, with the adapter id, the method, the workflow module and a detail.                                                         |
 
 Declaring one is declaring a bean. On Spring Boot that is a `@Bean` or a `@Component` in the test's
 own context, on Quarkus a CDI bean; several beans of one hook type are allowed and the double asks

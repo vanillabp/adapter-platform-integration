@@ -95,6 +95,7 @@ public class TheOrderOfAStartTest {
     final InOrder aStart = Mockito.inOrder(pipeline, electionCheck);
     aStart.verify(pipeline).deployResources(eq(List.of("test-module")), any());
     aStart.verify(electionCheck).validateElectionCapabilityAfterDeployment();
+    aStart.verify(electionCheck).sayWhereStartMessagesAreNotCheckedAfterDeployment();
     aStart.verify(pipeline).startWorkflowProcessing(eq(List.of("test-module")));
     aStart.verify(pipeline).endOfStartup();
 

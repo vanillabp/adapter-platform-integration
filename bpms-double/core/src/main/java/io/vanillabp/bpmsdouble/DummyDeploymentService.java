@@ -411,6 +411,21 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
                         bpmnProcessId,
                         source.startEventsOf(adapterId, workflowModuleId, bpmnProcessId))));
 
+    // like a real adapter which reads its model: report the messages which start the
+    // process, so the core can check a start by message against them
+    collaborators
+        .bpmsInitiatedStartInvoker()
+        .ifPresent(
+            invoker -> bpmsInitiatedStartSource
+                .first()
+                .map(source -> source.startMessagesOf(adapterId, workflowModuleId, bpmnProcessId))
+                .ifPresent(
+                    messageNames -> invoker.reportStartMessages(
+                        adapterId,
+                        workflowModuleId,
+                        bpmnProcessId,
+                        messageNames)));
+
     // like a real adapter which can be asked about its deployed versions: hand the
     // catalog over, so version specifications naming a version tag can be resolved
     processVersionSource
