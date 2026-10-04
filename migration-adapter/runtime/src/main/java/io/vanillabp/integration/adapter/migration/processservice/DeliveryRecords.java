@@ -1524,7 +1524,7 @@ public final class DeliveryRecords {
    * The row of the task an operation names, where the operation names one. That row was written
    * when the adapter left the task open, and it names the BPMS' own id of the workflow the task
    * runs in, its element and its kind. Phase two hands it to the adapter, which can then address
-   * the task without searching for it, see {@code DECISIONS.pending/903.md}.
+   * the task without searching for it, see decision 114 in the repository's DECISIONS.md.
    *
    * @param workflowAggregateId The workflow aggregate the operation is about
    * @param args The arguments of the operation
