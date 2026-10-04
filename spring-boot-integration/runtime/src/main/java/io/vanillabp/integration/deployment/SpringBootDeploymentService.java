@@ -129,7 +129,10 @@ public class SpringBootDeploymentService implements SmartLifecycle {
         // workflow, so a secondary or declared-only id may be the one whose combination
         // cannot locate its workflows
         .flatMap(processService -> processService.getProcessServicesOfDeclaredIds().stream())
-        .forEach(processService -> processService.validateElectionCapabilityAfterDeployment());
+        .forEach(processService -> {
+          processService.validateElectionCapabilityAfterDeployment();
+          processService.sayWhereStartMessagesAreNotCheckedAfterDeployment();
+        });
 
     deploymentService.endOfStartup();
 

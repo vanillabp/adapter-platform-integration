@@ -30,4 +30,26 @@ public interface DummyBpmsInitiatedStartSource {
       String workflowModuleId,
       String bpmnProcessId);
 
+  /**
+   * The plain names of the messages which start the given BPMN process, as a real adapter
+   * would read them from the BPMN model. The dummy reports them to the core, which then
+   * checks <code>ProcessService#startWorkflowByMessage</code> against them.
+   * <p>
+   * The default answers <code>null</code>, and the dummy then reports nothing. That is the shape
+   * of an adapter which cannot name the messages of its model.
+   *
+   * @param adapterId The adapter ID performing the wiring
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return The message names to be reported, or <code>null</code> to report nothing
+   */
+  default Collection<String> startMessagesOf(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return null;
+
+  }
+
 }

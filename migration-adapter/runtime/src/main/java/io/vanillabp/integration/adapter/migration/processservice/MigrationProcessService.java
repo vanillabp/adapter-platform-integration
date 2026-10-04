@@ -202,6 +202,28 @@ public class MigrationProcessService<A> {
   private volatile VanillaBpMetrics metrics = VanillaBpMetrics.NONE;
 
   /**
+   * The messages the adapters reported as starting their processes, which a call of
+   * {@link #startWorkflowByMessage} is checked against. Handed in by the workflow-task
+   * registry when it registers this process service, because the registry is where the
+   * adapters report. <code>null</code> until then, and in a test building this service
+   * alone: nothing is checked then.
+   */
+  private volatile io.vanillabp.integration.adapter.migration.workflowstart.StartMessages startMessages;
+
+  /**
+   * Hands over the messages a call of {@link #startWorkflowByMessage} is checked
+   * against. Called by the workflow-task registry when it registers this process service.
+   *
+   * @param startMessages The messages the adapters reported, never <code>null</code>
+   */
+  public void checkStartMessagesAgainst(
+      final io.vanillabp.integration.adapter.migration.workflowstart.StartMessages startMessages) {
+
+    this.startMessages = startMessages;
+
+  }
+
+  /**
    * Hands over what to count into, called by the platform integration once the metrics of
    * the application are known. It passes them on to the delivery records, so both count
    * into the same place without the platform having to know that there are two.
@@ -415,6 +437,29 @@ public class MigrationProcessService<A> {
       return;
     }
     findings.refuse(io.vanillabp.integration.spi.startup.StartupTopic.CONFIGURATION, scope, message);
+
+  }
+
+  /**
+   * Says once, after the deployment, that {@link #startWorkflowByMessage} is not checked
+   * for this process, where the adapter which starts its workflows reported no messages
+   * for it. Such an adapter either cannot read its model or does not know about the
+   * report yet, and the calls go to the BPMS unchecked, as they did before.
+   * <p>
+   * After the deployment, because the adapters report while they wire the models.
+   */
+  public void sayWhereStartMessagesAreNotCheckedAfterDeployment() {
+
+    if ((startMessages == null) || adapterProcessServices.isEmpty()) {
+      return;
+    }
+    startMessages
+        .sayWhereMessagesAreNotChecked(
+            adapterProcessServices
+                .getFirst()
+                .getAdapterId(),
+            workflowModuleId,
+            bpmnProcessId);
 
   }
 
@@ -1529,13 +1574,32 @@ public class MigrationProcessService<A> {
    * persisted with the outbox entry, and a workflow is started at most once per
    * aggregate.
    *
+   * <p>
+   * The message has to start THIS process. One which starts another process is refused
+   * before anything is saved, where the adapter which starts the workflow reported the
+   * messages of its model (see
+   * {@link io.vanillabp.integration.adapter.migration.workflowstart.StartMessages}).
+   *
    * @param workflowAggregate The workflow aggregate
-   * @param messageName The BPMN message name of the message start event
+   * @param messageName The BPMN message name of the message start event, plain as the
+   *          application knows it
    * @return The attached workflow aggregate
+   * @throws IllegalArgumentException If the message does not start this process
    */
   public A startWorkflowByMessage(
       final A workflowAggregate,
       final String messageName) {
+
+    if ((startMessages != null) && !adapterProcessServices.isEmpty()) {
+      startMessages
+          .refuseAMessageWhichStartsAnotherProcess(
+              adapterProcessServices
+                  .getFirst()
+                  .getAdapterId(),
+              workflowModuleId,
+              bpmnProcessId,
+              messageName);
+    }
 
     return execute(
         PhaseOperation.START_WORKFLOW_BY_MESSAGE,

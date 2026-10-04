@@ -21,6 +21,10 @@ import java.util.Collection;
  * turns out to be one nobody started through VanillaBP, and returns what the adapter has
  * to write back into the BPMS.</li>
  * </ol>
+ * During <code>wireBpmn</code> an adapter also reports the messages which start a process,
+ * through {@link #reportStartMessages(String, String, String, Collection)}. That is the
+ * start the application asks for, not one the BPMS fires by itself, and the core uses it to
+ * check <code>ProcessService#startWorkflowByMessage</code>.
  * An adapter whose BPMS cannot notify VanillaBP about a start it performs by itself does
  * not implement any of this; it fails the deployment of a process carrying such a start
  * event with a guiding message instead, because that workflow could never obtain a workflow
@@ -45,6 +49,50 @@ public interface BpmsInitiatedStartInvoker {
       String workflowModuleId,
       String bpmnProcessId,
       Collection<BpmsInitiatedStartSpec> startEvents);
+
+  /**
+   * Reports the names of the messages which start a deployed BPMN process, read from the
+   * model this adapter deploys while the application starts. Called during
+   * <code>wireBpmn</code>, once per executable BPMN process.
+   * <p>
+   * The core uses the names to check every call of
+   * <code>ProcessService#startWorkflowByMessage</code> before phase one: a message which
+   * does not start the process of that process service is refused with an exception
+   * naming the messages which do. Without the check, a message which starts ANOTHER
+   * process would start that one, and the core would record the new workflow under the
+   * wrong process.
+   * <p>
+   * The rules for the names:
+   * <ul>
+   * <li>Report the message start events the process itself holds. A message start event
+   * of an event subprocess starts no workflow and is left out.</li>
+   * <li>Report the PLAIN names, as the application passes them. Where your adapter
+   * prefixes identifiers to avoid name clashes, strip the prefix the way
+   * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport#plainIdentifier}
+   * does.</li>
+   * <li>Report an empty collection for a process without a message start event. The core
+   * then refuses every message for it.</li>
+   * <li>Do not call this for a process where you cannot name every message start event,
+   * for example because a name is an expression. The core then does not check that
+   * process.</li>
+   * </ul>
+   * An adapter which never calls this is not checked at all. The core says so once per
+   * BPMN process while the application starts, and the calls go to the BPMS as before.
+   * <p>
+   * The names are kept per adapter, because during a migration two adapters may deploy
+   * the same process in different versions. The check asks the adapter which starts
+   * the workflow, which is the first of the prioritized adapters.
+   *
+   * @param adapterId The ID of the adapter deploying the process
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param messageNames The plain names of the messages which start the process
+   */
+  void reportStartMessages(
+      String adapterId,
+      String workflowModuleId,
+      String bpmnProcessId,
+      Collection<String> messageNames);
 
   /**
    * Decides what a start the BPMS reported means, builds and saves the workflow aggregate
