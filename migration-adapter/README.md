@@ -449,6 +449,14 @@ searchable yet.
 
 ### What an election costs a caller which holds a transaction
 
+Where the row written when the workflow started names an adapter which is still configured for the
+workflow, `adapterIdOfWorkflow` and `locationOfWorkflow` answer from that row and nothing below is
+paid: no BPMS is asked and nothing is waited for. The adapter of that row started the workflow, and a
+workflow does not change its BPMS, so it holds the workflow until its end. The same row is also why
+the two methods do not throw after a workflow ended, for as long as the row lives. Without such a
+row, or where it names an adapter the configuration dropped, the election runs as measured here.
+`TheElectionReadsTheStartRowFirstTest` holds both ways.
+
 Measured on 2026-09-14 against the BPMS double, Spring Boot, H2 and a HikariCP pool of
 four connections, with the double reporting the window and the probe interval the Camunda
 8 adapter reports out of the box (ten seconds, 250 ms). The caller opens a transaction,
@@ -2126,6 +2134,50 @@ question on, and then a row past its period is deleted only where the aggregate 
   key, and the cap is what bounds how many of them one run makes.
 - `TheAggregateDecidesWhenAStartRowMayGoTest` holds the three answers which keep a row and the one
   which lets it go.
+
+##### The rows carry the version of the process
+
+Every row of the log carries the version of the process definition its workflow runs on, in
+`PROCESS_VERSION`, wherever the adapter names one. That holds for a delivery row and for a start
+row alike. An extension which shows details per version needs the version as early as it needs the
+id, and on a BPMS answering from a read model neither of them is there to ask for shortly after the
+start. `WorkflowElection#workflowStartOf` reads the id and the version together, and the adapter
+of the row with them: the adapter which started the workflow, which holds it until its end, because
+a workflow does not change its BPMS. That read elects nothing; `adapterIdOfWorkflow` and
+`locationOfWorkflow` still do.
+
+- The value is the version as the BPMS counts it, in the form the adapter reports it for a task: a
+  number on Camunda 7 and Camunda 8, a version tag where the BPMS has only that.
+- Where it comes from: `TaskInvocationContext#getProcessVersion` for a delivery,
+  `BpmsInitiatedStartContext#getProcessVersion` for a start the BPMS fires itself, and
+  `PhaseTwoRequest#reportStartedWorkflow(String, String)` for a start of the application. The first
+  two needed no adapter change, because the adapters filled both already. The third is a second
+  method beside the one with the id only, so an adapter which calls the old one compiles and runs
+  as before and writes a row without a version.
+- Whether an empty version may still come is a question about the adapter, and the core already
+  has the answer: an adapter which counts versions registers a `ProcessVersionCatalog` while it
+  wires its BPMN, and one which does not says so with `reportNoProcessVersionCatalog`.
+  `ProcessVersions#reportsVersions` reads both, and `WorkflowStart#versionsAreReported` carries the
+  answer to the reader. An adapter which said nothing either way counts as one which reports none,
+  so nobody waits for a version which never comes.
+- An adapter which keeps a catalog and still writes a row without a version has a defect. The core
+  says so in a WARN, once per adapter and BPMN process, and writes the row anyway. Dropping a
+  delivery or a start over a missing piece of information would cost far more than the
+  information is worth.
+- The start of one workflow may be reported twice: once by the adapter which started it and once
+  by the BPMS, where the adapter opens a worker at every start event, as the one on Camunda 8 does.
+  Only one of the two may know the version. So `recordWorkflowStart` adds the version to a row which
+  names the same workflow and has none yet, and it never changes a version which is there: that is
+  the version the workflow started on. A SECOND workflow of the aggregate replaces the version
+  together with the id, also with an empty one.
+- A start row without a version is answered with the version of an OPEN delivery of the same
+  workflow, where one has it. Only rows of the BPMN process asked about count for that, because a
+  task of a called process carries the version of the called process.
+- No index: the version is read with the row it stands in, and a key or an index which is there
+  already finds that row.
+- `TheRowsCarryTheProcessVersionTest` holds the three ways a row comes about and the WARN,
+  `JdbcRowsCarryTheProcessVersionTest` the SQL, and `MongoTaskDeliveryLogTest` of both platforms the
+  two MongoDB stores.
 
 ##### What the log does not hold
 

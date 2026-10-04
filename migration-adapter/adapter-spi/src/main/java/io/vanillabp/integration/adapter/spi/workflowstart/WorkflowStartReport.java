@@ -37,4 +37,25 @@ public interface WorkflowStartReport {
   void startedWorkflow(
       String workflowId);
 
+  /**
+   * Says which workflow of the BPMS was created, and on which version of its process definition.
+   * The same rules as for {@link #startedWorkflow(String)}: at most once per phase two, and a
+   * <code>null</code> id is the same as not calling it at all.
+   * <p>
+   * The default drops the version and passes the id on. That keeps a sink written before the
+   * version existed working, and it keeps this interface a functional one, so a test of an
+   * adapter can still hand in a lambda.
+   *
+   * @param workflowId The BPMS' own id of the started workflow
+   * @param processVersion The version of the process definition the workflow was started on, as
+   *          the BPMS counts it, or <code>null</code> where the BPMS does not say
+   */
+  default void startedWorkflow(
+      final String workflowId,
+      final String processVersion) {
+
+    startedWorkflow(workflowId);
+
+  }
+
 }

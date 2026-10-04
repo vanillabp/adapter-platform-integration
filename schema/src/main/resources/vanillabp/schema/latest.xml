@@ -447,4 +447,21 @@
     </createIndex>
   </changeSet>
 
+  <changeSet author="VanillaBP" id="vanillabp-task-delivery-process-version-2.0.0" labels="2.0.0">
+    <comment>
+      The version of the process definition a workflow runs on, as the BPMS counts it: a number on
+      Camunda 7 and Camunda 8, a version tag where the BPMS has only that. Written for a delivery
+      and for the start of a workflow alike, wherever the adapter names it. An extension which
+      shows details per version needs it from the moment the workflow starts, and a BPMS answering
+      from a read model cannot give it then.
+
+      Nullable: every row which is there names no version, and an adapter whose BPMS has no
+      versions never fills it. No index: the column is read together with the row it belongs to,
+      which a key or an existing index already finds.
+    </comment>
+    <addColumn tableName="${vanillabp.delivery.table}">
+      <column name="PROCESS_VERSION" type="VARCHAR(255)" />
+    </addColumn>
+  </changeSet>
+
 </databaseChangeLog>

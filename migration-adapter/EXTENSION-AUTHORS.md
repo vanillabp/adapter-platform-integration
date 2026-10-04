@@ -225,6 +225,13 @@ belongs to the adapter, and sending commands to an engine behind the adapter's b
 everything this platform promises - and read a non-null id as "this workflow is still running".
 The record is history, the election is the answer about now.
 
+Both methods read the row written when the workflow started first. Where it names an adapter which
+is still configured for the workflow, that adapter and the workflow id of the row are the answer: no
+BPMS is asked and nothing is waited for, so a report out of your application's transaction does not
+hold that transaction open. The adapter of that row started the workflow, and a workflow does not
+change its BPMS. For the same reason the two methods do not throw after the workflow ended, for as
+long as the row lives. Without the row the election runs as described above.
+
 `DerivedCancelationTest#theElectionCarriesTheWorkflowId` runs it against a booted application on
 both platforms.
 
@@ -241,6 +248,18 @@ period `vanillabp.delivery.workflow-start-retention` passed, there is no store f
 or the BPMN process is not part of this application. So empty means "VanillaBP does not know" and
 never "there is no such workflow". Everything the paragraph above says about what you may do with
 the id holds here as well.
+
+`WorkflowElection#workflowStartOf` reads the same rows and answers the id together with the version
+of the process definition the workflow runs on, as a `WorkflowStart`. Ask it where you pick an
+implementation per version. It also names the adapter which started the workflow. A workflow does
+not change its BPMS, so that adapter holds it until its end, and you learn it without an election.
+The adapter is empty where VanillaBP knows the id from its election cache only. It is empty in exactly the cases `workflowIdOf` is empty. An empty
+version inside a non-empty answer means one of two things, and `versionsAreReported` tells them
+apart. Where it is `true`, the adapter of that workflow reports versions, and the version may still
+come: a later report of the same start brings it, and so does a task of that workflow which waits
+for your application. Where it
+is `false`, the adapter has no versions, or said nothing about them, and waiting means waiting
+forever.
 
 ## 4. Where your settings live
 

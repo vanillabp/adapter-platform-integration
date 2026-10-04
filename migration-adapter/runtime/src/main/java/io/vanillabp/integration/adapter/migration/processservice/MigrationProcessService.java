@@ -1272,13 +1272,16 @@ public class MigrationProcessService<A> {
    * @param adapterId The ID of the adapter which started the workflow
    * @param workflowAggregateId The workflow aggregate of the started workflow
    * @param workflowId The BPMS' own id of the started workflow or <code>null</code>
+   * @param processVersion The version of the process definition the workflow was started on, or
+   *          <code>null</code> where the adapter does not say
    */
   public void recordWorkflowStart(
       final String adapterId,
       final Object workflowAggregateId,
-      final String workflowId) {
+      final String workflowId,
+      final String processVersion) {
 
-    deliveryRecords.recordWorkflowStart(adapterId, workflowAggregateId, workflowId);
+    deliveryRecords.recordWorkflowStart(adapterId, workflowAggregateId, workflowId, processVersion);
 
   }
 
@@ -1880,20 +1883,54 @@ public class MigrationProcessService<A> {
     }
     // where the adapter says which workflow it created, this is the one moment anybody ever
     // learns it: phase two returns nothing, and the instance was created on the other side of
-    // the commit
-    final var startedWorkflowId = new java.util.concurrent.atomic.AtomicReference<String>();
+    // the commit. The version of the process definition comes along where the adapter names it
+    final var startedWorkflow = new StartedWorkflow();
     runPhaseTwo(
         adapter,
         "%s of %s".formatted(operation.describe(args), subject),
         () -> handlerOf(adapter, operation, args)
-            .phaseTwo(phaseTwoRequest(workflowAggregateId, args, startedWorkflowId::set)));
+            .phaseTwo(phaseTwoRequest(workflowAggregateId, args, startedWorkflow)));
+    final var startedWorkflowId = startedWorkflow.workflowId;
     // the workflow exists now, and this adapter created it: the next operation on it
     // (the classic one is correlating the message which lets it continue) probes this
     // adapter first and waits out its BPMS' visibility delay instead of failing
     rememberWorkflowAdapter(workflowAggregateId, adapterId, startedWorkflowId.get());
     // and it is written down, because a cache is bounded and does not survive a restart while
     // the question "which workflow does this aggregate belong to" outlives both
-    deliveryRecords.recordWorkflowStart(adapterId, workflowAggregateId, startedWorkflowId.get());
+    deliveryRecords
+        .recordWorkflowStart(adapterId, workflowAggregateId, startedWorkflowId.get(),
+            startedWorkflow.processVersion.get());
+
+  }
+
+  /**
+   * What phase two of a START says about the workflow it created. Both methods of the sink are
+   * implemented, so an adapter which names no version reports the id all the same and leaves the
+   * version empty.
+   */
+  private static final class StartedWorkflow implements io.vanillabp.integration.adapter.spi.workflowstart.WorkflowStartReport {
+
+    private final java.util.concurrent.atomic.AtomicReference<String> workflowId = new java.util.concurrent.atomic.AtomicReference<>();
+
+    private final java.util.concurrent.atomic.AtomicReference<String> processVersion = new java.util.concurrent.atomic.AtomicReference<>();
+
+    @Override
+    public void startedWorkflow(
+        final String workflowId) {
+
+      startedWorkflow(workflowId, null);
+
+    }
+
+    @Override
+    public void startedWorkflow(
+        final String workflowId,
+        final String processVersion) {
+
+      this.workflowId.set(workflowId);
+      this.processVersion.set(processVersion);
+
+    }
 
   }
 
@@ -2444,12 +2481,13 @@ public class MigrationProcessService<A> {
    * aggregate. With the ten-second window of a Camunda 8 cluster whose exporter is behind,
    * as few concurrent reports as the connection pool is wide empty it for everybody. The
    * measurement is in {@code migration-adapter/README.md}, under "What an election costs a
-   * caller which holds a transaction".
+   * caller which holds a transaction". Where the row about the start of the workflow is there,
+   * nothing of this is paid: see {@link #locationOfWorkflow(Object)}.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return The id of the adapter holding the workflow
-   * @throws IllegalStateException If no configured BPMS knows the workflow, or if the
-   *           BPMS which should hold it is unreachable
+   * @throws IllegalStateException If there is no start row naming a configured adapter, and no
+   *           configured BPMS knows the workflow, or the BPMS which should hold it is unreachable
    */
   public String adapterIdOfWorkflow(
       final Object workflowAggregateId) {
@@ -2467,14 +2505,34 @@ public class MigrationProcessService<A> {
    * holds and nothing new is asked of any BPMS for it: the record of a task delivery of
    * that workflow first, then the election cache. A <code>null</code> id is a regular
    * answer.
+   * <p>
+   * The row written when the workflow started is read FIRST. Its adapter started the workflow, and
+   * a workflow does not change its BPMS: a new workflow starts in the first adapter of the list,
+   * and a running one stays where it is. So where that adapter is still one of this workflow's
+   * adapters, its id and the workflow id of the row are the answer, without asking any BPMS and
+   * without waiting for a read model. That is also why this does not throw after the workflow
+   * ended, for as long as the row lives (<code>vanillabp.delivery.workflow-start-retention</code>):
+   * the row says who started the workflow, not whether it still runs. Without such a row (a
+   * workflow started before the row existed, a row past its period, an adapter which reports no
+   * workflow id, or an adapter which is not configured any more), the election runs as it always
+   * did.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return Where the workflow is
-   * @throws IllegalStateException If no configured BPMS knows the workflow, or if the
-   *           BPMS which should hold it is unreachable
+   * @throws IllegalStateException If there is no start row naming a configured adapter, and no
+   *           configured BPMS knows the workflow, or the BPMS which should hold it is unreachable
    */
   public io.vanillabp.integration.extension.spi.election.WorkflowLocation locationOfWorkflow(
       final Object workflowAggregateId) {
+
+    // the adapter which started the workflow holds it until its end, so the row about the start
+    // answers without a round trip and without the wait for a read model. The election would give
+    // the same answer later, and on a BPMS which forgot an ended workflow it would throw instead
+    final var started = deliveryRecords.workflowStartRowOf(workflowAggregateId);
+    if ((started != null) && isAdapterOfThisWorkflow(started.adapterId())) {
+      return new io.vanillabp.integration.extension.spi.election.WorkflowLocation(
+          started.adapterId(), started.workflowId());
+    }
 
     final var subject = subjectOf(workflowAggregateId);
     final var workflowId = workflowIdOf(workflowAggregateId);
@@ -2535,6 +2593,60 @@ public class MigrationProcessService<A> {
     return recorded != null
         ? recorded
         : workflowLocator.rememberedWorkflowId(workflowAggregateId);
+
+  }
+
+  /**
+   * Whether the given adapter is one this workflow is elected among. A start row names the adapter
+   * which started the workflow, and an id the configuration dropped since would send an extension
+   * to an adapter which is not there.
+   */
+  private boolean isAdapterOfThisWorkflow(
+      final String adapterId) {
+
+    return (adapterId != null) && adapterProcessServices
+        .stream()
+        .anyMatch(adapter -> adapterId.equals(adapter.getAdapterId()));
+
+  }
+
+  /**
+   * The BPMS' own id of the given workflow together with the version of the process definition
+   * it runs on, as far as VanillaBP holds them, and whether an empty version may still come
+   * ({@link io.vanillabp.integration.extension.spi.election.WorkflowElection#workflowStartOf}).
+   * <p>
+   * The same two sources as {@link #workflowIdOf(Object)}, in the same order. The election cache
+   * knows no version and no adapter of a row, so an id only the cache knows is answered without an
+   * adapter and without a version, and with no promise that one will come.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @return What VanillaBP holds about the workflow, or <code>null</code> where it holds no id
+   */
+  public io.vanillabp.integration.extension.spi.election.WorkflowStart workflowStartOf(
+      final Object workflowAggregateId) {
+
+    final var recorded = deliveryRecords.workflowStartOf(workflowAggregateId);
+    if (recorded != null) {
+      return recorded;
+    }
+    final var remembered = workflowLocator.rememberedWorkflowId(workflowAggregateId);
+    return remembered == null
+        ? null
+        : new io.vanillabp.integration.extension.spi.election.WorkflowStart(null, remembered, null, false);
+
+  }
+
+  /**
+   * Hands over what the adapters said about the versions of their BPMN processes. Called by the
+   * registry of the workflow tasks when it registers this process, because that registry is
+   * where the adapters report their catalogs while they wire their BPMN.
+   *
+   * @param processVersions What the adapters registered
+   */
+  public void setProcessVersions(
+      final io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions processVersions) {
+
+    deliveryRecords.setProcessVersions(processVersions);
 
   }
 

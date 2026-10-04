@@ -150,6 +150,27 @@ public class TaskDeliveryLogReaderTest {
   }
 
   @Test
+  @DisplayName("A record says which version of its process the workflow runs on, where the adapter named one")
+  public void aRecordSaysTheVersionOfItsProcess() throws Exception {
+
+    givenADelivery("a-key", "the-task", "instance-4711", "TheTask", A_MOMENT, null, "TASK");
+    givenADelivery("another-key", "another-task", "instance-4711", "TheOtherTask", A_MOMENT, null, "TASK");
+    try (var connection = dataSource.getConnection(); var update = connection
+        .prepareStatement(
+            "UPDATE %s SET PROCESS_VERSION = ? WHERE DELIVERY_KEY = ?".formatted(LOG_OF_THIS_TEST))) {
+      update.setString(1, "3");
+      update.setString(2, "a-key");
+      update.executeUpdate();
+    }
+
+    assertEquals("3", readerOfThisTest().deliveriesOfTask("the-task").getFirst().processVersion());
+    assertNull(
+        readerOfThisTest().deliveriesOfTask("another-task").getFirst().processVersion(),
+        "a record whose adapter named no version reports none");
+
+  }
+
+  @Test
   @DisplayName("A reader is built without the class which names the table, and only a question needs it")
   public void aReaderIsBuiltWithoutTheClassWhichNamesTheTable() {
 
@@ -192,7 +213,8 @@ public class TaskDeliveryLogReaderTest {
                   BPMN_ELEMENT_ID VARCHAR(255), \
                   WORKFLOW_ID VARCHAR(255), \
                   TASK_KIND VARCHAR(32), \
-                  RECORD_KIND VARCHAR(32) DEFAULT 'TASK_DELIVERY' NOT NULL)"""
+                  RECORD_KIND VARCHAR(32) DEFAULT 'TASK_DELIVERY' NOT NULL, \
+                  PROCESS_VERSION VARCHAR(255))"""
                   .formatted(LOG_OF_THIS_TEST));
     }
 

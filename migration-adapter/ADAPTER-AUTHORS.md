@@ -289,6 +289,18 @@ was before the sink existed. The same holds for a workflow your BPMS started on 
 `BpmsInitiatedStartContext#getNativeInstanceId` is the value the core writes down - that one is no
 longer for messages only.
 
+If your BPMS counts the versions of a process, report the version with the id:
+`PhaseTwoRequest#reportStartedWorkflow(String, String)` takes the version of the process definition
+the workflow was started on, in the same form `TaskInvocationContext#getProcessVersion` reports it
+for a task of that workflow. Call this one instead of the one with the id only, never both. An
+extension which shows details per version reads the version from that row, and on a BPMS answering
+from a read model the row is the only place to read it in the first seconds. The core knows which
+adapters count versions from the `ProcessVersionCatalog` you register while you wire your BPMN. If
+you register one and report a start without a version, the core says so in a WARN once per BPMN
+process and writes the row anyway. A start your BPMS fires itself and every delivery carry the
+version already, through `BpmsInitiatedStartContext#getProcessVersion` and
+`TaskInvocationContext#getProcessVersion`, so nothing more is asked there.
+
 What your BPMS is asked about are the four awareness probes and the read-only viewer methods.
 The probes are section 4. The viewer methods, `getProcessDefinitions`, `getBpmnXml` and
 `getWorkflowHistory`, have no phases and no transaction; their defaults throw a guiding message,

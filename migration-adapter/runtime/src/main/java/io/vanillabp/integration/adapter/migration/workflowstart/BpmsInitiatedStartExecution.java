@@ -302,9 +302,15 @@ public final class BpmsInitiatedStartExecution {
     // the aggregate and the workflow which runs it are both known right here, in the
     // transaction which persists the aggregate, so this is where the pair is written down. It
     // happens for every outcome of the decision above, including the workflow which was ours
-    // already: the row is keyed by the aggregate, so writing it again writes nothing
+    // already: the row is keyed by the aggregate, so writing it again writes nothing. The version
+    // the BPMS reported with the start goes with it, which is where an adapter of a remote BPMS
+    // knows it without asking anybody
     processService
-        .recordWorkflowStart(context.getAdapterId(), serializedId, context.getNativeInstanceId());
+        .recordWorkflowStart(
+            context.getAdapterId(),
+            serializedId,
+            context.getNativeInstanceId(),
+            context.getProcessVersion());
     final Map<String, Object> variables = new LinkedHashMap<>();
     variables.put(aggregateIdName, serializedId);
     return new BpmsInitiatedStartResult(serializedId, aggregateIdName, variables, created);

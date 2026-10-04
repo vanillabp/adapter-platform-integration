@@ -43,7 +43,7 @@ public final class TaskDeliveryLogReader {
    */
   private static final String COLUMNS_OF_A_RECORD = """
       TASK_ID, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
-      TASK_DEFINITION, BPMN_ELEMENT_ID, OUTCOME, TASK_CLOSED_AT, TASK_KIND""";
+      TASK_DEFINITION, BPMN_ELEMENT_ID, OUTCOME, TASK_CLOSED_AT, TASK_KIND, PROCESS_VERSION""";
 
   /**
    * The kind of row a delivery is written as. A row of the log is either that or the start of a
@@ -77,6 +77,8 @@ public final class TaskDeliveryLogReader {
    * @param taskKind Which kind of task {@link #taskId()} is the id of, as the delivering
    *          adapter named it (<code>TASK</code> or <code>USER_TASK</code>), empty where
    *          the adapter named none
+   * @param processVersion The version of the process definition the workflow runs on, as the
+   *          adapter reported it, empty where it named none
    */
   public record Delivery(
                          String taskId,
@@ -89,7 +91,8 @@ public final class TaskDeliveryLogReader {
                          String bpmnElementId,
                          String outcome,
                          boolean taskWasClosed,
-                         String taskKind) {
+                         String taskKind,
+                         String processVersion) {
 
   }
 
@@ -246,7 +249,7 @@ public final class TaskDeliveryLogReader {
                 .getString("TASK_DEFINITION"), results.getString(
                     "BPMN_ELEMENT_ID"), results
                         .getString("OUTCOME"), results.getTimestamp("TASK_CLOSED_AT") != null, results
-                            .getString("TASK_KIND"));
+                            .getString("TASK_KIND"), results.getString("PROCESS_VERSION"));
 
   }
 

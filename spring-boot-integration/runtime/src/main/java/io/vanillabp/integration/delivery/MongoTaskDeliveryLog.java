@@ -189,7 +189,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                       .taskDefinition(), delivery.bpmnElementId(), delivery.taskId(), delivery
                           .outcome(), delivery.bpmnErrorCode(), delivery
                               .bpmnErrorName(), recordedAt, recordedAt, null, delivery
-                                  .taskKind(), delivery.recordKind()),
+                                  .taskKind(), delivery.recordKind(), delivery.processVersion()),
           collection);
       compensateUnlessCommitted(delivery);
       return true;
@@ -209,7 +209,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
    * carries one workflow. Only where it finds one does the update run, and that update is bounded to
    * a document which is a start and whose workflow id differs, so a start dispatched twice writes
    * nothing. <code>lastSeenAt</code> moves with the id, which is what the period of such a document
-   * counts from.
+   * counts from, and so does the version: one of the workflow which ended says nothing about the
+   * one which runs now. A document which names this workflow already may still get the version it
+   * lacks, and nothing else.
    */
   @Override
   public boolean recordWorkflowStart(
@@ -221,7 +223,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
     final var startedAt = workflowStart.recordedAt() == null
         ? Instant.now()
         : workflowStart.recordedAt();
-    return mongoTemplate
+    final var replaced = mongoTemplate
         .updateFirst(
             Query
                 .query(
@@ -236,7 +238,30 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                 .update("workflowId", workflowStart.workflowId())
                 .set("adapterId", workflowStart.adapterId())
                 .set("recordedAt", startedAt)
-                .set("lastSeenAt", startedAt),
+                .set("lastSeenAt", startedAt)
+                .set("processVersion", workflowStart.processVersion()),
+            TaskDeliveryDocument.class,
+            collection)
+        .getModifiedCount() > 0;
+    if (replaced || (workflowStart.processVersion() == null)) {
+      return replaced;
+    }
+    // the same workflow reported a second time, by the BPMS where the adapter started it or the
+    // other way round, and only one of the two may have known the version
+    return mongoTemplate
+        .updateFirst(
+            Query
+                .query(
+                    Criteria
+                        .where("_id")
+                        .is(workflowStart.deliveryKey())
+                        .and("recordKind")
+                        .is(WORKFLOW_START)
+                        .and("workflowId")
+                        .is(workflowStart.workflowId())
+                        .and("processVersion")
+                        .is(null)),
+            Update.update("processVersion", workflowStart.processVersion()),
             TaskDeliveryDocument.class,
             collection)
         .getModifiedCount() > 0;
@@ -432,7 +457,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
             .getBpmnElementId(), document
                 .getTaskId(), document.getOutcome(), document.getBpmnErrorCode(), document
                     .getBpmnErrorName(), document.getRecordedAt(), document
-                        .getTaskClosedAt(), document.getTaskKind(), document.getRecordKind());
+                        .getTaskClosedAt(), document.getTaskKind(), document.getRecordKind(), document
+                            .getProcessVersion());
 
   }
 

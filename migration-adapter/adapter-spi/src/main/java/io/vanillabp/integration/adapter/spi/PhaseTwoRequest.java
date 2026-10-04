@@ -90,6 +90,32 @@ public record PhaseTwoRequest<A>(
   }
 
   /**
+   * Says which workflow of the BPMS the start just created AND on which version of its process
+   * definition, so VanillaBP can answer both later without asking any BPMS. Everything
+   * {@link #reportStartedWorkflow(String)} says holds here as well. Call one of the two, not
+   * both.
+   * <p>
+   * An adapter whose BPMS counts versions calls this one. VanillaBP knows which adapters count
+   * versions, from the catalog an adapter registers while it wires its BPMN. Where such an
+   * adapter reports a start without a version, VanillaBP says so once per adapter and BPMN
+   * process in a WARN, and still writes the id down.
+   *
+   * @param workflowId The BPMS' own id of the started workflow, <code>null</code> where the
+   *          adapter names none
+   * @param processVersion The version of the process definition the workflow was started on, as
+   *          the BPMS counts it and in the same form
+   *          {@code io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#getProcessVersion()}
+   *          reports it for a task of that workflow. <code>null</code> where the BPMS does not say
+   */
+  public void reportStartedWorkflow(
+      final String workflowId,
+      final String processVersion) {
+
+    workflowStartReport.startedWorkflow(workflowId, processVersion);
+
+  }
+
+  /**
    * Which task the operation addresses - the value phase one was given, which the outbox
    * persisted in between.
    *

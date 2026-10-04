@@ -78,4 +78,20 @@ public final class ExtensionWorkflowElection implements WorkflowElection {
 
   }
 
+  @Override
+  public java.util.Optional<io.vanillabp.integration.extension.spi.election.WorkflowStart> workflowStartOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId) {
+
+    final var processService = router.processServiceOf(workflowModuleId, bpmnProcessId);
+    if (processService == null) {
+      // the same as for the id alone: about a BPMN process this application does not serve, a
+      // read knows nothing
+      return java.util.Optional.empty();
+    }
+    return java.util.Optional.ofNullable(processService.workflowStartOf(workflowAggregateId));
+
+  }
+
 }

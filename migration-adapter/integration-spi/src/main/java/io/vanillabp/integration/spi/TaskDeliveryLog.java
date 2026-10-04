@@ -140,15 +140,21 @@ public interface TaskDeliveryLog {
    * about the second one with it. So a row whose workflow id differs is overwritten, and a row which
    * already names this workflow is left alone - a start dispatched twice writes nothing.
    * <p>
+   * One thing may still be added to a row which names this workflow already: its
+   * {@link TaskDelivery#processVersion()}, where the row has none and the new one has. The start
+   * of one workflow can be reported twice, once by the adapter which started it and once by the
+   * BPMS itself, and only one of the two may know the version. A version a row holds already is
+   * never changed: it is the version the workflow started on.
+   * <p>
    * The default inserts and keeps what is there, which is what a store written before this existed
    * does. Such a store answers the id of a second workflow on one aggregate with the first one's
    * until the retention takes the row, so a store which can update implements this. The stores
    * VanillaBP ships do.
    *
    * @param workflowStart The row, built by
-   *          {@link TaskDelivery#workflowStart(String, String, String, String, String, java.time.Instant)}
-   * @return <code>true</code> where the store now holds this workflow's id, <code>false</code> where
-   *         it held it already
+   *          {@link TaskDelivery#workflowStart(String, String, String, String, String, String, java.time.Instant)}
+   * @return <code>true</code> where the store now holds this workflow's id or its version for the
+   *         first time, <code>false</code> where it held everything already
    */
   default boolean recordWorkflowStart(
       final TaskDelivery workflowStart) {
