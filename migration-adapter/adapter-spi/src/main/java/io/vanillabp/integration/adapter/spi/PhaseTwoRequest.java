@@ -27,6 +27,13 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
  * @param workflowStartReport Where phase two of a START says which workflow the BPMS created,
  *        reported through {@link #reportStartedWorkflow(String)} rather than read from here.
  *        {@link WorkflowStartReport#NOBODY_LISTENS} for every other operation
+ * @param workflowId The BPMS' own id of the workflow the operation is about, where VanillaBP
+ *        wrote down that THIS adapter started it, otherwise <code>null</code>. Handed to an
+ *        operation about a workflow only. It is a hint, like the id the election hands to
+ *        {@link MigratableProcessService#awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object, String)}:
+ *        an adapter may
+ *        address the workflow by it instead of searching for it, and where the BPMS does not know
+ *        that id it does what it would have done without one
  */
 public record PhaseTwoRequest<A>(
                                  String workflowModuleId,
@@ -34,7 +41,8 @@ public record PhaseTwoRequest<A>(
                                  AggregatePersistenceAware<A> aggregatePersistence,
                                  Object workflowAggregateId,
                                  Map<String, String> args,
-                                 WorkflowStartReport workflowStartReport) {
+                                 WorkflowStartReport workflowStartReport,
+                                 String workflowId) {
 
   /**
    * Copies the arguments, so what a handler reads cannot be changed by whoever built the
@@ -68,7 +76,30 @@ public record PhaseTwoRequest<A>(
       final Map<String, String> args) {
 
     this(
-        workflowModuleId, bpmnProcessId, aggregatePersistence, workflowAggregateId, args, WorkflowStartReport.NOBODY_LISTENS);
+        workflowModuleId, bpmnProcessId, aggregatePersistence, workflowAggregateId, args, WorkflowStartReport.NOBODY_LISTENS, null);
+
+  }
+
+  /**
+   * A request which knows no workflow id, which is what every caller built before the id
+   * existed. The id stands LAST for that reason.
+   *
+   * @param workflowModuleId The ID of the workflow module the workflow belongs to
+   * @param bpmnProcessId The BPMN process ID of the workflow
+   * @param aggregatePersistence The persistence of the workflow-aggregate
+   * @param workflowAggregateId The ID of the workflow aggregate in its own type
+   * @param args The operation's arguments
+   * @param workflowStartReport Where phase two of a START says which workflow the BPMS created
+   */
+  public PhaseTwoRequest(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final Map<String, String> args,
+      final WorkflowStartReport workflowStartReport) {
+
+    this(workflowModuleId, bpmnProcessId, aggregatePersistence, workflowAggregateId, args, workflowStartReport, null);
 
   }
 

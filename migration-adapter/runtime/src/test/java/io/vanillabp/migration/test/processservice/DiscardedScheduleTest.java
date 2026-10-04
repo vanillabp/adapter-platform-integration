@@ -138,6 +138,11 @@ public class DiscardedScheduleTest {
     lenient()
         .when(adapter.awarenessOfWorkflow(any(), any(), any()))
         .thenReturn(WorkflowAwareness.ACTIVE);
+    // the election hands the workflow id to a probe about a workflow, and a mock does not run
+    // the default which drops it
+    lenient()
+        .when(adapter.awarenessOfWorkflow(any(), any(), any(), any()))
+        .thenReturn(WorkflowAwareness.ACTIVE);
 
     @SuppressWarnings("unchecked")
     final AggregatePersistenceAware<Object> persistence = mock(AggregatePersistenceAware.class);

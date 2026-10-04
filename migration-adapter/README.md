@@ -99,12 +99,14 @@ falls through to the next adapter, `COMPLETED` is a warned no-op, and
 start in the first-priority adapter (no probing).
 
 The walk itself is drawn below. A cached hint is probed first and the remaining adapters follow in
-list order, and each of the four answers ends the walk in its own way.
+list order, and each of the four answers ends the walk in its own way. For an operation on a
+workflow, the row written when the workflow started is the hint where the cache has none (see
+"Waiting for a workflow to become visible").
 
 ```mermaid
 flowchart TB
   S["operation on an EXISTING workflow<br/>(complete/cancel task, user task, correlate, aggregateChanged, viewer)"] --> L["prioritized adapters for (module, process):<br/>workflow › module › global — most specific non-empty list wins"]
-  L --> H{"cache hint for<br/>(module, process, id)?"}
+  L --> H{"cache hint for<br/>(module, process, id)?<br/>else, for a workflow operation:<br/>start row of a configured adapter?"}
   H -->|yes| P0["probe the hinted adapter first"]
   H -->|no| P["probe next adapter in list order<br/>awarenessOfTask / awarenessOfUserTask / awarenessOfWorkflow<br/>with WorkflowScope (module + served process ids)"]
   P0 --> R
@@ -372,9 +374,23 @@ Four pieces solve it, and the split matters:
    shorter one; its default answers the window above, which is what every adapter written
    before this does.
 2. **The waiting is bounded by a hint, never blanket.** VanillaBP waits only for an
-   adapter the `WorkflowAdapterCache` names for that workflow. A workflow nobody ever
-   heard of has no hint and fails immediately - which a wrong ID has to, since waiting
-   the full window on every typo would turn a programming error into a timeout.
+   adapter the `WorkflowAdapterCache` names for that workflow, or, for an operation on the
+   workflow itself, the adapter the row written when the workflow started names. A workflow
+   nobody ever heard of has no hint and fails immediately - which a wrong ID has to, since
+   waiting the full window on every typo would turn a programming error into a timeout.
+
+   The start row is the hint which survives. The cache lives in the memory of one node and
+   forgets after its time-to-live, so a restart, a second node taking over an outbox entry
+   and an hour without an operation all used to leave an operation on a running workflow
+   without a hint. While the BPMS' read model was behind, phase one then threw
+   `WorkflowNotFoundException` and the dispatch consumed the entry as stale, which is work
+   lost for good. Measured against Camunda 8.10.0 with a stopped exporter on 2026-10-04: a
+   restart after six minutes consumed all 480 waiting `aggregateChanged` entries that way.
+   The row is in the application's database, so it reads as a hint wherever the cache has
+   none. A row which names an adapter the workflow is not elected among any more does not
+   count. `AnOperationReadsTheStartRowTest` holds the core,
+   `WorkflowVisibilityDelayTest#anOperationAfterARestartWaitsForTheWorkflow` both platforms.
+
 3. **The cache is filled where VanillaBP knows the answer without asking**
    (`MigrationProcessService.rememberWorkflowAdapter`): when a start is SCHEDULED (the
    elected adapter is decided then), again after its phase two, and on every inbound
@@ -436,8 +452,10 @@ prove "exactly the window we are waiting for". It was left out:
   plugs its shared cache in, which is cheaper than teaching every outbox store a query.
 
 The residual is therefore honest and documented: on a cluster WITHOUT a shared cache, an
-operation reaching a node which neither started the workflow nor received a delivery for
-it has no hint, so it fails at the call while the BPMS catches up. Retrying the business
+operation on a TASK reaching a node which neither started the workflow nor received a delivery
+for it has no hint, so it fails at the call while the BPMS catches up. An operation on the
+workflow itself is covered by the start row, unless the workflow was started before the row
+existed or by an adapter which reports no workflow id. Retrying the business
 operation works, and so does a shared cache - which is what the
 `WorkflowNotFoundException` says when an eventually consistent adapter is configured.
 
@@ -445,7 +463,10 @@ The other residual is the mirror image: an operation with a hint whose workflow 
 gone (ended long ago and cleaned out of the read model) is planned instead of refused. Its
 entry is repeated and finally blocked, and the counter of blocked entries is where it
 shows. That is the price of never refusing an operation on a workflow which merely is not
-searchable yet.
+searchable yet. The start row makes this window longer: it is kept for
+`vanillabp.delivery.workflow-start-retention` (thirty days) instead of the cache's hour, so a
+workflow which ended and was cleaned out of the read model within that period ends as a blocked
+entry rather than as a refused call or a consumed one.
 
 ### What an election costs a caller which holds a transaction
 
@@ -565,9 +586,10 @@ together with `#readFailsAfterTheVisibilityWindowPassed`.
 
 ### The election may carry the BPMS' own id of the workflow
 
-`MigratableProcessService.awarenessOfWorkflow` has a fourth argument, and the paths which WAIT
-pass it: the election an extension asks for, and the read of the viewer API. It is the BPMS' own
-id of the workflow, `null` where VanillaBP holds none.
+`MigratableProcessService.awarenessOfWorkflow` has a fourth argument, and every election about a
+workflow passes it: both phases of an operation on the workflow, the election an extension asks
+for, and the read of the viewer API. It is the BPMS' own id of the workflow, `null` where
+VanillaBP holds none.
 
 Why it is worth passing, measured on three Camunda 8 clusters in September 2026: the engine
 knows a new instance 16 to 19 ms after the create was sent, while the search which
@@ -583,9 +605,14 @@ earlier than its index, and every command which asks it addresses a key.
   would send the next operation to the wrong BPMS.
 - The default drops the id and calls the three-argument question, so every adapter written
   before this keeps compiling and behaving (`ElectionWithAWorkflowIdDefaultTest`).
-- Where the core takes the id from: the open delivery records of that aggregate first, then the
-  election cache, which keeps the id next to the adapter id since it learns both from every
-  delivery. Nothing new is asked of any BPMS for it.
+- Where the core takes the id from: the row written when the workflow started first, then the
+  open delivery records of that aggregate, then the election cache, which keeps the id next to
+  the adapter id since it learns both from every delivery. Nothing new is asked of any BPMS for
+  it.
+- Phase two of an operation on a workflow carries the id too, as `PhaseTwoRequest#workflowId()`,
+  but only where the start row names the adapter which runs that phase two. An adapter which
+  would otherwise search for the key of the workflow, as Camunda 8 does to push a changed
+  aggregate, can use it instead and needs no read model for that operation.
 
 `WorkflowAdapterCache.hintOf` is what reads both in one call, because a shared cache charges a
 round trip per read; `put(..., adapterId, workflowId)` is what writes them. Both are `default`
@@ -2882,9 +2909,16 @@ store, for the MongoDB ones and for a store an application brings itself:
   recovered/retried entry is recognized either way; the gruelbox store bridges its entry
   state via a `Submitter` wrapper — there the counter is only incremented on
   FAILED attempts, so a hard crash still re-dispatches without the probe). A
-  previously attempted START entry probes the recorded adapter's
-  `awarenessOfWorkflowForRedispatch` first: a workflow already known there means
-  the previous dispatch succeeded — the entry is consumed without a second start.
+  previously attempted START entry first reads the row written when the workflow
+  started: where it names the recorded adapter, the previous dispatch succeeded and the
+  entry is consumed without a second start, and nobody is asked. Only without such a
+  row the recorded adapter's `awarenessOfWorkflowForRedispatch` is probed, with the same
+  consequence for a workflow already known there. The row matters on a BPMS which
+  searches a read model: while that read model is behind, the probe says "unknown" for a
+  workflow the first attempt created, and the start would run twice. A second instance
+  has jobs of its own, so the delivery log sees no repetition either. Neither the row nor
+  the probe tells an earlier, ended workflow of the same aggregate from the one this entry
+  starts.
   The probe's contract is stricter than the election's: NEVER optimistic (a wrong
   "known" loses a workflow; a wrong "unknown" merely yields the duplicate the
   residual permits anyway) — adapters that cannot query reliably answer
@@ -2919,7 +2953,9 @@ sequenceDiagram
   DP->>RT: dispatch(call, previouslyAttempted)
   RT->>RT: requireTransaction with the aggregate's runner (gruelbox brings its own tx)
   RT->>PS: executePhaseTwo(START_WORKFLOW, id, adapterId, args, previouslyAttempted)
-  alt previouslyAttempted
+  alt previouslyAttempted and a start row names the recorded adapter
+    PS-->>RT: consumed, no second start
+  else previouslyAttempted, no such row
     PS->>AD: awarenessOfWorkflowForRedispatch(scope, persistence, id)
     Note over AD: NEVER optimistic: C7 history query · C8 search (UNKNOWN without secondary storage) · PEA UNKNOWN
     alt ACTIVE / COMPLETED
@@ -2950,7 +2986,8 @@ and `#rollbackLeavesNoEntryAndNoPhaseTwo`; the idempotency key is
 `RepeatedOperationTest#aSecondStartAfterTheDispatchIsPlanned`; the key released with the
 dispatch is `GruelboxDeduplicationWindowTest#aDispatchedEntryIsReleased`; recovery after a
 restart is `OutboxRecoveryTest`; the redispatch probe is
-`OutboxRedispatchMitigationTest#retriedStartEntryDoesNotStartASecondWorkflow`; the
+`OutboxRedispatchMitigationTest#retriedStartEntryDoesNotStartASecondWorkflow` and the start row
+read before it is `AnOperationReadsTheStartRowTest#aRetriedStartWithARowStartsNothing`; the
 discarded schedule is `DiscardedScheduleTest`; and the activation carried by a
 correlation's key is `ActivationIdentityTest` together with
 `PhaseOperationContractTest#noOtherKeyCarriesAnActivation`. That a missing outbox ends the

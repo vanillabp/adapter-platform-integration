@@ -1844,10 +1844,12 @@ public class MigrationProcessService<A> {
    * Phase two of an operation which STARTS a workflow. The adapter elected in phase one
    * was persisted with the outbox entry and is used here - there is no re-election from
    * the then-current priorities. If the entry was dispatched before (a recovered or
-   * retried entry), the re-dispatch mitigation probes
-   * {@link MigratableProcessService#awarenessOfWorkflowForRedispatch} on the recorded
-   * adapter FIRST: a workflow already known there means the previous dispatch already
-   * started it - the entry is consumed without starting a second instance. The residual
+   * retried entry), the re-dispatch mitigation asks FIRST whether the previous dispatch
+   * already started the workflow: the row written when the recorded adapter started it
+   * says so without asking anybody, and where there is no such row
+   * {@link MigratableProcessService#awarenessOfWorkflowForRedispatch} is probed on that
+   * adapter. A workflow already known means the entry is consumed without starting a
+   * second instance. The residual
    * at-least-once window (a crash between the remote start and marking the entry done,
    * before any awareness lag caught up) remains and is ACCEPTED - this mitigation
    * minimizes duplicates, it does not close the window.
@@ -1936,8 +1938,12 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The re-dispatch mitigation: probes whether the recorded adapter already knows
-   * the workflow of a previously attempted START entry.
+   * The re-dispatch mitigation: whether the recorded adapter already knows the workflow
+   * of a previously attempted START entry. The start row is read first. It is written
+   * once the adapter reported the workflow it created, so it answers in the window where a
+   * BPMS which answers from a read model does not know the workflow yet. Like the probe,
+   * it cannot tell an earlier workflow of the same aggregate from the one this entry
+   * starts.
    *
    * @return Whether the start has to be SKIPPED (the workflow already exists -
    *         the previous dispatch succeeded)
@@ -1949,6 +1955,23 @@ public class MigrationProcessService<A> {
       final Object workflowAggregateId,
       final String operationDescription) {
 
+    // the row written when this adapter started the workflow is the answer a search cannot give
+    // while the BPMS' read model is behind, and asking anyway would start a second instance
+    final var started = deliveryRecords.workflowStartRowOf(workflowAggregateId);
+    if ((started != null) && adapter.getAdapterId().equals(started.adapterId())) {
+      log.info(
+          "Skipped re-dispatched phase two of {} of aggregate '{}' (BPMN process '{}' of "
+              + "workflow module '{}'): VanillaBP wrote down that adapter '{}' started workflow "
+              + "'{}' for it - the previous dispatch attempt succeeded, the outbox entry is "
+              + "consumed without starting a second instance",
+          operationDescription,
+          workflowAggregateId,
+          bpmnProcessId,
+          workflowModuleId,
+          adapter.getAdapterId(),
+          started.workflowId());
+      return true;
+    }
     final var awareness = adapter.awarenessOfWorkflowForRedispatch(workflowScope(), aggregatePersistenceSupport,
         workflowAggregateId);
     switch (awareness) {
@@ -2004,12 +2027,7 @@ public class MigrationProcessService<A> {
     final var recordedLocation = deliveryRecords.locate(operation, aggregateId, args, adapterProcessServices);
     final var location = recordedLocation != null
         ? recordedLocation
-        : workflowLocator.locate(
-            adapterProcessServices,
-            adapter -> probe(operation, adapter, aggregateId, args),
-            aggregateId,
-            subject,
-            WorkflowLocator.Patience.NONE);
+        : elect(operation, aggregateId, args, subject, WorkflowLocator.Patience.NONE);
 
     switch (location.awareness()) {
       case COMPLETED -> {
@@ -2066,12 +2084,8 @@ public class MigrationProcessService<A> {
     // transaction is open. A read model which has not caught up is not waited for: this
     // thread dispatches the entries of every workflow of this store, and the entry of
     // the one workflow nobody can find yet is given back with a due time instead
-    final var location = workflowLocator.locate(
-        adapterProcessServices,
-        adapter -> probe(operation, adapter, workflowAggregateId, args),
-        workflowAggregateId,
-        subject,
-        WorkflowLocator.Patience.RETRY_UNAVAILABLE);
+    final var location = elect(
+        operation, workflowAggregateId, args, subject, WorkflowLocator.Patience.RETRY_UNAVAILABLE);
 
     switch (location.awareness()) {
       case UNKNOWN_TO_BPMS -> {
@@ -2094,11 +2108,14 @@ public class MigrationProcessService<A> {
           subject);
       // BPMS_UNAVAILABLE cannot reach here (locate throws) - the outbox retries
       default -> {
+        final var workflowId = addressesTheWorkflow(operation)
+            ? workflowIdStartedBy(location.adapter(), workflowAggregateId)
+            : null;
         runPhaseTwo(
             location.adapter(),
             "%s of %s".formatted(operation.describe(args), subject),
             () -> handlerOf(location.adapter(), operation, args)
-                .phaseTwo(phaseTwoRequest(workflowAggregateId, args)));
+                .phaseTwo(phaseTwoRequestAbout(workflowAggregateId, args, workflowId)));
         deliveryRecords
             .writeDownThatTheTaskIsClosed(operation, workflowAggregateId, args, subject);
       }
@@ -2254,13 +2271,73 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * The election of an operation on an existing workflow, in both phases.
+   * <p>
+   * An operation about the workflow itself reads the row written when the workflow started
+   * before it asks anybody. That row is durable, while the election cache lives in the memory
+   * of one node: after a restart, on a second node and once the cache forgot, the row is the
+   * only thing which still says that the workflow exists. Without it an adapter which answers
+   * from a read model that has not caught up reads as "nobody knows this workflow", and the
+   * operation fails in phase one or is consumed as stale in phase two. With it the same answer
+   * reads as "not visible yet", like it does with a cached hint. A row naming an adapter which
+   * is not configured for this workflow any more does not count. See
+   * {@code DECISIONS.pending/897.md} in the repository.
+   * <p>
+   * The BPMS' own id of the workflow goes to the probe as well, so an adapter can ask its
+   * engine by key instead of searching. An operation about a task asks by the task's id and
+   * reads no row.
+   */
+  private WorkflowLocator.Location<A> elect(
+      final PhaseOperation operation,
+      final Object workflowAggregateId,
+      final Map<String, String> args,
+      final String subject,
+      final WorkflowLocator.Patience patience) {
+
+    if (!addressesTheWorkflow(operation)) {
+      return workflowLocator.locate(
+          adapterProcessServices,
+          adapter -> probe(operation, adapter, workflowAggregateId, args, null),
+          workflowAggregateId,
+          subject,
+          patience);
+    }
+    final var started = deliveryRecords.workflowStartRowOf(workflowAggregateId);
+    final var recordedStart = (started != null) && isAdapterOfThisWorkflow(started.adapterId())
+        ? new WorkflowLocator.RecordedStart(started.adapterId(), started.workflowId())
+        : null;
+    final String workflowId;
+    if (recordedStart != null) {
+      workflowId = recordedStart.workflowId();
+    } else if (started != null) {
+      // the row is about an adapter this workflow is not elected among any more, so its id
+      // would be handed to adapters which never knew that workflow
+      workflowId = workflowLocator.rememberedWorkflowId(workflowAggregateId);
+    } else {
+      workflowId = workflowIdOf(workflowAggregateId);
+    }
+    return workflowLocator.locate(
+        adapterProcessServices,
+        adapter -> probe(operation, adapter, workflowAggregateId, args, workflowId),
+        workflowAggregateId,
+        subject,
+        patience,
+        recordedStart);
+
+  }
+
+  /**
    * Asks one adapter the question the operation's election is about.
+   *
+   * @param workflowId The BPMS' own id of the workflow, handed to a probe about the workflow,
+   *          or <code>null</code> where VanillaBP holds none
    */
   private WorkflowAwareness probe(
       final PhaseOperation operation,
       final MigratableProcessService<A> adapter,
       final Object workflowAggregateId,
-      final Map<String, String> args) {
+      final Map<String, String> args,
+      final String workflowId) {
 
     return switch (operation.election()) {
       case HOLDS_THE_TASK -> adapter
@@ -2268,7 +2345,7 @@ public class MigrationProcessService<A> {
       case HOLDS_THE_USER_TASK -> adapter
           .awarenessOfUserTask(workflowScope(), workflowAggregateId, args.get(PhaseTwoCall.ARG_TASK_ID));
       case HOLDS_THE_WORKFLOW -> adapter
-          .awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, workflowAggregateId);
+          .awarenessOfWorkflow(workflowScope(), aggregatePersistenceSupport, workflowAggregateId, workflowId);
       default -> throw new IllegalStateException(
           "The election '%s' of operation '%s' asks no adapter anything!"
               .formatted(operation.election(), operation.name()));
@@ -2680,6 +2757,36 @@ public class MigrationProcessService<A> {
 
     return new PhaseTwoRequest<>(
         workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, args);
+
+  }
+
+  /**
+   * The same request, with the BPMS' own id of the workflow where the adapter which runs phase two
+   * started that workflow.
+   */
+  private PhaseTwoRequest<A> phaseTwoRequestAbout(
+      final Object workflowAggregateId,
+      final Map<String, String> args,
+      final String workflowId) {
+
+    return new PhaseTwoRequest<>(
+        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, args, null, workflowId);
+
+  }
+
+  /**
+   * The workflow id the start row names, where the given adapter is the one which started the
+   * workflow. An id which another BPMS gave its workflow means nothing to this adapter, so it is
+   * not handed over.
+   */
+  private String workflowIdStartedBy(
+      final MigratableProcessService<A> adapter,
+      final Object workflowAggregateId) {
+
+    final var started = deliveryRecords.workflowStartRowOf(workflowAggregateId);
+    return (started != null) && adapter.getAdapterId().equals(started.adapterId())
+        ? started.workflowId()
+        : null;
 
   }
 

@@ -887,8 +887,10 @@ one which was responsible, and the operation simply comes too late.
 The redispatch probe must never be optimistic. `awarenessOfWorkflowForRedispatch` is asked before
 a recovered or repeated `START_WORKFLOW` entry is dispatched, and answering "known" SKIPS that
 start. A wrong "known" therefore loses a workflow, while a wrong "unknown" costs the duplicate the
-at-least-once residual permits anyway. Its default delegates to the ordinary workflow probe, which
-is right only where that probe is an honest query. Where it is not, override this one and answer
+at-least-once residual permits anyway. The core asks you only where it has no row saying that your
+adapter started the workflow of that aggregate: such a row answers the question without you. Its
+default delegates to the ordinary workflow probe, which is right only where that probe is an honest
+query. Where it is not, override this one and answer
 `UNKNOWN_TO_BPMS`. `OutboxRedispatchMitigationTest#retriedStartEntryDoesNotStartASecondWorkflow`
 is the probe doing its job.
 
@@ -928,7 +930,10 @@ thread as well: the election an extension asks for, which a reporting extension 
 transaction still open. What that costs is measured in this module's `README.md`, and your window is
 the number it is measured against. A hint exists only where VanillaBP knew the answer without
 asking anybody, because it started the workflow itself or because a delivery for that workflow
-arrived from that BPMS. Every row of that table is a case of `WorkflowLocatorTest`, and the read
+arrived from that BPMS. For an operation on a workflow the row written when the workflow started is
+a hint too, where the election cache has none. That row is kept in the application's database, so
+it is still there after a restart, on a second node and after the cache forgot, which is exactly
+when a read model which stopped catching up would otherwise make a running workflow look unknown. Every row of that table is a case of `WorkflowLocatorTest`, and the read
 column additionally of
 `ViewerApiTest#readWaitsForAnEventuallyConsistentAdapterToCatchUp`.
 
@@ -947,11 +952,12 @@ itself, so a task somebody completed outside VanillaBP still has a record saying
 
 ### 4.1 The election may hand you the workflow's own id
 
-`awarenessOfWorkflow` has a fourth argument, and the two paths which WAIT for an eventually
-consistent BPMS pass it: the election an extension asks for, and a read of the viewer API. It is
-your BPMS' own id of the workflow, taken from what VanillaBP already holds - the record of a task
-delivery and the election cache - and `null` where nobody knew one. Nothing new is asked of your
-BPMS for it.
+`awarenessOfWorkflow` has a fourth argument, and every election about a workflow passes it: both
+phases of an operation on the workflow (correlating a message, pushing a changed aggregate), the
+election an extension asks for, and a read of the viewer API. It is your BPMS' own id of the
+workflow, taken from what VanillaBP already holds. That is the row written when the workflow
+started, the record of a task delivery and the election cache, and `null` where nobody knew one.
+Nothing new is asked of your BPMS for it.
 
 Implement it where your engine answers by key faster than your read model does. On a Camunda 8
 cluster that is the difference between 20 ms and up to two seconds.
@@ -965,6 +971,13 @@ given without it.
 
 Do not implement it and nothing changes: the default drops the id and calls the question you
 already answer.
+
+Phase two of an operation on a workflow gets the id as well, as `PhaseTwoRequest#workflowId()`,
+where VanillaBP wrote down that YOUR adapter started that workflow. Use it where your BPMS addresses
+a workflow by its key and you would otherwise search for that key, the way pushing a changed
+aggregate does. The same rule holds: it is a hint, and where your BPMS does not know that key, do
+what you would have done without it. It is `null` for a task operation, for a workflow another
+adapter started and wherever no start row exists.
 
 ### 4.2 The window may be answered per workflow
 
