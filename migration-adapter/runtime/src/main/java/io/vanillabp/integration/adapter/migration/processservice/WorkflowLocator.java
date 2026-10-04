@@ -50,6 +50,14 @@ import lombok.extern.slf4j.Slf4j;
  * answer without any hint is a workflow nobody ever heard of, which fails
  * immediately.
  * <p>
+ * <b>A hint the cache does not have.</b> The cache lives in the memory of one node and
+ * forgets after a while, while the row written when a workflow started is durable. So a
+ * caller which holds that row hands it in ({@link RecordedStart}), and where the cache
+ * has no hint the row is the hint: its adapter is probed first, and an unknown answer
+ * means "not visible yet" just as it does with a cached hint. The cache keeps the first
+ * word, because it is free to read and an election wrote it more recently than the
+ * start. See {@code DECISIONS.pending/897.md} in the repository.
+ * <p>
  * <b>What the walk cannot do.</b> It stops at the first
  * {@link WorkflowAwareness#ACTIVE} and is therefore only as right as the answers it
  * gets. Whether a workflow belongs to an adapter is the ADAPTER's question, not this
@@ -406,13 +414,46 @@ public final class WorkflowLocator {
       final String subject,
       final Patience patience) {
 
+    return locate(prioritizedAdapters, probe, workflowAggregateId, subject, patience, null);
+
+  }
+
+  /**
+   * The same election, with the row written when the workflow started as the hint to use
+   * where the cache has none.
+   *
+   * @param <A> The aggregate type
+   * @param prioritizedAdapters The adapters in prioritized order
+   * @param probe The operation-specific awareness probe
+   * @param workflowAggregateId The ID of the workflow aggregate the probed subject
+   *        belongs to
+   * @param subject A short description of the probed subject, used in log and error
+   *        messages
+   * @param patience How long this caller may take for an answer
+   * @param recordedStart What the start row says, or <code>null</code> where there is no
+   *        row or it names an adapter which is not configured for this workflow
+   * @return The location - never <code>null</code>
+   * @throws IllegalStateException If an adapter reports itself
+   *         {@link WorkflowAwareness#BPMS_UNAVAILABLE}
+   */
+  public <A> Location<A> locate(
+      final List<MigratableProcessService<A>> prioritizedAdapters,
+      final Function<MigratableProcessService<A>, WorkflowAwareness> probe,
+      final Object workflowAggregateId,
+      final String subject,
+      final Patience patience,
+      final RecordedStart recordedStart) {
+
     final var serializedAggregateId = workflowAggregateId == null
         ? null
         : workflowAggregateId.toString();
 
-    final var hint = (cache == null) || (serializedAggregateId == null)
+    final var cachedHint = (cache == null) || (serializedAggregateId == null)
         ? null
         : hintOf(serializedAggregateId);
+    final var hint = (cachedHint == null) && (recordedStart != null) && (recordedStart.adapterId() != null)
+        ? new Hint(bpmnProcessId, recordedStart.adapterId(), recordedStart.workflowId(), false)
+        : cachedHint;
 
     if (hint != null) {
       final var location = locateViaHint(
@@ -441,11 +482,28 @@ public final class WorkflowLocator {
    *
    * @param bpmnProcessId The id the hint sits under
    * @param adapterId The adapter the hint points at
+   * @param workflowId The BPMS' own id of the workflow, or <code>null</code>
+   * @param isCached Whether the hint came from the cache, which is the only kind of hint
+   *        that can be dropped or repaired where it sits
    */
   private record Hint(
                       String bpmnProcessId,
                       String adapterId,
-                      String workflowId) {
+                      String workflowId,
+                      boolean isCached) {
+  }
+
+  /**
+   * What the row written when a workflow started says about it: the adapter which started
+   * it and the BPMS' own id of the workflow. A workflow does not change its BPMS, so the
+   * adapter of that row is the one to ask first.
+   *
+   * @param adapterId The adapter which started the workflow
+   * @param workflowId The BPMS' own id of the workflow, or <code>null</code>
+   */
+  public record RecordedStart(
+                              String adapterId,
+                              String workflowId) {
   }
 
   /**
@@ -461,7 +519,7 @@ public final class WorkflowLocator {
           .hintOf(workflowModuleId, candidate, serializedAggregateId)
           .orElse(null);
       if (entry != null) {
-        return new Hint(candidate, entry.adapterId(), entry.workflowId());
+        return new Hint(candidate, entry.adapterId(), entry.workflowId(), true);
       }
     }
     return null;
@@ -498,7 +556,9 @@ public final class WorkflowLocator {
           "Cached adapter '{}' for {} is no longer a prioritized adapter - dropping the hint",
           cachedAdapterId,
           subject);
-      cache.invalidate(workflowModuleId, hint.bpmnProcessId(), serializedAggregateId);
+      if (hint.isCached()) {
+        cache.invalidate(workflowModuleId, hint.bpmnProcessId(), serializedAggregateId);
+      }
       return null;
     }
 
@@ -507,6 +567,10 @@ public final class WorkflowLocator {
         : probeWithRetry(cachedAdapter, probe, subject, patience);
     switch (awareness) {
       case ACTIVE -> {
+        if (!hint.isCached() && (cache != null)) {
+          // the start row proved right: the next operation reads the cache and skips the row
+          cache.put(workflowModuleId, bpmnProcessId, serializedAggregateId, cachedAdapterId, hint.workflowId());
+        }
         return new Location<>(awareness, cachedAdapter, null);
       }
       case COMPLETED -> {
@@ -515,7 +579,9 @@ public final class WorkflowLocator {
         // walking everybody, and it leaves the cache long before a living one would.
         // Marked where the hint sits rather than under this instance's own id: a second
         // entry would leave the one which was read claiming a living workflow
-        cache.putEnded(workflowModuleId, hint.bpmnProcessId(), serializedAggregateId, cachedAdapterId);
+        if (cache != null) {
+          cache.putEnded(workflowModuleId, hint.bpmnProcessId(), serializedAggregateId, cachedAdapterId);
+        }
         return new Location<>(awareness, cachedAdapter, null);
       }
       case UNKNOWN_TO_BPMS -> {

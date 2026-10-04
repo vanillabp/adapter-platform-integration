@@ -5,6 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
+import java.time.Instant;
+
+import javax.sql.DataSource;
 
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
@@ -16,12 +19,17 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.runtime.delivery.JdbcTaskDeliveryLog;
+import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.TaskDelivery;
+import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.integration.test.Aggregate;
 import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.SteerableTaskAwarenessSource;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import io.vanillabp.spi.process.WorkflowNotFoundException;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
@@ -98,6 +106,15 @@ public class WorkflowVisibilityDelayTest {
   @Inject
   UserTransaction userTransaction;
 
+  @Inject
+  JdbcTaskDeliveryLog deliveryLog;
+
+  @Inject
+  WorkflowAdapterCache cache;
+
+  @Inject
+  DataSource dataSource;
+
   @BeforeEach
   public void reset() {
 
@@ -172,6 +189,69 @@ public class WorkflowVisibilityDelayTest {
       assertTrue(
           System.currentTimeMillis() < deadline,
           "the correlation was not dispatched in time");
+      Thread.sleep(50);
+    }
+    assertTrue(listener
+        .getCorrelatedMessages()
+        .contains(aggregate.getId()
+            + ":PaymentReceived:null"));
+
+  }
+
+  @Test
+  @DisplayName("After a restart the start row stands in for the lost hint, and the correlation waits for the workflow")
+  public void anOperationAfterARestartWaitsForTheWorkflow() throws Exception {
+
+    final var aggregate = started("after-a-restart");
+    listener.awaitInvocations(1, UNTIL_A_DISPATCH_COUNTS_AS_LOST);
+    final var start = PhaseTwoOutboxReader
+        .ofTheVanillaBpOutbox(dataSource)
+        .entries()
+        .stream()
+        .filter(entry -> PhaseOperation.START_WORKFLOW.name().equals(entry.operation()))
+        .filter(entry -> aggregate.getId().toString().equals(entry.aggregateId()))
+        .findFirst()
+        .orElseThrow();
+    // what a node which restarted has: no hint in memory, and the row written when the workflow
+    // started in the database. The dummy adapter reports no workflow id, so the row is written
+    // here, the way an adapter which reports one leaves it behind
+    cache.invalidate(start.workflowModuleId(), start.bpmnProcessId(), start.aggregateId());
+    userTransaction.begin();
+    try {
+      deliveryLog
+          .recordWorkflowStart(
+              TaskDelivery
+                  .workflowStart(
+                      "test",
+                      start.workflowModuleId(),
+                      start.bpmnProcessId(),
+                      start.aggregateId(),
+                      "workflow-of-"
+                          + start.aggregateId(),
+                      null,
+                      Instant.now()));
+      userTransaction.commit();
+    } catch (final Exception e) {
+      userTransaction.rollback();
+      throw e;
+    }
+    awareness.becomeVisibleAfter(INVISIBLE_PROBES, VISIBILITY_WINDOW);
+
+    // without the row this is the WorkflowNotFoundException of the test below
+    userTransaction.begin();
+    try {
+      workflowService.correlateMessage(aggregate, "PaymentReceived");
+      userTransaction.commit();
+    } catch (final Exception e) {
+      userTransaction.rollback();
+      throw e;
+    }
+
+    final var deadline = System.currentTimeMillis() + UNTIL_A_DISPATCH_COUNTS_AS_LOST;
+    while (listener.getCorrelatedMessages().isEmpty()) {
+      assertTrue(
+          System.currentTimeMillis() < deadline,
+          "the correlation was not dispatched in time, or it was consumed as stale");
       Thread.sleep(50);
     }
     assertTrue(listener
