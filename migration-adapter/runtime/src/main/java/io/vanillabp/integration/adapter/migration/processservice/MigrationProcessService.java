@@ -2719,6 +2719,21 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * The open user tasks of the workflow of the given aggregate, as far as the delivery log holds
+   * them ({@link io.vanillabp.integration.extension.spi.election.WorkflowElection#openUserTasksOf}).
+   * The election cache knows no tasks, so the log is the only source.
+   *
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @return The open user tasks, oldest delivery first, never <code>null</code>
+   */
+  public List<io.vanillabp.integration.extension.spi.election.OpenUserTask> openUserTasksOf(
+      final Object workflowAggregateId) {
+
+    return deliveryRecords.openUserTasksOf(workflowAggregateId);
+
+  }
+
+  /**
    * Hands over what the adapters said about the versions of their BPMN processes. Called by the
    * registry of the workflow tasks when it registers this process, because that registry is
    * where the adapters report their catalogs while they wire their BPMN.
