@@ -6,7 +6,7 @@ git. These entries feed the user-facing
 [migration guide](https://github.com/vanillabp/adapter-platform-integration/wiki/Migrating-from-version-1),
 which is the narrated version for users and wins where the two disagree. The same file exists for
 [spi-for-java](https://github.com/vanillabp/spi-for-java/blob/main/UPGRADE.md), for the
-[Camunda 7 adapter](https://github.com/vanillabp/camunda7-adapter/blob/main/UPGRADE.md) and for the
+[Camunda 7 adapter](https://github.com/camunda-community-hub/vanillabp-camunda7-adapter/blob/main/UPGRADE.md) and for the
 [Camunda 8 adapter](https://github.com/vanillabp/camunda8-adapter/blob/main/UPGRADE.md). What your
 BPMS asks of you on top of this is in the file of its adapter.
 
