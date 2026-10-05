@@ -140,6 +140,45 @@ public class MigrationAdapterPropertiesTest {
   }
 
   @Test
+  public void testAMessageAboutMissingBpmnFilesExplainsSeveralModules() {
+
+    final var properties = new MigrationAdapterProperties();
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+    properties.setPrioritizedAdapters(List.of("adapter-test"));
+
+    properties.validateProperties(
+        new ClasspathFacts(
+            adaptersLoaded, List.of(
+                new ClasspathFacts.WorkflowModuleInfo("the-app", true),
+                new ClasspathFacts.WorkflowModuleInfo("a-module", false))),
+        null);
+
+    assertEquals(
+        java.util.Optional.of(
+            "The application has 2 workflow modules, so the BPMN files of each one are expected below its own module ID."),
+        properties.whyTheConventionSearchedThere("the-app"));
+
+  }
+
+  @Test
+  public void testAMessageAboutMissingBpmnFilesSaysNothingAboutAConfiguredLocation() {
+
+    final var properties = new MigrationAdapterProperties();
+    properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
+    properties.setPrioritizedAdapters(List.of("adapter-test"));
+    properties.setResourcesLocation("classpath*:somewhere-else");
+
+    properties.validateProperties(
+        new ClasspathFacts(
+            adaptersLoaded, List.of(new ClasspathFacts.WorkflowModuleInfo("the-app", true))),
+        null);
+
+    assertEquals(java.util.Optional.empty(), properties.whyTheConventionSearchedThere("the-app"));
+    assertEquals(java.util.Optional.empty(), properties.whyTheConventionSearchedThere("unknown-module"));
+
+  }
+
+  @Test
   public void testConfiguredResourcesLocationsWinOverTheConvention() {
 
     final var properties = new MigrationAdapterProperties();
