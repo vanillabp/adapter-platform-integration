@@ -41,11 +41,18 @@ Workflow modules are declared by a `META-INF/workflow-module` marker file whose
 content is the workflow module ID. `@WorkflowService` classes are matched to a module
 by comparing classpath-root URL prefixes: the URL of the class resource
 (`Class#getResource`) minus the class' relative path against the URL of the marker
-file minus `META-INF/workflow-module`. Comparing URL prefixes works for all class
-loaders — plain classpath (`file:`), JARs (`jar:file:`) and Spring Boot repackaged
-fat JARs (`jar:nested:`, used by the Boot loader since 3.2). Services not matching
-any marker file belong to the *global* module (the whole application acting as a
-single workflow module) — only one global marker is allowed.
+file minus `META-INF/workflow-module`. The two prefixes are compared as the JAR or
+directory they stand for, not as strings (`WorkflowModule#isDeclaredInTheArtifactOf`).
+A repackaged Spring Boot JAR is the reason. Its classes sit below `BOOT-INF/classes/`,
+but the marker file stays at the top of the JAR. So the class URL reads
+`jar:nested:/app.jar/!BOOT-INF/classes/!/` (or `jar:file:/app.jar!/BOOT-INF/classes!/`
+with the loader of Spring Boot before 3.2) while the marker URL reads
+`jar:file:/app.jar!/`. Both mean the same JAR. A JAR below `BOOT-INF/lib/` stays a JAR
+of its own. The same comparison decides whether a module comes from the application's
+own artifact, which decides where its BPMN files are searched. `StandaloneFatJarIT`
+starts such a JAR with `java -jar` and unpacked. Services not matching any marker file
+belong to the *global* module (the whole application acting as a single workflow
+module). Only one global marker is allowed.
 
 ### Finding the workflow services
 

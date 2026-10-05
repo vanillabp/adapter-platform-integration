@@ -442,7 +442,7 @@ public class DeploymentService {
                     adapters (%s). No workflow of this module can be started; the BPMS would \
                     report an unknown process. Locations searched: %s. Check where the module's \
                     BPMN files are packaged, or name the location explicitly in \
-                    '%s.workflow-modules.%s.adapters.<adapter>.resources-location'."""
+                    '%s.workflow-modules.%s.adapters.<adapter>.resources-location'.%s"""
                     .formatted(
                         workflowModuleId,
                         String.join(", ", properties.getDeploymentAdaptersFor(workflowModuleId)),
@@ -456,7 +456,11 @@ public class DeploymentService {
                             .distinct()
                             .collect(java.util.stream.Collectors.joining(", ")),
                         MigrationAdapterProperties.PREFIX,
-                        workflowModuleId)));
+                        workflowModuleId,
+                        properties
+                            .whyTheConventionSearchedThere(workflowModuleId)
+                            .map(" "::concat)
+                            .orElse(""))));
 
   }
 

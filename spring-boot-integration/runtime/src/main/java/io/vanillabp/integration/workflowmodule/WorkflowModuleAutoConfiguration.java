@@ -112,9 +112,10 @@ public class WorkflowModuleAutoConfiguration {
    * the given class was loaded from. This is done based on
    * {@link Class#getResource(String)} instead of the class' protection domain since
    * the URL of the class resource uses the very same protocol as resources resolved
-   * by Spring's resource loader. This way matching root prefixes works for all class
-   * loaders: plain classpath ({@code file:}), JARs ({@code jar:file:}) and Spring
-   * Boot repackaged fat JARs ({@code jar:nested:}).
+   * by Spring's resource loader: plain classpath ({@code file:}), JARs
+   * ({@code jar:file:}) and Spring Boot executable JARs ({@code jar:nested:}). Which
+   * workflow module such a root belongs to is answered by
+   * {@link WorkflowModule#isDeclaredInTheArtifactOf(String)}.
    *
    * @param clazz The class
    * @return The classpath-root prefix or {@code null} if it cannot be determined
@@ -156,12 +157,11 @@ public class WorkflowModuleAutoConfiguration {
 
           try {
             // register a service class in the workflow module identified by META-INF/workflow-module
-            // found in the same JAR/directory: match the classpath-root prefix of the service
-            // class against the classpath-root prefix of the workflow module descriptor
+            // found in the same JAR/directory
             final var serviceClassRootPrefix = determineClasspathRootPrefix(serviceClass);
             final var workflowModuleInServiceClassJar = allWorkflowModules
                 .stream()
-                .filter(module -> module.getSourceUri().equals(serviceClassRootPrefix))
+                .filter(module -> module.isDeclaredInTheArtifactOf(serviceClassRootPrefix))
                 .findFirst();
             if (workflowModuleInServiceClassJar.isPresent()) {
               globalClasspathWorkflowModuleDescriptors.remove(workflowModuleInServiceClassJar.get());

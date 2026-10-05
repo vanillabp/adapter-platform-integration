@@ -27,6 +27,7 @@
     <module>upgrade-cost-integration-test</module>
     <module>workflowmodule-integration-tests</module>
     <module>fatjar-integration-test</module>
+    <module>standalone-fatjar-integration-test</module>
   </modules>
 
   <properties>

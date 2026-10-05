@@ -179,8 +179,7 @@ public class SpringBootMigrationAdapterAutoConfiguration {
         .getWorkflowModules()
         .stream()
         .map(workflowModule -> new ClasspathFacts.WorkflowModuleInfo(
-            workflowModule.getId(), (mainArtifactRootPrefix != null) && mainArtifactRootPrefix
-                .equals(workflowModule.getSourceUri())))
+            workflowModule.getId(), workflowModule.isDeclaredInTheArtifactOf(mainArtifactRootPrefix)))
         .toList();
 
     properties.validateProperties(

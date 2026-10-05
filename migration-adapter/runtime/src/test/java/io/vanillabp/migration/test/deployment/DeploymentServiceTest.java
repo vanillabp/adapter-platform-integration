@@ -1477,6 +1477,68 @@ public class DeploymentServiceTest {
 
   // === Helper Methods ===
 
+  @Nested
+  @DisplayName("A module none of its adapters found BPMN files for")
+  class ModuleWithoutBpmnFilesTests {
+
+    private static final String RECOGNISED = "The application's own JAR or directory holds this workflow module, so "
+        + "'classpath*:processes/<adapter>' was searched as well.";
+
+    private static final String NOT_RECOGNISED = "The file 'META-INF/workflow-module' of this module was not found in "
+        + "the application's own JAR or directory, so 'classpath*:processes/<adapter>' was not searched.";
+
+    @Test
+    @DisplayName("The message says that the module was seen as the application itself")
+    public void theMessageSaysThatTheModuleIsTheApplication() {
+
+      final var reported = whatIsReportedWithoutBpmnFiles(true);
+
+      assertTrue(reported.contains(RECOGNISED), reported);
+      assertTrue(reported.contains("Locations searched: 'classpath*:test-module/processes/adapter-test1', "
+          + "'classpath*:processes/adapter-test1'"), reported);
+
+    }
+
+    @Test
+    @DisplayName("The message says that the module was not seen as the application itself")
+    public void theMessageSaysThatTheModuleIsNotTheApplication() {
+
+      final var reported = whatIsReportedWithoutBpmnFiles(false);
+
+      assertTrue(reported.contains(NOT_RECOGNISED), reported);
+      assertFalse(reported.contains(RECOGNISED), reported);
+
+    }
+
+    private String whatIsReportedWithoutBpmnFiles(
+        final boolean fromMainArtifact) {
+
+      final var properties = new MigrationAdapterProperties();
+      properties.setAdapters(Map.of("adapter-test1", AdapterConfigProperties.ofType("dummy")));
+      properties.setPrioritizedAdapters(List.of("adapter-test1"));
+      properties.validateProperties(
+          new io.vanillabp.integration.adapter.migration.config.ClasspathFacts(
+              List.of("dummy"), List
+                  .of(new io.vanillabp.integration.adapter.migration.config.ClasspathFacts.WorkflowModuleInfo(
+                      "test-module", fromMainArtifact))),
+          null);
+      remember(properties);
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+
+      new DeploymentService(properties, List.of(adapter1DeploymentService), List.of())
+          .deployResources(List.of("test-module"), bpmnFilesOnly(location -> Map.of()));
+
+      return reported()
+          .stream()
+          .filter(message -> message.startsWith("No BPMN resources were found for workflow module 'test-module'"))
+          .findFirst()
+          .orElseThrow(() -> new AssertionError("nothing reported about the missing BPMN files: "
+              + reported()));
+
+    }
+
+  }
+
   /**
    * Creates properties with a configured adapter and workflow module.
    */

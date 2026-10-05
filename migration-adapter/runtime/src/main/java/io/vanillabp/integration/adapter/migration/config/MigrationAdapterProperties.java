@@ -7,6 +7,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.function.Function;
@@ -2360,6 +2361,55 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
             migrating to another adapter later costs nothing.
             Sample: 'classpath*:/workflow-resources/%s'"""
             .formatted(PREFIX, workflowModuleId, adapterId, PREFIX, adapterId, PREFIX, workflowModuleId, adapterId));
+
+  }
+
+  /**
+   * Why the convention searched where it did for a workflow module, as a sentence for a
+   * message about BPMN files which were not found. The convention searches below
+   * <code>processes/</code> only for the single workflow module of the application's own
+   * artifact, and a developer who put the files there needs to know whether VanillaBP saw
+   * the module that way.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @return The sentence, or nothing where every adapter of the module reads a configured
+   *         location and the convention played no part
+   */
+  public Optional<String> whyTheConventionSearchedThere(
+      final String workflowModuleId) {
+
+    final var conventionalLocations = conventionalResourcesLocations.get(workflowModuleId);
+    if (conventionalLocations == null) {
+      return Optional.empty();
+    }
+    final var conventionWasUsed = getDeploymentAdaptersFor(workflowModuleId)
+        .stream()
+        .anyMatch(adapterId -> getAdapterResourcesLocationsFor(workflowModuleId, adapterId)
+            .getFirst()
+            .location()
+            .equals("%s/%s".formatted(conventionalLocations.getFirst(), adapterId)));
+    if (!conventionWasUsed) {
+      return Optional.empty();
+    }
+    if (conventionalLocations.size() > 1) {
+      return Optional.of(
+          """
+              The application's own JAR or directory holds this workflow module, so \
+              'classpath*:processes/<adapter>' was searched as well.""");
+    }
+    if (conventionalResourcesLocations.size() > 1) {
+      return Optional.of(
+          """
+              The application has %d workflow modules, so the BPMN files of each one are \
+              expected below its own module ID."""
+              .formatted(conventionalResourcesLocations.size()));
+    }
+    return Optional.of(
+        """
+            The file 'META-INF/workflow-module' of this module was not found in the \
+            application's own JAR or directory, so 'classpath*:processes/<adapter>' was not \
+            searched. VanillaBP searches there only for the workflow module of the application \
+            itself.""");
 
   }
 
