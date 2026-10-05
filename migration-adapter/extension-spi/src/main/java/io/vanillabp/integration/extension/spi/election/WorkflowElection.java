@@ -182,4 +182,36 @@ public interface WorkflowElection {
 
   }
 
+  /**
+   * The user tasks of this workflow which VanillaBP delivered and which are still open, as far as
+   * VanillaBP wrote them down. This is NO election.
+   * <p>
+   * Like {@link #workflowIdOf} it only reads the delivery log. No BPMS is asked and nothing is
+   * waited for, so it may be asked inside a transaction of the application, right after a task was
+   * delivered. Tasks of called processes are in the answer too, as far as this application serves
+   * their BPMN processes in the same workflow service.
+   * <p>
+   * An empty list means "VanillaBP knows of no open user task". It does not mean the workflow has
+   * none. A store written before this existed answers nothing, and so does a store which cannot be
+   * read, a BPMN process this application does not serve, and a task delivered before this version
+   * was deployed. An extension which needs a task the list does not have has to look for it in
+   * another way.
+   * <p>
+   * The default answers an empty list, which is what an implementation written before this existed
+   * answers.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param bpmnProcessId The BPMN process of the workflow
+   * @param workflowAggregateId The ID of its workflow aggregate
+   * @return The open user tasks, oldest delivery first, never <code>null</code>
+   */
+  default java.util.List<OpenUserTask> openUserTasksOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Object workflowAggregateId) {
+
+    return java.util.List.of();
+
+  }
+
 }

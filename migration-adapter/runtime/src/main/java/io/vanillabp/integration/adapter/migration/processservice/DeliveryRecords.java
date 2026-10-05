@@ -1485,6 +1485,67 @@ public final class DeliveryRecords {
   }
 
   /**
+   * The open user tasks of the workflow of the given aggregate, read from the open records under
+   * every BPMN process id this workflow service serves, the own id first. A row of a task carries
+   * the instance the task runs in, which for a task of a called process is not the workflow of the
+   * aggregate. That one is taken from the start row, so a reader gets both.
+   *
+   * @param workflowAggregateId The workflow aggregate the caller is asking about
+   * @return The open user tasks, oldest delivery first; empty where there are none or the log
+   *         cannot be read
+   */
+  public List<io.vanillabp.integration.extension.spi.election.OpenUserTask> openUserTasksOf(
+      final Object workflowAggregateId) {
+
+    if (workflowAggregateId == null) {
+      return List.of();
+    }
+    final var deliveryLog = resolveLog();
+    if (deliveryLog == null) {
+      return List.of();
+    }
+    try {
+      final var rows = new java.util.ArrayList<TaskDelivery>();
+      for (final var candidate : bpmnProcessIdsToReadUnder) {
+        deliveryLog
+            .openTasksOfAggregate(workflowModuleId, candidate, workflowAggregateId.toString())
+            .stream()
+            .filter(row -> TaskKind.USER_TASK.name().equals(row.taskKind()))
+            .forEach(rows::add);
+      }
+      if (rows.isEmpty()) {
+        return List.of();
+      }
+      // each id list is oldest first, and a reader expects that order across all of them
+      rows.sort(java.util.Comparator
+          .comparing(TaskDelivery::recordedAt, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
+      final var started = startRowOf(deliveryLog, workflowAggregateId);
+      final var workflowId = started == null
+          ? null
+          : started.workflowId();
+      return rows
+          .stream()
+          .map(row -> new io.vanillabp.integration.extension.spi.election.OpenUserTask(
+              row.adapterId(), workflowId, row.workflowId(), row.bpmnProcessId(), row.taskId(), row
+                  .taskDefinition(), row.bpmnElementId(), row.processVersion()))
+          .toList();
+    } catch (final RuntimeException e) {
+      // the same as for the id: a record nobody can read is a record nobody has, and the caller
+      // was told that an empty list may mean exactly this
+      log
+          .debug(
+              "Could not read the open user tasks of aggregate '{}' (BPMN process '{}' of workflow "
+                  + "module '{}')",
+              workflowAggregateId,
+              bpmnProcessId,
+              workflowModuleId,
+              e);
+      return List.of();
+    }
+
+  }
+
+  /**
    * The row written when the workflow of the given aggregate started, and nothing else: no open
    * task stands in for it. The adapter of that row started the workflow, and a workflow does not
    * change its BPMS, so this is what the election reads before it asks any BPMS.
