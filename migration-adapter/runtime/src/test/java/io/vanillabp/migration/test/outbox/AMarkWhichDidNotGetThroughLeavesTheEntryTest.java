@@ -419,7 +419,7 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
         entriesCountedAsBlocked.get(),
         "an entry which is not blocked was counted as one, so the meter names a repair nobody owes");
     assertTrue(
-        !somethingWasLoggedAbout(entry, "has to be cleaned up manually"),
+        !somethingWasLoggedAbout(entry, PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE),
         "an entry which says OPEN was reported as blocked, and somebody would go and repair it");
 
   }

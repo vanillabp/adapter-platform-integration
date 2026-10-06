@@ -11,13 +11,20 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
+import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
@@ -137,8 +144,53 @@ public class PermanentPhaseTwoFailureTest {
     final var registry = new SimpleMeterRegistry();
     metrics.bindTo(registry);
     listener.failNextDispatchesPermanently(1);
+    final var errors = new ListAppender<ILoggingEvent>();
+    errors.start();
+    final var dispatcherLog = (Logger) LoggerFactory.getLogger(JdbcPhaseTwoOutboxDispatcher.class);
+    dispatcherLog.addAppender(errors);
 
-    final var attachedAggregate = startWorkflow("permanent-failure-test");
+    final Aggregate attachedAggregate;
+    try {
+      attachedAggregate = startWorkflow("permanent-failure-test");
+      blockedAfterOneAttempt(attachedAggregate);
+    } finally {
+      dispatcherLog.detachAppender(errors);
+      errors.stop();
+    }
+
+    // the ERROR is where an operator starts, so it names the entry and the page which says
+    // how to find it, open it again or delete it
+    final var blockedEntry = entriesOf(attachedAggregate.getId()).get(0).id();
+    assertTrue(
+        errors.list
+            .stream()
+            .filter(event -> event.getLevel() == Level.ERROR)
+            .map(ILoggingEvent::getFormattedMessage)
+            .anyMatch(message -> message.contains(blockedEntry) && message
+                .contains(PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE)),
+        "the ERROR of a blocked entry does not say where the way back is described");
+
+    assertEquals(
+        1.0,
+        registry
+            .get(VanillaBpMetrics.OUTBOX_BLOCKED)
+            .tag(VanillaBpMetrics.TAG_STORE, "JdbcPhaseTwoOutbox")
+            .tag(VanillaBpMetrics.TAG_OPERATION, PhaseOperation.START_WORKFLOW.name())
+            .tag(VanillaBpMetrics.TAG_PERMANENT, "true")
+            .counter()
+            .count(),
+        "a blocked entry is counted, because the gauge of waiting entries falls at that moment");
+
+  }
+
+  /**
+   * Waits until the entry of the workflow is blocked and checks that it was attempted
+   * once and is not attempted again.
+   *
+   * @param attachedAggregate The aggregate whose start fails
+   */
+  private void blockedAfterOneAttempt(
+      final Aggregate attachedAggregate) throws Exception {
 
     listener.awaitInvocations(1, 30_000);
 
@@ -160,17 +212,6 @@ public class PermanentPhaseTwoFailureTest {
             .filter(attachedAggregate.getId()::equals)
             .count(),
         "the dispatch must not be repeated");
-
-    assertEquals(
-        1.0,
-        registry
-            .get(VanillaBpMetrics.OUTBOX_BLOCKED)
-            .tag(VanillaBpMetrics.TAG_STORE, "JdbcPhaseTwoOutbox")
-            .tag(VanillaBpMetrics.TAG_OPERATION, PhaseOperation.START_WORKFLOW.name())
-            .tag(VanillaBpMetrics.TAG_PERMANENT, "true")
-            .counter()
-            .count(),
-        "a blocked entry is counted, because the gauge of waiting entries falls at that moment");
 
   }
 

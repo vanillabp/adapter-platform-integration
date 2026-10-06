@@ -137,36 +137,107 @@ public class PermanentPhaseTwoFailureTest {
 
     final var blockedEntriesCounted = blockedEntriesCounted();
     listener.failNextDispatchesPermanently(1);
+    final var errors = new java.util.concurrent.CopyOnWriteArrayList<String>();
+    final var errorWatcher = errorsInto(errors);
+    final var dispatcherLog = java.util.logging.Logger
+        .getLogger(io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher.class.getName());
+    dispatcherLog.addHandler(errorWatcher);
 
-    userTransaction.begin();
-    final var attachedAggregate = workflowService.startWorkflow("permanent-failure-test");
-    userTransaction.commit();
-
-    listener.awaitInvocations(1, 30_000);
-
-    final var deadline = System.currentTimeMillis() + 30_000;
-    while (blockedEntriesOf(attachedAggregate.getId()) == 0) {
-      assertTrue(System.currentTimeMillis() < deadline, "the entry was not blocked");
-      Thread.sleep(50);
+    final Object attachedAggregateId;
+    try {
+      userTransaction.begin();
+      attachedAggregateId = workflowService
+          .startWorkflow("permanent-failure-test")
+          .getId();
+      userTransaction.commit();
+      blockedAfterOneAttempt(attachedAggregateId);
+    } finally {
+      dispatcherLog.removeHandler(errorWatcher);
     }
 
-    // exactly one attempt, and nothing retries a blocked entry
-    assertEquals(1, attemptsOf(attachedAggregate.getId()));
-    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
-    assertEquals(1, attemptsOf(attachedAggregate.getId()));
-    assertEquals(
-        1,
-        listener
-            .getInvocations()
+    // the ERROR is where an operator starts, so it names the entry and the page which says
+    // how to find it, open it again or delete it
+    final var blockedEntry = entriesOf(attachedAggregateId).get(0).id();
+    assertTrue(
+        errors
             .stream()
-            .filter(attachedAggregate.getId()::equals)
-            .count(),
-        "the dispatch must not be repeated");
+            .anyMatch(error -> error.contains(blockedEntry) && error.contains(
+                io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE)),
+        "the ERROR of a blocked entry does not say where the way back is described: "
+            + errors);
 
     assertEquals(
         blockedEntriesCounted + 1.0,
         blockedEntriesCounted(),
         "a blocked entry is counted, because the gauge of waiting entries falls at that moment");
+
+  }
+
+  /**
+   * Collects what is logged at ERROR, the message together with its parameters, because
+   * the log manager of Quarkus hands the parameters over unformatted.
+   *
+   * @param errors Where the lines go
+   * @return The handler to add to a logger
+   */
+  private static java.util.logging.Handler errorsInto(
+      final java.util.List<String> errors) {
+
+    return new java.util.logging.Handler() {
+
+      @Override
+      public void publish(
+          final java.util.logging.LogRecord record) {
+
+        if (record.getLevel().intValue() >= java.util.logging.Level.SEVERE.intValue()) {
+          errors.add(record.getMessage()
+              + " "
+              + java.util.Arrays.toString(record.getParameters()));
+        }
+
+      }
+
+      @Override
+      public void flush() {
+      }
+
+      @Override
+      public void close() {
+      }
+
+    };
+
+  }
+
+  /**
+   * Waits until the entry of the workflow is blocked and checks that it was attempted
+   * once and is not attempted again.
+   *
+   * @param attachedAggregateId The aggregate whose start fails
+   */
+  private void blockedAfterOneAttempt(
+      final Object attachedAggregateId) throws Exception {
+
+    listener.awaitInvocations(1, 30_000);
+
+    final var deadline = System.currentTimeMillis() + 30_000;
+    while (blockedEntriesOf(attachedAggregateId) == 0) {
+      assertTrue(System.currentTimeMillis() < deadline, "the entry was not blocked");
+      Thread.sleep(50);
+    }
+
+    // exactly one attempt, and nothing retries a blocked entry
+    assertEquals(1, attemptsOf(attachedAggregateId));
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
+    assertEquals(1, attemptsOf(attachedAggregateId));
+    assertEquals(
+        1,
+        listener
+            .getInvocations()
+            .stream()
+            .filter(attachedAggregateId::equals)
+            .count(),
+        "the dispatch must not be repeated");
 
   }
 

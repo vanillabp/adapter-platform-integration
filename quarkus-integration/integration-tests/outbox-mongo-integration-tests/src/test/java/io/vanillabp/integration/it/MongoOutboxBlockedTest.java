@@ -78,22 +78,84 @@ public class MongoOutboxBlockedTest {
   public void permanentlyFailingEntryIsBlocked() throws Exception {
 
     listener.failNextDispatches(Integer.MAX_VALUE);
+    final var errors = new java.util.concurrent.CopyOnWriteArrayList<String>();
+    final var errorWatcher = errorsInto(errors);
+    final var dispatcherLog = java.util.logging.Logger
+        .getLogger(io.vanillabp.integration.runtime.outbox.MongoPhaseTwoOutboxDispatcher.class.getName());
+    dispatcherLog.addHandler(errorWatcher);
 
-    userTransaction.begin();
-    workflowService.startWorkflow("blocked-test");
-    userTransaction.commit();
+    try {
+      userTransaction.begin();
+      workflowService.startWorkflow("blocked-test");
+      userTransaction.commit();
 
-    // wait until the entry is marked BLOCKED
-    final var deadline = System.currentTimeMillis() + 10000;
-    while (outbox().entriesBlocked() == 0) {
-      assertTrue(System.currentTimeMillis() < deadline, "entry was not blocked");
-      Thread.sleep(50);
+      // wait until the entry is marked BLOCKED
+      final var deadline = System.currentTimeMillis() + 10000;
+      while (outbox().entriesBlocked() == 0) {
+        assertTrue(System.currentTimeMillis() < deadline, "entry was not blocked");
+        Thread.sleep(50);
+      }
+
+      // exactly block-after-attempts dispatches happened, then no more
+      assertEquals(2, listener.getInvocations().size());
+      Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
+      assertEquals(2, listener.getInvocations().size(), "a BLOCKED entry must not be retried");
+    } finally {
+      dispatcherLog.removeHandler(errorWatcher);
     }
 
-    // exactly block-after-attempts dispatches happened, then no more
-    assertEquals(2, listener.getInvocations().size());
-    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
-    assertEquals(2, listener.getInvocations().size(), "a BLOCKED entry must not be retried");
+    // the ERROR is where an operator starts, so it names the entry and the page which says
+    // how to find it, open it again or delete it
+    final var blockedEntry = outbox()
+        .entries()
+        .stream()
+        .filter(MongoPhaseTwoOutboxReader.Entry::isBlocked)
+        .findFirst()
+        .orElseThrow()
+        .id();
+    assertTrue(
+        errors
+            .stream()
+            .anyMatch(error -> error.contains(blockedEntry) && error.contains(
+                io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE)),
+        "the ERROR of a blocked entry does not say where the way back is described: "
+            + errors);
+
+  }
+
+  /**
+   * Collects what is logged at ERROR, the message together with its parameters, because
+   * the log manager of Quarkus hands the parameters over unformatted.
+   *
+   * @param errors Where the lines go
+   * @return The handler to add to a logger
+   */
+  private static java.util.logging.Handler errorsInto(
+      final java.util.List<String> errors) {
+
+    return new java.util.logging.Handler() {
+
+      @Override
+      public void publish(
+          final java.util.logging.LogRecord record) {
+
+        if (record.getLevel().intValue() >= java.util.logging.Level.SEVERE.intValue()) {
+          errors.add(record.getMessage()
+              + " "
+              + java.util.Arrays.toString(record.getParameters()));
+        }
+
+      }
+
+      @Override
+      public void flush() {
+      }
+
+      @Override
+      public void close() {
+      }
+
+    };
 
   }
 

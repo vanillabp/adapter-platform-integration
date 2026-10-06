@@ -4182,3 +4182,24 @@ logged at DEBUG. No schema changes. `PhaseTwoRequest` gets an eighth component, 
 stays, so an adapter or a test which builds a request keeps compiling.
 
 Like the workflow id, the row is a hint. An adapter which does not read it behaves as before.
+
+### 115. The ERROR of a blocked entry links to the way back, and the ERROR of an extension stays beside it
+
+An entry the outbox gives up on waits for a person. Until now the ERROR only said that it "has to be
+cleaned up manually", and nothing said how. The Business Cockpit throws `PhaseTwoPermanentFailure`
+for a change whose workflow or user task is missing after ten minutes, so its operators meet such
+an entry in normal operation, not only after a broken deployment.
+
+Each of the three dispatchers (JDBC, MongoDB on Spring Boot, MongoDB on Quarkus) now ends its
+ERROR about a blocked entry with the address of the wiki page `Blocked-outbox-entries`. The page
+says, per store, how to find the entry, open it again or delete it, and what opening does to the
+idempotency key. The address is one constant, `PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE`, so
+the lines and the tests reading them cannot name two different pages.
+
+A blocked entry of an extension leaves two ERROR lines: one of the extension, which says what to
+check in its own terms, and one of the dispatcher, which names the row and carries the stack trace.
+Merging them was weighed and not taken. The extension does not know the row, and the dispatcher
+does not know what the extension's failure means. Both lines stay.
+
+A command or a user interface for the repair was not built here. That is roadmap line 125 (admin
+UI). Until then the statements on the wiki page are the supported way.

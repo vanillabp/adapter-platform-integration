@@ -60,8 +60,8 @@ import lombok.extern.slf4j.Slf4j;
  * operation can be planned again, and it is deleted asynchronously once
  * <code>vanillabp.outbox.retention</code> passed. After
  * <code>vanillabp.outbox.block-after-attempts</code> failed attempts an entry is
- * marked {@link PhaseTwoOutboxEntry#STATUS_BLOCKED} and has to be cleaned up
- * manually.
+ * marked {@link PhaseTwoOutboxEntry#STATUS_BLOCKED} and waits for a person, see
+ * {@link PhaseTwoOutboxProperties#BLOCKED_ENTRIES_GUIDE}.
  * <p>
  * <strong>Waiting for a read model is not an attempt.</strong> A dispatch which the adapter
  * answers with {@link io.vanillabp.integration.spi.PhaseTwoRetryLater} is written back with
@@ -582,8 +582,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       countBlockedEntry(entry.getOperation(), true);
       log.error(
           "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-              + "failed for a reason repeating cannot fix - the outbox entry '{}' is blocked and has "
-              + "to be cleaned up manually!",
+              + "failed for a reason repeating cannot fix - the outbox entry '{}' is blocked. How to find "
+              + "it, open it again or delete it: "
+              + PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE,
           entry.getOperation(),
           entry.getBpmnProcessId(),
           entry.getWorkflowModuleId(),
@@ -604,7 +605,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       countBlockedEntry(entry.getOperation(), false);
       log.error(
           "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
-              + "failed {} times - the outbox entry '{}' is now blocked and has to be cleaned up manually!",
+              + "failed {} times - the outbox entry '{}' is now blocked. How to find it, open it again or "
+              + "delete it: "
+              + PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE,
           entry.getOperation(),
           entry.getBpmnProcessId(),
           entry.getWorkflowModuleId(),
@@ -661,7 +664,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       log.error(
           "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' waited {} "
               + "for its BPMS to report the workflow, which is longer than '{}' allows - the outbox "
-              + "entry '{}' is now blocked and has to be cleaned up manually: {}",
+              + "entry '{}' is now blocked. How to find it, open it again or delete it: "
+              + PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE
+              + " - the last answer was: {}",
           entry.getOperation(),
           entry.getBpmnProcessId(),
           entry.getWorkflowModuleId(),

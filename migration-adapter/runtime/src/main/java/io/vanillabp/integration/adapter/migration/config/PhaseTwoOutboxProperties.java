@@ -126,6 +126,14 @@ public class PhaseTwoOutboxProperties {
       + ".block-after-attempts";
 
   /**
+   * Where an operator reads how to find a blocked entry, open it again or delete it, for
+   * every store VanillaBP writes itself. Each ERROR which reports a blocked entry ends with
+   * this address. It is a constant so the tests which read those lines name the same page
+   * the lines do. See decision 115 in the repository's DECISIONS.md.
+   */
+  public static final String BLOCKED_ENTRIES_GUIDE = "https://github.com/vanillabp/adapter-platform-integration/wiki/Blocked-outbox-entries";
+
+  /**
    * How long an entry may wait for a BPMS which does not report its workflow yet, counted
    * from the moment the entry was written. After that the entry is blocked.
    * <p>
