@@ -56,6 +56,8 @@ public class BpmsInitiatedStartTest {
 
   private static final String SIGNAL_EVENT = "SignalStart";
 
+  private static final String REPORTING_EVENT = "ReportingStart";
+
   private static final Instant TRIGGER_TIME = Instant.parse("2026-08-12T04:00:00Z");
 
   @Configuration
@@ -159,7 +161,8 @@ public class BpmsInitiatedStartTest {
                   .of(
                       BpmsInitiatedStartSpec.of(TIMER_EVENT, BpmsStartTrigger.Kind.TIMER),
                       new BpmsInitiatedStartSpec(
-                          SIGNAL_EVENT, BpmsStartTrigger.Kind.SIGNAL, "OrderReceived"))
+                          SIGNAL_EVENT, BpmsStartTrigger.Kind.SIGNAL, "OrderReceived"),
+                      BpmsInitiatedStartSpec.of(REPORTING_EVENT, BpmsStartTrigger.Kind.CONDITIONAL))
               : List.of();
 
     }
@@ -345,6 +348,36 @@ public class BpmsInitiatedStartTest {
           .get(signalStart.workflowAggregateId());
       Assertions.assertEquals("SIGNAL/OrderReceived", signalAggregate.getStartedBy());
       Assertions.assertEquals("SOUTH", signalAggregate.getRegion());
+
+    }
+
+  }
+
+  @Test
+  public void aReportFromInsideTheStartDoesNothing() throws IOException {
+
+    WorkflowStartConfiguration.AGGREGATES.clear();
+
+    try (var testApp = buildTestApp(); var context = runTestApplication(
+        testApp,
+        WorkflowStartConfiguration.class,
+        StartEventsConfiguration.class)) {
+
+      final var dummyAdapter = context
+          .getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
+
+      // the dummy adapter knows no workflow of this aggregate, like a Camunda 8 cluster which does
+      // not show the workflow while its start listener runs. A report which asked it would end
+      // the start with a WorkflowNotFoundException
+      final var reportingStart = dummyAdapter
+          .startWorkflowByBpms(
+              MODULE,
+              PROCESS,
+              context(BpmsStartTrigger.Kind.CONDITIONAL, REPORTING_EVENT, Map.of("region", "west")));
+
+      Assertions.assertTrue(reportingStart.created());
+      Assertions.assertEquals("reported-west", reportingStart.workflowAggregateId());
+      Assertions.assertEquals("west", WorkflowStartConfiguration.AGGREGATES.get("reported-west").getRegion());
 
     }
 

@@ -2,6 +2,7 @@ package io.vanillabp.migration.test.processservice;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -77,6 +78,8 @@ public class AnOperationReadsTheStartRowTest {
     final List<Optional<TaskDelivery>> taskRowsInPhaseTwo = new CopyOnWriteArrayList<>();
 
     final AtomicInteger redispatchProbes = new AtomicInteger();
+
+    final List<Optional<Instant>> planningMomentsHanded = new CopyOnWriteArrayList<>();
 
     AnAdapterWithALaggingReadModel() {
 
@@ -169,6 +172,18 @@ public class AnOperationReadsTheStartRowTest {
 
       redispatchProbes.incrementAndGet();
       return answer;
+
+    }
+
+    @Override
+    public WorkflowAwareness awarenessOfWorkflowForRedispatch(
+        final WorkflowScope scope,
+        final AggregatePersistenceAware<Object> aggregatePersistence,
+        final Object workflowAggregateId,
+        final Instant plannedAt) {
+
+      planningMomentsHanded.add(Optional.ofNullable(plannedAt));
+      return awarenessOfWorkflowForRedispatch(scope, aggregatePersistence, workflowAggregateId);
 
     }
 
@@ -323,9 +338,24 @@ public class AnOperationReadsTheStartRowTest {
   private void theWorkflowWasStartedBy(
       final String adapterId) {
 
+    theWorkflowWasStartedAt(adapterId, Instant.now());
+
+  }
+
+  private void theWorkflowWasStartedAt(
+      final String adapterId,
+      final Instant startedAt) {
+
     deliveryLog
         .recordWorkflowStart(
-            TaskDelivery.workflowStart(adapterId, MODULE, PROCESS, AGGREGATE, WORKFLOW, "1", Instant.now()));
+            TaskDelivery.workflowStart(adapterId, MODULE, PROCESS, AGGREGATE, WORKFLOW, "1", startedAt));
+
+  }
+
+  private static Map<String, String> plannedAt(
+      final Instant plannedAt) {
+
+    return Map.of(PhaseTwoCall.ARG_PLANNED_AT, plannedAt.toString());
 
   }
 
@@ -469,6 +499,93 @@ public class AnOperationReadsTheStartRowTest {
 
     assertEquals(1, adapter.redispatchProbes.get());
     assertEquals(1, adapter.phaseTwoRunsOf(PhaseOperation.START_WORKFLOW), "the probe said unknown, so it starts");
+
+  }
+
+  @Test
+  @DisplayName("A start is planned together with the moment it was planned")
+  public void aStartCarriesItsPlanningMoment() {
+
+    final var before = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+    aNodeWithoutAHint().startWorkflow(AGGREGATE);
+
+    final var start = scheduled.getFirst();
+    assertEquals(PhaseOperation.START_WORKFLOW.name(), start.operation());
+    final var plannedAt = Instant.parse(start.args().get(PhaseTwoCall.ARG_PLANNED_AT));
+    assertFalse(plannedAt.isBefore(before));
+    assertEquals(
+        Optional.of("START_WORKFLOW|%s|%s|%s".formatted(MODULE, PROCESS, AGGREGATE)),
+        start.idempotencyKey(),
+        "the moment does not take part in the key, so a second planning of the same start is still a duplicate");
+
+  }
+
+  @Test
+  @DisplayName("A retried start whose start row was written after it was planned starts nothing")
+  public void aRetriedStartWithAYoungerRowStartsNothing() {
+
+    final var plannedAt = Instant.now().minusSeconds(5);
+    theWorkflowWasStartedAt(ADAPTER, plannedAt.plusMillis(200));
+    final var processService = aNodeWithoutAHint();
+
+    processService.executePhaseTwo(PhaseOperation.START_WORKFLOW, AGGREGATE, ADAPTER, plannedAt(plannedAt), true);
+
+    assertEquals(0, adapter.phaseTwoRunsOf(PhaseOperation.START_WORKFLOW));
+    assertEquals(0, adapter.redispatchProbes.get(), "the row answered, so the search was not asked");
+
+  }
+
+  @Test
+  @DisplayName("A retried second start of an aggregate does not count the row of the first workflow and starts")
+  public void aRetriedSecondStartDoesNotCountTheFirstWorkflow() {
+
+    final var plannedAt = Instant.now();
+    theWorkflowWasStartedAt(ADAPTER, plannedAt.minus(java.time.Duration.ofDays(2)));
+    final var processService = aNodeWithoutAHint();
+
+    processService.executePhaseTwo(PhaseOperation.START_WORKFLOW, AGGREGATE, ADAPTER, plannedAt(plannedAt), true);
+
+    assertEquals(
+        List.of(Optional.of(plannedAt)),
+        adapter.planningMomentsHanded,
+        "the row belongs to the earlier workflow, so the adapter is asked about the workflows started since");
+    assertEquals(1, adapter.phaseTwoRunsOf(PhaseOperation.START_WORKFLOW), "the probe said unknown, so it starts");
+
+  }
+
+  @Test
+  @DisplayName("A retried start planned before the moment was recorded counts every row, as before")
+  public void aRetriedStartWithoutAPlanningMomentCountsTheRow() {
+
+    theWorkflowWasStartedAt(ADAPTER, Instant.now().minus(java.time.Duration.ofDays(2)));
+    final var processService = aNodeWithoutAHint();
+
+    processService.executePhaseTwo(PhaseOperation.START_WORKFLOW, AGGREGATE, ADAPTER, Map.of(), true);
+
+    assertEquals(0, adapter.phaseTwoRunsOf(PhaseOperation.START_WORKFLOW));
+    assertTrue(adapter.planningMomentsHanded.isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("A retried start without a start row hands the probe the moment it was planned")
+  public void aRetriedStartHandsThePlanningMomentToTheProbe() {
+
+    final var plannedAt = Instant.now();
+    adapter.answer = WorkflowAwareness.COMPLETED;
+    final var processService = aNodeWithoutAHint();
+
+    processService.executePhaseTwo(PhaseOperation.START_WORKFLOW, AGGREGATE, ADAPTER, plannedAt(plannedAt), true);
+    processService
+        .executePhaseTwo(
+            PhaseOperation.START_WORKFLOW,
+            AGGREGATE,
+            ADAPTER,
+            Map.of(PhaseTwoCall.ARG_PLANNED_AT, "not a moment"),
+            true);
+
+    assertEquals(List.of(Optional.of(plannedAt), Optional.empty()), adapter.planningMomentsHanded);
+    assertEquals(0, adapter.phaseTwoRunsOf(PhaseOperation.START_WORKFLOW), "the probe knows a workflow since then");
 
   }
 

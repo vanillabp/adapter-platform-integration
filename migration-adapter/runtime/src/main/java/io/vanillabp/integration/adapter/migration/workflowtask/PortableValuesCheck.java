@@ -308,6 +308,12 @@ public class PortableValuesCheck {
    * Why that type does not travel to the BPMS on its own. The wrapper
    * {@link Boolean} gets its own sentence, because without it the rule looks like
    * pedantry.
+   * <p>
+   * Every other type gets the reason and the fact that a declaration lets it through. The
+   * check judges the missing entry, never the type: {@link DeclaredAggregateValues#covers}
+   * compares paths only. Without that sentence the reason reads like a verdict on the type,
+   * which for a collection sounds as if it could not be declared at all. A collection, a map
+   * and an array get one more sentence, because what is inside them is the next question.
    *
    * @param type The declared type
    * @return The sentence for the message
@@ -322,9 +328,30 @@ public class PortableValuesCheck {
           decision. Declare the attribute as boolean, or give the aggregate a boolean getter \
           which answers what the model really asks.""";
     }
-    return """
+    final var reason = """
         Only a boolean and a text mean the same in every expression language, and a value of the \
-        aggregate is there to carry a decision.""";
+        aggregate is there to carry a decision. So the value has to be declared. Its type is not \
+        the problem: a value of any type travels once it is declared.""";
+    if (isCollection(type)) {
+      return "%s %s"
+          .formatted(
+              reason,
+              """
+                  A collection or a map travels as one value, and every expression language reads \
+                  what is inside it in its own way. Declared, it travels as it is.""");
+    }
+    return reason;
+
+  }
+
+  /**
+   * Whether a value of that type holds other values, which is what the message about it adds a
+   * sentence for.
+   */
+  private static boolean isCollection(
+      final Class<?> type) {
+
+    return type.isArray() || Collection.class.isAssignableFrom(type) || Map.class.isAssignableFrom(type);
 
   }
 

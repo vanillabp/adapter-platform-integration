@@ -301,6 +301,51 @@ public interface MigratableProcessService<A> {
   }
 
   /**
+   * The same question as
+   * {@link #awarenessOfWorkflowForRedispatch(WorkflowScope, AggregatePersistenceAware, Object)},
+   * about the workflows started at or after the given moment only. This is the method the core
+   * calls.
+   * <p>
+   * An aggregate may carry a second workflow once its first one ended. The outbox entry of that
+   * second start was planned long after the first workflow started. So where the first attempt to
+   * dispatch the second start failed before it created anything, the first workflow is no evidence
+   * for the second one. An answer which counts it SKIPS the start and loses the second workflow.
+   * Counting only the workflows started at or after <code>plannedAt</code> tells the two apart:
+   * the BPMS' own start time of the workflow (Camunda 7: the start time in the history, Camunda 8:
+   * the <code>startDate</code> the search reports) is compared with it.
+   * <p>
+   * <code>plannedAt</code> is read from the clock of the node which planned the start, and the
+   * BPMS reads its own clock. Where the BPMS' clock is behind by more than the time between
+   * planning and the first dispatch, the workflow this entry started looks older than the entry,
+   * and the answer is {@link WorkflowAwareness#UNKNOWN_TO_BPMS}. That costs a duplicate, which is
+   * the residual the contract permits anyway. Moving the moment back to allow for the skew would
+   * turn the same error into a lost workflow, so an adapter does not do that.
+   * <p>
+   * The default ignores the moment and asks
+   * {@link #awarenessOfWorkflowForRedispatch(WorkflowScope, AggregatePersistenceAware, Object)},
+   * which is what an adapter written before this method existed answers. Such an adapter still
+   * skips the second start of an aggregate in the case above.
+   *
+   * @param scope The workflow module and BPMN processes being asked about
+   * @param aggregatePersistence The workflow aggregate's persistence support
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param plannedAt When the start was planned, or <code>null</code> for an entry planned by a
+   *          version which did not record it, in which case every workflow of the aggregate
+   *          counts
+   * @return The BPMS' awareness of a workflow started at or after <code>plannedAt</code> - unsure
+   *         means {@link WorkflowAwareness#UNKNOWN_TO_BPMS}
+   */
+  default WorkflowAwareness awarenessOfWorkflowForRedispatch(
+      final WorkflowScope scope,
+      final AggregatePersistenceAware<A> aggregatePersistence,
+      final Object workflowAggregateId,
+      final java.time.Instant plannedAt) {
+
+    return awarenessOfWorkflowForRedispatch(scope, aggregatePersistence, workflowAggregateId);
+
+  }
+
+  /**
    * Whether this adapter can answer
    * {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)} by
    * ASKING its BPMS, rather than by assuming.

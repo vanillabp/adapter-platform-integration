@@ -214,4 +214,38 @@ public interface WorkflowElection {
 
   }
 
+  /**
+   * Whether the given aggregate is the one a <code>&#64;WorkflowStartedByBpms</code> method is
+   * building right now, on this thread. This is NO election, and it asks nobody.
+   * <p>
+   * Such a method runs before the workflow it starts can be found. On Camunda 8 the row which says
+   * which BPMS holds the workflow is written only after the method returned, and the BPMS does not
+   * show the workflow yet either. So a report about the aggregate made from inside the method
+   * waits for a BPMS which has nothing to say. An extension which reports changes of an aggregate
+   * asks this first and skips the report where the answer is <code>true</code>: the start is
+   * reported anyway once it is done, and an extension which observes starts sees it then.
+   * <p>
+   * The answer is <code>true</code> only where such a method runs on this thread and the aggregate
+   * is NEW: it has no id yet, or an id its persistence does not know. The method may also return
+   * an aggregate which exists already and has other workflows and open tasks. A report about that
+   * one is a real report, and the answer is <code>false</code>. It is <code>false</code> as well
+   * where the persistence cannot load an aggregate by its id, because then nothing tells a new
+   * aggregate from an existing one.
+   * <p>
+   * <code>ProcessService#aggregateChanged</code> applies the same rule and does nothing for such
+   * an aggregate.
+   * <p>
+   * The default answers <code>false</code>, which is what an implementation written before this
+   * existed answers.
+   *
+   * @param workflowAggregate The aggregate a report is about
+   * @return Whether it is the aggregate the running start builds
+   */
+  default boolean isInsideTheStartOf(
+      final Object workflowAggregate) {
+
+    return false;
+
+  }
+
 }

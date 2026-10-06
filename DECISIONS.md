@@ -3701,9 +3701,14 @@ day it ships. It carries javadoc, and its name is one we keep. The precedent sta
 already, because the names of the tables VanillaBP writes are public constants and nothing but
 tests reads them.
 
-What is still open is whether this is built, and for how many messages. Stephan decides that. The
-default this entry carries: build it for the findings an adapter test asserts today, and leave the
-other startup messages as they are until later work reworks them.
+It is built for the findings an adapter test asserted when this was decided, and the other startup
+messages stay as they are until later work reworks them. The phrases stand beside the check which
+writes them, so the name and the text are in one file and the SPI modules carry no message text:
+`DeployedProcessVersionsCheck.A_VERSION_OF_A_PROCESS`, `SERVED_BY_NO_METHOD`,
+`STILL_RUN_ON_THIS_VERSION` and `STILL_RUN_ON_AN_OUTFADED_VERSION`, and
+`DeliveryRecords.NO_DELIVERY_LOG`. The checks format their messages from them, so no phrase stands
+in the tree twice. The tests of this repository keep writing the words out, because they are the
+place where the wording is tested.
 
 ### 106. The delivery record says which kind of task an id is, and a record of the other kind elects nobody
 
@@ -4114,8 +4119,9 @@ Phase two of such an operation hands the workflow id of the row to the adapter, 
 adapter which addresses a workflow by its key can then skip the search for it.
 
 The re-dispatch of a START reads the same row before it probes. Where the row names the adapter the
-entry was written for, the earlier attempt created the workflow, and the entry is consumed without
-asking anybody.
+entry was written for, and was written at or after the moment the entry was planned, the earlier
+attempt created the workflow, and the entry is consumed without asking anybody. A row older than the
+entry belongs to an earlier workflow of the same aggregate (decision 116).
 
 Before this, only the hint in the election cache told "not visible yet" apart from "nobody knows
 this workflow". That hint lives in the memory of one node and expires after an hour. Measured
@@ -4146,10 +4152,10 @@ What it costs, and what is accepted:
   instead of an hour. A workflow which ended and which its BPMS already forgot inside that period
   is not refused at the call any more. Its operation is planned, repeated and finally blocked, which
   is where it becomes visible. That is the residual a cached hint always had, only for longer.
-- Neither the row nor the probe tells an earlier, ended workflow of the same aggregate from the one
-  a re-dispatched START is about. With the row, a second start whose first attempt failed before it
-  created anything is skipped, as the probes of the Camunda adapters already do today (both find the
-  earlier instance). This is not new, and it is written down so nobody reads the row as the cause.
+- An earlier, ended workflow of the same aggregate is told apart from the one a re-dispatched START
+  is about by the moment the entry was planned, for the row and for the probe
+  (decision 116). An entry planned before that moment was recorded has none, and for
+  it a second start whose first attempt failed before it created anything is still skipped.
 - One read by primary key per operation on a workflow, and only where the cache has no hint.
 
 ### 113. Waiting for a read model uses time, not attempts
@@ -4261,3 +4267,89 @@ does not know what the extension's failure means. Both lines stay.
 
 A command or a user interface for the repair was not built here. That is roadmap line 125 (admin
 UI). Until then the statements on the wiki page are the supported way.
+
+### 116. A retried start counts only the workflows started after it was planned
+
+An aggregate may outlive its workflow and carry a second one afterwards. This stays allowed, and
+the wiki says it is supported but not recommended: a business id processed twice is usually better
+modelled as two aggregates. Forbidding it was weighed and not taken. It would be a new rule which
+refuses a start, and a start row which expires after its retention period could only half enforce
+it.
+
+What had to be repaired is a loss. Say the first attempt to dispatch the SECOND start fails before
+it creates anything. The dispatch which repeats the entry asks whether the workflow exists already
+(decision 112). The start row names the first workflow, Camunda 7 answers from its history, and
+Camunda 8 searches without a state filter. All three say "it is there", the entry is consumed, and
+the second workflow never starts.
+
+So every START now carries the moment it was planned, in its arguments under
+`PhaseTwoCall.ARG_PLANNED_AT`. The arguments were chosen over a column of the outbox table because
+every store already persists them and hands them back, the gruelbox store and a store of an
+application included. No rule deriving an idempotency key reads the moment, so two starts of one
+aggregate still share their key. The moment is kept in milliseconds, which is what the stores keep
+of the moment a start row is written.
+
+The repeated dispatch uses the moment twice:
+
+- A start row counts only where it was written at or after the moment. A row which is older belongs
+  to an earlier workflow.
+- The adapter's probe gets the moment, through the four-argument
+  `MigratableProcessService#awarenessOfWorkflowForRedispatch`. An adapter compares it with the
+  start time its BPMS reports and counts only the workflows started at or after it. The default
+  ignores the moment and asks the three-argument method, which is what an adapter written before
+  answers. Such an adapter still skips the second start in the case above.
+
+An entry planned before this change carries no moment. For it everything counts, as before.
+
+The clocks were weighed. The start row and the moment are both read from clocks of the application's
+nodes. The row of this entry's own workflow is written after the dispatch, so it is younger than the
+moment by the time the dispatch took. Two nodes whose clocks differ by more than that make the row
+look older, and then the probe answers. The workflow exists, so a probe which can find it does. A
+BPMS whose clock is behind the node's by more than the time between planning and the first dispatch
+makes the workflow look older than the entry, and the probe answers "unknown". That costs a
+duplicate start, which is the at-least-once residual the contract permits anyway. The other way
+round, an earlier workflow would have to start within that same difference before the second start
+is planned, and the earlier workflow has to END before then. Moving the moment back to allow for
+the skew would turn the first error into a lost workflow, so neither the core nor an adapter does
+that.
+
+### 117. A report from inside the start of a workflow about the aggregate it builds does nothing
+
+A `@WorkflowStartedByBpms` method builds the aggregate of a workflow the BPMS started. Code which
+reports every change of an aggregate calls `ProcessService#aggregateChanged` there too, and an
+extension such as the Business Cockpit reports the same change through the election
+(`WorkflowElection`).
+
+Neither report can work at that moment. The method runs before the start row is written (decision
+111 and 112 read that row first), and on Camunda 8 the aggregate id is not even a variable of the
+instance yet: the start listener job writes it when it completes. So nothing finds the workflow. The
+cache holds no hint either, since VanillaBP did not start this workflow. Measured against the core on
+2026-10-06 with an adapter which does not show the workflow, as Camunda 8 does not:
+`ProcessService#aggregateChanged` saved the aggregate, asked each prioritized adapter once and threw
+`WorkflowNotFoundException`, which ends the start and fails the listener job. The election of an
+extension waits only where a hint exists, so it did not wait either: one question per adapter, then
+an `IllegalStateException`.
+
+And neither report is needed. Completing the start hands the values the aggregate shares to the BPMS,
+and an extension which observes starts sees the new workflow when the start is done.
+
+So the core keeps the running start on the thread for as long as the method runs
+(`RunningBpmsInitiatedStart`, the workflow module and the BPMN process). While it runs, a report about
+an aggregate which is NEW does nothing and writes a DEBUG line. New means the aggregate has no id, or
+an id its persistence does not know. The id is often unknown before the start saves the aggregate,
+which is the normal case for a generated id, so the rule cannot ask for it. The method may also
+return an aggregate which exists already. That one may have other workflows and open tasks, and a
+report about it runs as always. Where the persistence cannot load by id, nothing tells the two
+apart, and the report runs as well.
+
+An extension asks the same rule through `WorkflowElection#isInsideTheStartOf(Object)`. Its default
+answers `false`, which is what an implementation written before answers.
+
+Writing the start row before the method runs was weighed and not taken: the id is often not known
+then.
+
+The rule does not ask which BPMS runs the workflow. On Camunda 7 the method runs inside the engine's
+own transaction. That engine keeps the aggregate id in the business key, and the key is written from
+the method's result. So a report from inside the method finds nothing there either, and the start
+writes the values when it is done, as on Camunda 8. The Process-Engine-API reports no start the
+application did not ask for, so the method never runs there.

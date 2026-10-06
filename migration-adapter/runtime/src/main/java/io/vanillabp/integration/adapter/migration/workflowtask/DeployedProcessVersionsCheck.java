@@ -51,6 +51,42 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 public class DeployedProcessVersionsCheck {
 
   /**
+   * How a finding about one version of a process names it, with the version and the plain BPMN
+   * process id to put in. It opens the subject line of every finding about a version, where the
+   * workflow module and the adapter follow.
+   * <p>
+   * Public so that a test of an adapter reads the words from here and fills in its own values,
+   * see decision 105 in the repository's DECISIONS.md. A changed text then changes no adapter
+   * test, and a renamed constant breaks its build.
+   */
+  public static final String A_VERSION_OF_A_PROCESS = "version '%s' of process '%s'";
+
+  /**
+   * The words of the finding about a held version whose tasks no
+   * <code>&#64;WorkflowTask</code> method serves. Both forms of that finding carry them, the
+   * error about a version workflows still run on and the warning about one nobody is on.
+   * <p>
+   * Public for adapter tests, see {@link #A_VERSION_OF_A_PROCESS}.
+   */
+  public static final String SERVED_BY_NO_METHOD = "served by NO @WorkflowTask method of this application";
+
+  /**
+   * The words which say that workflows still run on a version whose tasks nothing serves. Only
+   * the error carries them, so a test tells the error from the warning by them.
+   * <p>
+   * Public for adapter tests, see {@link #A_VERSION_OF_A_PROCESS}.
+   */
+  public static final String STILL_RUN_ON_THIS_VERSION = "still run on this version";
+
+  /**
+   * The words of the finding about a version the configuration fades out while workflows still
+   * run on it, with the version to put in.
+   * <p>
+   * Public for adapter tests, see {@link #A_VERSION_OF_A_PROCESS}.
+   */
+  public static final String STILL_RUN_ON_AN_OUTFADED_VERSION = "still run on version '%s'";
+
+  /**
    * Which of the given tasks no <code>&#64;WorkflowTask</code> method serves in that
    * version - answered by the {@link WorkflowTaskRegistry}, which is the only place
    * knowing the version ranges of the methods.
@@ -925,18 +961,16 @@ public class DeployedProcessVersionsCheck {
         obsolete by adding e.g. '%s' to '%s'."""
         .formatted(version, version, OutfadedProcessVersions.propertyName(adapterId));
 
-    final var scope = "version '%s' of process '%s' of workflow module '%s', adapter '%s'"
-        .formatted(version, bpmnProcessId, workflowModuleId, adapterId);
+    final var scope = subjectOf(workflowModuleId, bpmnProcessId, adapterId, version);
     if ((running != null) && (running > 0)) {
       findings
           .error(
               io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
               scope,
               """
-                  %d workflow(s) still run on this version, whose task definition(s) %s are \
-                  served by NO @WorkflowTask method of this application - each of them will fail \
+                  %d workflow(s) %s, whose task definition(s) %s are %s - each of them will fail \
                   with an incident at its next such task! %s"""
-                  .formatted(running, definitions, remedy));
+                  .formatted(running, STILL_RUN_ON_THIS_VERSION, definitions, SERVED_BY_NO_METHOD, remedy));
       return;
     }
     findings
@@ -945,9 +979,10 @@ public class DeployedProcessVersionsCheck {
             scope,
             """
                 This version is still deployed at the adapter and its task definition(s) %s are \
-                served by NO @WorkflowTask method of this application%s. %s"""
+                %s%s. %s"""
                 .formatted(
                     definitions,
+                    SERVED_BY_NO_METHOD,
                     running == null
                         ? ", and this BPMS cannot say whether workflows still run on it"
                         : ", no workflow runs on it right now",
@@ -1080,7 +1115,7 @@ public class DeployedProcessVersionsCheck {
       return;
     }
     final var message = """
-        %d workflow(s) still run on version '%s' of BPMN process '%s' (workflow module '%s', adapter \
+        %d workflow(s) %s of BPMN process '%s' (workflow module '%s', adapter \
         '%s'), which '%s' fades out - this application does not serve that version any more, so each \
         of them will fail with an incident at its next task whose definition nobody serves! Complete \
         or migrate those workflows, or stop fading out that version. Set \
@@ -1088,7 +1123,7 @@ public class DeployedProcessVersionsCheck {
         instead of only reporting it."""
         .formatted(
             running,
-            version,
+            STILL_RUN_ON_AN_OUTFADED_VERSION.formatted(version),
             bpmnProcessId,
             workflowModuleId,
             adapterId,
@@ -1098,17 +1133,29 @@ public class DeployedProcessVersionsCheck {
       findings
           .refuse(
               io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
-              "version '%s' of process '%s' of workflow module '%s', adapter '%s'"
-                  .formatted(version, bpmnProcessId, workflowModuleId, adapterId),
+              subjectOf(workflowModuleId, bpmnProcessId, adapterId, version),
               message);
       return;
     }
     findings
         .error(
             io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
-            "version '%s' of process '%s' of workflow module '%s', adapter '%s'"
-                .formatted(version, bpmnProcessId, workflowModuleId, adapterId),
+            subjectOf(workflowModuleId, bpmnProcessId, adapterId, version),
             message);
+
+  }
+
+  /**
+   * The subject line of a finding about one version of a process.
+   */
+  private static String subjectOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String adapterId,
+      final String version) {
+
+    return "%s of workflow module '%s', adapter '%s'"
+        .formatted(A_VERSION_OF_A_PROCESS.formatted(version, bpmnProcessId), workflowModuleId, adapterId);
 
   }
 

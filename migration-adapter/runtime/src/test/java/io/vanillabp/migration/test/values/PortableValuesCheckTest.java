@@ -1,6 +1,7 @@
 package io.vanillabp.migration.test.values;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -106,6 +107,29 @@ public class PortableValuesCheckTest {
     public Boolean getExpressShipping() {
 
       return null;
+
+    }
+
+  }
+
+  /**
+   * An aggregate sharing a number and a list, which a reader of the message tends to judge
+   * differently although the check does not.
+   */
+  @NoSyncWithBPMS
+  public static class NumberAndListAggregate {
+
+    @SyncWithBPMS
+    public Long getPassengers() {
+
+      return 2L;
+
+    }
+
+    @SyncWithBPMS
+    public List<String> getStops() {
+
+      return List.of("Graz", "Wien");
 
     }
 
@@ -219,6 +243,64 @@ public class PortableValuesCheckTest {
                 UnportableAggregate.class,
                 "id",
                 List.of()));
+
+  }
+
+  @Test
+  @DisplayName("the refusal of a number and of a list both say that a declaration lets the value through")
+  public void theRefusalNamesTheWayToTheDeclarationForEveryType() {
+
+    final var message = refusalFor(
+        NumberAndListAggregate.class,
+        Object.class,
+        propertiesDeclaring(List.of(), List.of()),
+        List.of());
+
+    final var aboutTheNumber = lineAbout("'passengers'", message);
+    final var aboutTheList = lineAbout("'stops'", message);
+    assertTrue(aboutTheNumber.contains("java.lang.Long"), aboutTheNumber);
+    assertTrue(aboutTheList.contains("java.util.List"), aboutTheList);
+    for (final var line : List.of(aboutTheNumber, aboutTheList)) {
+      assertTrue(line.contains("TO the BPMS"), line);
+      assertTrue(line.contains("Its type is not the problem: a value of any type travels once it is declared."), line);
+    }
+    assertTrue(
+        aboutTheList.contains("A collection or a map travels as one value"),
+        aboutTheList);
+    assertFalse(
+        aboutTheNumber.contains("A collection or a map travels as one value"),
+        aboutTheNumber);
+    assertTrue(
+        message.contains("vanillabp.workflow-modules.loan-approval.workflows.LoanApproval.declared-aggregate-values"),
+        message);
+
+  }
+
+  @Test
+  @DisplayName("a declared list of the aggregate travels like a declared number")
+  public void aDeclaredListTravels() {
+
+    assertDoesNotThrow(
+        () -> checkWith(propertiesDeclaring(List.of("passengers", "stops"), List.of()))
+            .refuseValuesWhichDoNotTravelWell(
+                MODULE,
+                PROCESS,
+                Object.class,
+                NumberAndListAggregate.class,
+                "id",
+                List.of()));
+
+  }
+
+  private static String lineAbout(
+      final String value,
+      final String message) {
+
+    return message
+        .lines()
+        .filter(line -> line.contains(value))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("no line about %s in: %s".formatted(value, message)));
 
   }
 

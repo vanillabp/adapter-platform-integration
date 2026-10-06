@@ -1,5 +1,6 @@
 package io.vanillabp.integration.test.deployment;
 
+import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.BpmsStartTrigger;
 import io.vanillabp.spi.service.TaskParam;
@@ -8,6 +9,7 @@ import io.vanillabp.spi.service.WorkflowEnded;
 import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowStartedByBpms;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 
 /**
  * The workflow service of the acceptance test of BPMS-initiated starts. Its process has
@@ -24,6 +26,9 @@ import jakarta.enterprise.context.ApplicationScoped;
     workflowAggregateClass = StartAggregate.class,
     bpmnProcess = @BpmnProcess(bpmnProcessId = "StartProcess"))
 public class StartWorkflowService {
+
+  @Inject
+  ProcessService<StartAggregate> processService;
 
   /**
    * The same workflow service also wants to know when a workflow ended.
@@ -73,6 +78,24 @@ public class StartWorkflowService {
         ? null
         : region.toUpperCase());
     return aggregate;
+
+  }
+
+  /**
+   * Reports the aggregate it builds as changed, the way an application does which calls
+   * <code>aggregateChanged</code> wherever it changes one. The workflow cannot be found yet while
+   * this method runs, so the report does nothing and the start hands the values over.
+   */
+  @WorkflowStartedByBpms(id = "ReportingStart")
+  public StartAggregate aggregateOfReportingStart(
+      final BpmsStartTrigger trigger,
+      @TaskParam("region") final String region) {
+
+    final var aggregate = new StartAggregate();
+    aggregate.setId("reported-%s".formatted(region));
+    aggregate.setStartedBy(trigger.kind().name());
+    aggregate.setRegion(region);
+    return processService.aggregateChanged(aggregate);
 
   }
 

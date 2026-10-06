@@ -235,6 +235,18 @@ long as the row lives. Without the row the election runs as described above.
 `DerivedCancelationTest#theElectionCarriesTheWorkflowId` runs it against a booted application on
 both platforms.
 
+One moment has no row and no hint at all: the `@WorkflowStartedByBpms` method of the application,
+which builds the aggregate of a workflow the BPMS started. The row is written after the method
+returned, and on Camunda 8 the cluster does not show the workflow yet. A report about that
+aggregate made from inside the method finds nobody, and the election throws. Ask
+`WorkflowElection#isInsideTheStartOf(aggregate)` first, and skip the report where it answers
+`true`. Nothing is lost: the start hands the aggregate's values to the BPMS when it is done, and if
+you observe starts, you see this one then. The answer is `true` only for an aggregate the method is
+building, one without an id or with an id its persistence does not know. An aggregate which exists
+already gets `false`, because the method may return one with other workflows and open tasks.
+`ProcessService#aggregateChanged` applies the same rule and does nothing for such an aggregate.
+`AReportInsideTheStartOfAWorkflowTest` holds the rule.
+
 `WorkflowElection#workflowIdOf` answers the id and NOTHING else, and it elects nothing: no BPMS is
 asked, nothing is waited for, and nothing is thrown. Ask it where you want the id for your own
 report rather than because you are about to talk to an engine. It reads what VanillaBP persisted,
