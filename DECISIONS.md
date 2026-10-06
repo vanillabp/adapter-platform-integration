@@ -69,7 +69,8 @@ and two workflow modules of one backend may carry the same aggregate ID. `Workfl
 the core hands the probes so they can tell.
 
 `BPMS_UNAVAILABLE` never falls through to the next adapter: the unavailable BPMS is the one most
-likely to hold the workflow, so the probe is retried briefly and then fails by name. There is no
+likely to hold the workflow, so the walk fails by name. Phase one fails at once, and the dispatch
+and a read retry briefly first (decision 27). There is no
 fallback in this walk at all, because a fallback means operating on a workflow which belongs to
 somebody else.
 
@@ -251,8 +252,9 @@ housekeeping are ours, so `vanillabp-schema` ships one database-neutral Liquibas
 runtime DDL creates the same columns. Nothing else is shipped: gruelbox's table belongs to
 gruelbox and the engine tables belong to the engine, both documented rather than copied.
 
-Where the application creates the schema itself, both stores check at startup that their table AND
-its columns exist, and name the table, the property and the artifact to apply. Checking only the
+Where the application creates the schema itself, the stores check at startup that their tables
+exist, and name the table, the property and the artifact to apply. The outbox and the delivery log
+check the columns as well. Checking only the
 table is what let a later column slip through once.
 
 *The title said "two tables" when the outbox and the delivery log were all there was. The payload
@@ -270,7 +272,8 @@ which runs a second time.
 So the ids the stores still hold open work for are asked once at startup and compared with the
 configured ones, and a mismatch warns with both readings and with the property which acknowledges
 it. A warning, not a failed boot, because the entries are waiting rather than lost. A store which
-cannot answer says so by returning nothing and the check stays quiet.
+cannot answer at startup returns nothing, and the same warning then comes at the first dispatch of
+one of its entries (decision 47).
 
 ### 18. Reading a metric costs no more than reading a number
 
@@ -376,10 +379,12 @@ imported `BeanRegistrar`, because a registrar runs while the configuration class
 and would see only the definitions registered up to that point. A library's auto-configuration
 contributes later, and that is the case this exists for.
 
-A class carrying the annotation without being a bean is passed over without a word. It cannot be
+A class carrying the annotation without being a bean is passed over by the discovery. It cannot be
 told apart from a class another profile brings, and the application which really lost its handlers
 is told so further down, by the report the deployment writes about the BPMN processes no workflow
-service of this run claims. It names the process, what a workflow of it costs (it can be started
+service of this run claims. Where a process stays unclaimed, that report reads the class resources
+once and names such a class with both readings (`WorkflowServicesWhichAreNoBeans`); a healthy boot
+scans nothing. It names the process, what a workflow of it costs (it can be started
 and gets no further than its first task) and the two ways out, writing the workflow service or
 taking the process out of the file. What this gives up is the loudest symptom a forgotten workflow
 service used to have: it does not end the boot any more, and whoever does not read the startup log
@@ -527,8 +532,10 @@ crash or a migration.
 
 What that costs is one question per operation, which is a query against a remote BPMS and
 nothing at all against an embedded one, plus the walk over the adapters until one answers.
-The only accelerator is `WorkflowAdapterCache`, whose entries are hints and never answers
-(entry 5), so a lost hint costs a walk and never a wrong route.
+The first accelerator was `WorkflowAdapterCache`, whose entries are hints and never answers
+(entry 5), so a lost hint costs a walk and never a wrong route. Two more came later, and both are
+records of something that happened rather than a registry: the delivery record of a task (decision
+30) and the start row of a workflow (decision 112).
 
 The workload this is sized for is the one VanillaBP is built for, and that is a product
 decision rather than a limit somebody forgot to lift: business processes whose steps are
@@ -546,9 +553,9 @@ node, so the BPMS is asked once per workflow instead of once per node. That is t
 recommended answer to "the election is our bottleneck", and it is the reason the cache SPI
 is part of the integration SPI rather than an internal class.
 
-Two consequences the code carries visibly. The re-dispatch of a workflow start probes
-`awarenessOfWorkflowForRedispatch` instead of consulting a record, which is why that probe
-must never answer optimistically, and the residual duplicate window after a crash is
+Two consequences the code carries visibly. The re-dispatch of a workflow start reads the start
+row first (decision 112) and probes `awarenessOfWorkflowForRedispatch` only where the row says
+nothing, which is why that probe must never answer optimistically, and the residual duplicate window after a crash is
 documented per adapter rather than closed. And an adapter which cannot be asked at all
 answers optimistically, which is safe while it is the only BPMS configured and is the reason
 a migration setup containing such an adapter routes by list order (see the wiki page
@@ -595,8 +602,9 @@ the connection pool, and an application whose BPMS is slow stops being able to d
 including the work which has nothing to do with that BPMS.
 
 So the walk asks how patient it may be. Phase one asks every adapter once and never sleeps. The
-dispatch of a phase-two entry may do both, because no application transaction is open there and a
-repetition costs an entry another attempt rather than a connection.
+dispatch of a phase-two entry may ask an unreachable BPMS again, because no application transaction
+is open there and a repetition costs an entry another attempt rather than a connection. It does not
+wait for a read model which is behind: it gives the entry back with a due time (decision 49).
 
 Three goals decide what happens to the answers, and they are Stephan's, written down here because
 they are the reason the table below looks like it does:
@@ -609,14 +617,14 @@ they are the reason the table below looks like it does:
 3. a BPMS which is not available right now produces an exception - and asking it is the only
    honest way to find out.
 
-|                  The probe answers                  |                phase one does                |              the dispatch does               |                      a read does                       |
-|-----------------------------------------------------|----------------------------------------------|----------------------------------------------|--------------------------------------------------------|
-| `ACTIVE`                                            | the operation runs                           | the operation runs                           | the adapter answers                                    |
-| `COMPLETED`                                         | warned no-op                                 | the entry is consumed                        | the adapter answers (an ended workflow is viewable)    |
-| `UNKNOWN_TO_BPMS`, task operation                   | `TaskNotFoundException` at once              | the entry is consumed (the task is gone)     | -                                                      |
-| `UNKNOWN_TO_BPMS`, workflow operation, hint present | the operation is planned, the caller returns | waits out the window, then repeats the entry | waits out the window, then `WorkflowNotFoundException` |
-| `UNKNOWN_TO_BPMS`, no hint                          | `WorkflowNotFoundException` at once          | the entry is consumed (stale)                | `WorkflowNotFoundException` at once                    |
-| `BPMS_UNAVAILABLE`                                  | exception naming the adapter, at once        | retried twice, then the entry is repeated    | retried twice, then the exception                      |
+|                  The probe answers                  |                phase one does                |             the dispatch does              |                      a read does                       |
+|-----------------------------------------------------|----------------------------------------------|--------------------------------------------|--------------------------------------------------------|
+| `ACTIVE`                                            | the operation runs                           | the operation runs                         | the adapter answers                                    |
+| `COMPLETED`                                         | warned no-op                                 | the entry is consumed                      | the adapter answers (an ended workflow is viewable)    |
+| `UNKNOWN_TO_BPMS`, task operation                   | `TaskNotFoundException` at once              | the entry is consumed (the task is gone)   | -                                                      |
+| `UNKNOWN_TO_BPMS`, workflow operation, hint present | the operation is planned, the caller returns | gives the entry back, due after the window | waits out the window, then `WorkflowNotFoundException` |
+| `UNKNOWN_TO_BPMS`, no hint                          | `WorkflowNotFoundException` at once          | the entry is consumed (stale)              | `WorkflowNotFoundException` at once                    |
+| `BPMS_UNAVAILABLE`                                  | exception naming the adapter, at once        | retried twice, then the entry is repeated  | retried twice, then the exception                      |
 
 The read is the column this decision first forgot, and a red blueprint nightly is what
 said so (story 176): the viewer of a workflow started seconds ago asked Camunda 8 while
@@ -756,8 +764,8 @@ always did. A closed record is narrower still: it turns into the warned no-op on
 operations which end the task it names, because a push writes into a scope that outlives the task
 and the workflow may well run on. And where it says nothing - no store,
 `deduplicate-deliveries` switched off, the retention passed, an upgrade whose open tasks predate
-it, Camunda 7 which reports no delivery at all because it delivers in the application's
-transaction - the walk runs exactly as it did. A registry which is wrong routes wrongly; this one
+it - the walk runs exactly as it did. Camunda 7 used to be on this list, because it reported no
+delivery; since decision 107 a delivery without an id is written down too. A registry which is wrong routes wrongly; this one
 is either right or silent.
 
 The moment a task was closed is written after phase two succeeded, on the dispatching thread, and
@@ -1213,6 +1221,9 @@ than for a clock, so a store holding nothing else has nothing to be woken for. T
 dispatched entry may be deleted is part of the answer as well, so the wake-up which deletes is the
 same wake-up which dispatches.
 
+*The delete has left the poller since: the night window of decision 91 removes the dispatched
+entries now, and a wake-up only dispatches.*
+
 **The question has to be answered from an index, and the shape of the index decides the shape of the
 question.** A repeated question whose cost grows with everything a table ever held is what entry 19
 forbids, and an aggregate over an unindexed column is exactly that: measured on PostgreSQL 16 with
@@ -1221,7 +1232,8 @@ number grows. So the two stores VanillaBP owns ship two indexes each, over the s
 timestamp of each question - two and not one, because both questions filter the same status and order
 by a different moment, and an index over both moments would serve neither. The same pair serves the
 select which picks the due entries up and the delete which ends the retention, which is why there is
-nothing to add beyond them. gruelbox owns its table and already indexes
+nothing to add beyond them. (The gruelbox store has its own repository since decision 102, so what
+follows is that repository's to keep.) gruelbox owns its table and already indexes
 `(processed, blocked, nextAttemptTime)` for its own flush, so nothing is added there and the QUESTION
 is shaped to fit that index instead: two reads naming both flags, one per value of `processed`,
 rather than one read naming only `blocked` which would have scanned the table.
@@ -1289,9 +1301,11 @@ nothing is. It was rejected because the question is itself a statement, one per 
 is the traffic the delete already was. A cheaper question buys nothing where the answer costs as much
 as the act.
 
-The outbox's own retention delete is NOT gated this way. It rides the poller of entry 42, whose
-wake-up times already contain the moment the oldest dispatched entry may go, so that one is paid for
-by a wake-up which was going to happen anyway.
+The outbox's own retention delete is NOT gated this way either. It runs in the night window of
+decision 91.
+
+*This paragraph used to say that the delete rides the poller of entry 42. That stopped when decision
+91 moved it into the night window.*
 
 ### 44. A handler VanillaBP calls takes part in the transaction it finds
 
@@ -1385,6 +1399,10 @@ keeps a call as one serialized invocation: the only way to answer there is to re
 deserialize it. Entry 19 rules that out. A start asks for numbers, and a question answered from
 everything an application ever scheduled gets slower for every year it is in production.
 
+*The premise changed twice since. Spring Boot with JPA runs VanillaBP's own JDBC store by default
+(decision 75), which answers at the start, and the gruelbox store has its own repository (decision
+102). The rule below still holds for a store which cannot answer at the start.*
+
 So the question is put where the invocation is deserialized anyway, at the dispatch of the entry.
 The id is at hand there, an id which is gone from the configuration is reported in the words the boot
 of the other stores uses, and it costs nothing which was not already being paid. The report is said
@@ -1460,14 +1478,16 @@ short due time is therefore kept, which is what the waiting was for, and no thre
 connection is held while a cluster catches up. The attempt is counted like any other, so
 `block-after-attempts` still ends a workflow which never becomes visible.
 
-What this costs is the poll after the due moment, so an entry is dispatched at most
-`vanillabp.outbox.poll-interval` later than the window it asked for. What it ends is a dispatch which
+The poller is told the new due time (decision 42), so the entry is dispatched when the window it
+asked for ends. What it ends is a dispatch which
 slept while it held the transaction of the store, and with it the question of how many such sleepers
 a connection pool survives.
 
 `ARejectedDispatchIsPlannedAgainTest` holds both ends: the call reaches the consumer once and the
 entry is ticked off, and the workflow which is searchable is served first while the other one waits.
-`GruelboxWritesTheDueTimeADispatchAskedForTest` holds the due time in the row.
+`GruelboxWritesTheDueTimeADispatchAskedForTest` holds the due time in the row, in the repository of
+the gruelbox store since decision 102. VanillaBP's own JDBC store writes the window when the attempt
+ends, without a listener.
 
 *Superseded in part by decision 113: the sentence saying the attempt is counted like any other, since an answer `PhaseTwoRetryLater` uses no attempt now and `wait-for-visibility-at-most` ends a workflow which never becomes visible.*
 
@@ -1700,6 +1720,9 @@ The same method writes the attributes of a workflow aggregate the BPMS started
 (`AggregatePropertyWriter`), so one rule serves both. A wrong number in an aggregate outlives the
 handler which received it, which makes the refusal worth more there, not less.
 
+*That class is gone since decision 92, because the platform builds no aggregate for a workflow the
+BPMS starts. The paragraph above no longer applies.*
+
 ### 56. One version selection serves VanillaBP's own handlers and an extension's
 
 `@WorkflowTask`, `@WorkflowStartedByBpms` and `@WorkflowEnded` let a method name the process
@@ -1788,6 +1811,11 @@ sees, which the documentation says rather than the conversion repairing it.
 
 `AggregatePropertyWriter` hangs on the same method, so an aggregate a BPMS-initiated start builds
 gets its `UUID`, its dates and its enum attributes the same way, and refuses the same texts.
+
+*Two parts of this entry changed later. Decision 58 lets a `Date` travel as the instant it holds and
+adds `TimeZone`, and decision 59 stops the boot where a `Calendar` would be shared. Of the three
+refusals above, only the one of `Locale` stays. And `AggregatePropertyWriter` is gone since decision
+92, so the last paragraph no longer applies.*
 
 ### 58. A value type is recognised by what it is, and a Date travels as the instant it holds
 
@@ -2270,9 +2298,10 @@ one here: the backlog this story is about would pile up an orphan of up to a meb
 replaced report and keep every one of them for the retention, seven days by default.
 
 Each store recognises a claimed entry by what its own dispatcher writes. The two stores
-VanillaBP wrote itself count an attempt when they claim an entry, so `ATTEMPTS = 0` says that
-nobody has read it, and the update which replaces carries that condition and is therefore the
-very optimistic lock the claim is. On the JDBC store the claim now reads its row once more,
+VanillaBP wrote itself write a lease when they claim an entry and count the attempt when it ends
+(decision 79). So an entry with no attempt and no running lease is one nobody has read, and the
+update which replaces carries both conditions. That makes it the same optimistic lock the claim
+is. On the JDBC store the claim now reads its row once more,
 because the row may have been replaced since the select of the due entries, and dispatching
 the entry as it read then would hand the handler a payload reference which is gone. MongoDB
 needs no such read: its claim is one atomic `findOneAndUpdate` and answers with the document
@@ -2393,6 +2422,10 @@ is no aggregate of that name. That is the same shape as a start the engine perfo
 and it is decided by the rule Stephan set for it: an own start is recognised by the fact that the
 id has no aggregate. Camunda 7 therefore needs no work for decision 69, and the foreign-start case
 belongs to that rule and to the story which builds it.
+
+*Decision 98 changed that rule. A name no workflow aggregate carries is refused now, and a start the
+engine performs on its own is one which arrives without a name. A key somebody chose on Camunda 7 is
+therefore refused at the start rather than read as an aggregate's id.*
 
 One risk stays and is accepted with open eyes. A key somebody chose which happens to look like an
 id an aggregate already has is attached to that workflow without a word. A key comparison would
@@ -2549,10 +2582,12 @@ transaction, which is what `PhaseTwoOutboxTransaction` and `JdbcConnectionAccess
 
 Working against a third-party outbox as long as possible was deliberate, and it did its job: it
 kept us from building things which only work with an outbox of our own. That job is done, so the
-swap happens in 2.0. Gruelbox stays available for an application which already runs it
-(`vanillabp.outbox.gruelbox.enabled`), and nothing in the platform depends on it any more. It
-takes its own table with it, so an upgrade which still has entries there is told at startup
-rather than losing them quietly.
+swap happens in 2.0. Gruelbox stays available for an application which already runs it, and
+nothing in the platform depends on it any more. It takes its own table with it, so an upgrade which
+still has entries there is told at startup rather than losing them quietly.
+
+*The key `vanillabp.outbox.gruelbox.enabled` named here first is gone. Since decision 102 the
+gruelbox store has a repository of its own, and an application opts in by adding its artifact.*
 
 The entries of one workflow aggregate are dispatched by one thread, and the aggregate decides
 which of them (`DispatchLanes`, `vanillabp.outbox.dispatch-threads`, four by default). Until now
@@ -2571,6 +2606,8 @@ The MongoDB stores keep dispatching on one thread. They are a store of their own
 platforms, the lanes are not tied to JDBC, and the work belongs to the story which measures
 whether they need it.
 
+*Decision 77 did that measuring and gave the MongoDB stores the same lanes.*
+
 The entry above which this changes the premise of is 47: gruelbox is no longer what most
 applications run, so the store which cannot name the adapter ids of its waiting entries at a
 start is now the exception rather than the default. What decision 47 decided - that such a store
@@ -2582,8 +2619,8 @@ Before the housekeeping removes a payload by age it asks the entries whether one
 names it. Decision 62 put that reference among the arguments, and the retention counts at the
 entry, so age alone does not say a payload may go. On a healthy store the question is never asked,
 because a payload goes with the dispatch of its entry. An entry which is stuck keeps
-its payload, so one stuck entry means the question is asked on every poll, which is every ten
-seconds by default.
+its payload, so one stuck entry means the question is asked at every run of the housekeeping.
+That used to be every poll, every ten seconds by default; since decision 91 it is the night window.
 
 That was measured in September 2026, and the result is not the same on both kinds of store.
 
@@ -2826,8 +2863,8 @@ javadoc comment on the field is enough while Lombok writes the getter and the se
 without javadoc is a pity he accepts, because the extra code weighs more and a builder only rarely
 reaches the end user. The help an IDE shows while somebody edits a YAML file is a second surface,
 and it does not depend on Lombok either. It comes from
-`META-INF/spring-configuration-metadata.json`. All 42 descriptions in the published file of
-`vanillabp-spring-boot-integration` are word for word the 42 entries of
+`META-INF/spring-configuration-metadata.json`. Every description in the published file of
+`vanillabp-spring-boot-integration` is word for word an entry of
 `spring-boot-integration/runtime/src/main/resources/META-INF/additional-spring-configuration-metadata.json`,
 which is written by hand and guarded by `AKeyIsDescribedInOnePlaceTest` and
 `EveryKeyOfASectionIsDescribedTest`. Not one of them comes from a javadoc comment, and the module
@@ -2963,6 +3000,9 @@ the trigger carries a timer's time, and taking it as the id is what makes a repe
 harmless, while a signal and a condition carry no such value and an application which needs one
 brings its own.
 
+*Decision 98 replaced the part about the timer's time. The trigger carries no time any more, and a
+repeated notification is recognised by the name the BPMS holds.*
+
 The check runs while the models are deployed, not when the start fires. What the BPMS can start
 on its own stands in the model, and which methods exist is what the scan knows, so both halves are
 there while the application boots. Finding out at three in the morning, when the timer fires and
@@ -3004,7 +3044,8 @@ window, and it is the same on all four stores.
 
 The promise is written where an adapter author meets it: in the javadoc of `PhaseTwoRetryLater`
 and on the outbox page of both platform wikis.
-`GruelboxWritesTheDueTimeADispatchAskedForTest#aLongerWindowIsWrittenToo` holds the case which
+`GruelboxWritesTheDueTimeADispatchAskedForTest#aLongerWindowIsWrittenToo`, in the repository of the
+gruelbox store since decision 102, holds the case which
 used to go the other way.
 
 *Superseded in part by decision 113: the part of a sentence saying that asking earlier costs a failed attempt, since asking earlier costs no attempt now and only asks in vain.*
@@ -3103,8 +3144,10 @@ become less true because a later check ends the start.
 The limit: a check which cannot let the start walk on, because the next check would ask a
 question this one just proved unanswerable, throws where it stands. Its javadoc says so.
 
-**Where the end of a start is.** At the end of `DeploymentService.startWorkflowProcessing`.
-Nothing a start can notice comes later: six validations run in a hook both platforms fire once
+**Where the end of a start is.** In `DeploymentService.endOfStartup`, which the platform calls once
+its start is complete. On Quarkus that is right after the workflow processing started. On Spring
+Boot it is the end of the deployment, and what the start of the workflow processing notices after
+that is a late finding. Apart from that, nothing a start can notice comes later: six validations run in a hook both platforms fire once
 every bean exists, and the election capability of the adapters is judged after the deployment,
 because a BPMS may only tell what it can do once something was deployed to it.
 
@@ -3156,9 +3199,9 @@ it reached: those are reports about the adapter doing its work and they stay whe
 three framed reports of the adapters (`Camunda8Connectors`, `Camunda8Listeners`,
 `Camunda7Listeners`) are of that kind and do not move.
 
-**Nothing breaks while the adapters follow.** The platform publishes the bean and nothing asks
-for it yet. An adapter which does not know about it behaves exactly as it did, and each of the
-four picks the bean up in its own story once this snapshot is published. That is why the way is a
+**Nothing breaks while the adapters follow.** The platform publishes the bean, and an adapter
+which does not ask for it behaves exactly as it did. The Camunda 8 adapter asks for it; the others
+pick it up in a story of their own. That is why the way is a
 bean and not a new mandatory collaborator: a mandatory one would turn every adapter red the
 moment the snapshot lands, for a feature none of them uses yet.
 
@@ -3301,8 +3344,8 @@ belongs to one application. The Process-Engine-API adapter can meet it, because 
 subscriptions match a task type globally and it has no tenant, and today it answers with
 `failTask` and the engine repeats the delivery; that is its own decision to take.
 
-`MigrationProcessService#deliverWorkflowTask` is where the refusal is worded and
-`MigrationProcessServiceTest` holds the message.
+`DeliveryOfAnUnknownWorkflowException` words the refusal, `MigrationProcessService#deliverWorkflowTask`
+throws it, and `MigrationProcessServiceTest` holds the message.
 
 ### 100. The order of one workflow's operations is a promise of VanillaBP's own stores only
 
@@ -3460,8 +3503,9 @@ tests reading the configuration metadata parse with, and `jackson-annotations` a
 javadoc needs to read the annotations of Spring Boot's health classes. Both were invisible while a
 third party dragged them in, which is one more argument for the move.
 
-One thing is still open. The wiki keeps a paragraph about the store, and this entry does not say
-which page it stands on. Nothing in the platform cites that paragraph.
+The wiki keeps a paragraph about the store on the page `Spring-Boot-integration`, in the section
+"The store which used to be here", and the page `Blocked-outbox-entries` points to the other
+repository for a blocked entry there. Nothing in the platform cites either.
 
 ### 103. An expression in the model is named, and the rule which names it lives in the platform
 
@@ -3561,10 +3605,8 @@ path does not resolve. Both can speak about one expression and they say differen
 one ends the start, this one says what the path costs you next year. Nor is this a verdict on DMN.
 A decision gets its inputs as variables, and that is the intended way.
 
-The detection is still missing in all three adapters. The platform ships first, and then each
-adapter reports what it reads. The Camunda 7 adapter has most of it already, in
-`Camunda7ExpressionIdentifiers`, which collects expressions with their placement for the sync
-check. Until an adapter reports, nothing is said, which is the same silence as for an adapter which
+The Camunda 7 and the Camunda 8 adapter report what they read. The Process-Engine-API adapter does
+not yet. Until an adapter reports, nothing is said, which is the same silence as for an adapter which
 cannot read its models.
 
 ### 104. A citation of a decision names its file while the decision waits for its number
@@ -3595,9 +3637,9 @@ one string again. It reports three things: a spelling which is not the file, a f
 because the decision got its number, and a number no entry of `DECISIONS.md` carries. It reads the
 whole repository in about a second, and it runs on every pull request.
 
-Its own promise is the joining, so `--self-test` builds a small repository, wraps a citation of
-each kind over two lines and checks that all of them are found. A line-by-line search finds none of
-them, which is the whole reason the script exists.
+Its own promise is the joining, so `--self-test` builds a small repository with one citation of
+each kind, wraps two of them over two lines and checks that all of them are found. A line-by-line
+search misses the wrapped ones, which is the whole reason the script exists.
 
 One thing follows from the check for whoever writes such a document: a page which explains the
 convention writes its examples with a placeholder where the number goes. An example with digits in
@@ -3805,8 +3847,9 @@ The log of processed task deliveries holds a second kind of row: the start of a 
 row carries the workflow aggregate and the BPMS' own id of its workflow and nothing about a task,
 and `RECORD_KIND` is what tells it apart from a delivery.
 
-The election of an operation about a workflow probes every configured adapter until one says it
-holds the workflow, and it remembers nothing. `PhaseOperation.AGGREGATE_CHANGED` is
+The election of an operation about a workflow probed every configured adapter until one said it
+held the workflow, and it remembered nothing but the hint of the cache. Decision 112 has it read
+the start row first now. `PhaseOperation.AGGREGATE_CHANGED` is
 `electedBy(Election.HOLDS_THE_WORKFLOW)`, and its javadoc says it in so many words: "No adapter ID
 is persisted - the executing adapter is elected at dispatch time by probing". Nothing in VanillaBP
 mapped an aggregate onto the workflow which runs it.
@@ -3966,6 +4009,9 @@ the BPMS' own id of the workflow, through `WorkflowElection#workflowStartOf`. Th
 the adapter of that row, the adapter which started the workflow. A workflow does not change its BPMS,
 so that adapter holds the workflow until its end, and an extension learns it without an election.
 `adapterIdOfWorkflow` and `locationOfWorkflow` stay as they are and still elect.
+
+*Decision 111 changed that: both read the start row first now and elect only where it does not
+answer.*
 
 An extension may show details per version of a process: an implementation for version 3 of a model
 and another one for version 4. To pick one it needs the version of the workflow, and it needs it from
@@ -4143,8 +4189,9 @@ How it works:
 - Because the answer is not counted and the lease is given back, the next dispatch of the entry
   looks like a first one. A START is then not checked against the BPMS before it runs again. So an
   adapter throws `PhaseTwoRetryLater` only before its operation reached the BPMS. The javadoc of
-  `PhaseTwoRetryLater` says so. The core throws it only before it calls an adapter, so nothing
-  changes for the adapters of this workspace.
+  `PhaseTwoRetryLater` says so. The core throws it only before it calls an adapter. The Camunda 8
+  adapter throws it for a push into a task's scope which its read model does not report yet, which
+  is before anything reaches the BPMS.
 - A value of zero or less ends the startup with a message naming the key.
 
 Two sentences of earlier entries stop being true, and this entry replaces them. Both entries stay
