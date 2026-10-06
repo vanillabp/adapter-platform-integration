@@ -208,9 +208,10 @@ out of the environment, so `${...}` and `@Value` could see them while `Environme
 
 An adapter whose BPMS is remote cannot take part in your local transaction, so a workflow is started
 in two phases through a transaction outbox. Coming from version 1 that is new, and it is asked of an
-application on Camunda 7 as well. Three tables are created in the database your workflow aggregates
-live in: the outbox store, the payloads of the calls which carry one, and the log of processed task
-deliveries which keeps a redelivered task from running your handler twice. A payload lies beside its
+application on Camunda 7 as well. Four tables are created in the database your workflow aggregates
+live in: the outbox store, the payloads of the calls which carry one, the log of processed task
+deliveries which keeps a redelivered task from running your handler twice, and the claim which says
+which node removes the old rows tonight. A payload lies beside its
 entry rather than inside it, which is why it has a table of its own.
 
 Version 1 had no outbox. On Camunda 8 a listener completed the job after your transaction had

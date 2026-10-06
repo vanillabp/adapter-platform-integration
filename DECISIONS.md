@@ -244,16 +244,20 @@ was only declared, every version the BPMS holds under it is an older one, and th
 run over all of them. Only the core can tell the two apart, because only it knows what the
 application declared.
 
-### 16. The two tables VanillaBP owns come from one schema artifact
+### 16. The four tables VanillaBP owns come from one schema artifact
 
-The phase-two outbox and the task delivery log are ours, so `vanillabp-schema` ships one
-database-neutral Liquibase changelog for them plus the SQL generated from it per database, and the
+The phase-two outbox, the payloads of its calls, the task delivery log and the claim of the
+housekeeping are ours, so `vanillabp-schema` ships one database-neutral Liquibase changelog for them plus the SQL generated from it per database, and the
 runtime DDL creates the same columns. Nothing else is shipped: gruelbox's table belongs to
 gruelbox and the engine tables belong to the engine, both documented rather than copied.
 
 Where the application creates the schema itself, both stores check at startup that their table AND
 its columns exist, and name the table, the property and the artifact to apply. Checking only the
 table is what let a later column slip through once.
+
+*The title said "two tables" when the outbox and the delivery log were all there was. The payload
+table came with decision 62 and the housekeeping table with decision 91, and the count was corrected
+on 2026-10-06. What was decided did not change.*
 
 ### 17. An adapter id is an identity and is never renamed while anything is still open
 
@@ -282,7 +286,7 @@ workflow ever becomes a tag, or every workflow would get its own time series.
 
 ### 19. A start asks for numbers, and asks as many questions on the last day as on the first
 
-Booting an application puts questions to the BPMS and to the two tables VanillaBP owns: which
+Booting an application puts questions to the BPMS and to the tables VanillaBP owns: which
 versions the BPMS holds, how many workflows still run on an older one, how many tasks it is
 holding open, which adapter ids the persisted state still names. Every one of them is answered
 from data which keeps growing for as long as the application is in production, so every one of
