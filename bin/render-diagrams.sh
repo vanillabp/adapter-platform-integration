@@ -17,7 +17,8 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
+# A relative path is looked up in CDPATH first, which can land in another clone.
+CDPATH= cd -- "$(dirname "$0")/.."
 
 files=("$@")
 if [ ${#files[@]} -eq 0 ]; then

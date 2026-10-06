@@ -237,6 +237,10 @@ getter which is not in the file. A published class which took its constructor fr
 that constructor out, because the documentation otherwise shows a parameterless one which does not
 exist.
 
+Headings follow the place of the comment. In the javadoc of a type, a heading is `<strong>`,
+because the plugin rejects `<h4>` there as a heading out of sequence. In the javadoc of a method,
+`<h4>` is fine.
+
 Two javadoc blocks in a row are the gap neither tool sees. Javadoc keeps the last block before an
 element and drops the earlier ones without a word, so a comment somebody wrote and kept up to date
 appears nowhere. `bin/check-orphaned-javadoc.sh` finds that shape. A block it reports describes
