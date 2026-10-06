@@ -623,8 +623,8 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Creates the outbox table and the payload table (unless the application manages its
-   * schema itself, in which case their existence is verified instead).
+   * Creates the outbox table, the payload table and the housekeeping table (unless the
+   * application manages its schema itself, in which case their existence is verified instead).
    * <p>
    * Called by the platform BEFORE the deployment pipeline runs, because a workflow may
    * be started as soon as the application is up and the entry needs its table.

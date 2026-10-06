@@ -75,7 +75,10 @@ public class EveryKeyOfASectionIsDescribedTest {
             development environment neither proposes nor explains them: %s
             The annotation processor does not descend into a type which arrives as a dependency, \
             so describe each of them in \
-            'META-INF/additional-spring-configuration-metadata.json' of this module."""
+            'META-INF/additional-spring-configuration-metadata.json' of this module.
+            If you just did, build the main sources again from clean: this test reads the generated \
+            'META-INF/spring-configuration-metadata.json', and the compiler writes it only \
+            when the main sources compile."""
             .formatted(missing));
 
   }

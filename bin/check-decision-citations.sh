@@ -33,7 +33,9 @@
 
 set -uo pipefail
 
-self=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
+# CDPATH is cleared because cd prints the directory it found through CDPATH, and that
+# second line would end up inside the path.
+self=$(CDPATH= cd -- "$(dirname "$0")" && pwd)/$(basename "$0")
 
 # Three citations, each wrapped the way the formatter wraps one, and one which is fine.
 self_test() {
