@@ -83,6 +83,23 @@ public class MigrationProcessServiceTest {
 
   }
 
+  /**
+   * The call a start of aggregate 42 schedules: everything of it is fixed except the moment it
+   * was planned, which only has to be there.
+   */
+  private static boolean isTheStartOfAggregate42(
+      final PhaseTwoCall call) {
+
+    final var withoutTheMoment = new java.util.HashMap<>(call.args());
+    final var plannedAt = withoutTheMoment.remove(PhaseTwoCall.ARG_PLANNED_AT);
+    return (plannedAt != null) && PhaseTwoCall
+        .of(PhaseOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of())
+        .equals(PhaseTwoCall
+            .of(PhaseOperation.START_WORKFLOW, call.workflowModuleId(), call.bpmnProcessId(), call
+                .workflowAggregateId(), call.adapterId(), withoutTheMoment));
+
+  }
+
   @Test
   @DisplayName("Constructor fails if no process services are given at all")
   public void constructorFailsOnEmptyListOfProcessServices() {
@@ -309,8 +326,7 @@ public class MigrationProcessServiceTest {
     // priorities
     verify(phaseTwoOutbox)
         .schedule(
-            PhaseTwoCall
-                .of(PhaseOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of()));
+            org.mockito.ArgumentMatchers.argThat(MigrationProcessServiceTest::isTheStartOfAggregate42));
 
   }
 
@@ -371,7 +387,7 @@ public class MigrationProcessServiceTest {
   public void redispatchedStartSkipsIfWorkflowIsKnown() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L))
+    when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L, null))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.ACTIVE);
 
     final var testee = MigrationProcessService
@@ -395,7 +411,7 @@ public class MigrationProcessServiceTest {
   public void redispatchedStartProceedsIfWorkflowIsUnknown() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L))
+    when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L, null))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS);
 
     final var testee = MigrationProcessService
@@ -420,7 +436,7 @@ public class MigrationProcessServiceTest {
   public void redispatchedStartFailsIfBpmsIsUnavailable() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L))
+    when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L, null))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.BPMS_UNAVAILABLE);
 
     final var testee = MigrationProcessService
@@ -459,7 +475,7 @@ public class MigrationProcessServiceTest {
 
     testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false);
 
-    verify(processService, never()).awarenessOfWorkflowForRedispatch(any(), any(), any());
+    verify(processService, never()).awarenessOfWorkflowForRedispatch(any(), any(), any(), any());
     final var phaseTwo = recorded.phaseTwoOf(PhaseOperation.START_WORKFLOW);
     assertEquals(1, phaseTwo.size());
     assertEquals(42L, phaseTwo.getFirst().workflowAggregate());
@@ -471,7 +487,7 @@ public class MigrationProcessServiceTest {
   public void redispatchedStartByMessageSkipsIfWorkflowIsKnown() {
 
     when(processService.getAdapterId()).thenReturn("test-adapter");
-    when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L))
+    when(processService.awarenessOfWorkflowForRedispatch(SCOPE, aggregatePersistence, 42L, null))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.COMPLETED);
 
     final var testee = MigrationProcessService
@@ -595,8 +611,7 @@ public class MigrationProcessServiceTest {
 
     verify(phaseTwoOutbox)
         .schedule(
-            PhaseTwoCall
-                .of(PhaseOperation.START_WORKFLOW, "test-module", "TestProcess", "42", "test-adapter", Map.of()));
+            org.mockito.ArgumentMatchers.argThat(MigrationProcessServiceTest::isTheStartOfAggregate42));
     // resolved exactly once (at startup), not per workflow start
     verify(phaseTwoOutboxResolver).resolveFor(Object.class);
 

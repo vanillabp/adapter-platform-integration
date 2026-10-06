@@ -1,7 +1,14 @@
 package io.vanillabp.integration.test.outbox;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.time.Duration;
+import java.time.Instant;
+
+import javax.sql.DataSource;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -10,11 +17,16 @@ import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.context.ConfigurableApplicationContext;
 import org.springframework.core.ResolvableType;
+import org.springframework.jdbc.datasource.TransactionAwareDataSourceProxy;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.delivery.JdbcTaskDeliveryLog;
+import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.utils.CapturedOutput;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
@@ -106,6 +118,85 @@ public class OutboxRedispatchMitigationTest {
 
     } finally {
       SteerableTaskAwarenessSource.initialAnswer = WorkflowAwareness.UNKNOWN_TO_BPMS;
+    }
+
+  }
+
+  @Test
+  @DisplayName("A retried second START of an aggregate does not take the first workflow for its own and starts")
+  public void retriedSecondStartIsNotSkippedForTheFirstWorkflow(
+      final CapturedOutput output) throws Exception {
+
+    try (var context = runApplication("second-start", "PT0.5S")) {
+      final var listener = context.getBean(RecordingPhaseTwoListener.class);
+      listener.reset();
+      @SuppressWarnings("unchecked")
+      final var processService = (ProcessService<Aggregate>) context
+          .getBeanProvider(ResolvableType.forClassWithGenerics(ProcessService.class, Aggregate.class))
+          .getObject();
+      final var transactionTemplate = context.getBean(TransactionTemplate.class);
+      final var outbox = PhaseTwoOutboxReader
+          .ofTheVanillaBpOutbox(new TransactionAwareDataSourceProxy(context.getBean(DataSource.class)));
+
+      // the first workflow of the aggregate: it starts, and its entry is done, which frees the
+      // key the second start is planned under
+      final var aggregate = transactionTemplate.execute(status -> {
+        final var created = new Aggregate();
+        created.setContent("first-workflow");
+        return processService.startWorkflow(created);
+      });
+      assertNotNull(aggregate);
+      listener.awaitInvocations(1, 15000);
+      final var aggregateId = aggregate.getId().toString();
+      final var deadline = System.currentTimeMillis() + 15000;
+      while (!outbox
+          .entries()
+          .stream()
+          .filter(entry -> aggregateId.equals(entry.aggregateId()))
+          .allMatch(PhaseTwoOutboxReader.Entry::wasDispatched)) {
+        assertTrue(System.currentTimeMillis() < deadline, "the first start was not marked done in time");
+        Thread.sleep(50);
+      }
+      final var firstStart = outbox
+          .entries()
+          .stream()
+          .filter(entry -> aggregateId.equals(entry.aggregateId()))
+          .filter(entry -> PhaseOperation.START_WORKFLOW.name().equals(entry.operation()))
+          .findFirst()
+          .orElseThrow();
+
+      // the row the first start leaves behind. The dummy adapter reports no workflow id, so the
+      // row is written here, the way an adapter which reports one leaves it, a day before the
+      // second start
+      transactionTemplate.executeWithoutResult(status -> context
+          .getBean(JdbcTaskDeliveryLog.class)
+          .recordWorkflowStart(
+              TaskDelivery
+                  .workflowStart(
+                      "test",
+                      firstStart.workflowModuleId(),
+                      firstStart.bpmnProcessId(),
+                      aggregateId,
+                      "first-workflow-of-"
+                          + aggregateId,
+                      null,
+                      Instant.now().minus(Duration.ofDays(1)))));
+
+      // the second workflow: its first dispatch fails before it creates anything
+      listener.failNextDispatches(1);
+      transactionTemplate.execute(status -> processService.startWorkflow(aggregate));
+
+      // the retry reads the row of the first workflow, which is older than the entry, so it asks
+      // the adapter about workflows started since, which knows none, and starts
+      listener.awaitInvocations(3, 15000);
+      assertEquals(
+          3,
+          listener.getInvocations().size(),
+          "the first start, the failed attempt of the second one and its retry; got: "
+              + listener.getInvocations());
+      assertFalse(
+          output.getAll().contains("Skipped re-dispatched phase two of starting the workflow"),
+          "the second start was taken for the first workflow");
     }
 
   }

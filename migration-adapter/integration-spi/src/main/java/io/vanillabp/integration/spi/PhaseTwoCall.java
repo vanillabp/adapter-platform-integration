@@ -181,6 +181,19 @@ public record PhaseTwoCall(
   public static final String ARG_ACTIVATION_ID = "activationId";
 
   /**
+   * The {@link #args()} key carrying the moment a call which STARTS a workflow was planned, as
+   * an ISO-8601 instant. Part of the persisted contract - never change the literal.
+   * <p>
+   * An aggregate may carry a second workflow once its first one ended. Where the first attempt
+   * to dispatch that second start failed, the dispatch which repeats it has to tell the first
+   * workflow from the one this entry is about, and the first one started before the entry was
+   * planned. The moment travels in the args because every store persists them and hands them
+   * back, so no store needs a column for it. No rule deriving an idempotency key reads it, so
+   * two starts planned at different moments still share their key.
+   */
+  public static final String ARG_PLANNED_AT = "plannedAt";
+
+  /**
    * Refuses a call which does not name its operation or the BPMN process it belongs to,
    * and copies what a caller could still change afterwards - the arguments and the payload
    * bytes.

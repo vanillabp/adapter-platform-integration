@@ -3,6 +3,11 @@ package io.vanillabp.integration.it;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Duration;
+import java.time.Instant;
+
+import javax.sql.DataSource;
+
 import org.jboss.shrinkwrap.api.ShrinkWrap;
 import org.jboss.shrinkwrap.api.spec.JavaArchive;
 import org.junit.jupiter.api.DisplayName;
@@ -12,12 +17,16 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.runtime.delivery.JdbcTaskDeliveryLog;
+import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.Aggregate;
 import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.PerAdapterAwarenessSource;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
 import io.vanillabp.integration.test.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
@@ -69,6 +78,35 @@ public class OutboxRedispatchMitigationTest {
   @Inject
   UserTransaction userTransaction;
 
+  @Inject
+  JdbcTaskDeliveryLog deliveryLog;
+
+  @Inject
+  DataSource dataSource;
+
+  /** Something the test does in a transaction of its own. */
+  @FunctionalInterface
+  interface InATransaction<T> {
+
+    T run() throws Exception;
+
+  }
+
+  private <T> T inATransaction(
+      final InATransaction<T> work) throws Exception {
+
+    userTransaction.begin();
+    try {
+      final var result = work.run();
+      userTransaction.commit();
+      return result;
+    } catch (final Exception e) {
+      userTransaction.rollback();
+      throw e;
+    }
+
+  }
+
   @Test
   @DisplayName("A retried START entry whose workflow is already known is consumed without a second start")
   public void retriedStartEntryDoesNotStartASecondWorkflow() throws Exception {
@@ -116,6 +154,71 @@ public class OutboxRedispatchMitigationTest {
         listener.getInvocations().size(),
         "the mitigated retry must not start a second workflow; invocations: "
             + listener.getInvocations());
+
+  }
+
+  @Test
+  @DisplayName("A retried second START of an aggregate does not take the first workflow for its own and starts")
+  public void retriedSecondStartIsNotSkippedForTheFirstWorkflow() throws Exception {
+
+    listener.reset();
+    awareness.reset();
+    awareness.answerFor("test", WorkflowAwareness.UNKNOWN_TO_BPMS);
+    final var outbox = PhaseTwoOutboxReader.ofTheVanillaBpOutbox(dataSource);
+
+    // the first workflow of the aggregate: it starts, and its entry is done, which frees the
+    // key the second start is planned under
+    final var aggregate = inATransaction(() -> workflowService.startWorkflow("first-workflow"));
+    listener.awaitInvocations(1, 30_000);
+    final var aggregateId = aggregate.getId().toString();
+    final var deadline = System.currentTimeMillis() + 30_000;
+    while (!outbox
+        .entries()
+        .stream()
+        .filter(entry -> aggregateId.equals(entry.aggregateId()))
+        .allMatch(PhaseTwoOutboxReader.Entry::wasDispatched)) {
+      assertTrue(System.currentTimeMillis() < deadline, "the first start was not marked done in time");
+      Thread.sleep(50);
+    }
+    final var firstStart = outbox
+        .entries()
+        .stream()
+        .filter(entry -> aggregateId.equals(entry.aggregateId()))
+        .filter(entry -> PhaseOperation.START_WORKFLOW.name().equals(entry.operation()))
+        .findFirst()
+        .orElseThrow();
+
+    // the row the first start leaves behind. The dummy adapter reports no workflow id, so the
+    // row is written here, the way an adapter which reports one leaves it, a day before the
+    // second start
+    inATransaction(() -> deliveryLog
+        .recordWorkflowStart(
+            TaskDelivery
+                .workflowStart(
+                    "test",
+                    firstStart.workflowModuleId(),
+                    firstStart.bpmnProcessId(),
+                    aggregateId,
+                    "first-workflow-of-"
+                        + aggregateId,
+                    null,
+                    Instant.now().minus(Duration.ofDays(1)))));
+
+    // the second workflow: its first dispatch fails before it creates anything
+    listener.failNextDispatches(1);
+    inATransaction(() -> workflowService.startWorkflowAgain(aggregate));
+
+    // the retry reads the row of the first workflow, which is older than the entry, so it asks
+    // the adapter about workflows started since, which knows none, and starts
+    listener.awaitInvocations(3, 30_000);
+    assertEquals(
+        3,
+        listener.getInvocations().size(),
+        "the first start, the failed attempt of the second one and its retry; got: "
+            + listener.getInvocations());
+    assertTrue(
+        awareness.countProbesOf("test") > 0,
+        "the retry has to ask the adapter, since the row belongs to the first workflow");
 
   }
 

@@ -3,6 +3,7 @@ package io.vanillabp.integration.adapter.migration.processservice;
 import java.io.InputStream;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -1882,7 +1883,8 @@ public class MigrationProcessService<A> {
                   .formatted(operation.describe(args), subject, adapterId));
         });
 
-    if (previouslyAttempted && skipRedispatchedStart(adapter, workflowAggregateId, operation.describe(args))) {
+    if (previouslyAttempted && skipRedispatchedStart(adapter, workflowAggregateId, operation.describe(args),
+        plannedAtOf(args))) {
       return;
     }
     // where the adapter says which workflow it created, this is the one moment anybody ever
@@ -1939,13 +1941,42 @@ public class MigrationProcessService<A> {
   }
 
   /**
+   * When the START in the given arguments was planned.
+   *
+   * @return The moment, or <code>null</code> for an entry planned before the moment was
+   *         recorded, or one whose value nobody can read
+   */
+  private Instant plannedAtOf(
+      final Map<String, String> args) {
+
+    final var plannedAt = args.get(PhaseTwoCall.ARG_PLANNED_AT);
+    if (plannedAt == null) {
+      return null;
+    }
+    try {
+      return Instant.parse(plannedAt);
+    } catch (final java.time.format.DateTimeParseException e) {
+      // without the moment every workflow of the aggregate counts, which is what the
+      // re-dispatch did before the moment was recorded
+      log.debug("Ignored unreadable planning moment '{}' of a start of BPMN process '{}'", plannedAt,
+          bpmnProcessId, e);
+      return null;
+    }
+
+  }
+
+  /**
    * The re-dispatch mitigation: whether the recorded adapter already knows the workflow
    * of a previously attempted START entry. The start row is read first. It is written
    * once the adapter reported the workflow it created, so it answers in the window where a
-   * BPMS which answers from a read model does not know the workflow yet. Like the probe,
-   * it cannot tell an earlier workflow of the same aggregate from the one this entry
-   * starts.
+   * BPMS which answers from a read model does not know the workflow yet.
+   * <p>
+   * An aggregate may carry a second workflow once its first one ended, so the row and the
+   * probe may both be about that earlier workflow. Only a workflow started at or after the
+   * moment the entry was planned counts. The row counts where it was written then, and the
+   * adapter is handed the moment for its probe.
    *
+   * @param plannedAt When the entry was planned, <code>null</code> where nobody knows
    * @return Whether the start has to be SKIPPED (the workflow already exists -
    *         the previous dispatch succeeded)
    * @throws IllegalStateException If the BPMS is unavailable - the outbox entry
@@ -1954,12 +1985,14 @@ public class MigrationProcessService<A> {
   private boolean skipRedispatchedStart(
       final MigratableProcessService<A> adapter,
       final Object workflowAggregateId,
-      final String operationDescription) {
+      final String operationDescription,
+      final Instant plannedAt) {
 
     // the row written when this adapter started the workflow is the answer a search cannot give
     // while the BPMS' read model is behind, and asking anyway would start a second instance
     final var started = deliveryRecords.workflowStartRowOf(workflowAggregateId);
-    if ((started != null) && adapter.getAdapterId().equals(started.adapterId())) {
+    if ((started != null) && adapter.getAdapterId().equals(started.adapterId()) && writtenForThisEntry(started,
+        plannedAt)) {
       log.info(
           "Skipped re-dispatched phase two of {} of aggregate '{}' (BPMN process '{}' of "
               + "workflow module '{}'): VanillaBP wrote down that adapter '{}' started workflow "
@@ -1974,7 +2007,7 @@ public class MigrationProcessService<A> {
       return true;
     }
     final var awareness = adapter.awarenessOfWorkflowForRedispatch(workflowScope(), aggregatePersistenceSupport,
-        workflowAggregateId);
+        workflowAggregateId, plannedAt);
     switch (awareness) {
       case ACTIVE, COMPLETED -> {
         log.info(
@@ -2002,6 +2035,27 @@ public class MigrationProcessService<A> {
       }
     }
     return false;
+
+  }
+
+  /**
+   * Whether the start row was written by an earlier attempt of the entry planned at the given
+   * moment. A row older than the entry belongs to an earlier workflow of the same aggregate.
+   * <p>
+   * Both moments are read from the clocks of the application's nodes. The row is written after
+   * the entry was dispatched, so for this entry's own workflow it is younger by the time the
+   * dispatch took. Where the clocks of two nodes differ by more than that, the row looks older,
+   * and the adapter's probe answers instead: the workflow exists, so the probe finds it, and at
+   * worst it starts a duplicate.
+   */
+  private static boolean writtenForThisEntry(
+      final TaskDelivery started,
+      final Instant plannedAt) {
+
+    if ((plannedAt == null) || (started.recordedAt() == null)) {
+      return true;
+    }
+    return !started.recordedAt().isBefore(plannedAt);
 
   }
 
@@ -2218,7 +2272,7 @@ public class MigrationProcessService<A> {
       final String electedAdapterId,
       final Map<String, String> args) {
 
-    final var scheduledArgs = withActivation(operation, args);
+    final var scheduledArgs = withPlannedAt(operation, withActivation(operation, args));
 
     // backstop only: the outbox was already resolved and validated at startup
     // (validatePhaseTwoOutboxAtStartup) - this fires only if that was skipped
@@ -2245,6 +2299,26 @@ public class MigrationProcessService<A> {
           operation,
           "%s of %s".formatted(operation.describe(scheduledArgs), subjectOf(workflowAggregateId)));
     }
+
+  }
+
+  /**
+   * Adds the moment a START is planned to its arguments, so the dispatch which repeats it can
+   * tell an earlier workflow of the same aggregate from the one this entry starts, see
+   * {@link PhaseTwoCall#ARG_PLANNED_AT}.
+   */
+  private static Map<String, String> withPlannedAt(
+      final PhaseOperation operation,
+      final Map<String, String> args) {
+
+    if (operation.election() != Election.STARTS_THE_WORKFLOW) {
+      return args;
+    }
+    final var withPlannedAt = new LinkedHashMap<>(args);
+    // milliseconds, because that is what the stores keep of the moment a start row is written,
+    // and a finer moment would make a row written in the same millisecond look older
+    withPlannedAt.put(PhaseTwoCall.ARG_PLANNED_AT, Instant.now().truncatedTo(ChronoUnit.MILLIS).toString());
+    return withPlannedAt;
 
   }
 

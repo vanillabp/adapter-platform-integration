@@ -4114,8 +4114,9 @@ Phase two of such an operation hands the workflow id of the row to the adapter, 
 adapter which addresses a workflow by its key can then skip the search for it.
 
 The re-dispatch of a START reads the same row before it probes. Where the row names the adapter the
-entry was written for, the earlier attempt created the workflow, and the entry is consumed without
-asking anybody.
+entry was written for, and was written at or after the moment the entry was planned, the earlier
+attempt created the workflow, and the entry is consumed without asking anybody. A row older than the
+entry belongs to an earlier workflow of the same aggregate (`DECISIONS.pending/901.md`).
 
 Before this, only the hint in the election cache told "not visible yet" apart from "nobody knows
 this workflow". That hint lives in the memory of one node and expires after an hour. Measured
@@ -4146,10 +4147,10 @@ What it costs, and what is accepted:
   instead of an hour. A workflow which ended and which its BPMS already forgot inside that period
   is not refused at the call any more. Its operation is planned, repeated and finally blocked, which
   is where it becomes visible. That is the residual a cached hint always had, only for longer.
-- Neither the row nor the probe tells an earlier, ended workflow of the same aggregate from the one
-  a re-dispatched START is about. With the row, a second start whose first attempt failed before it
-  created anything is skipped, as the probes of the Camunda adapters already do today (both find the
-  earlier instance). This is not new, and it is written down so nobody reads the row as the cause.
+- An earlier, ended workflow of the same aggregate is told apart from the one a re-dispatched START
+  is about by the moment the entry was planned, for the row and for the probe
+  (`DECISIONS.pending/901.md`). An entry planned before that moment was recorded has none, and for
+  it a second start whose first attempt failed before it created anything is still skipped.
 - One read by primary key per operation on a workflow, and only where the cache has no hint.
 
 ### 113. Waiting for a read model uses time, not attempts

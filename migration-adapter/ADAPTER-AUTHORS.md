@@ -894,6 +894,15 @@ query. Where it is not, override this one and answer
 `UNKNOWN_TO_BPMS`. `OutboxRedispatchMitigationTest#retriedStartEntryDoesNotStartASecondWorkflow`
 is the probe doing its job.
 
+The core calls the four-argument form, which adds the moment the start was planned. An aggregate may
+carry a second workflow once its first one ended, and the first one is no evidence that the second
+one started. So override the four-argument form and count only the workflows your BPMS started at or
+after that moment, by the start time it reports. Do not move the moment back to allow for a clock
+which is behind: that turns a duplicate into a lost workflow. The moment is `null` for an entry
+planned before it was recorded, and then every workflow of the aggregate counts. The default ignores
+the moment and asks the three-argument form, so an adapter which overrides only that one still takes
+the first workflow for the second.
+
 `canLocateWorkflows()` deserves an honest answer for the same reason. If your BPMS cannot be asked
 whether it holds a workflow, the only answer which keeps a single-BPMS application working is an
 optimistic `ACTIVE`, and next to a second adapter that answer routes operations by list order
