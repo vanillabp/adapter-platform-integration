@@ -143,9 +143,10 @@ This repository contains the following VanillaBP functionality:
       per-workflow-module configuration files and the conventions that make an explicit configuration optional.
    2. Detecting [workflow modules](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-modules).
    3. Running the deployment pipeline of each workflow module (`readBpmn` → `prepareBpmn` → `wireBpmn` →
-      `deployResources` → `startWorkflowProcessing`) for every configured adapter and
-      [extension](https://github.com/vanillabp/adapter-platform-integration/wiki/Extensions). BPMN only — there is
-      no DMN model type yet.
+      `readDmn` → `deployResources` → `startWorkflowProcessing`) for every configured adapter and
+      [extension](https://github.com/vanillabp/adapter-platform-integration/wiki/Extensions). The module's `.dmn`
+      files are read after its BPMN files and deployed with them, in the same deployment
+      ([decision tables](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-modules#decision-tables-travel-with-the-processes-calling-them)).
    4. Ending the start with `DeploymentService#endOfStartup()`. A platform integration owes the core the
       order deploy, check, close: `deployResources`, then the checks which only work once an adapter has
       deployed (today the election capability of the prioritized adapters), then `endOfStartup()`. Miss the

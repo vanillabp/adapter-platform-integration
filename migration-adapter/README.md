@@ -1156,8 +1156,11 @@ classDiagram
 An adapter's `AdapterDeploymentService` extends `ExtensionWiringService`
 ("the wiring service with deployment"): preparing/wiring and starting/stopping of
 workflow processing are inherited, reading and deploying of BPMS resources is added.
-There is deliberately no DMN model type parameter yet — DMN support will be added to
-the interface once designed.
+A DMN file has no model type parameter: `readDmn` gets its bytes and adds them to the
+processing context, so no adapter has to understand a decision table. Rewriting the
+decision ids under prefixes is the same for every BPMS and is done by `DmnDecisionIds`.
+What this means for an application is on the wiki page
+[Workflow modules](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-modules#decision-tables-travel-with-the-processes-calling-them).
 
 #### Which method serves a delivery
 

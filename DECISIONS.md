@@ -538,8 +538,10 @@ records of something that happened rather than a registry: the delivery record o
 30) and the start row of a workflow (decision 112).
 
 The workload this is sized for is the one VanillaBP is built for, and that is a product
-decision rather than a limit somebody forgot to lift: business processes whose steps are
-minutes and days apart, implemented in high quality and as cheaply as possible. An
+decision rather than a limit somebody forgot to lift. It is built for the business processes
+of a normal company, fast or slow: a workflow may finish within seconds or wait for weeks.
+What matters is not how quickly one workflow runs, but how many operations all of them add up
+to, and VanillaBP is not built for thousands per second. An
 application which really moves thousands of operations per second has to be optimised
 anyway, and a project of that kind carries the budget to build what it needs; VanillaBP
 buying that case with complexity everybody else pays for would be the wrong trade. So the
