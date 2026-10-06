@@ -3701,9 +3701,14 @@ day it ships. It carries javadoc, and its name is one we keep. The precedent sta
 already, because the names of the tables VanillaBP writes are public constants and nothing but
 tests reads them.
 
-What is still open is whether this is built, and for how many messages. Stephan decides that. The
-default this entry carries: build it for the findings an adapter test asserts today, and leave the
-other startup messages as they are until later work reworks them.
+It is built for the findings an adapter test asserted when this was decided, and the other startup
+messages stay as they are until later work reworks them. The phrases stand beside the check which
+writes them, so the name and the text are in one file and the SPI modules carry no message text:
+`DeployedProcessVersionsCheck.A_VERSION_OF_A_PROCESS`, `SERVED_BY_NO_METHOD`,
+`STILL_RUN_ON_THIS_VERSION` and `STILL_RUN_ON_AN_OUTFADED_VERSION`, and
+`DeliveryRecords.NO_DELIVERY_LOG`. The checks format their messages from them, so no phrase stands
+in the tree twice. The tests of this repository keep writing the words out, because they are the
+place where the wording is tested.
 
 ### 106. The delivery record says which kind of task an id is, and a record of the other kind elects nobody
 

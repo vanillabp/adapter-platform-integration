@@ -72,6 +72,16 @@ import lombok.extern.slf4j.Slf4j;
 public final class DeliveryRecords {
 
   /**
+   * The words of the warning about a BPMN process whose adapter may deliver a task twice while
+   * no delivery log is there to notice it.
+   * <p>
+   * Public so that a test of an adapter reads the words from here, see decision 105 in the
+   * repository's DECISIONS.md. A changed text then changes no adapter test, and a renamed
+   * constant breaks its build.
+   */
+  public static final String NO_DELIVERY_LOG = "no TaskDeliveryLog is available";
+
+  /**
    * How many open tasks are remembered as reported. A bound rather than a growing set:
    * the entry is a hint, and forgetting one costs one repeated WARN.
    */
@@ -324,9 +334,9 @@ public final class DeliveryRecords {
             "process '%s' of workflow module '%s', adapter '%s'"
                 .formatted(bpmnProcessId, workflowModuleId, adapterId),
             """
-                This adapter may deliver a task of this BPMN process more than once, but no \
-                TaskDeliveryLog is available for aggregate '%s' - a repeated delivery will run \
-                the @WorkflowTask method again. To solve this either
+                This adapter may deliver a task of this BPMN process more than once, but %s \
+                for aggregate '%s' - a repeated delivery will run the @WorkflowTask method again. \
+                To solve this either
                 %s
                 - define your own bean implementing io.vanillabp.integration.spi.TaskDeliveryLog \
                 (assign it to specific aggregates via a \
@@ -334,6 +344,7 @@ public final class DeliveryRecords {
                 - set 'vanillabp.adapters.%s.deduplicate-deliveries' to 'false' to state that \
                 the handlers of this application are idempotent themselves."""
                 .formatted(
+                    NO_DELIVERY_LOG,
                     workflowAggregateClass.getName(),
                     resolver == null
                         ? "- provide a TaskDeliveryLogResolver (platform integration), or"
