@@ -25,7 +25,8 @@ public class StartProcessStartEventSource implements DummyBpmsInitiatedStartSour
     return "StartProcess".equals(bpmnProcessId)
         ? List.of(
             BpmsInitiatedStartSpec.of("DailyTimer", BpmsStartTrigger.Kind.TIMER),
-            new BpmsInitiatedStartSpec("SignalStart", BpmsStartTrigger.Kind.SIGNAL, "OrderReceived"))
+            new BpmsInitiatedStartSpec("SignalStart", BpmsStartTrigger.Kind.SIGNAL, "OrderReceived"),
+            BpmsInitiatedStartSpec.of("ReportingStart", BpmsStartTrigger.Kind.CONDITIONAL))
         : List.of();
 
   }

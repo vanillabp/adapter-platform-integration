@@ -1,5 +1,9 @@
 package io.vanillabp.integration.test.workflowstart;
 
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+
+import io.vanillabp.spi.process.ProcessService;
 import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.BpmsStartTrigger;
 import io.vanillabp.spi.service.TaskParam;
@@ -22,6 +26,13 @@ import io.vanillabp.spi.service.WorkflowStartedByBpms;
     workflowAggregateClass = WorkflowStartAggregate.class,
     bpmnProcess = @BpmnProcess(bpmnProcessId = "TimerProcess"))
 public class WorkflowStartWorkflowService {
+
+  /**
+   * Looked up when a method needs it, because the process service is built from this workflow
+   * service.
+   */
+  @Autowired
+  private ObjectProvider<ProcessService<WorkflowStartAggregate>> processService;
 
   /**
    * The same workflow service also wants to know when a workflow ended.
@@ -71,6 +82,24 @@ public class WorkflowStartWorkflowService {
         ? null
         : region.toUpperCase());
     return aggregate;
+
+  }
+
+  /**
+   * Reports the aggregate it builds as changed, the way an application does which calls
+   * <code>aggregateChanged</code> wherever it changes one. The workflow cannot be found yet while
+   * this method runs, so the report does nothing and the start hands the values over.
+   */
+  @WorkflowStartedByBpms(id = "ReportingStart")
+  public WorkflowStartAggregate aggregateOfReportingStart(
+      final BpmsStartTrigger trigger,
+      @TaskParam("region") final String region) {
+
+    final var aggregate = new WorkflowStartAggregate();
+    aggregate.setId("reported-%s".formatted(region));
+    aggregate.setStartedBy(trigger.kind().name());
+    aggregate.setRegion(region);
+    return processService.getObject().aggregateChanged(aggregate);
 
   }
 

@@ -157,7 +157,13 @@ public final class BpmsInitiatedStartExecution {
     }
 
     final var aggregateClass = processService.getWorkflowAggregateClass();
-    final var returned = handler.invoke(context);
+    final Object returned;
+    // a report about the aggregate the method builds asks about a workflow nobody can find yet,
+    // and the start reports its values anyway once the method returned
+    try (var running = io.vanillabp.integration.adapter.migration.processservice.RunningBpmsInitiatedStart
+        .of(processService.getWorkflowModuleId(), processService.getBpmnProcessId())) {
+      returned = handler.invoke(context);
+    }
     if (returned == null) {
       throw new IllegalStateException(
           """

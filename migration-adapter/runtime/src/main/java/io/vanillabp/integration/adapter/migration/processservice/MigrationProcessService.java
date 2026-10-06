@@ -1718,6 +1718,11 @@ public class MigrationProcessService<A> {
    * workflow's global scope, a task ID means the scope of that task instance only - a
    * task-scoped push deliberately leaves the global values as they were.
    *
+   * <p>
+   * Called from inside the <code>&#64;WorkflowStartedByBpms</code> method of this BPMN process
+   * for the aggregate that method is building, it does nothing and returns the aggregate as it
+   * was handed over, see {@link #isInsideTheStartOf(Object)}.
+   *
    * @param workflowAggregate The workflow aggregate
    * @param taskId The ID of the task whose scope receives the values, or
    *        <code>null</code> for the workflow's global scope
@@ -1727,12 +1732,61 @@ public class MigrationProcessService<A> {
       final A workflowAggregate,
       final String taskId) {
 
+    if (isInsideTheStartOf(workflowAggregate)) {
+      log.debug(
+          "Skipped pushing the changed aggregate '{}' (BPMN process '{}' of workflow module '{}'): it "
+              + "is reported from inside the @WorkflowStartedByBpms method which builds it, and the "
+              + "start hands its values to the BPMS when it ends",
+          aggregatePersistenceSupport.getAggregateId(workflowAggregate),
+          bpmnProcessId,
+          workflowModuleId);
+      return workflowAggregate;
+    }
     return execute(
         PhaseOperation.AGGREGATE_CHANGED,
         workflowAggregate,
         taskId == null
             ? Map.of()
             : Map.of(PhaseTwoCall.ARG_TASK_ID, taskId));
+
+  }
+
+  /**
+   * Tells whether the given aggregate is the one the <code>&#64;WorkflowStartedByBpms</code>
+   * method of this BPMN process is building right now, on this thread.
+   * <p>
+   * That is the case where such a method runs and the aggregate is NEW: it has no id yet, or an
+   * id the persistence does not know. The id often is not known before the start saves the
+   * aggregate after the method returned, which is the normal case for a generated id. An
+   * aggregate the persistence knows already is NOT new: the method may return an existing
+   * aggregate, which may have other workflows and open tasks, so a report about it runs as
+   * always. So does every report where the persistence cannot load by id, because nothing then
+   * tells a new aggregate from an existing one.
+   * <p>
+   * Skipping a report about a new aggregate loses nothing. Phase two would push the values to a
+   * workflow whose start job has not finished, and finishing that job hands the same values to
+   * the BPMS. An extension observing the start reports it on its own, see
+   * {@link io.vanillabp.integration.extension.spi.election.WorkflowElection#isInsideTheStartOf}.
+   *
+   * @param workflowAggregate The aggregate a report is about
+   * @return Whether it is the aggregate the running start of this BPMN process builds
+   */
+  public boolean isInsideTheStartOf(
+      final Object workflowAggregate) {
+
+    if ((workflowAggregate == null) || !RunningBpmsInitiatedStart.isRunningFor(workflowModuleId,
+        bpmnProcessId) || !workflowAggregateClass.isInstance(workflowAggregate)) {
+      return false;
+    }
+    final var aggregateId = aggregatePersistenceSupport.getAggregateId(workflowAggregateClass.cast(workflowAggregate));
+    if ((aggregateId == null) || aggregateId.toString().isBlank()) {
+      return true;
+    }
+    try {
+      return aggregatePersistenceSupport.loadById(aggregateId) == null;
+    } catch (final UnsupportedOperationException e) {
+      return false;
+    }
 
   }
 

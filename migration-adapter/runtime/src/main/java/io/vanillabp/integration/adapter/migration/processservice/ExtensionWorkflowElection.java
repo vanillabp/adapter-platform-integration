@@ -110,4 +110,16 @@ public final class ExtensionWorkflowElection implements WorkflowElection {
 
   }
 
+  @Override
+  public boolean isInsideTheStartOf(
+      final Object workflowAggregate) {
+
+    return RunningBpmsInitiatedStart
+        .current()
+        .map(running -> router.processServiceOf(running.workflowModuleId(), running.bpmnProcessId()))
+        .map(processService -> processService.isInsideTheStartOf(workflowAggregate))
+        .orElse(false);
+
+  }
+
 }

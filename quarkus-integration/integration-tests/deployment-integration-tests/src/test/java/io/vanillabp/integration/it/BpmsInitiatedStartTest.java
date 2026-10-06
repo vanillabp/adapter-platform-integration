@@ -186,6 +186,25 @@ public class BpmsInitiatedStartTest {
 
 
   @Test
+  @DisplayName("A report from inside the start about the aggregate it builds does nothing")
+  public void aReportFromInsideTheStartDoesNothing() {
+
+    // the dummy adapter knows no workflow of this aggregate, like a Camunda 8 cluster which does
+    // not show the workflow while its start listener runs. A report which asked it would end the
+    // start with a WorkflowNotFoundException
+    final var reportingStart = dummyAdapter()
+        .startWorkflowByBpms(
+            MODULE,
+            PROCESS,
+            context(BpmsStartTrigger.Kind.CONDITIONAL, "ReportingStart", Map.of("region", "west")));
+
+    assertTrue(reportingStart.created());
+    assertEquals("reported-west", reportingStart.workflowAggregateId());
+    assertEquals("west", persistence.stored("reported-west").getRegion());
+
+  }
+
+  @Test
   @DisplayName("The end of a workflow is reported, and only processes asking for it get a listener")
   public void theEndOfAWorkflowIsReported() {
 
