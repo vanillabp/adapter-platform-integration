@@ -2001,8 +2001,13 @@ discover a narrower one by moving from one store to another.
 A payload is removed where its entry is finished, which is the update marking the entry
 dispatched. Removing it before that would leave an entry whose payload is gone, so the order
 is fixed and errs towards keeping a payload too long. What a crash between the two writes
-leaves behind, and the payload of an entry blocked longer than the retention, is removed by
-an age sweep riding the housekeeping each store already runs.
+leaves behind is removed by an age sweep in the housekeeping of each store. Before it removes a
+payload, the sweep asks whether an entry still names it (decision 76). The retention counts at
+the entry, so a blocked entry keeps its payload for as long as its repair takes.
+
+*This paragraph used to say that the sweep also removes "the payload of an entry blocked longer
+than the retention". That stopped being true when the sweep began to ask the entries first, and
+the half sentence was taken out on 2026-10-06.*
 
 ### 63. An entry which reports says which state it means, an entry which writes never does
 
