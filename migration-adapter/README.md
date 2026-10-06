@@ -2622,8 +2622,21 @@ operation it failed at: the key is what refuses a second schedule, so the applic
 store said no, and that answer is indistinguishable from a correct deduplication - one failed
 operation muted itself until somebody deleted the row, and only the counter
 `vanillabp.outbox.discarded` made it visible at all. The blocked row stays for whoever repairs
-it, so a repair now has to expect a second row for the same operation. Gruelbox holds its
-`uniqueRequestId` until the row goes, so there the dead end remains.
+it, so a repair now has to expect a second row for the same operation. The gruelbox store of
+`io.vanillabp:gruelbox-phase-two-outbox` ends up in the same place by another road. gruelbox
+has no second column to move a key into, so that store frees the `uniqueRequestId` of a blocked
+row when the same key is planned again, and the row stays blocked. Its README says so.
+
+**A blocked entry has a written way back.** The wiki page
+[Blocked outbox entries](https://github.com/vanillabp/adapter-platform-integration/wiki/Blocked-outbox-entries)
+says how an operator finds such an entry, opens it again or deletes it, on the table and on the
+collection, and what to check about a younger entry of the same key first. Every ERROR which
+reports a blocked entry ends with that address. It is one constant,
+`PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE`, so the three dispatchers and their tests
+(`PermanentPhaseTwoFailureTest` of both platforms, `MongoOutboxBlockedTest` on Quarkus and
+`MongoWaitingForAReadModelUsesNoAttemptsTest` on Spring Boot) name the same page. An extension which gave up may
+log an ERROR of its own beside it. Both lines stay: the extension's says what to check, the
+dispatcher's names the row and carries the stack trace.
 
 A scheduled call is described by the immutable value type `PhaseTwoCall`
 (operation, workflow module, BPMN process, workflow-aggregate ID in serialized

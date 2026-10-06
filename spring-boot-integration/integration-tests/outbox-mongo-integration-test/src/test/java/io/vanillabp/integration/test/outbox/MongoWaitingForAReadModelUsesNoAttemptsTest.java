@@ -12,6 +12,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.mongodb.autoconfigure.MongoClientSettingsBuilderCustomizer;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -27,6 +28,12 @@ import org.testcontainers.utility.DockerImageName;
 
 import com.mongodb.ConnectionString;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
+import io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
@@ -199,10 +206,32 @@ public class MongoWaitingForAReadModelUsesNoAttemptsTest {
     listener.answerNotYet(Integer.MAX_VALUE, WINDOW);
     // written two hours ago and never dispatched, which is what an exporter which stopped
     // for two hours leaves behind
-    final var entry = anEntryWrittenAt("read-model-never-caught-up", Instant.now().minus(Duration.ofHours(2)));
+    final var errors = new ListAppender<ILoggingEvent>();
+    errors.start();
+    final var dispatcherLog = (Logger) LoggerFactory
+        .getLogger(MongoPhaseTwoOutboxDispatcher.class);
+    dispatcherLog.addAppender(errors);
+    final String entry;
+    try {
+      entry = anEntryWrittenAt("read-model-never-caught-up", Instant.now().minus(Duration.ofHours(2)));
 
-    waitUntil("the entry which waited too long was not blocked", () -> entryOf(entry).isBlocked());
-    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
+      waitUntil("the entry which waited too long was not blocked", () -> entryOf(entry).isBlocked());
+      Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
+    } finally {
+      dispatcherLog.detachAppender(errors);
+      errors.stop();
+    }
+
+    // the ERROR is where an operator starts, so it names the entry and the page which says
+    // how to find it, open it again or delete it
+    assertTrue(
+        errors.list
+            .stream()
+            .filter(event -> event.getLevel() == Level.ERROR)
+            .map(ILoggingEvent::getFormattedMessage)
+            .anyMatch(
+                message -> message.contains(entry) && message.contains(PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE)),
+        "the ERROR of a blocked entry does not say where the way back is described");
 
     assertEquals(
         1,
