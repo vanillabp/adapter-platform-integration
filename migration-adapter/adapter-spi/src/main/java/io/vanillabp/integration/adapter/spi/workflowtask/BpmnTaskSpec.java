@@ -17,13 +17,14 @@ package io.vanillabp.integration.adapter.spi.workflowtask;
  *          topic/delegate expression), matched against
  *          <code>&#64;WorkflowTask(taskDefinition = ...)</code>; may be
  *          <code>null</code> if the BPMS task carries none
- * @param optional Whether a matching <code>&#64;WorkflowTask</code> method is
- *          OPTIONAL: <code>false</code> for service-like tasks (an unmatched task
- *          fails the wiring validation with a guiding message), <code>true</code>
- *          for USER tasks - their notification handlers are optional
- *          (a user task without a handler is simply processed through forms/task
- *          lists), but a matching method is still marked as wired so the
- *          per-module unwired-methods check does not report it
+ * @param optional Whether the element is a USER task: <code>true</code> for a user task,
+ *          <code>false</code> for everything the BPMS hands to a worker. In the model a
+ *          deployment brings, it changes nothing any more - every task of a claimed process
+ *          needs a <code>&#64;WorkflowTask</code> method or the property
+ *          <code>implemented-externally=true</code>, a user task as well (see
+ *          {@link ImplementedExternally}). It still counts for a version the BPMS only
+ *          still holds: a user task there is not asked for a method, because nobody can
+ *          change that model any more
  * @param name The <code>name</code> attribute of the BPMN element, what a modeller
  *          wrote on it and what a person reading a task list expects to see. May be
  *          <code>null</code>: an element needs no name, and an adapter which does not
@@ -41,16 +42,46 @@ package io.vanillabp.integration.adapter.spi.workflowtask;
  *          in the repository's DECISIONS.md); an empty list means that every element of
  *          the chain names its item. See decision 94 in the repository's
  *          DECISIONS.md
+ * @param listener Whether this is a listener the model carries on the element named by
+ *          {@link #activityId()} rather than the element itself. A listener is served by a
+ *          method naming its {@link #taskDefinition()} and by nothing else, because
+ *          <code>&#64;WorkflowTask(id = ...)</code> names the element, and the element may
+ *          have a method of its own. A listener is still marked as served elsewhere by the
+ *          element id as well as by its task definition, so one line covers every listener of
+ *          an element (see {@link ImplementedExternally})
  */
 public record BpmnTaskSpec(
                            String activityId,
                            String taskDefinition,
                            boolean optional,
                            String name,
-                           java.util.List<String> multiInstanceElementsWithoutAnItem) {
+                           java.util.List<String> multiInstanceElementsWithoutAnItem,
+                           boolean listener) {
 
   /**
-   * A MANDATORY task spec (service-like tasks) whose BPMN name is not read.
+   * A task spec of an element rather than of a listener - what every adapter wrote before
+   * a listener was told apart.
+   *
+   * @param activityId The BPMN activity ID
+   * @param taskDefinition The task definition (may be <code>null</code>)
+   * @param optional Whether the element is a user task (see {@link #optional()})
+   * @param name The BPMN <code>name</code> attribute (may be <code>null</code>)
+   * @param multiInstanceElementsWithoutAnItem See
+   *          {@link #multiInstanceElementsWithoutAnItem()}
+   */
+  public BpmnTaskSpec(
+      final String activityId,
+      final String taskDefinition,
+      final boolean optional,
+      final String name,
+      final java.util.List<String> multiInstanceElementsWithoutAnItem) {
+
+    this(activityId, taskDefinition, optional, name, multiInstanceElementsWithoutAnItem, false);
+
+  }
+
+  /**
+   * The task spec of a service-like task whose BPMN name is not read.
    *
    * @param activityId The BPMN activity ID
    * @param taskDefinition The task definition (may be <code>null</code>)
@@ -68,8 +99,7 @@ public record BpmnTaskSpec(
    *
    * @param activityId The BPMN activity ID
    * @param taskDefinition The task definition (may be <code>null</code>)
-   * @param optional Whether a matching handler method is optional (see
-   *          {@link #optional()})
+   * @param optional Whether the element is a user task (see {@link #optional()})
    */
   public BpmnTaskSpec(
       final String activityId,
@@ -86,8 +116,7 @@ public record BpmnTaskSpec(
    *
    * @param activityId The BPMN activity ID
    * @param taskDefinition The task definition (may be <code>null</code>)
-   * @param optional Whether a matching handler method is optional (see
-   *          {@link #optional()})
+   * @param optional Whether the element is a user task (see {@link #optional()})
    * @param name The BPMN <code>name</code> attribute (may be <code>null</code>)
    */
   public BpmnTaskSpec(
@@ -101,7 +130,7 @@ public record BpmnTaskSpec(
   }
 
   /**
-   * An OPTIONAL task spec (user tasks - see {@link #optional()}).
+   * The task spec of a user task (see {@link #optional()}).
    *
    * @param activityId The BPMN activity ID
    * @param taskDefinition The task definition (may be <code>null</code>)
@@ -116,8 +145,8 @@ public record BpmnTaskSpec(
   }
 
   /**
-   * An OPTIONAL task spec (user tasks - see {@link #optional()}) carrying the name the
-   * modeller wrote on the element.
+   * The task spec of a user task (see {@link #optional()}) carrying the name the modeller
+   * wrote on the element.
    *
    * @param activityId The BPMN activity ID
    * @param taskDefinition The task definition (may be <code>null</code>)
@@ -130,6 +159,25 @@ public record BpmnTaskSpec(
       final String name) {
 
     return new BpmnTaskSpec(activityId, taskDefinition, true, name, null);
+
+  }
+
+  /**
+   * The task spec of a listener the model carries on an element (see {@link #listener()}).
+   *
+   * @param elementId The id of the element the listener sits on
+   * @param taskDefinition The task definition the listener names, a job type say
+   * @param multiInstanceElementsWithoutAnItem See
+   *          {@link #multiInstanceElementsWithoutAnItem()}, <code>null</code> where the
+   *          adapter does not read it
+   * @return The spec
+   */
+  public static BpmnTaskSpec listener(
+      final String elementId,
+      final String taskDefinition,
+      final java.util.List<String> multiInstanceElementsWithoutAnItem) {
+
+    return new BpmnTaskSpec(elementId, taskDefinition, false, null, multiInstanceElementsWithoutAnItem, true);
 
   }
 

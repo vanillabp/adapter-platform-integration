@@ -200,6 +200,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   private final DeployedProcessVersionsCheck deployedVersionsCheck;
 
   /**
+   * Reads which tasks the application says something else serves.
+   */
+  private final ImplementedExternallyCheck implementedExternally;
+
+  /**
    * The bare registry: handlers are wired and invoked, and no startup check runs.
    * <p>
    * What a platform integration knows is missing here - the sync model, the transaction
@@ -307,6 +312,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     this.fullSyncCheck = new io.vanillabp.integration.adapter.migration.sync.FullSyncCheck(aggregateSync, properties);
     this.portableValuesCheck = new PortableValuesCheck(aggregateSync, properties);
     this.outfadedVersions = new OutfadedProcessVersions(properties);
+    this.implementedExternally = new ImplementedExternallyCheck(properties, findings);
     this.deployedVersionsCheck = new DeployedProcessVersionsCheck(
         processVersions, outfadedVersions, this::tasksNotServedInVersion, this::handlersNotServingAnyVersion, this, this::reportConcurrentTokenElementsOfHeldVersions, scoping == null
             ? null
@@ -703,9 +709,34 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final String bpmnProcessId,
       final Collection<BpmnTaskSpec> tasks) {
 
+    validateTaskWiring(null, workflowModuleId, bpmnProcessId, tasks);
+
+  }
+
+  @Override
+  public boolean isImplementedExternally(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final BpmnTaskSpec task) {
+
+    return implementedExternally.isMarked(adapterId, workflowModuleId, bpmnProcessId, task);
+
+  }
+
+  @Override
+  public void validateTaskWiring(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<BpmnTaskSpec> tasks) {
+
     // what the modeller wrote on the elements: nothing here decides anything by it, and
     // an extension asking for it would otherwise parse the same BPMN bytes again
     extensionHandlers.rememberBpmnTaskNames(workflowModuleId, bpmnProcessId, tasks);
+    // the names a line of 'implemented-externally' may use, held against the configuration
+    // once the module is deployed
+    implementedExternally.rememberTasks(workflowModuleId, bpmnProcessId, tasks);
 
     final var key = new RegistryKey(workflowModuleId, bpmnProcessId);
     final var entry = entries.get(key);
@@ -720,6 +751,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     }
     final var handlers = List.copyOf(entry.handlers);
     entry.wiringValidated = true;
+    implementedExternally.rememberClaimed(workflowModuleId, bpmnProcessId);
 
     // mark every matched handler as wired - the reverse direction (methods
     // matching no task of ANY process of the module) is validated per module via
@@ -729,15 +761,25 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         .filter(handler -> tasks.stream().anyMatch(task -> matches(handler, task)))
         .forEach(WorkflowTaskHandler::markWired);
 
-    // OPTIONAL tasks (user tasks) never fail the validation: a user
-    // task without a notification handler is processed through forms/task lists;
-    // matching handlers were still marked wired above
-    final var unmatchedTasks = tasks
-        .stream()
-        .filter(task -> !task.optional())
-        .filter(task -> handlers.stream().noneMatch(handler -> matches(handler, task)))
-        .toList();
-    if (unmatchedTasks.isEmpty()) {
+    // every task needs a method or a line saying that something else serves it, a user task
+    // as well: version 1 asked for the method, and a task nobody here serves is either a
+    // forgotten method or somebody else's work, which only the application can tell apart.
+    // A line at the task itself next to a method would have the task answered twice, so that
+    // ends the boot as well. A line above the task covers only the tasks without a method
+    final var unmatchedTasks = new LinkedList<BpmnTaskSpec>();
+    final var servedTwice = new LinkedList<BpmnTaskSpec>();
+    for (final var task : tasks) {
+      final var served = handlers.stream().anyMatch(handler -> matches(handler, task));
+      final var marking = implementedExternally.markingOf(adapterId, workflowModuleId, bpmnProcessId, task);
+      if (!served && (marking == ImplementedExternallyCheck.Marking.NONE)) {
+        unmatchedTasks.add(task);
+      } else if (served && (marking == ImplementedExternallyCheck.Marking.AT_THE_TASK)) {
+        servedTwice.add(task);
+      } else if (!served && (marking == ImplementedExternallyCheck.Marking.INHERITED)) {
+        implementedExternally.rememberAnInheritedMarkingWasUsed(workflowModuleId, bpmnProcessId);
+      }
+    }
+    if (unmatchedTasks.isEmpty() && servedTwice.isEmpty()) {
       return;
     }
 
@@ -750,28 +792,44 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         .stream()
         .map(Class::getName)
         .collect(Collectors.joining("', '", "'", "'"));
-    message.append("\nBPMN tasks having no matching @WorkflowTask method:");
-    unmatchedTasks.forEach(task -> message.append(
-        """
+    if (!unmatchedTasks.isEmpty()) {
+      message.append("\nBPMN tasks having no matching @WorkflowTask method:");
+      unmatchedTasks.forEach(task -> message.append(
+          """
 
-              - task '%s' (task definition '%s'): add a method annotated with @WorkflowTask named \
-            '%s' to %s, or annotate an existing method with @WorkflowTask(taskDefinition = "%s") \
-            or @WorkflowTask(id = "%s")."""
-            .formatted(
-                task.activityId(),
-                task.taskDefinition(),
-                task.taskDefinition() != null
-                    ? task.taskDefinition()
-                    : task.activityId(),
-                serviceClasses,
-                task.taskDefinition(),
-                task.activityId())));
+                - %s: add a method annotated with @WorkflowTask named '%s' to %s, or annotate an \
+              existing method with %s.
+              %s"""
+              .formatted(
+                  describe(task),
+                  task.taskDefinition() != null
+                      ? task.taskDefinition()
+                      : task.activityId(),
+                  serviceClasses,
+                  task.listener()
+                      ? "@WorkflowTask(taskDefinition = \"%s\")".formatted(task.taskDefinition())
+                      : "@WorkflowTask(taskDefinition = \"%s\") or @WorkflowTask(id = \"%s\")"
+                          .formatted(task.taskDefinition(), task.activityId()),
+                  io.vanillabp.integration.adapter.spi.workflowtask.ImplementedExternally
+                      .howToMark(workflowModuleId, bpmnProcessId, task)
+                      .indent(4)
+                      .stripTrailing())));
+    }
+    if (!servedTwice.isEmpty()) {
+      message.append(
+          "\nBPMN tasks having a @WorkflowTask method AND a line at the task saying that something else "
+              + "serves them ('implemented-externally=true'), so the method and the other worker would both "
+              + "answer them:");
+      servedTwice.forEach(task -> message.append(
+          "%n  - %s: remove the method or the line, depending on who is meant to serve it."
+              .formatted(describe(task))));
+    }
     message.append("\nTasks of the BPMN process: ");
     message.append(tasks.isEmpty()
         ? "none"
         : tasks
             .stream()
-            .map(task -> "'%s' (task definition '%s')".formatted(task.activityId(), task.taskDefinition()))
+            .map(WorkflowTaskRegistry::describe)
             .collect(Collectors.joining(", ")));
     message.append(". @WorkflowTask methods found: ");
     message.append(handlers.isEmpty()
@@ -782,6 +840,22 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
             .collect(Collectors.joining(", ")));
     message.append('.');
     throw new IllegalStateException(message.toString());
+
+  }
+
+  /**
+   * One task as a message names it: the element, its task definition, and whether it is a
+   * listener on that element.
+   *
+   * @param task The task
+   * @return The words
+   */
+  private static String describe(
+      final BpmnTaskSpec task) {
+
+    return task.listener()
+        ? "listener on '%s' (task definition '%s')".formatted(task.activityId(), task.taskDefinition())
+        : "task '%s' (task definition '%s')".formatted(task.activityId(), task.taskDefinition());
 
   }
 
@@ -878,6 +952,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   @Override
   public void validateNoUnwiredWorkflowTaskMethods(
       final String workflowModuleId) {
+
+    // the other direction of the same question about the configuration: a line saying that
+    // something else serves a task no deployed model has. Asked here because this is the
+    // moment every adapter of the module has handed over its models
+    implementedExternally.warnAboutLinesNoModelNeeds(workflowModuleId);
 
     // a method may be registered under several BPMN processes (secondary
     // processes, several handler objects) - it is unwired only if NO
@@ -1043,8 +1122,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final WorkflowTaskHandler handler,
       final BpmnTaskSpec task) {
 
-    return sameWiring(handler.getTaskDefinition(), task.taskDefinition()) || sameWiring(handler.getActivityId(),
-        task.activityId());
+    // a listener is served by a method naming its task definition and by nothing else: the
+    // element id names the element, which may have a method of its own
+    return sameWiring(handler.getTaskDefinition(), task.taskDefinition()) || (!task.listener() && sameWiring(handler
+        .getActivityId(), task.activityId()));
 
   }
 
@@ -2014,9 +2095,12 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
     return tasks
         .stream()
-        // a user task without a handler is processed through forms or task lists, in
-        // an old version exactly as in the deployed one
+        // the model a deployment brings has to have a method for every user task, an older
+        // version the BPMS only still holds does not: nobody can change that model any
+        // more, and the rule would otherwise keep a removed user task marked forever
         .filter(task -> !task.optional())
+        // and a task the application says somebody else serves is served
+        .filter(task -> !implementedExternally.isMarked(null, workflowModuleId, bpmnProcessId, task))
         .filter(task -> handlers
             .stream()
             .noneMatch(handler -> matches(handler, task) && handler.matchesVersion(version, resolver)))

@@ -26,6 +26,8 @@ vanillabp:
             sample:
               greeting: Gruess Gott
           tasks:
+            TheUserTask:
+              implemented-externally: true
             theTask:
               extensions:
                 sample:

@@ -53,6 +53,8 @@ vanillabp:
             sample:
               position: workflow
           tasks:
+            TheUserTask:
+              implemented-externally: true
             theTask:
               adapters:
                 saas:

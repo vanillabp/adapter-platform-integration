@@ -44,6 +44,18 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                       Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.AdapterConfiguration {
 
     /**
+     * None of these fixtures says that something else serves a task.
+     *
+     * @return Nothing
+     */
+    @Override
+    public Optional<Boolean> implementedExternally() {
+
+      return Optional.empty();
+
+    }
+
+    /**
      * None of these fixtures writes the permission to share a whole aggregate. It belongs
      * to a workflow anyway, and the core refuses it at every other level.
      */
@@ -86,6 +98,18 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                    Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.AdapterProperties {
 
     /**
+     * None of these fixtures says that something else serves a task.
+     *
+     * @return Nothing
+     */
+    @Override
+    public Optional<Boolean> implementedExternally() {
+
+      return Optional.empty();
+
+    }
+
+    /**
      * None of these fixtures writes the permission to share a whole aggregate. It belongs
      * to a workflow anyway, and the core refuses it at every other level.
      */
@@ -120,6 +144,18 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                 Map<String, QuarkusMigrationAdapterProperties.AdapterProperties> adapters,
                                 QuarkusMigrationAdapterProperties.DeliveryProperties delivery,
                                 Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.TaskProperties {
+
+    /**
+     * None of these fixtures says that something else serves a task.
+     *
+     * @return Nothing
+     */
+    @Override
+    public Optional<Boolean> implementedExternally() {
+
+      return Optional.empty();
+
+    }
 
     /**
      * Without extension settings, which is what most of these fixtures need.
@@ -160,6 +196,18 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                     Map<String, QuarkusMigrationAdapterProperties.TaskProperties> tasks,
                                     QuarkusMigrationAdapterProperties.DeliveryProperties delivery,
                                     Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.WorkflowProperties {
+
+    /**
+     * None of these fixtures says that something else serves a task.
+     *
+     * @return Nothing
+     */
+    @Override
+    public Optional<Boolean> implementedExternally() {
+
+      return Optional.empty();
+
+    }
 
     /**
      * None of these fixtures writes the permission to share a whole aggregate. It belongs
@@ -238,6 +286,18 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                           Map<String, QuarkusMigrationAdapterProperties.WorkflowProperties> workflows,
                                           QuarkusMigrationAdapterProperties.TransactionsProperties transactions,
                                           QuarkusMigrationAdapterProperties.DeliveryProperties delivery) implements QuarkusMigrationAdapterProperties.WorkflowModuleProperties {
+
+    /**
+     * None of these fixtures says that something else serves a task.
+     *
+     * @return Nothing
+     */
+    @Override
+    public Optional<Boolean> implementedExternally() {
+
+      return Optional.empty();
+
+    }
 
     /**
      * None of these fixtures writes the permission to share a whole aggregate. It belongs
@@ -431,6 +491,18 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                             QuarkusMigrationAdapterProperties.TransactionsProperties transactions,
                             QuarkusMigrationAdapterProperties.DeliveryProperties delivery,
                             QuarkusMigrationAdapterProperties.MetricsProperties metrics) implements QuarkusMigrationAdapterProperties {
+
+    /**
+     * None of these fixtures says that something else serves a task.
+     *
+     * @return Nothing
+     */
+    @Override
+    public Optional<Boolean> implementedExternally() {
+
+      return Optional.empty();
+
+    }
 
     /**
      * None of these fixtures writes the permission to share a whole aggregate. It belongs

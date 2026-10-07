@@ -106,6 +106,14 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   private java.util.List<String> declaredTaskParams;
 
   /**
+   * Whether something other than this application serves every task of this workflow
+   * which does not say otherwise (<code>implemented-externally</code>, see
+   * {@link MigrationAdapterProperties#implementedExternally}). <code>null</code> means
+   * "not configured at this level".
+   */
+  private Boolean implementedExternally;
+
+  /**
    * Overrides <code>vanillabp.delivery</code> for this workflow. Only the settings which
    * belong to a single workflow are read here - the maximum age of an open task, since
    * one process may wait for a partner for weeks while every other one is done in
@@ -181,6 +189,14 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
      * mapping gives the value.
      */
     private java.util.List<String> declaredTaskParams;
+
+    /**
+     * Whether something other than this application serves every task of this workflow
+     * which does not say otherwise (<code>implemented-externally</code>, see
+     * {@link MigrationAdapterProperties#implementedExternally}). <code>null</code> means
+     * "not configured at this level".
+     */
+    private Boolean implementedExternally;
 
     /**
      * Overrides <code>vanillabp.delivery</code> for this workflow.
@@ -333,6 +349,23 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     }
 
     /**
+     * Whether something other than this application serves every task of this workflow
+     * which does not say otherwise (<code>implemented-externally</code>, see
+     * {@link MigrationAdapterProperties#implementedExternally}). <code>null</code> means
+     * "not configured at this level".
+     *
+     * @param implementedExternally The value of {@link #implementedExternally}
+     * @return This builder, so the calls chain
+     */
+    public B implementedExternally(
+        final Boolean implementedExternally) {
+
+      this.implementedExternally = implementedExternally;
+      return self();
+
+    }
+
+    /**
      * Overrides <code>vanillabp.delivery</code> for this workflow.
      *
      * @param delivery The value of {@link #delivery}
@@ -403,6 +436,9 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
           + "declaredTaskParams="
           + declaredTaskParams
           + ", "
+          + "implementedExternally="
+          + implementedExternally
+          + ", "
           + "delivery="
           + delivery
           + ")";
@@ -470,6 +506,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     this.acceptExpressionsInTheModel = b.acceptExpressionsInTheModel;
     this.declaredAggregateValues = b.declaredAggregateValues;
     this.declaredTaskParams = b.declaredTaskParams;
+    this.implementedExternally = b.implementedExternally;
     this.delivery = b.delivery;
 
   }
@@ -593,6 +630,20 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   public java.util.List<String> getDeclaredTaskParams() {
 
     return declaredTaskParams;
+
+  }
+
+  /**
+   * Whether something other than this application serves every task of this workflow
+   * which does not say otherwise (<code>implemented-externally</code>, see
+   * {@link MigrationAdapterProperties#implementedExternally}). <code>null</code> means
+   * "not configured at this level".
+   *
+   * @return The value of {@link #implementedExternally}
+   */
+  public Boolean getImplementedExternally() {
+
+    return implementedExternally;
 
   }
 
@@ -723,6 +774,21 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
       final java.util.List<String> declaredTaskParams) {
 
     this.declaredTaskParams = declaredTaskParams;
+
+  }
+
+  /**
+   * Whether something other than this application serves every task of this workflow
+   * which does not say otherwise (<code>implemented-externally</code>, see
+   * {@link MigrationAdapterProperties#implementedExternally}). <code>null</code> means
+   * "not configured at this level".
+   *
+   * @param implementedExternally The value of {@link #implementedExternally}
+   */
+  public void setImplementedExternally(
+      final Boolean implementedExternally) {
+
+    this.implementedExternally = implementedExternally;
 
   }
 

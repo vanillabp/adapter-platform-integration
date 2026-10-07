@@ -299,7 +299,10 @@ adapter is told beats what the same level says in general. And a more specific l
 adapter section of a less specific one, so a value written for the workflow outranks a value written
 for one adapter at the workflow module. The positions are merged key by key rather than as blocks,
 so a workflow may change one value and keep what the application said about the rest. The level is
-called `tasks` and a task is named by its task definition.
+called `tasks` and a task is named by its task definition. One key of the core already takes the
+element id there as well, `implemented-externally`, and the element id wins where both are written
+(`DECISIONS.pending/834.md`). Your settings keep the task definition until the general change
+reaches them.
 
 The adapter positions exist for the same reason section 3 does. An application migrating from one
 BPMS to another runs two adapters, you hang on both of them, and a value which has to differ between

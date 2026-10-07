@@ -1681,6 +1681,8 @@ and that the open work of the workflow is a question for the BPMS. An extension 
 second one asks the BPMS through its own adapter half, which is where the knowledge about querying
 that BPMS lives anyway.
 
+*Superseded in part by `DECISIONS.pending/834.md`: the paragraph saying that a user task without a method is a design and that the wiring validation lets it pass. Such a task now needs a method or the line `implemented-externally=true`, as version 1 asked for the method. The rest stands: a user task the application marked that way still writes no record, for the reasons above.*
+
 ### 55. A number reaches a handler as the number the BPMS reported, or not at all
 
 A `@TaskParam` declares a type and the BPMS reports a value, and the two of them do not have to
