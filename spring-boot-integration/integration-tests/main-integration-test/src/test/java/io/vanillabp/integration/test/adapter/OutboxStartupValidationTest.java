@@ -36,7 +36,9 @@ public class OutboxStartupValidationTest {
   public void anApplicationWithoutOutboxFailsAtStartupWithRemedies() {
 
     this.contextRunner
-        .withPropertyValues("spring.config.location=classpath:application.yaml")
+        .withPropertyValues(
+            "spring.config.location=classpath:application.yaml",
+            io.vanillabp.integration.test.ThePlaceholderModel.BELONGS_TO_SOMEBODY_ELSE)
         .withInitializer(new ConfigDataApplicationContextInitializer())
         .withUserConfiguration(
             WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class, SampleWorkflowService.class)
@@ -81,7 +83,9 @@ public class OutboxStartupValidationTest {
   public void anApplicationBringingAStoreBoots() {
 
     this.contextRunner
-        .withPropertyValues("spring.config.location=classpath:application.yaml")
+        .withPropertyValues(
+            "spring.config.location=classpath:application.yaml",
+            io.vanillabp.integration.test.ThePlaceholderModel.BELONGS_TO_SOMEBODY_ELSE)
         .withInitializer(new ConfigDataApplicationContextInitializer())
         .withUserConfiguration(
             WorkflowModuleConfiguration.class, TestPersistenceConfiguration.class,

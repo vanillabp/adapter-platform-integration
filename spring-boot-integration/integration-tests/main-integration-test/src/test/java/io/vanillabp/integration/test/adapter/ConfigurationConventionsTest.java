@@ -115,8 +115,48 @@ public class ConfigurationConventionsTest {
 
   }
 
+  /**
+   * Says that the one BPMN file of these applications holds the process of
+   * {@link SampleWorkflowService}, with its one task. Without it the BPMS double would name the
+   * process after the file, nobody would claim it, and the start would end over it - which would
+   * ask these applications for a property, the one thing they are here to do without.
+   */
+  @org.springframework.context.annotation.Configuration
+  static class TheSampleModel {
+
+    @org.springframework.context.annotation.Bean
+    io.vanillabp.bpmsdouble.DummyTaskWiringSource theSampleModel() {
+
+      return new io.vanillabp.bpmsdouble.DummyTaskWiringSource() {
+
+        @Override
+        public List<String> executableProcessesOf(
+            final String adapterId,
+            final String workflowModuleId,
+            final String filename) {
+
+          return List.of("SampleWorkflowService");
+
+        }
+
+        @Override
+        public List<io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec> tasksOf(
+            final String adapterId,
+            final String workflowModuleId,
+            final String bpmnProcessId) {
+
+          return List.of(new io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec("Activity_Juhu", "juhu"));
+
+        }
+
+      };
+
+    }
+
+  }
+
   private static final Class<?>[] APPLICATION_CONFIGURATION = {
-      DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, io.vanillabp.integration.deployment.DeploymentAutoConfiguration.class, TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class, TestTransactionRunnerConfiguration.class, SampleWorkflowService.class, WorkflowModuleConfiguration.class, AggregatePersistenceConfiguration.class
+      TheSampleModel.class, DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class, WorkflowModuleAutoConfiguration.class, SpringBootMigrationAdapterAutoConfiguration.class, io.vanillabp.integration.deployment.DeploymentAutoConfiguration.class, TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class, TestTransactionRunnerConfiguration.class, SampleWorkflowService.class, WorkflowModuleConfiguration.class, AggregatePersistenceConfiguration.class
   };
 
   /**

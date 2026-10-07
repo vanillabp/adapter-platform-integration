@@ -1661,6 +1661,44 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * What the workflow itself says about <code>implemented-externally</code>, at the two
+   * positions of the workflow level and nowhere else: for one adapter, and in general.
+   * <p>
+   * For a process no <code>&#64;WorkflowService</code> claims, this is the line which says that
+   * the process belongs to somebody else: it was deployed only because it shares a file with a
+   * claimed one. A line at the workflow module or at the application does not say that, because
+   * it is written for many processes at once and cannot mean this one. See
+   * {@code DECISIONS.pending/937.md}.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param adapterId The adapter ID, or <code>null</code> to read no adapter position
+   * @return The value written at the workflow, or <code>null</code> where the workflow says
+   *         nothing
+   */
+  public Boolean implementedExternallyAtTheWorkflow(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String adapterId) {
+
+    final var module = workflowModuleId != null
+        ? workflowModules.get(workflowModuleId)
+        : null;
+    final var workflow = (module != null) && (bpmnProcessId != null)
+        ? module
+            .getWorkflows()
+            .get(bpmnProcessId)
+        : null;
+    if (workflow == null) {
+      return null;
+    }
+    return firstWritten(
+        implementedExternallyOf(workflow.getAdapters(), adapterId),
+        workflow.getImplementedExternally());
+
+  }
+
+  /**
    * What one adapter section of a level says about <code>implemented-externally</code>.
    *
    * @param adaptersOfLevel The adapter sections of the level

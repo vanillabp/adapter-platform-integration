@@ -12,3 +12,6 @@ vanillabp:
       adapters:
         demo:
           resources-location: classpath:processes/dummy
+      workflows:
+        first:
+          implemented-externally: true

@@ -722,7 +722,7 @@ sequenceDiagram
   DS->>AD: deployResources(module, PC)
   AD->>WT: registerDeployedVersion(module, process, version)  — per process, the adapter's own duty
   Note over DS,WT: once EVERY adapter of EVERY module deployed, the CORE writes its startup reports<br/>(they need the file each BPMN process came from, which the deployment collected)
-  DS->>WT: bpmnProcessesWithoutWorkflowService(module)  [WARN naming every unclaimed process and its file]
+  Note over DS: a process nobody claims and nobody marked was refused while the files were read,<br/>and nothing was deployed then: the start ends here
   Note over DS,WT: then, per workflow module, in this order<br/>(nothing an adapter knows, so no adapter may forget them any more)
   DS->>WT: registerVersionsOfProcessesNobodyDeployed(module, adapterId, processVersionCatalogOf)  [per adapter of the module]
   DS->>AD: processVersionCatalogOf(module, process)  [per id declared but not deployed, null = cannot say]
@@ -950,41 +950,38 @@ reached the task.
    delivery has to carry, whether a task may stay open, which processes share an
    aggregate, which elements can put a second token into a workflow.
 
-   A process NO `@WorkflowService` class claims is the one case that call does not
-   validate. A BPMN file goes to the BPMS as a whole, so a process modelled next to the
-   one the application asked for is deployed with it, and the file may well belong to
-   somebody else: a called process a modeller drew alongside the calling one, or a
-   process which moved out of the application while its model stayed. Asking such a
-   process for `@WorkflowTask` methods ended the boot over a model the application cannot
-   change, and the message it wrote - add a workflow service for this process - is the
-   right sentence only where the application means to serve it. The registry collects the
-   process instead, and the deployment reports the module's unclaimed processes in one
-   WARN naming each process, its file and what it costs. Where a service DOES claim the
-   process, nothing changed: an unmatched task ends the boot as before, because that is a
-   defect the developer can fix in their own code.
+   A process NO `@WorkflowService` class claims is not validated, and an adapter does not
+   wire it at all. A BPMN file goes to the BPMS as a whole, so a process modelled next to
+   the one the application asked for is deployed with it: a called process a modeller drew
+   alongside the calling one, or a process which moved out of the application while its
+   model stayed. The start cannot tell such a process from a forgotten workflow service,
+   so the application says which one it is. `DeploymentService` asks
+   `isClaimedByAWorkflowService` for every executable process right after the adapter read
+   the file, and refuses a process nobody claims unless the line
+   `vanillabp.workflow-modules.<module>.workflows.<process>.implemented-externally=true`
+   (or the same line for one adapter) marks it. Once one process was refused, nothing is
+   deployed to any BPMS any more, and the start ends after the last module was read, with
+   every such process of every module in one message. A marked process travels with its
+   file and nothing else of VanillaBP touches it. Where a service DOES claim the process,
+   nothing changed: an unmatched task ends the boot, because that is a defect the developer
+   can fix in their own code. The rule is in `DECISIONS.pending/937.md`.
 
-   **What the core does on its own**, once the last adapter of a workflow module finished
-   deploying: four calls on `WorkflowTaskWiring`, of which three run per module. The
-   report about the processes no `@WorkflowService` class claims comes first, from
-   `bpmnProcessesWithoutWorkflowService(module)`, and it is written with the deployment's
-   other startup reports rather than inside the per-module checks, because those reports
-   name the file each BPMN process came from and that map belongs to the deployment as a
-   whole.
-
-   That report is also where a platform may add a sentence of its own, through
+   That refusal is also where a platform may add a sentence of its own, through
    `UnclaimedBpmnProcessHints` - one question, one answer, handed to `DeploymentService`
    like `workflowTaskWiring` is. The Spring Boot integration implements it and Quarkus
-   does not, because the answer differs per platform while the report does not: on Spring
+   does not, because the answer differs per platform while the refusal does not: on Spring
    Boot a class carrying `@WorkflowService` which nobody made a bean of is invisible to the
    discovery (decision 21 of `DECISIONS.md`) and only reading class resources can name it,
    which is Spring's work and must not enter the core; on Quarkus the same case fails the
    BUILD, because the build knows its bean set. The hint is asked ONLY where a process is
-   actually being reported, so a healthy boot pays nothing, and its lines go inside the
-   module's existing WARN block rather than into a warning of their own - one report per
-   workflow module, not two which have to be read together. An implementation which throws
-   is ignored: a report must not turn a warning into a failed boot.
+   refused, so a healthy boot pays nothing, and its lines go inside the refusal. An
+   implementation which throws is ignored: the refusal has to name the processes and the
+   way out, and an exception of the hint would replace it.
 
-   The three per-module calls follow, in an order which matters. Every adapter of the
+   **What the core does on its own**, once the last adapter of a workflow module finished
+   deploying: three calls on `WorkflowTaskWiring`, run per module.
+
+   They run in an order which matters. Every adapter of the
    module is asked first, through
    `registerVersionsOfProcessesNobodyDeployed(module, adapter, ...)` and the adapter's
    `processVersionCatalogOf`, what its BPMS still holds for a BPMN process the
@@ -996,9 +993,9 @@ reached the task.
    serving no task at all is the more basic defect and the developer should read about it
    first.
 
-   All four need nothing an adapter knows, so the core picks the moment instead of asking
-   every adapter author to remember it. The reverse check stays exactly as loud as it
-   was: an unclaimed process is never compared against methods, so it can neither excuse
+   None of them needs anything an adapter knows, so the core picks the moment instead of
+   asking every adapter author to remember it. The reverse check stays exactly as loud as
+   it was: an unclaimed process is never compared against methods, so it can neither excuse
    nor hide one.
    `registerDeployedVersion` stays with the adapter: only it knows which version its BPMS
    ended up with.

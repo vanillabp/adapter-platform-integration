@@ -321,8 +321,8 @@ what makes a start noticeably faster.
 
 An application whose workflow service is no Spring bean therefore gets no `ProcessService` for it.
 Such a class could never serve a task anyway, because the handler object is resolved through the
-bean factory, and what the application meets is a warning naming the BPMN process nobody serves and
-the file it came from. Make the class a bean, with `@Service` or with a `@Bean` method whose return
+bean factory, and the start ends with a message naming the BPMN process nobody serves, the file it
+came from and the class which is no bean. Make the class a bean, with `@Service` or with a `@Bean` method whose return
 type is the workflow service class. A workflow service registered by one profile only is found while
 that profile is active, which is the point of reading the bean definitions of this run.
 
@@ -622,6 +622,21 @@ are written. A task with a method and this line at the task ends the start, a li
 workflow or module covers only the tasks without a method, and a line for a task no deployed model
 has is a warning. Nothing changes for an application which served every task in version 1.
 ([Workflow tasks](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-tasks#a-task-something-else-serves))
+
+#### A process nobody claims can say so
+
+Version 1 ended the start for every BPMN process no `@WorkflowService` declared, a process which only
+sits in the same file as yours included. Version 2 does the same. What is new is a way out for a
+process somebody else serves:
+
+```properties
+vanillabp.workflow-modules.<module>.workflows.<process>.implemented-externally=true
+```
+
+VanillaBP then deploys the process with its file and leaves it alone: no listener, no worker and no
+check of the adapter touches it. A process somebody else deployed into the same BPMS is not touched
+either. Nothing changes for an application which declared every process of its files in version 1.
+([Workflow tasks](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-tasks#a-process-somebody-else-serves))
 
 #### Decision tables are deployed with the workflow module
 

@@ -14,6 +14,9 @@ vanillabp:
       adapters:
         demo:
           resources-location: classpath:processes/dummy
+      workflows:
+        first:
+          implemented-externally: true
   outbox:
     poll-interval: PT0.5S
     attempt-frequency: PT0.5S

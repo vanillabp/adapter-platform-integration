@@ -55,7 +55,10 @@ public class DeploymentPipelineTest {
           .addAsResource("bpmn/first.bpmn", "processes/dummy/first.bpmn")
           .addAsResource("bpmn/second.bpmn", "processes/dummy/sub/second.bpmn")
           .addAsResource("bpmn/rating.dmn", "processes/dummy/rating.dmn")
-          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
+          .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
+      // the BPMS double names the second process after its path, and no class here claims it
+      .overrideConfigKey("vanillabp.workflow-modules.test-module.workflows.\"sub/second\".implemented-externally",
+          "true");
 
   @Inject
   RecordingDeploymentEvents events;

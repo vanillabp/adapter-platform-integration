@@ -89,13 +89,6 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   private final Map<RegistryKey, RegistryEntry> entries = new ConcurrentHashMap<>();
 
   /**
-   * The BPMN processes an adapter wired although no <code>&#64;WorkflowService</code>
-   * class of the application claims them. A set, so the same process wired by a second
-   * adapter of the workflow module is reported once.
-   */
-  private final java.util.Set<RegistryKey> processesWithoutWorkflowService = ConcurrentHashMap.newKeySet();
-
-  /**
    * What the BPMS know about the deployed versions of the BPMN processes - needed to
    * place a version TAG named by a <code>version</code> attribute in the deployment
    * order. Shared by all three handler kinds, since all three annotations
@@ -741,12 +734,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     final var key = new RegistryKey(workflowModuleId, bpmnProcessId);
     final var entry = entries.get(key);
     if (entry == null) {
-      // nobody claimed this process, so there is nothing to validate it against:
-      // asking for the @WorkflowTask methods of a process the application never said
-      // it serves would end the boot over a model somebody else owns. What it costs
-      // is reported once per workflow module by the deployment, see
-      // #bpmnProcessesWithoutWorkflowService
-      processesWithoutWorkflowService.add(key);
+      // nobody claimed this process, so there is nothing to validate it against. An adapter
+      // does not wire such a process at all, and the deployment has ended the start over it
+      // already unless the application marked it as somebody else's
       return;
     }
     final var handlers = List.copyOf(entry.handlers);
@@ -859,18 +849,6 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   }
 
-  @Override
-  public Collection<String> bpmnProcessesWithoutWorkflowService(
-      final String workflowModuleId) {
-
-    return processesWithoutWorkflowService
-        .stream()
-        .filter(key -> key.workflowModuleId().equals(workflowModuleId))
-        .map(RegistryKey::bpmnProcessId)
-        .sorted()
-        .toList();
-
-  }
 
   /**
    * Says once per workflow module which <code>&#64;WorkflowTask</code> methods would be
@@ -2126,6 +2104,23 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         .filter(candidate -> sameWiring(candidate.getTaskDefinition(),
             taskDefinitionOrActivityId) || sameWiring(candidate.getActivityId(), taskDefinitionOrActivityId))
         .anyMatch(WorkflowTaskHandler::isAsynchronousTask);
+
+  }
+
+  /**
+   * Answered from the registry itself rather than through
+   * {@link #resolveWorkflowAggregateIdName(String, String)}: the name of the aggregate's ID
+   * property is asked of the persistence, and an application on a BPMS with a business key may
+   * leave it unanswered, which says nothing about whether a workflow service claims the
+   * process. See {@code DECISIONS.pending/937.md}.
+   */
+  @Override
+  public boolean isClaimedByAWorkflowService(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    return (entry != null) && (entry.processService != null);
 
   }
 

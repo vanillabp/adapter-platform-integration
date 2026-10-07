@@ -249,6 +249,7 @@ public class TwoAdapterTypesDeploymentTest {
             TestTransactionRunnerConfiguration.class,
             SampleWorkflowService.class,
             WorkflowModuleConfiguration.class)
+            .properties(io.vanillabp.integration.test.ThePlaceholderModel.BELONGS_TO_SOMEBODY_ELSE)
             .run()) {
 
       Assertions.assertTrue(context.isActive(), "context should boot with two adapter types");

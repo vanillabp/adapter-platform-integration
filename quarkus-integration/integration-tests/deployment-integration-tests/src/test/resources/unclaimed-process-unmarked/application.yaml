@@ -2,7 +2,7 @@ quarkus:
   datasource:
     db-kind: h2
     jdbc:
-      url: jdbc:h2:mem:unclaimed-process;DB_CLOSE_DELAY=-1
+      url: jdbc:h2:mem:unclaimed-process-unmarked;DB_CLOSE_DELAY=-1
 vanillabp:
   prioritized-adapters:
     - demo1
@@ -21,5 +21,3 @@ vanillabp:
             - event
             - index
             - total
-        Called:
-          implemented-externally: true

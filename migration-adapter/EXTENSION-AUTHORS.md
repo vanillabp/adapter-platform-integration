@@ -158,6 +158,13 @@ parsing the file a second time: `ExtensionHandlers#bpmnTaskNameOf(module, proces
 answers the `name` a modeller wrote on an element, kept from what the adapter handed over while it
 wired.
 
+A process no `@WorkflowService` claims reaches your `wireBpmn` too, because the core hands you every
+process of the file. The adapter leaves such a process as it was modelled (`DECISIONS.pending/937.md`),
+and an extension should do the same: report nothing about it and add nothing to it. Ask
+`WorkflowTaskWiring#isClaimedByAWorkflowService(workflowModuleId, bpmnProcessId)` to tell. Your
+extension gets `WorkflowTaskWiring` the way an adapter does, as a bean on Spring Boot and on
+Quarkus.
+
 ## 3. An extension hangs on every configured adapter
 
 The core builds one processing context per workflow module and adapter id. Your three calls are made
@@ -248,7 +255,7 @@ already gets `false`, because the method may return one with other workflows and
 `AReportInsideTheStartOfAWorkflowTest` holds the rule.
 
 `WorkflowElection#workflowIdOf` answers the id and NOTHING else, and it elects nothing: no BPMS is
-asked, nothing is waited for, and nothing is thrown. Ask it where you want the id for your own
+asked and nothing is waited for. Ask it where you want the id for your own
 report rather than because you are about to talk to an engine. It reads what VanillaBP persisted,
 first the row written when the workflow started and then the rows of that workflow's task
 deliveries, so it answers from the moment the workflow came into existence - which is the window in
@@ -256,9 +263,12 @@ which a BPMS answering from a read model reports nothing at all.
 
 `Optional.empty()` covers several situations and tells none of them apart: this application never
 started that workflow, the start happened before the row existed, the adapter names no id, the
-period `vanillabp.delivery.workflow-start-retention` passed, there is no store for that aggregate,
-or the BPMN process is not part of this application. So empty means "VanillaBP does not know" and
-never "there is no such workflow". Everything the paragraph above says about what you may do with
+period `vanillabp.delivery.workflow-start-retention` passed, or there is no store for that
+aggregate. So empty means "VanillaBP does not know" and never "there is no such workflow". A BPMN
+process no `@WorkflowService` of this application declares is refused with an
+`IllegalStateException`, the way the election refuses it: VanillaBP writes nothing down for such a
+process, so asking about it is a mistake an empty answer would hide. `workflowStartOf` refuses it the
+same way. Everything the paragraph above says about what you may do with
 the id holds here as well.
 
 `WorkflowElection#workflowStartOf` reads the same rows and answers the id together with the version

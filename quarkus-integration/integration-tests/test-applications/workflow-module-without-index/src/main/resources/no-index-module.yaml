@@ -4,5 +4,8 @@ vanillabp:
       adapters:
         test:
           resources-location: classpath:no-index-module/processes/dummy
+      workflows:
+        no-index-workflow:
+          implemented-externally: true
 no-index-module:
   test: 42

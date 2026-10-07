@@ -7,3 +7,8 @@ vanillabp:
   adapters:
     demo:
       type: dummy
+  workflow-modules:
+    test-module:
+      workflows:
+        first:
+          implemented-externally: true

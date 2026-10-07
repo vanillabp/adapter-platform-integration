@@ -28,8 +28,10 @@ import io.vanillabp.integration.spi.startup.StartupTopic;
  * The rule it serves is the wiring validation's: every task of a claimed process has a
  * <code>&#64;WorkflowTask</code> method or is marked with this property, see
  * {@link WorkflowTaskRegistry#validateTaskWiring(String, String, String, Collection)}. This
- * class answers the second half of that question and nothing more, so a later level of the
- * same property - a whole process somebody else owns - has one place to be read at.
+ * class answers the second half of that question and nothing more. The other meaning of a line
+ * at the workflow, that a process nobody claims belongs to somebody else, is read by the
+ * deployment before anything is deployed, from
+ * {@link MigrationAdapterProperties#implementedExternallyAtTheWorkflow(String, String, String)}.
  * <p>
  * A list of names in a configuration file goes out of date without anybody noticing, which
  * was the reason against such a list. The warning about lines nothing needs is the answer to
@@ -286,8 +288,8 @@ final class ImplementedExternallyCheck {
    * task without a method of the claimed processes this start wired. Such a line changes
    * nothing: every task below it has its method, and the method wins.
    * <p>
-   * Only claimed processes are looked at. What a line at a process nobody claims means is a
-   * question of its own. A line at the application is not judged either, because it covers
+   * Only claimed processes are looked at. A line at a process nobody claims says that the
+   * process belongs to somebody else, and that line is needed. A line at the application is not judged either, because it covers
    * several workflow modules and one module alone cannot tell whether it is needed.
    *
    * @param workflowModuleId The workflow module

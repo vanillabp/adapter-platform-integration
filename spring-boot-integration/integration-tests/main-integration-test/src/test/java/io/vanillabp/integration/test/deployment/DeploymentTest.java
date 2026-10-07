@@ -84,6 +84,7 @@ public class DeploymentTest {
             SampleWorkflowService.class,
             WorkflowModuleConfiguration.class,
             TestConfig.class)
+            .properties(io.vanillabp.integration.test.ThePlaceholderModel.BELONGS_TO_SOMEBODY_ELSE)
             .run()) {
 
       final var capturedOutput = output.getAll();

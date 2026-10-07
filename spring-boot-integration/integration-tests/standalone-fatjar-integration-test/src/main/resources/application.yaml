@@ -8,3 +8,8 @@ vanillabp:
   adapters:
     dummy:
       type: dummy
+  workflow-modules:
+    standalone-module:
+      workflows:
+        standalone:
+          implemented-externally: true

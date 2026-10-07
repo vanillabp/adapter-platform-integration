@@ -47,7 +47,12 @@ public class BpmnFileAddedInDevModeTest {
           .addAsResource("application.yaml")
           .add(new StringAsset("quarkus.http.port="
               + PORT
-              + "\n"), "application.properties")
+              + "\n"
+              // the BPMS double names a process after its file, and no class here claims
+              // either of the two: the lines say that they are somebody else's
+              + "vanillabp.workflow-modules.test-module.workflows.first.implemented-externally=true\n"
+              + "vanillabp.workflow-modules.test-module.workflows.second.implemented-externally=true\n"),
+              "application.properties")
           .addAsResource("META-INF/workflow-module")
           .add(new StringAsset(BPMN), FIRST_BPMN)
           .addClass(BpmnFileAddedInDevModeSupportingResource.class));

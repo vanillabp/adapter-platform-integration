@@ -390,6 +390,11 @@ taking the process out of the file. What this gives up is the loudest symptom a 
 service used to have: it does not end the boot any more, and whoever does not read the startup log
 does not learn about it.
 
+*The last paragraph is superseded by `DECISIONS.pending/937.md`: a deployed process nobody claims
+ends the boot again, unless the application marks it with
+`...workflows.<process>.implemented-externally=true`. The report naming the class which is no bean
+is part of that refusal now. The discovery itself is unchanged.*
+
 ### 22. An idempotency key says an operation is planned once, not that it ever happened
 
 The key of a phase-two operation deduplicates against the entries which have not been dispatched
@@ -4468,9 +4473,10 @@ a Camunda 8 job type like `io.camunda:http-json:1` for example, needs brackets o
 on Quarkus, and a colon has to be escaped in a properties file on both, so such a name gets one line per
 platform.
 
-**What is left to a later story.** The workflow position has a second meaning for a process nobody
-claims: that process belongs to somebody else. Reading it that way is story 937, and
-`ImplementedExternallyCheck` is where it belongs.
+**The second meaning of the workflow position.** For a process nobody claims, a line at the workflow
+says that the process belongs to somebody else. `DECISIONS.pending/937.md` holds that rule. The
+deployment reads that line through `MigrationAdapterProperties.implementedExternallyAtTheWorkflow`
+before anything is deployed, so it is not read in `ImplementedExternallyCheck`.
 
 The predicate `WorkflowTaskWiring.isClaimedByAWorkflowService(module, process)` came with this change,
 because the Camunda 8 adapter asks it while it sorts the listeners. It answers by

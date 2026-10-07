@@ -212,9 +212,12 @@ public class DeploymentService {
    * (<code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;bpmnProcessId&gt;</code>)
    * which match no executable BPMN process found in the module's resources are
    * reported by a WARN (not a failure - the BPMN may arrive later, e.g. during a
-   * migration) naming the known BPMN process IDs, and so are the executable BPMN
-   * processes no <code>&#64;WorkflowService</code> class claims (see
-   * {@link #reportBpmnProcessesWithoutWorkflowService(List, Map)}).
+   * migration) naming the known BPMN process IDs.
+   * <p>
+   * An executable BPMN process no <code>&#64;WorkflowService</code> class claims ends the
+   * start, unless the application says that it belongs to somebody else (see
+   * {@link #refuseProcessesNobodyClaims(Map)}). Nothing is deployed once such a process was
+   * found.
    *
    * @param workflowModuleIds The workflow module IDs to deploy
    * @param resourcesLoader Loads the resources of one location: it is given the location
@@ -266,6 +269,9 @@ public class DeploymentService {
     // which file each executable BPMN process came from, per workflow module - what
     // the reports after the deployment name so a developer can open the right file
     final var bpmnFilesByProcessId = new HashMap<String, Map<String, String>>();
+    // the processes nobody claims and nobody marked as somebody else's, per workflow module,
+    // with their files: each of them ends the start, and nothing is deployed once one is found
+    final var processesNobodyClaims = new LinkedHashMap<String, Map<String, String>>();
 
     // walk through all workflow modules
     workflowModuleIds
@@ -295,7 +301,8 @@ public class DeploymentService {
                 workflowModuleId,
                 deploymentService,
                 resourcesLoader,
-                bpmnFilesByProcessId.computeIfAbsent(workflowModuleId, id -> new LinkedHashMap<>()));
+                bpmnFilesByProcessId.computeIfAbsent(workflowModuleId, id -> new LinkedHashMap<>()),
+                processesNobodyClaims);
           } catch (final RuntimeException e) {
             final var adapterId = deploymentService.getAdapterId();
             final var policy = properties.getDeploymentFailureFor(adapterId);
@@ -326,11 +333,14 @@ public class DeploymentService {
           }
         });
 
+    // a process nobody claims ends the start before anything else is said about the
+    // deployment, because nothing was deployed once it was found
+    refuseProcessesNobodyClaims(processesNobodyClaims);
+    endTheStartIfSomethingWasRefused();
+
     reportWorkflowModulesWithoutResources(workflowModuleIds);
 
     warnAboutConfiguredWorkflowsUnknownToBpmnResources(workflowModuleIds, bpmnFilesByProcessId);
-
-    reportBpmnProcessesWithoutWorkflowService(workflowModuleIds, bpmnFilesByProcessId);
 
     workflowModuleIds.forEach(this::runModuleLevelChecks);
 
@@ -636,66 +646,101 @@ public class DeploymentService {
   }
 
   /**
-   * Reports the executable BPMN processes of a workflow module which no
-   * <code>&#64;WorkflowService</code> class claims. A BPMN file is deployed to the BPMS
-   * as a whole, so a process drawn next to the one the application asked for travels
-   * with it, and it used to end the boot: the wiring validation found no method for its
-   * tasks and asked for a workflow service, which is the right sentence for a process
-   * the application means to serve and the wrong one for a process it does not.
-   * <p>
-   * Only a warning, because the boot cannot tell a forgotten workflow service from a
-   * process which belongs to somebody else. What it costs is in the message, together
-   * with the two ways out.
+   * Ends the start over the executable BPMN processes of a workflow module which no
+   * <code>&#64;WorkflowService</code> class claims and which the application did not mark as
+   * somebody else's. A BPMN file is deployed to the BPMS as a whole, so a process drawn next to
+   * the one the application asked for travels with it. The start cannot tell a forgotten
+   * workflow service from such a process, and only the application can. So it says which one it
+   * is: a workflow service for a process it serves, the line
+   * <code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;process&gt;.implemented-externally=true</code>
+   * for a process something else serves. A marked process is deployed with its file and left
+   * alone otherwise: no adapter wires it, and no check ends the start because of it. See
+   * {@code DECISIONS.pending/937.md}.
    *
-   * @param workflowModuleIds The workflow module IDs deployed
-   * @param bpmnFilesByProcessId The BPMN file each executable process was found in, per
-   *          workflow module
+   * @param processesNobodyClaims The processes nobody claims and nobody marked, with their
+   *          files, per workflow module
    */
-  private void reportBpmnProcessesWithoutWorkflowService(
-      final List<String> workflowModuleIds,
-      final Map<String, Map<String, String>> bpmnFilesByProcessId) {
+  private void refuseProcessesNobodyClaims(
+      final Map<String, Map<String, String>> processesNobodyClaims) {
 
-    if (workflowTaskWiring == null) {
-      return;
-    }
-    workflowModuleIds.forEach(workflowModuleId -> {
-      final var unclaimedProcessIds = workflowTaskWiring
-          .bpmnProcessesWithoutWorkflowService(workflowModuleId);
-      if (unclaimedProcessIds.isEmpty()) {
+    processesNobodyClaims.forEach((
+        workflowModuleId,
+        filesByProcessId) -> {
+      if (filesByProcessId.isEmpty()) {
         return;
       }
-      final var filesByProcessId = bpmnFilesByProcessId.getOrDefault(workflowModuleId, Map.of());
+      final var processIds = filesByProcessId
+          .keySet()
+          .stream()
+          .sorted()
+          .toList();
       properties
           .startupFindings()
-          .warn(
+          .refuse(
               StartupTopic.CODE,
               "workflow module '%s'".formatted(workflowModuleId),
               """
                   Workflow module '%s' deploys BPMN processes which no @WorkflowService class of this \
                   application claims:%s
-                  They are deployed because a BPMN file travels to the BPMS as a whole, so a process \
-                  modelled next to the one you asked for goes with it. A workflow of such a process can \
-                  still be started, by a call activity of another process or by the BPMS itself, and it \
-                  will not get past its first task, because no @WorkflowTask method of this application \
-                  serves it. Either serve the process, by a class annotated with \
-                  @WorkflowService(bpmnProcess = @BpmnProcess(bpmnProcessId = "<the process>")) holding a \
-                  @WorkflowTask method per task, or take the process out of its file. Nothing to do here \
-                  if another application serves it.%s"""
+                  A BPMN file goes to the BPMS as a whole, so a process modelled next to the one you \
+                  asked for goes with it. Say for each of them who serves it. If this application \
+                  does, add a class annotated with \
+                  @WorkflowService(bpmnProcess = @BpmnProcess(bpmnProcessId = "<the process>")) holding \
+                  a @WorkflowTask method per task. If something else does, add this line, and VanillaBP \
+                  deploys the process with its file and leaves it alone otherwise:%s
+                  Or take the process out of its file.%s"""
                   .formatted(
                       workflowModuleId,
-                      unclaimedProcessIds
+                      processIds
                           .stream()
                           .map(bpmnProcessId -> "\n  - process '%s' of file '%s'".formatted(
                               bpmnProcessId,
-                              filesByProcessId.getOrDefault(bpmnProcessId, "unknown")))
+                              filesByProcessId.get(bpmnProcessId)))
                           .collect(java.util.stream.Collectors.joining()),
-                      whatElseIsWorthSaying(workflowModuleId, unclaimedProcessIds)));
+                      processIds
+                          .stream()
+                          .map(bpmnProcessId -> io.vanillabp.integration.adapter.spi.workflowtask.ImplementedExternally
+                              .processPropertyLine(workflowModuleId, bpmnProcessId)
+                              .indent(2)
+                              .stripTrailing())
+                          .collect(java.util.stream.Collectors.joining("\n", "\n", "")),
+                      whatElseIsWorthSaying(workflowModuleId, processIds)));
     });
 
   }
 
   /**
-   * What the platform integration has to add about the processes just reported, as lines of the
+   * Whether a BPMN process found in a file of the workflow module ends the start: nobody
+   * claims it, and the application did not mark it as somebody else's for this adapter (see
+   * {@link #refuseProcessesNobodyClaims(Map)}).
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param adapterId The adapter deploying the file
+   * @param bpmnProcessId The BPMN process ID
+   * @return Whether nobody claims the process and nothing says that it belongs to somebody else
+   */
+  private boolean nobodyClaims(
+      final String workflowModuleId,
+      final String adapterId,
+      final String bpmnProcessId) {
+
+    if (workflowTaskWiring == null) {
+      // the pipeline runs without the core's wiring interface in tests exercising only the
+      // pipeline itself, and there is nobody to ask then
+      return false;
+    }
+    if (workflowTaskWiring.isClaimedByAWorkflowService(workflowModuleId, bpmnProcessId)) {
+      return false;
+    }
+    return !Boolean.TRUE.equals(properties.implementedExternallyAtTheWorkflow(
+        workflowModuleId,
+        bpmnProcessId,
+        adapterId));
+
+  }
+
+  /**
+   * What the platform integration has to add about the processes just refused, as lines of the
    * same finding - a reader gets one report per workflow module instead of two which have to be
    * read together.
    * <p>
@@ -717,8 +762,8 @@ public class DeploymentService {
     try {
       hints = unclaimedProcessHints.whatElseIsWorthSaying(workflowModuleId, unclaimedProcessIds);
     } catch (final RuntimeException e) {
-      // a report which fails would turn a warning into a failed boot, which is the opposite
-      // of what this report is for
+      // a hint which fails would replace the refusal it belongs to by an exception which
+      // names neither the processes nor the way out
       log.debug("Could not look for further reasons why nothing claims a process", e);
       return "";
     }
@@ -741,13 +786,16 @@ public class DeploymentService {
    * @param resourcesLoader Loads the files of one location and extension
    * @param bpmnFilesByProcessId Collects the file each executable BPMN process was
    *     found in (used by the reports running after all adapters were processed)
+   * @param processesNobodyClaims Collects the processes nobody claims and nobody marked, per
+   *     workflow module; once it holds one, nothing is deployed any more
    * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process.
    */
   private <PC> void deployResourcesOfAdapter(
       final String workflowModuleId,
       final AdapterDeploymentService<?, PC> deploymentService,
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader,
-      final Map<String, String> bpmnFilesByProcessId) {
+      final Map<String, String> bpmnFilesByProcessId,
+      final Map<String, Map<String, String>> processesNobodyClaims) {
 
     // a configured location is the only one; the convention may name two (the
     // application IS the workflow module, and a module tested inside its own Maven
@@ -781,7 +829,8 @@ public class DeploymentService {
               bpmnFileEntry.getKey(), // filename
               bpmnFileEntry.getValue(), // InputStream
               resourcesLocation.vanillaBpBpmn(),
-              bpmnFilesByProcessId)
+              bpmnFilesByProcessId,
+              processesNobodyClaims.computeIfAbsent(workflowModuleId, id -> new java.util.TreeMap<>()))
               .ifPresentOrElse(
                   bpmsProcessingContext::setBpmsProcessingContext,
                   () -> properties
@@ -856,6 +905,15 @@ public class DeploymentService {
         deploymentService,
         resourcesLoader.apply(resourcesLocation.location(), DMN_EXTENSION),
         bpmsProcessingContext);
+
+    // a process nobody claims ends this start, so nothing goes out to a BPMS any more: an
+    // application which is about to end has no business changing a system outside of it
+    if (processesNobodyClaims
+        .values()
+        .stream()
+        .anyMatch(processes -> !processes.isEmpty())) {
+      return;
+    }
 
     // ...and finally deploy all the resources together (BPMN, DMN) to the BPMS
     deploymentService.deployResources(workflowModuleId, bpmsProcessingContext.getBpmsProcessingContext());
@@ -936,6 +994,8 @@ public class DeploymentService {
    * @param bpmn The BPMN resource inputstream
    * @param isVanillaBpBpmn Whether the BPMN is VanillaBP's BPMN or is specific to the adapter's BPMS
    * @param bpmnFilesByProcessId Collects the file each executable BPMN process was found in
+   * @param processesNobodyClaims Collects the processes of the file nobody claims and nobody
+   *          marked as somebody else's, with the file
    * @param <BPMN> The BPMN model type
    * @param <PC> The processing context, used to store all information needed by the adapter to deploy the process
    * @return The context used to store all information needed by the adapter to deploy the process
@@ -948,7 +1008,8 @@ public class DeploymentService {
       final String filename,
       final InputStream bpmn,
       final boolean isVanillaBpBpmn,
-      final Map<String, String> bpmnFilesByProcessId) {
+      final Map<String, String> bpmnFilesByProcessId,
+      final Map<String, String> processesNobodyClaims) {
 
     // read executable processes from the BPMN file
     final var executableProcesses = deploymentService.readBpmn(
@@ -969,6 +1030,9 @@ public class DeploymentService {
       // the first adapter finding the process names the file: two adapters may read
       // the same module from locations of their own, and the message wants one name
       bpmnFilesByProcessId.putIfAbsent(bpmnProcessId, filename);
+      if (nobodyClaims(workflowModuleId, deploymentService.getAdapterId(), bpmnProcessId)) {
+        processesNobodyClaims.putIfAbsent(bpmnProcessId, filename);
+      }
       // ...preparing the model...
       context = deploymentService.prepareBpmn(
           workflowModuleId,

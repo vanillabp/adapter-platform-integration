@@ -121,6 +121,7 @@ public class TwoAdapterIdsOfOneTypeTest {
             WorkflowModuleConfiguration.class,
             AggregatePersistenceConfiguration.class,
             DeploymentTest.TestConfig.class)
+            .properties(io.vanillabp.integration.test.ThePlaceholderModel.BELONGS_TO_SOMEBODY_ELSE)
             .run()) {
 
       // one MigratableProcessService element bean per configured adapter id

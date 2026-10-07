@@ -41,6 +41,10 @@ public class ShutdownObserverTest {
           .addClass(TestAdapterDeploymentService.class) // records the shutdown pass
           .addClass(TestAdapterDeploymentServiceProducer.class))
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter()) // add mocked adapter
+      // the adapter double names the process after its file, and no class of the sample claims
+      // it: the line says that it is somebody else's, so the start goes on
+      .overrideConfigKey("vanillabp.workflow-modules.test-module.workflows.\"test.bpmn\".implemented-externally",
+          "true")
       // the shutdown pass runs when the application is undeployed after all tests
       .setAfterUndeployListener(() -> Assertions.assertEquals(
           "test-module",

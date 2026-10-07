@@ -22,6 +22,8 @@ vanillabp:
         demo2:
           resources-location: classpath:processes/dummy
       workflows:
+        first:
+          implemented-externally: true
         NoSuchProcess:
           prioritized-adapters:
             - demo2

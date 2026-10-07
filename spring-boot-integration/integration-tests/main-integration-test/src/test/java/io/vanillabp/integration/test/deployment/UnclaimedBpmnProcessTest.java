@@ -40,16 +40,14 @@ import lombok.Setter;
  * A BPMN file carries two executable processes - which is what a modeller produces by
  * drawing a called process next to the calling one, and what a migration leaves behind
  * when a process moves out of an application while its model stays in the file. The file
- * travels to the BPMS as a whole, so both processes are deployed, and the second one is
- * validated against the <code>&#64;WorkflowTask</code> methods of a workflow service
- * which does not exist. That used to end the boot with a message asking for a workflow
- * service, which is the right sentence for a process the application means to serve and
- * the wrong one for a process it does not.
+ * travels to the BPMS as a whole, so both processes are deployed.
  * <p>
- * Now the boot continues and says what such a process costs. What did NOT change is the
- * case which really is a defect: a process a workflow service DOES claim and whose task
- * has no method still ends the boot, and so does a method matching no task of any process
- * of the module.
+ * The boot cannot tell a forgotten workflow service from a process somebody else serves, so
+ * the application says which one it is. Without a word the boot ends, naming both ways out.
+ * With <code>implemented-externally=true</code> at the process the boot goes on and says
+ * nothing about it. What did not change is the case which is a defect either way: a process a
+ * workflow service DOES claim and whose task has no method still ends the boot, and so does a
+ * method matching no task of any process of the module.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class UnclaimedBpmnProcessTest {
@@ -260,12 +258,27 @@ public class UnclaimedBpmnProcessTest {
                 allow-full-sync-with-bpms: true
       """;
 
+  /**
+   * The same configuration, saying that something else serves <code>Called</code>.
+   */
+  private static final String APPLICATION_YAML_MARKING_CALLED = APPLICATION_YAML + """
+              Called:
+                implemented-externally: true
+      """;
+
   private SpringBootTestApplication buildTestApp() throws IOException {
+
+    return buildTestApp(APPLICATION_YAML_MARKING_CALLED);
+
+  }
+
+  private SpringBootTestApplication buildTestApp(
+      final String applicationYaml) throws IOException {
 
     return SpringBootTestApplication
         .builder()
         .addResource("META-INF/workflow-module")
-        .addResource("application.yaml", APPLICATION_YAML)
+        .addResource("application.yaml", applicationYaml)
         .addResource("test-module/processes/unclaimed/CallingAndCalled.bpmn")
         .hideResource("META-INF/workflow-module")
         .hideResource("application.yaml")
@@ -293,8 +306,39 @@ public class UnclaimedBpmnProcessTest {
   }
 
   @Test
-  @DisplayName("The process nobody serves is a WARN, and the one next to it works")
-  public void anUnclaimedProcessBootsWithAGuidingWarn(
+  @DisplayName("The process nobody serves ends the boot, naming both ways out")
+  public void anUnclaimedProcessEndsTheBoot() throws IOException {
+
+    try (var testApp = buildTestApp(APPLICATION_YAML)) {
+
+      final var failure = Assertions.assertThrows(
+          Exception.class,
+          () -> runTestApplication(
+              testApp,
+              CallingWorkflowService.class,
+              TwoProcessesConfiguration.class).close());
+
+      final var message = rootMessageOf(failure);
+      Assertions.assertTrue(message.contains("process 'Called' of file 'CallingAndCalled.bpmn'"), message);
+      Assertions.assertTrue(
+          message.contains("Workflow module 'test-module' deploys BPMN processes which no @WorkflowService class"),
+          message);
+      Assertions.assertTrue(message.contains("@WorkflowService(bpmnProcess"), message);
+      Assertions.assertTrue(
+          message.contains("vanillabp.workflow-modules.test-module.workflows.Called.implemented-externally=true"),
+          message);
+      Assertions.assertFalse(
+          message.contains("- process 'Calling' of file"),
+          "the claimed process of the same file is not reported: "
+              + message);
+
+    }
+
+  }
+
+  @Test
+  @DisplayName("The process marked as somebody else's is not reported, and the one next to it works")
+  public void aMarkedProcessBootsQuietly(
       final CapturedOutput output) throws IOException {
 
     TwoProcessesConfiguration.AGGREGATES.clear();
@@ -309,25 +353,9 @@ public class UnclaimedBpmnProcessTest {
         TwoProcessesConfiguration.class)) {
 
       final var captured = output.getAll().substring(writtenBeforeThisBoot);
-      Assertions.assertTrue(
-          captured.contains("process 'Called' of file 'CallingAndCalled.bpmn'"),
-          "expected the WARN to name the unclaimed process and its file but got: "
-              + captured);
-      Assertions.assertTrue(
-          captured.contains("Workflow module 'test-module' deploys BPMN processes which no @WorkflowService class"),
-          "expected the WARN to name the workflow module but got: "
-              + captured);
-      Assertions.assertTrue(
-          captured.contains("not get past its first task"),
-          "expected the WARN to say what such a process costs but got: "
-              + captured);
-      Assertions.assertTrue(
-          captured.contains("take the process out of its file"),
-          "expected the WARN to name both ways out but got: "
-              + captured);
       Assertions.assertFalse(
-          captured.contains("- process 'Calling' of file"),
-          "the claimed process of the same file is not reported: "
+          captured.contains("process 'Called' of file 'CallingAndCalled.bpmn'"),
+          "a process the application marked is not reported: "
               + captured);
 
       // the claimed process is wired as before: its task runs through the core

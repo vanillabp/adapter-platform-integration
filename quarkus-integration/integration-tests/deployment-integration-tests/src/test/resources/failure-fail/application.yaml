@@ -21,3 +21,6 @@ vanillabp:
           resources-location: classpath:processes/dummy
         demo2:
           resources-location: classpath:processes/dummy
+      workflows:
+        first:
+          implemented-externally: true

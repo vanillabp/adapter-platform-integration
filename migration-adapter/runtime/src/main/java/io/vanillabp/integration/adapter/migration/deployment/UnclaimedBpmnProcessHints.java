@@ -4,15 +4,15 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * What a platform integration can add to the report about the BPMN processes of a workflow
+ * What a platform integration can add to the refusal of the BPMN processes of a workflow
  * module which no <code>&#64;WorkflowService</code> class claims - one sentence per finding,
- * written into the report's own WARN block rather than as a warning of its own.
+ * written into the refusal itself rather than as a warning of its own.
  * <p>
  * It exists because the answer is platform-specific while the report is not. On Spring Boot a
  * workflow service is found because it is a bean (decision 21 in the repository's
  * DECISIONS.md), so a class carrying the annotation which nobody made a bean of is not in the
  * bean definitions at all and cannot be told from a class another profile brings - the boot
- * says nothing about it while the process it declares goes unserved. Looking for such a class
+ * ends over the process it declares and would not say why. Looking for such a class
  * means reading class resources, which is Spring's work and must not enter the core. On
  * Quarkus the same case fails the BUILD, because the build knows its bean set, so that
  * platform contributes nothing here.
