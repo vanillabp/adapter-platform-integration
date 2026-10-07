@@ -464,4 +464,28 @@
     </addColumn>
   </changeSet>
 
+  <changeSet author="VanillaBP" id="vanillabp-phase-two-outbox-last-failure-2.0.0" labels="2.0.0">
+    <comment>
+      Why the last attempt of an entry did not get through: the class and the message of what the
+      dispatch threw and of the causes which add something, in one line. The stack trace is not
+      kept here, it stays in the log. Every write which ends an attempt sets the column: the
+      reason where the attempt failed or was answered with "not yet", NULL where it went through.
+      So a blocked entry names its reason without anybody reading the log, and an entry which is
+      still being repeated says why it hangs. Opening a blocked entry again leaves the column as it
+      is, until the next attempt writes it.
+
+      The runtime cuts the text to 1000 bytes of UTF-8, not to 1000 characters, so it fits on
+      every database: Oracle and DB2 count a VARCHAR in bytes by default, and a message with an
+      umlaut in it must not fail the very write which blocks the entry. MongoDB keeps the same
+      text, cut the same way, so both stores show the same reason. Nullable, because an entry which
+      never failed has no reason, and neither has an entry written before the column existed. No
+      index: the column is read from the rows a query by STATUS or by ID has found already. A
+      changeset of its own rather than a column added to the one which created the table, because
+      that one was applied already.
+    </comment>
+    <addColumn tableName="${vanillabp.outbox.table}">
+      <column name="LAST_FAILURE" type="VARCHAR(1000)" />
+    </addColumn>
+  </changeSet>
+
 </databaseChangeLog>

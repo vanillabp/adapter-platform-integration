@@ -216,7 +216,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
     final var entry = new PhaseTwoOutboxEntry(
         entryId, call.workflowModuleId(), call.bpmnProcessId(), call.operation(), call
             .workflowAggregateId(), call.adapterId(), call
-                .args(), idempotencyKey, dedupKey, PhaseTwoOutboxEntry.STATUS_OPEN, now, 0, now, null, null, null);
+                .args(), idempotencyKey, dedupKey, PhaseTwoOutboxEntry.STATUS_OPEN, now, 0, now, null, null, null, null);
 
     try {
       mongoTemplate.insert(entry, collection);
