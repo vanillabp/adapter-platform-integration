@@ -4355,3 +4355,46 @@ own transaction. That engine keeps the aggregate id in the business key, and the
 the method's result. So a report from inside the method finds nothing there either, and the start
 writes the values when it is done, as on Camunda 8. The Process-Engine-API reports no start the
 application did not ask for, so the method never runs there.
+
+### 118. A blocked outbox entry keeps the reason of its last failed attempt
+
+An entry the outbox gave up on said why only in the ERROR of its dispatcher. Logs rotate, and a
+person who finds the entry days later, in a database client or in a report of an extension, saw
+what was blocked but not why.
+
+So every store VanillaBP owns keeps the reason next to the entry: the column `LAST_FAILURE` of the
+JDBC table and the field `lastFailure` of the MongoDB collections on Spring Boot and Quarkus.
+
+**What goes in.** The class and the message of what the dispatch threw, then the class and the
+message of each cause, joined by `; caused by `, in one line. A cause is left out where the text
+before it already contains it, which is what `new RuntimeException(cause)` produces. Line breaks
+become blanks. The stack trace is not stored: the ERROR or WARN line of the same attempt carries it,
+and the row only has to tell a person where to look. An entry blocked because it waited too long for
+its BPMS starts with how long it waited and names `vanillabp.outbox.wait-for-visibility-at-most`,
+then the last answer of the adapter, because that answer alone reads like an entry which is still
+waiting.
+
+**How long.** At most 1000 bytes of UTF-8, and the column is `VARCHAR(1000)`. Bytes and not
+characters, because Oracle and DB2 count a `VARCHAR` in bytes by default. A text cut by characters
+would fail there on the first message with an umlaut, and the write which fails would be the one
+which blocks the entry. A cut text ends with `...` and is never cut inside a character. MongoDB
+keeps the same text, cut the same way, so both stores show a person the same reason. 1000 is enough
+for a wrapped failure with two or three causes and stays far below the row-size limit of MySQL.
+
+**When it is written.** By every write which ends an attempt, in the same statement: a failed
+attempt writes its reason with its new due time, an answer "not yet" (`PhaseTwoRetryLater`) writes
+the answer, a block writes the reason which blocked. An attempt which got through empties the field,
+because the field answers "why does this entry hang", and a dispatched entry does not hang. An
+operator who opens a blocked entry again leaves the field alone, so the reason stays readable until
+the next attempt overwrites or empties it.
+
+**Where it is built.** Once, in `LastFailure` of the core, for all three dispatchers. Two stores
+building the text each would drift apart, and the point is that the stores read the same.
+
+Not taken: a column for the class of its own (no question reads it apart from the message), a
+`CLOB` of full length (a `CLOB` is spelled differently on every database and not needed for one
+line), and keeping the reason on a dispatched entry (it would answer a question the entry no longer
+raises, and the retention deletes the entry anyway).
+
+The gruelbox store of `io.vanillabp:gruelbox-phase-two-outbox` keeps no reason. Its table belongs
+to gruelbox, which has no column for one.
