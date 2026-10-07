@@ -22,7 +22,7 @@ import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxPropertie
  * The text is cut to {@link #MAX_BYTES} bytes of UTF-8. Bytes and not characters, because
  * Oracle and DB2 count a <code>VARCHAR</code> in bytes by default, and a message with an
  * umlaut in it would otherwise be refused by exactly the write which blocks the entry. See
- * {@code DECISIONS.pending/939.md}.
+ * decision 118 in the repository's DECISIONS.md.
  */
 public final class LastFailure {
 

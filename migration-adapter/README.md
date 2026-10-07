@@ -2651,8 +2651,8 @@ write which blocks an entry must not fail over an umlaut. An operator opening an
 leaves the field alone; the next attempt overwrites or empties it. `LastFailureTest` holds the
 text. The writes are held by `ABlockedEntryKeepsItsReasonTest` for JDBC,
 `AMongoBlockedEntryKeepsItsReasonTest` for MongoDB on Spring Boot and
-`MongoBlockedEntryKeepsItsReasonTest` for MongoDB on Quarkus. The reasoning is in
-`DECISIONS.pending/939.md`.
+`MongoBlockedEntryKeepsItsReasonTest` for MongoDB on Quarkus. The reasoning is
+decision 118 in the repository's DECISIONS.md.
 
 A scheduled call is described by the immutable value type `PhaseTwoCall`
 (operation, workflow module, BPMN process, workflow-aggregate ID in serialized
