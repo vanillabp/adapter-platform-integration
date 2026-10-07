@@ -353,6 +353,26 @@ public class ImplementedExternallyTest {
   }
 
   @Test
+  @DisplayName("A listener a method serves keeps its method where the element id of its user task is marked")
+  public void aServedListenerOnAMarkedElementKeepsItsMethod() {
+
+    // 'score' names a method; as a listener on the marked user task it is served by it, and the
+    // line for the element is about the element, not about this listener
+    tasks.put("Activity_Review", marked(true));
+    final var served = BpmnTaskSpec.listener("Activity_Review", "score", null);
+
+    assertDoesNotThrow(
+        () -> registry.validateTaskWiring(ADAPTER, MODULE, PROCESS, List.of(SCORE, APPROVE, REVIEW, served)));
+
+    // a line for the listener's own task definition next to its method is the contradiction
+    tasks.put("score", marked(true));
+    assertThrows(
+        IllegalStateException.class,
+        () -> registry.validateTaskWiring(ADAPTER, MODULE, PROCESS, List.of(APPROVE, REVIEW, served)));
+
+  }
+
+  @Test
   @DisplayName("A line for a task no deployed model has is a warning once the module is deployed")
   public void aLineNoModelNeedsIsAWarning() {
 

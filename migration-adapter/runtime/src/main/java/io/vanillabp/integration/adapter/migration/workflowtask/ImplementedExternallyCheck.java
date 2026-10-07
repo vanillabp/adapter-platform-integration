@@ -105,7 +105,9 @@ final class ImplementedExternallyCheck {
 
   /**
    * Where the marking of this task comes from, for this adapter. The element id is asked
-   * before the task definition, so a line for the element id wins where both are written.
+   * before the task definition, so a line for the element id wins where both are written. A
+   * listener is the exception: its own task definition is what names it, and the line for its
+   * element counts for it like a line from above.
    *
    * @param adapterId The adapter deploying the model, or <code>null</code>
    * @param workflowModuleId The workflow module
@@ -127,11 +129,29 @@ final class ImplementedExternallyCheck {
         .filter(Objects::nonNull)
         .distinct()
         .toList();
-    final var atTheTask = properties.implementedExternallyAtTheTask(workflowModuleId, bpmnProcessId, names, adapterId);
-    if (atTheTask != null) {
-      return atTheTask
-          ? Marking.AT_THE_TASK
-          : Marking.NONE;
+    if (task.listener()) {
+      // a listener is named at the task level by its own task definition, and that line is
+      // about this listener. A line for the element id is about the element and covers every
+      // listener on it, so for a listener it is a line from above: it covers the listener only
+      // where no method serves it, and a served listener on a marked user task is no conflict
+      final var ofTheListener = task.taskDefinition() == null
+          ? null
+          : properties
+              .implementedExternallyAtTheTask(workflowModuleId, bpmnProcessId, List.of(task.taskDefinition()),
+                  adapterId);
+      if (ofTheListener != null) {
+        return ofTheListener
+            ? Marking.AT_THE_TASK
+            : Marking.NONE;
+      }
+    } else {
+      final var atTheTask = properties.implementedExternallyAtTheTask(workflowModuleId, bpmnProcessId, names,
+          adapterId);
+      if (atTheTask != null) {
+        return atTheTask
+            ? Marking.AT_THE_TASK
+            : Marking.NONE;
+      }
     }
     return Boolean.TRUE.equals(properties.implementedExternally(workflowModuleId, bpmnProcessId, names, adapterId))
         ? Marking.INHERITED
