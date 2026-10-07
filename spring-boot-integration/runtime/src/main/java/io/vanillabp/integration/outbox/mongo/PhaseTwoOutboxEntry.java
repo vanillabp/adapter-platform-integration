@@ -20,7 +20,8 @@ import org.springframework.data.annotation.Id;
  * storage-level deduplication of the outbox contract. The {@link #status} lifecycle is
  * {@link #STATUS_OPEN} → {@link #STATUS_DONE} (successful dispatch; deleted
  * asynchronously after the configured retention) or {@link #STATUS_BLOCKED} (too many
- * failed attempts; manual cleanup required).
+ * failed attempts; manual cleanup required). {@link #lastFailure} says why the last attempt
+ * did not get through, so a blocked entry names its reason without the log.
  */
 public class PhaseTwoOutboxEntry {
 
@@ -149,6 +150,15 @@ public class PhaseTwoOutboxEntry {
   private Instant leasedUntil;
 
   /**
+   * Why the last attempt of this entry did not get through, <code>null</code> where it went
+   * through or where no attempt ended yet. Written together with whatever ended the attempt
+   * - the next due time or the block - and built by
+   * {@link io.vanillabp.integration.adapter.migration.outbox.LastFailure}, so it reads the
+   * same as the column of the JDBC table.
+   */
+  private String lastFailure;
+
+  /**
    * What Spring Data starts from when it reads an entry of the collection: it builds the
    * empty entry and fills the fields afterwards. The outbox writing an entry uses the
    * constructor taking every field.
@@ -175,6 +185,7 @@ public class PhaseTwoOutboxEntry {
    * @param doneAt The moment the entry was dispatched, or <code>null</code>
    * @param leasedBy The node holding the entry, or <code>null</code>
    * @param leasedUntil The moment the lease runs out, or <code>null</code>
+   * @param lastFailure Why the last attempt did not get through, or <code>null</code>
    */
   public PhaseTwoOutboxEntry(
       final String id,
@@ -192,7 +203,8 @@ public class PhaseTwoOutboxEntry {
       final Instant nextAttemptAt,
       final Instant doneAt,
       final String leasedBy,
-      final Instant leasedUntil) {
+      final Instant leasedUntil,
+      final String lastFailure) {
 
     this.id = id;
     this.workflowModuleId = workflowModuleId;
@@ -210,6 +222,30 @@ public class PhaseTwoOutboxEntry {
     this.doneAt = doneAt;
     this.leasedBy = leasedBy;
     this.leasedUntil = leasedUntil;
+    this.lastFailure = lastFailure;
+
+  }
+
+  /**
+   * Why the last attempt of this entry did not get through, see {@link #lastFailure}
+   *
+   * @return The reason, or <code>null</code> where the last attempt went through or none ended yet
+   */
+  public String getLastFailure() {
+
+    return lastFailure;
+
+  }
+
+  /**
+   * Why the last attempt of this entry did not get through, see {@link #lastFailure}
+   *
+   * @param lastFailure The reason, or <code>null</code>
+   */
+  public void setLastFailure(
+      final String lastFailure) {
+
+    this.lastFailure = lastFailure;
 
   }
 

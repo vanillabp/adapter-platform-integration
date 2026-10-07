@@ -2641,6 +2641,19 @@ reports a blocked entry ends with that address. It is one constant,
 log an ERROR of its own beside it. Both lines stay: the extension's says what to check, the
 dispatcher's names the row and carries the stack trace.
 
+**A blocked entry keeps its reason.** Every write which ends an attempt also writes
+`LAST_FAILURE` on the table and `lastFailure` on the MongoDB collections: the reason where the
+attempt failed or was answered with "not yet", nothing where it went through. The text is built
+in one place, `LastFailure`, for all three dispatchers: class and message of the failure and of
+each cause which adds something, in one line, without the stack trace, cut to 1000 bytes of
+UTF-8. Bytes and not characters, because Oracle and DB2 count a `VARCHAR` in bytes, and the
+write which blocks an entry must not fail over an umlaut. An operator opening an entry again
+leaves the field alone; the next attempt overwrites or empties it. `LastFailureTest` holds the
+text. The writes are held by `ABlockedEntryKeepsItsReasonTest` for JDBC,
+`AMongoBlockedEntryKeepsItsReasonTest` for MongoDB on Spring Boot and
+`MongoBlockedEntryKeepsItsReasonTest` for MongoDB on Quarkus. The reasoning is in
+`DECISIONS.pending/939.md`.
+
 A scheduled call is described by the immutable value type `PhaseTwoCall`
 (operation, workflow module, BPMN process, workflow-aggregate ID in serialized
 String form, elected adapter ID, operation-specific args). The dispatch chain is as

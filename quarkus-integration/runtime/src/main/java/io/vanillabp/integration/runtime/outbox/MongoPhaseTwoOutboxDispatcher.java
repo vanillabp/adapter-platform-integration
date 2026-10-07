@@ -31,6 +31,7 @@ import io.vanillabp.integration.adapter.migration.outbox.AStoppingNode;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLanes;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLease;
 import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
+import io.vanillabp.integration.adapter.migration.outbox.LastFailure;
 import io.vanillabp.integration.adapter.migration.outbox.OutboxHousekeeping;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
@@ -84,6 +85,12 @@ import lombok.extern.slf4j.Slf4j;
  * <code>vanillabp.outbox.block-after-attempts</code> failed attempts it is marked
  * {@link MongoPhaseTwoOutbox#STATUS_BLOCKED} and waits for a person, see
  * {@link PhaseTwoOutboxProperties#BLOCKED_ENTRIES_GUIDE}.
+ * <p>
+ * <strong>An entry says why its last attempt did not get through.</strong> Every write which
+ * ends an attempt sets <code>lastFailure</code>: the reason where the attempt failed or was
+ * answered with "not yet", nothing where it went through. The text is built by
+ * {@link io.vanillabp.integration.adapter.migration.outbox.LastFailure}, so it reads the same
+ * as the column of the JDBC table.
  * <p>
  * <strong>Waiting for a read model is not an attempt.</strong> A dispatch which the adapter
  * answers with {@link io.vanillabp.integration.spi.PhaseTwoRetryLater} is written back with
@@ -637,7 +644,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         // the attempt is counted where it ended, and the lease given back
         Updates.inc("attempts", 1),
         Updates.unset("leasedBy"),
-        Updates.unset("leasedUntil"));
+        Updates.unset("leasedUntil"),
+        // the attempt which ended last went through, so there is no failure to name
+        Updates.unset("lastFailure"));
     try {
       if (!writeAsTheHolder(collection, entry, markedDone)) {
         // the entry belongs to another node, and so do its bytes: that node may still be
@@ -754,7 +763,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     // the adapter said that repeating cannot help - blocked right away
     // instead of after the configured attempts
     if (PhaseTwoPermanentFailure.isPermanent(e)) {
-      if (!writeAsTheHolder(collection, entry, blockEntry(entryId))) {
+      if (!writeAsTheHolder(collection, entry, blockEntry(entryId, LastFailure.of(e)))) {
         return;
       }
       countBlockedEntry(entry.getString("operation"), true);
@@ -777,7 +786,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       return;
     }
     if (entry.getInteger("attempts") + 1 >= properties.getBlockAfterAttempts()) {
-      if (!writeAsTheHolder(collection, entry, blockEntry(entryId))) {
+      if (!writeAsTheHolder(collection, entry, blockEntry(entryId, LastFailure.of(e)))) {
         return;
       }
       countBlockedEntry(entry.getString("operation"), false);
@@ -799,7 +808,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     // attemptDelay(0) is the distance after the first failure: close, because most
     // failures are momentary
     final var retryIn = properties.attemptDelay(entry.getInteger("attempts"));
-    if (!writeAsTheHolder(collection, entry, dueAgainAt(Instant.now().plus(retryIn)))) {
+    if (!writeAsTheHolder(collection, entry, dueAgainAt(Instant.now().plus(retryIn), LastFailure.of(e)))) {
       return;
     }
     log.warn(
@@ -841,7 +850,8 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         : entry.getDate("createdAt").toInstant();
     final var now = Instant.now();
     if (properties.hasWaitedForVisibilityLongEnough(createdAt, now)) {
-      if (!writeAsTheHolder(collection, entry, blockEntry(entryId))) {
+      final var reason = LastFailure.ofAWaitWhichRanOut(Duration.between(createdAt, now), e);
+      if (!writeAsTheHolder(collection, entry, blockEntry(entryId, reason))) {
         return;
       }
       countBlockedEntry(entry.getString("operation"), false);
@@ -861,7 +871,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           e.getMessage());
       return;
     }
-    if (!writeAsTheHolder(collection, entry, dueAgainWithoutCountingAt(now.plus(retryAfter)))) {
+    if (!writeAsTheHolder(collection, entry, dueAgainWithoutCountingAt(now.plus(retryAfter), LastFailure.of(e)))) {
       return;
     }
     log.info(
@@ -1030,41 +1040,49 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   /**
    * Says when an entry whose attempt did not get through is to be read again, counts that
    * attempt and gives the lease back. All three in one write, because an entry which is due
-   * again while still leased would be waited out to the end of the lease.
+   * again while still leased would be waited out to the end of the lease. The reason goes
+   * into the same write, so an entry which is still being repeated says why it hangs.
    *
    * @param nextAttempt When it is to be read again
+   * @param reason Why the attempt did not get through, as {@link LastFailure} words it
    * @return The update to apply
    */
   private static Bson dueAgainAt(
-      final Instant nextAttempt) {
+      final Instant nextAttempt,
+      final String reason) {
 
     return Updates
         .combine(
             Updates.set("nextAttemptAt", Date.from(nextAttempt)),
             Updates.inc("attempts", 1),
             Updates.unset("leasedBy"),
-            Updates.unset("leasedUntil"));
+            Updates.unset("leasedUntil"),
+            Updates.set("lastFailure", reason));
 
   }
 
   /**
    * Says when the entry is to be read again after its BPMS did not report the workflow yet,
-   * and gives the lease back. It is {@link #dueAgainAt(Instant)} without the count: waiting
+   * and gives the lease back. It is {@link #dueAgainAt(Instant, String)} without the count: waiting
    * for a read model is not a failed attempt, and counting it blocked entries after a few
    * minutes of a stopped exporter. The time the entry waited is read from
-   * <code>createdAt</code> instead.
+   * <code>createdAt</code> instead. The answer is written as the last failure, because it is
+   * why the entry waits.
    *
    * @param nextAttempt When the entry is to be read again
+   * @param reason The answer of the adapter, as {@link LastFailure} words it
    * @return The update to apply
    */
   private static Bson dueAgainWithoutCountingAt(
-      final Instant nextAttempt) {
+      final Instant nextAttempt,
+      final String reason) {
 
     return Updates
         .combine(
             Updates.set("nextAttemptAt", Date.from(nextAttempt)),
             Updates.unset("leasedBy"),
-            Updates.unset("leasedUntil"));
+            Updates.unset("leasedUntil"),
+            Updates.set("lastFailure", reason));
 
   }
 
@@ -1075,18 +1093,22 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * which kept it would silence the very repetition the application needs - it would
    * ask, the outbox would answer no, and that answer looks exactly like a correct
    * deduplication. The row stays for whoever repairs it, and the new attempt of the
-   * operation is a document of its own.
+   * operation is a document of its own. The reason goes into the same write, so whoever
+   * finds the document reads why without the log.
    *
    * @param entryId The id of the entry to block
+   * @param reason Why it is blocked, as {@link LastFailure} words it
    * @return The update to apply
    */
   private static Bson blockEntry(
-      final String entryId) {
+      final String entryId,
+      final String reason) {
 
     return Updates
         .combine(
             Updates.set("status", MongoPhaseTwoOutbox.STATUS_BLOCKED),
             Updates.set("dedupKey", entryId),
+            Updates.set("lastFailure", reason),
             // the attempt which led here is counted, and the lease given back
             Updates.inc("attempts", 1),
             Updates.unset("leasedBy"),

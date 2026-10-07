@@ -57,6 +57,12 @@ import lombok.extern.slf4j.Slf4j;
  * marked {@link #STATUS_BLOCKED} and waits for a person, see
  * {@link PhaseTwoOutboxProperties#BLOCKED_ENTRIES_GUIDE}.
  * <p>
+ * <strong>An entry says why its last attempt did not get through.</strong> Every write which
+ * ends an attempt sets <code>LAST_FAILURE</code>: the reason where the attempt failed or was
+ * answered with "not yet", nothing where it went through (see {@link LastFailure}). A blocked
+ * entry therefore names its reason in the table, and so does an entry which is still being
+ * repeated.
+ * <p>
  * <strong>Waiting for a read model is not an attempt.</strong> A dispatch which the adapter
  * answers with {@link PhaseTwoRetryLater} is written back with the window the adapter named,
  * and <code>ATTEMPTS</code> stays as it was. What ends that wait is time: once
@@ -228,11 +234,15 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * <p>
    * <code>LEASED_BY</code> is in the condition for the reason {@link #MARK_ENTRY_BLOCKED}
    * and {@link #RESCHEDULE_ENTRY} carry it: a node which lost the entry writes nothing.
+   * <p>
+   * <code>LAST_FAILURE</code> is emptied, because the attempt which ended last went
+   * through. An entry which failed before and was dispatched in the end says nothing
+   * about a failure any more.
    */
   private static final String MARK_ENTRY_DONE = """
       UPDATE %s \
       SET STATUS = '%s', DONE_AT = ?, DEDUP_KEY = ID, ATTEMPTS = ATTEMPTS + 1, \
-      LEASED_BY = NULL, LEASED_UNTIL = NULL \
+      LEASED_BY = NULL, LEASED_UNTIL = NULL, LAST_FAILURE = NULL \
       WHERE ID = ? AND LEASED_BY = ?""";
 
   /**
@@ -244,12 +254,14 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * new attempt of the operation is a row of its own.
    * <p>
    * The attempt which led here is counted, and the lease is given back so the row is not
-   * held by a node which has nothing left to do with it.
+   * held by a node which has nothing left to do with it. <code>LAST_FAILURE</code> gets the
+   * reason in the same write, so whoever finds the row reads why without the log (see
+   * {@link LastFailure}).
    */
   private static final String MARK_ENTRY_BLOCKED = """
       UPDATE %s \
       SET STATUS = '%s', DEDUP_KEY = ID, ATTEMPTS = ATTEMPTS + 1, \
-      LEASED_BY = NULL, LEASED_UNTIL = NULL \
+      LEASED_BY = NULL, LEASED_UNTIL = NULL, LAST_FAILURE = ? \
       WHERE ID = ? AND LEASED_BY = ?""";
 
   /**
@@ -262,10 +274,14 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * what the entry says is the business of the node holding it now: an attempt which failed
    * here must not schedule an entry the other node has just finished, and it must not block
    * one either.
+   * <p>
+   * <code>LAST_FAILURE</code> gets the reason of this attempt, so an entry which is still
+   * being repeated says why it hangs.
    */
   private static final String RESCHEDULE_ENTRY = """
       UPDATE %s \
-      SET NEXT_ATTEMPT_AT = ?, ATTEMPTS = ATTEMPTS + 1, LEASED_BY = NULL, LEASED_UNTIL = NULL \
+      SET NEXT_ATTEMPT_AT = ?, ATTEMPTS = ATTEMPTS + 1, LEASED_BY = NULL, LEASED_UNTIL = NULL, \
+      LAST_FAILURE = ? \
       WHERE ID = ? AND LEASED_BY = ?""";
 
   /**
@@ -273,11 +289,13 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * and gives the lease back. It is {@link #RESCHEDULE_ENTRY} without the count: waiting for
    * a read model is not a failed attempt, and counting it blocked entries after a few
    * minutes of a stopped exporter. The time the entry waited is read from
-   * <code>CREATED_AT</code> instead, so this write needs nothing else.
+   * <code>CREATED_AT</code> instead. It does write the answer into
+   * <code>LAST_FAILURE</code>, because "the BPMS does not report the workflow yet" is why
+   * such an entry waits.
    */
   private static final String RESCHEDULE_ENTRY_WITHOUT_COUNTING = """
       UPDATE %s \
-      SET NEXT_ATTEMPT_AT = ?, LEASED_BY = NULL, LEASED_UNTIL = NULL \
+      SET NEXT_ATTEMPT_AT = ?, LEASED_BY = NULL, LEASED_UNTIL = NULL, LAST_FAILURE = ? \
       WHERE ID = ? AND LEASED_BY = ?""";
 
   /**
@@ -335,6 +353,12 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   public static final String PAYLOAD_REFERENCE_COLUMN = "PAYLOAD_REFERENCE";
 
   /**
+   * The column an entry keeps the reason of its last failed attempt in, which is how a blocked
+   * entry says why it is blocked without the log (see {@link LastFailure}).
+   */
+  public static final String LAST_FAILURE_COLUMN = "LAST_FAILURE";
+
+  /**
    * The columns a later version of VanillaBP added to this table. A table created by an
    * earlier version has neither, and every poll would fail on a column which is not there -
    * so this is said at startup, with the statement which repairs it, instead of at the first
@@ -347,7 +371,11 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           new AddedColumn(
               "LEASED_UNTIL", "TIMESTAMP (the type your database uses for the existing column NEXT_ATTEMPT_AT), nullable", "an entry cannot be claimed, so nothing is dispatched at all"),
           new AddedColumn(
-              PAYLOAD_REFERENCE_COLUMN, "VARCHAR(36) (nullable: an entry which carries no payload names none)", "the housekeeping cannot tell which payloads are still needed, so it removes none of them and the payload table grows"));
+              PAYLOAD_REFERENCE_COLUMN, "VARCHAR(36) (nullable: an entry which carries no payload names none)", "the housekeeping cannot tell which payloads are still needed, so it removes none of them and the payload table grows"),
+          new AddedColumn(
+              LAST_FAILURE_COLUMN, "VARCHAR(%d) (nullable: an entry whose last attempt went through has no failure)"
+                  .formatted(
+                      LastFailure.MAX_BYTES), "no failed attempt can be written down, so a failing entry is neither repeated nor blocked"));
 
   /**
    * A column this version of VanillaBP reads which an older table does not have.
@@ -954,13 +982,15 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         NEXT_ATTEMPT_AT %s NOT NULL, \
         DONE_AT %s, \
         LEASED_BY VARCHAR(255), \
-        LEASED_UNTIL %s)"""
+        LEASED_UNTIL %s, \
+        LAST_FAILURE VARCHAR(%d))"""
         .formatted(
             tableName,
             timestampType,
             timestampType,
             timestampType,
-            timestampType);
+            timestampType,
+            LastFailure.MAX_BYTES);
 
   }
 
@@ -1475,7 +1505,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     // the adapter said that repeating cannot help - blocked right away
     // instead of after the configured attempts
     if (PhaseTwoPermanentFailure.isPermanent(e)) {
-      if (!markBlocked(entry)) {
+      if (!markBlocked(entry, LastFailure.of(e))) {
         return;
       }
       countBlockedEntry(entry.operation(), true);
@@ -1498,7 +1528,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       return;
     }
     if (entry.attempts() + 1 >= properties.getBlockAfterAttempts()) {
-      if (!markBlocked(entry)) {
+      if (!markBlocked(entry, LastFailure.of(e))) {
         return;
       }
       countBlockedEntry(entry.operation(), false);
@@ -1520,7 +1550,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     // attemptDelay(0) is the distance after the first failure: close, because most
     // failures are momentary
     final var retryIn = properties.attemptDelay(entry.attempts());
-    if (!rescheduleAt(entry, Instant.now().plus(retryIn))) {
+    if (!rescheduleAt(entry, Instant.now().plus(retryIn), rescheduleEntry, LastFailure.of(e))) {
       return;
     }
     log.warn(
@@ -1556,7 +1586,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
     final var now = Instant.now();
     if (properties.hasWaitedForVisibilityLongEnough(entry.createdAt(), now)) {
-      if (!markBlocked(entry)) {
+      if (!markBlocked(entry, LastFailure.ofAWaitWhichRanOut(Duration.between(entry.createdAt(), now), e))) {
         return;
       }
       countBlockedEntry(entry.operation(), false);
@@ -1576,7 +1606,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           e.getMessage());
       return;
     }
-    if (!rescheduleAt(entry, now.plus(retryAfter), rescheduleEntryWithoutCounting)) {
+    if (!rescheduleAt(entry, now.plus(retryAfter), rescheduleEntryWithoutCounting, LastFailure.of(e))) {
       return;
     }
     log.info(
@@ -1596,7 +1626,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   /**
    * Ticks the entry off and tells the poller when the row may be deleted. The poller is
-   * told for the reason {@link #rescheduleAt(Entry, Instant)} tells it: the dispatch does
+   * told for the reason {@link #rescheduleAt(Entry, Instant, String, String)} tells it: the dispatch does
    * not run on it, so what this write leaves behind is news to it.
    *
    * @param entry The entry which was dispatched
@@ -1624,61 +1654,51 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * Takes the entry out of what any poll reads. Nothing in VanillaBP moves it back.
    *
    * @param entry The entry nobody is to try again
+   * @param reason Why, as {@link LastFailure} words it
    * @return Whether the entry says it is blocked now, which it does where this node still
    *         held it and the database wrote it down
    */
   private boolean markBlocked(
-      final Entry entry) {
+      final Entry entry,
+      final String reason) {
 
     final var outcome = update(markEntryBlocked, statement -> {
-      statement.setString(1, entry.id());
-      statement.setString(2, lease.owner());
+      statement.setString(1, reason);
+      statement.setString(2, entry.id());
+      statement.setString(3, lease.owner());
     });
     return theEntryNowSays(entry, outcome, "that it is blocked");
 
   }
 
   /**
-   * Writes when the next attempt of an entry is due, and tells the poller about it.
+   * Writes when the next attempt of an entry is due with the given statement, which either
+   * counts the attempt or does not, and tells the poller about it.
    * <p>
    * The poller has to be told because the dispatch does not run on it: it decided how long
    * to rest as this attempt began, from the lease the claim wrote. A due time closer than
    * that lease - the one an adapter names for a workflow its BPMS has not made searchable
    * yet - would otherwise be waited out to the end of the lease.
    *
-   * @param entry The entry whose dispatch failed
-   * @param nextAttempt When it is to be read again
-   * @return Whether the entry says its new due time, which it does where this node still
-   *         held it and the database wrote it down
-   */
-  private boolean rescheduleAt(
-      final Entry entry,
-      final Instant nextAttempt) {
-
-    return rescheduleAt(entry, nextAttempt, rescheduleEntry);
-
-  }
-
-  /**
-   * Writes when the next attempt of an entry is due with the given statement, which either
-   * counts the attempt or does not, and tells the poller about it.
-   *
    * @param entry The entry whose dispatch did not get through
    * @param nextAttempt When it is to be read again
    * @param reschedule The update to run, {@link #RESCHEDULE_ENTRY} or
    *          {@link #RESCHEDULE_ENTRY_WITHOUT_COUNTING}
+   * @param reason Why the attempt did not get through, as {@link LastFailure} words it
    * @return Whether the entry says its new due time, which it does where this node still
    *         held it and the database wrote it down
    */
   private boolean rescheduleAt(
       final Entry entry,
       final Instant nextAttempt,
-      final String reschedule) {
+      final String reschedule,
+      final String reason) {
 
     final var outcome = update(reschedule, statement -> {
       statement.setTimestamp(1, Timestamp.from(nextAttempt));
-      statement.setString(2, entry.id());
-      statement.setString(3, lease.owner());
+      statement.setString(2, reason);
+      statement.setString(3, entry.id());
+      statement.setString(4, lease.owner());
     });
     if (!theEntryNowSays(entry, outcome, "when it is due again")) {
       return false;
