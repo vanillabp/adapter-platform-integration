@@ -384,6 +384,7 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
         .first()
         .ifPresent(
             source -> collaborators.workflowTaskWiring().validateTaskWiring(
+                adapterId,
                 workflowModuleId,
                 bpmnProcessId,
                 source.tasksOf(adapterId, workflowModuleId, bpmnProcessId)));

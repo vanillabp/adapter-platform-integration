@@ -16,9 +16,9 @@ import java.util.Collection;
  * Per BPMN process, while <code>wireBpmn</code> runs - the adapter is the only one which
  * can read its own BPMN dialect, so everything the core needs about a model arrives here:
  * <ul>
- * <li>{@link #validateTaskWiring(String, String, Collection)} - every BPMN task has a
- * <code>&#64;WorkflowTask</code> method. Throwing from <code>wireBpmn</code> honors the
- * <code>deployment-failure</code> policy;</li>
+ * <li>{@link #validateTaskWiring(String, String, String, Collection)} - every BPMN task has
+ * a <code>&#64;WorkflowTask</code> method or is marked as served elsewhere. Throwing from
+ * <code>wireBpmn</code> honors the <code>deployment-failure</code> policy;</li>
  * <li>{@link #taskParameterNames(String, String, String)} - if your BPMS ships a variable
  * payload with a delivery, you have to know the names BEFORE you subscribe;</li>
  * <li>{@link #multiInstanceElementNames(String, String, String)} - which iterations a
@@ -67,9 +67,14 @@ public interface WorkflowTaskWiring {
 
   /**
    * Validates that every given BPMN task is served by a
-   * <code>&#64;WorkflowTask</code> method of the process' workflow service(s). All
-   * unmatched tasks are collected and reported in ONE exception with guiding
-   * messages. Additionally every matched method is marked as wired - the input for
+   * <code>&#64;WorkflowTask</code> method of the process' workflow service(s), or is marked
+   * as served by something else with <code>implemented-externally=true</code> (see
+   * {@link ImplementedExternally}). A user task is no exception: version 1 asked for a
+   * method for it as well. A line above the task, at the workflow or higher, covers only the
+   * tasks without a method; a line at the task itself next to a method is a contradiction. All
+   * tasks which are neither served nor marked, and all which are served and marked at the task,
+   * are collected and reported in ONE exception with guiding messages. Additionally every
+   * matched method is marked as wired - the input for
    * {@link #validateNoUnwiredWorkflowTaskMethods(String)}.
    * <p>
    * A process NO workflow service claims is not validated at all and does not end the
@@ -79,17 +84,74 @@ public interface WorkflowTaskWiring {
    * Such a process is reported by the deployment instead, see
    * {@link #bpmnProcessesWithoutWorkflowService(String)}. Call this method for every
    * executable process of a file anyway - it is what makes the report complete.
+   * <p>
+   * The adapter id is what lets a task be marked for one adapter only, the two adapters of
+   * a migration being the reason.
+   *
+   * @param adapterId The id of the adapter deploying the model
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param tasks The tasks of the executable BPMN process to be wired
+   * @throws IllegalStateException If a BPMN task of a CLAIMED process has no matching
+   *           method and is not marked as served elsewhere, or has one and is marked at the task
+   *           itself
+   */
+  default void validateTaskWiring(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<BpmnTaskSpec> tasks) {
+
+    validateTaskWiring(workflowModuleId, bpmnProcessId, tasks);
+
+  }
+
+  /**
+   * {@link #validateTaskWiring(String, String, String, Collection)} for an adapter which
+   * does not name itself. A task marked for one adapter only is not seen as marked then.
+   * The default of the four-argument method calls this one, which keeps a test double of
+   * this SPI compiling.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
    * @param tasks The tasks of the executable BPMN process to be wired
    * @throws IllegalStateException If a BPMN task of a CLAIMED process has no matching
-   *           method
+   *           method and is not marked as served elsewhere, or has one and is marked at the task
+   *           itself
    */
   void validateTaskWiring(
       String workflowModuleId,
       String bpmnProcessId,
       Collection<BpmnTaskSpec> tasks);
+
+  /**
+   * Whether the application says that something other than itself serves this task:
+   * <code>implemented-externally=true</code>, written for the element id or for the task
+   * definition, with the element id winning where both are written (see
+   * {@link ImplementedExternally}).
+   * <p>
+   * An adapter asks this where it refuses a shape on its own before the core sees the task,
+   * a Camunda 7 external task say: such a task is not refused once the application says
+   * that somebody else serves it. Whatever the answer, the task still goes to
+   * {@link #validateTaskWiring(String, String, String, Collection)}, which holds the rule.
+   * The default answers <code>false</code>, which keeps a test double of this SPI
+   * compiling.
+   *
+   * @param adapterId The id of the adapter asking
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param task The task
+   * @return Whether the task is marked as served elsewhere
+   */
+  default boolean isImplementedExternally(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final BpmnTaskSpec task) {
+
+    return false;
+
+  }
 
   /**
    * The BPMN processes of the workflow module which
@@ -531,6 +593,33 @@ public interface WorkflowTaskWiring {
   String resolveWorkflowAggregateIdName(
       String workflowModuleId,
       String bpmnProcessId);
+
+  /**
+   * Whether a <code>&#64;WorkflowService</code> class of the application claims the given
+   * BPMN process. A claimed process is one the application stands in for: its tasks are
+   * asked for methods, and a task nothing serves ends the boot. A process nobody claims was
+   * deployed only because it shares a file with a claimed one.
+   * <p>
+   * Answered by {@link #resolveWorkflowAggregateIdName(String, String)} and nothing else:
+   * only a claimed process has a workflow aggregate, so a name means claimed and the
+   * exception means not claimed. Adapters and extensions ask this instead of catching the
+   * exception themselves.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID, as the application declares it
+   * @return Whether a workflow service claims the process
+   */
+  default boolean isClaimedByAWorkflowService(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    try {
+      return resolveWorkflowAggregateIdName(workflowModuleId, bpmnProcessId) != null;
+    } catch (final IllegalStateException e) {
+      return false;
+    }
+
+  }
 
   /**
    * Hands over what the BPMS knows about the deployed versions of a BPMN process,

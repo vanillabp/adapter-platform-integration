@@ -84,6 +84,16 @@ public interface QuarkusMigrationAdapterProperties {
   Optional<List<String>> declaredTaskParams();
 
   /**
+   * Whether something other than this application serves the tasks this level covers
+   * (<code>implemented-externally</code>), so they need no <code>&#64;WorkflowTask</code>
+   * method. Resolved over eight positions, the most specific one winning (see
+   * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#implementedExternally}).
+   *
+   * @return The value written at this level
+   */
+  Optional<Boolean> implementedExternally();
+
+  /**
    * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
    * An empty Optional arrives as <code>null</code> in the core model, which then derives
    * the location from what the classpath says rather than asking for it (see decision 8
@@ -255,6 +265,16 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Boolean> deduplicateDeliveries();
 
     /**
+     * Whether something other than this application serves the tasks this level covers
+     * (<code>implemented-externally</code>), so they need no <code>&#64;WorkflowTask</code>
+     * method. Resolved over eight positions, the most specific one winning (see
+     * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#implementedExternally}).
+     *
+     * @return The value written at this level
+     */
+    Optional<Boolean> implementedExternally();
+
+    /**
      * The versions of a BPMN process this application does not serve any more, each
      * written in the grammar of the <code>version</code> attribute of
      * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
@@ -347,6 +367,16 @@ public interface QuarkusMigrationAdapterProperties {
      * @return Whether deliveries are deduplicated
      */
     Optional<Boolean> deduplicateDeliveries();
+
+    /**
+     * Whether something other than this application serves the tasks this level covers
+     * (<code>implemented-externally</code>), so they need no <code>&#64;WorkflowTask</code>
+     * method. Resolved over eight positions, the most specific one winning (see
+     * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#implementedExternally}).
+     *
+     * @return The value written at this level
+     */
+    Optional<Boolean> implementedExternally();
 
     /**
      * The versions of a BPMN process this application does not serve any more, each
@@ -777,6 +807,16 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<List<String>> declaredTaskParams();
 
     /**
+     * Whether something other than this application serves the tasks this level covers
+     * (<code>implemented-externally</code>), so they need no <code>&#64;WorkflowTask</code>
+     * method. Resolved over eight positions, the most specific one winning (see
+     * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#implementedExternally}).
+     *
+     * @return The value written at this level
+     */
+    Optional<Boolean> implementedExternally();
+
+    /**
      * Overrides <code>vanillabp.transactions</code> for this workflow module.
      *
      * @return The transaction configuration of this workflow module
@@ -986,6 +1026,16 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<List<String>> declaredTaskParams();
 
     /**
+     * Whether something other than this application serves the tasks this level covers
+     * (<code>implemented-externally</code>), so they need no <code>&#64;WorkflowTask</code>
+     * method. Resolved over eight positions, the most specific one winning (see
+     * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#implementedExternally}).
+     *
+     * @return The value written at this level
+     */
+    Optional<Boolean> implementedExternally();
+
+    /**
      * Overrides <code>vanillabp.delivery</code> for this workflow.
      *
      * @return The delivery configuration of this workflow
@@ -1033,6 +1083,16 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The declared parameter names
      */
     Optional<List<String>> declaredTaskParams();
+
+    /**
+     * Whether something other than this application serves the tasks this level covers
+     * (<code>implemented-externally</code>), so they need no <code>&#64;WorkflowTask</code>
+     * method. Resolved over eight positions, the most specific one winning (see
+     * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#implementedExternally}).
+     *
+     * @return The value written at this level
+     */
+    Optional<Boolean> implementedExternally();
 
     /**
      * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task, keyed

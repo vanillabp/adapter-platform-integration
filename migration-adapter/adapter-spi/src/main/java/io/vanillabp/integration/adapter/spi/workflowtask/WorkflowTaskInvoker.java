@@ -15,8 +15,8 @@ package io.vanillabp.integration.adapter.spi.workflowtask;
  * complete the task.
  * <p>
  * The rest answers questions a delivery raises: which variable carries the aggregate's id,
- * which values the aggregate shares, and whether an OPTIONAL notification (a user-task
- * lifecycle event) has a handler at all.
+ * which values the aggregate shares, and whether a notification (a user-task lifecycle
+ * event) has a handler at all.
  */
 public interface WorkflowTaskInvoker {
 
@@ -184,10 +184,11 @@ public interface WorkflowTaskInvoker {
 
   /**
    * Whether a <code>&#64;WorkflowTask</code> method is registered for the given
-   * task definition (or BPMN activity ID) - used for OPTIONAL notifications
-   * (user-task lifecycle events): the adapter checks before invoking so
-   * a user task without a handler is silently skipped instead of raising the
-   * guiding no-handler error meant for mandatory service tasks.
+   * task definition (or BPMN activity ID) - used for notifications (user-task lifecycle
+   * events): the adapter checks before invoking so a user task without a handler is
+   * silently skipped instead of raising the guiding no-handler error meant for service
+   * tasks. Such a user task passed the startup because the application marked it as
+   * served by something else (<code>implemented-externally</code>).
    * <p>
    * A task skipped here is finished by the ADAPTER and leaves no delivery record, which is
    * why the delivery log answers the open work of the application rather than the open work

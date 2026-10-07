@@ -89,6 +89,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.allowFullSyncWithBpms(unwrap(properties.allowFullSyncWithBpms()));
     core.acceptExpressionsInTheModel(unwrap(properties.acceptExpressionsInTheModel()));
     core.declaredTaskParams(unwrapListOrNull(properties.declaredTaskParams()));
+    core.implementedExternally(unwrap(properties.implementedExternally()));
     core.adapters(copyValues(properties.adapters(), this::toCore));
     core.resourcesLocation(unwrap(properties.resourcesLocation()));
     core.workflowModules(copyValues(properties.workflowModules(), this::toCore));
@@ -387,6 +388,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.nameClashAvoidance(unwrap(adapterConfiguration.nameClashAvoidance()));
     core.prefixTaskDefinitionsPerProcess(unwrap(adapterConfiguration.prefixTaskDefinitionsPerProcess()));
     core.deduplicateDeliveries(unwrap(adapterConfiguration.deduplicateDeliveries()));
+    core.implementedExternally(unwrap(adapterConfiguration.implementedExternally()));
     core.outfadedVersionsInUse(unwrap(adapterConfiguration.outfadedVersionsInUse()));
     final var extensions = adapterConfiguration.extensions();
     if (extensions != null) {
@@ -425,6 +427,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.nameClashAvoidance(unwrap(adapterProperties.nameClashAvoidance()));
     core.prefixTaskDefinitionsPerProcess(unwrap(adapterProperties.prefixTaskDefinitionsPerProcess()));
     core.deduplicateDeliveries(unwrap(adapterProperties.deduplicateDeliveries()));
+    core.implementedExternally(unwrap(adapterProperties.implementedExternally()));
     core.outfadedVersionsInUse(unwrap(adapterProperties.outfadedVersionsInUse()));
     final var extensions = adapterProperties.extensions();
     if (extensions != null) {
@@ -457,6 +460,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.allowFullSyncWithBpms(unwrap(workflowModuleProperties.allowFullSyncWithBpms()));
     core.acceptExpressionsInTheModel(unwrap(workflowModuleProperties.acceptExpressionsInTheModel()));
     core.declaredTaskParams(unwrapListOrNull(workflowModuleProperties.declaredTaskParams()));
+    core.implementedExternally(unwrap(workflowModuleProperties.implementedExternally()));
     core.adapters(copyValues(workflowModuleProperties.adapters(), this::toCore));
     core.workflows(copyValues(workflowModuleProperties.workflows(), this::toCore));
     core.transactions(toCore(workflowModuleProperties.transactions()));
@@ -495,6 +499,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.acceptExpressionsInTheModel(unwrap(workflowProperties.acceptExpressionsInTheModel()));
     core.declaredAggregateValues(unwrapListOrEmpty(workflowProperties.declaredAggregateValues()));
     core.declaredTaskParams(unwrapListOrNull(workflowProperties.declaredTaskParams()));
+    core.implementedExternally(unwrap(workflowProperties.implementedExternally()));
     core.adapters(copyValues(workflowProperties.adapters(), this::toCore));
     core.tasks(copyValues(workflowProperties.tasks(), this::toCore));
     final var extensions = workflowProperties.extensions();
@@ -526,6 +531,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     final var core = TaskAdapterProperties.builder();
 
     core.declaredTaskParams(unwrapListOrNull(taskProperties.declaredTaskParams()));
+    core.implementedExternally(unwrap(taskProperties.implementedExternally()));
     core.adapters(copyValues(taskProperties.adapters(), this::toCore));
     final var extensions = taskProperties.extensions();
     if (extensions != null) {

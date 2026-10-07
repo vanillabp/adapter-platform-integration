@@ -105,6 +105,15 @@ public class AdapterProperties {
   private Boolean deduplicateDeliveries;
 
   /**
+   * Whether something other than this application serves the tasks this level covers,
+   * for this adapter only (<code>implemented-externally</code>, see
+   * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, it is
+   * how the two adapters of a migration say different things about one task.
+   * <code>null</code> means "not configured at this level".
+   */
+  private Boolean implementedExternally;
+
+  /**
    * The versions of a BPMN process this application does not serve any more, each
    * written in the grammar of the <code>version</code> attribute of
    * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
@@ -183,6 +192,15 @@ public class AdapterProperties {
      * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
      */
     private Boolean deduplicateDeliveries;
+
+    /**
+     * Whether something other than this application serves the tasks this level covers,
+     * for this adapter only (<code>implemented-externally</code>, see
+     * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, it is
+     * how the two adapters of a migration say different things about one task.
+     * <code>null</code> means "not configured at this level".
+     */
+    private Boolean implementedExternally;
 
     /**
      * The versions of a BPMN process this application does not serve any more, each
@@ -291,6 +309,24 @@ public class AdapterProperties {
     }
 
     /**
+     * Whether something other than this application serves the tasks this level covers,
+     * for this adapter only (<code>implemented-externally</code>, see
+     * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, it is
+     * how the two adapters of a migration say different things about one task.
+     * <code>null</code> means "not configured at this level".
+     *
+     * @param implementedExternally The value of {@link #implementedExternally}
+     * @return This builder, so the calls chain
+     */
+    public B implementedExternally(
+        final Boolean implementedExternally) {
+
+      this.implementedExternally = implementedExternally;
+      return self();
+
+    }
+
+    /**
      * The versions of a BPMN process this application does not serve any more, each
      * written in the grammar of the <code>version</code> attribute of
      * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
@@ -377,6 +413,9 @@ public class AdapterProperties {
           + "deduplicateDeliveries="
           + deduplicateDeliveries
           + ", "
+          + "implementedExternally="
+          + implementedExternally
+          + ", "
           + "outfadedVersions="
           + outfadedVersions
           + ", "
@@ -444,6 +483,7 @@ public class AdapterProperties {
     this.nameClashAvoidance = b.nameClashAvoidance;
     this.prefixTaskDefinitionsPerProcess = b.prefixTaskDefinitionsPerProcess;
     this.deduplicateDeliveries = b.deduplicateDeliveries;
+    this.implementedExternally = b.implementedExternally;
     this.outfadedVersions = b.outfadedVersions;
     this.outfadedVersionsInUse = b.outfadedVersionsInUse;
     this.extensions = b.extensions;
@@ -521,6 +561,21 @@ public class AdapterProperties {
   public Boolean getDeduplicateDeliveries() {
 
     return deduplicateDeliveries;
+
+  }
+
+  /**
+   * Whether something other than this application serves the tasks this level covers,
+   * for this adapter only (<code>implemented-externally</code>, see
+   * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, it is
+   * how the two adapters of a migration say different things about one task.
+   * <code>null</code> means "not configured at this level".
+   *
+   * @return The value of {@link #implementedExternally}
+   */
+  public Boolean getImplementedExternally() {
+
+    return implementedExternally;
 
   }
 
@@ -626,6 +681,22 @@ public class AdapterProperties {
       final Boolean deduplicateDeliveries) {
 
     this.deduplicateDeliveries = deduplicateDeliveries;
+
+  }
+
+  /**
+   * Whether something other than this application serves the tasks this level covers,
+   * for this adapter only (<code>implemented-externally</code>, see
+   * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, it is
+   * how the two adapters of a migration say different things about one task.
+   * <code>null</code> means "not configured at this level".
+   *
+   * @param implementedExternally The value of {@link #implementedExternally}
+   */
+  public void setImplementedExternally(
+      final Boolean implementedExternally) {
+
+    this.implementedExternally = implementedExternally;
 
   }
 

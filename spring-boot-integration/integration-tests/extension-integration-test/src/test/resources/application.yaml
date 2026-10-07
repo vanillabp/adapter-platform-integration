@@ -63,6 +63,8 @@ vanillabp:
               greeting: Gruess Gott
               position: workflow
           tasks:
+            Activity_Review:
+              implemented-externally: true
             theTask:
               adapters:
                 the-bpms:

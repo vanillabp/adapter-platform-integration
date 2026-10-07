@@ -607,6 +607,22 @@ Every BPMS follows the same rule now. A normal return completes the task. A `Tas
 a BPMN error with the aggregate changes committed. Any other exception rolls the transaction back and
 leaves the retry to the BPMS.
 
+#### A task something else serves can say so
+
+Version 1 ended the start for every task of your process which had no `@WorkflowTask` method, a user
+task included. Version 2 does the same. What is new is a way out for a task somebody else serves on
+purpose, a user task worked through a task list or a job another worker answers:
+
+```properties
+vanillabp.workflow-modules.<module>.workflows.<process>.tasks.<element-id>.implemented-externally=true
+```
+
+The task may be named by its element id or by its task definition, and the element id wins where both
+are written. A task with a method and this line at the task ends the start, a line written for a whole
+workflow or module covers only the tasks without a method, and a line for a task no deployed model
+has is a warning. Nothing changes for an application which served every task in version 1.
+([Workflow tasks](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-tasks#a-task-something-else-serves))
+
 #### Decision tables are deployed with the workflow module
 
 A workflow module may put `.dmn` files next to its BPMN files, and the boot deploys them to the same

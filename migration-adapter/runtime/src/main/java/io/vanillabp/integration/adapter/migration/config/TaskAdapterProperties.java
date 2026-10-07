@@ -60,6 +60,15 @@ public class TaskAdapterProperties {
   private java.util.List<String> declaredTaskParams;
 
   /**
+   * Whether something other than this application serves this task
+   * (<code>implemented-externally</code>), so it needs no <code>&#64;WorkflowTask</code>
+   * method. The task is named by its element id or by its task definition, and the
+   * element id wins where both are written. <code>null</code> means "not configured at
+   * this level" (see {@link MigrationAdapterProperties#implementedExternally}).
+   */
+  private Boolean implementedExternally;
+
+  /**
    * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
    * the maximum age of an open task may be set at, which is where it belongs: the one
    * task waiting for a signature is the reason the whole application does not get a
@@ -97,6 +106,15 @@ public class TaskAdapterProperties {
      * the value.
      */
     private java.util.List<String> declaredTaskParams;
+
+    /**
+     * Whether something other than this application serves this task
+     * (<code>implemented-externally</code>), so it needs no <code>&#64;WorkflowTask</code>
+     * method. The task is named by its element id or by its task definition, and the
+     * element id wins where both are written. <code>null</code> means "not configured at
+     * this level" (see {@link MigrationAdapterProperties#implementedExternally}).
+     */
+    private Boolean implementedExternally;
 
     /**
      * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
@@ -159,6 +177,24 @@ public class TaskAdapterProperties {
     }
 
     /**
+     * Whether something other than this application serves this task
+     * (<code>implemented-externally</code>), so it needs no <code>&#64;WorkflowTask</code>
+     * method. The task is named by its element id or by its task definition, and the
+     * element id wins where both are written. <code>null</code> means "not configured at
+     * this level" (see {@link MigrationAdapterProperties#implementedExternally}).
+     *
+     * @param implementedExternally The value of {@link #implementedExternally}
+     * @return This builder, so the calls chain
+     */
+    public B implementedExternally(
+        final Boolean implementedExternally) {
+
+      this.implementedExternally = implementedExternally;
+      return self();
+
+    }
+
+    /**
      * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
      * the maximum age of an open task may be set at, which is where it belongs: the one
      * task waiting for a signature is the reason the whole application does not get a
@@ -208,6 +244,9 @@ public class TaskAdapterProperties {
           + ", "
           + "declaredTaskParams="
           + declaredTaskParams
+          + ", "
+          + "implementedExternally="
+          + implementedExternally
           + ", "
           + "delivery="
           + delivery
@@ -268,6 +307,7 @@ public class TaskAdapterProperties {
     this.adapters = b.adapters;
     this.extensions = b.extensions;
     this.declaredTaskParams = b.declaredTaskParams;
+    this.implementedExternally = b.implementedExternally;
     this.delivery = b.delivery;
 
   }
@@ -321,6 +361,21 @@ public class TaskAdapterProperties {
   }
 
   /**
+   * Whether something other than this application serves this task
+   * (<code>implemented-externally</code>), so it needs no <code>&#64;WorkflowTask</code>
+   * method. The task is named by its element id or by its task definition, and the
+   * element id wins where both are written. <code>null</code> means "not configured at
+   * this level" (see {@link MigrationAdapterProperties#implementedExternally}).
+   *
+   * @return The value of {@link #implementedExternally}
+   */
+  public Boolean getImplementedExternally() {
+
+    return implementedExternally;
+
+  }
+
+  /**
    * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
    * the maximum age of an open task may be set at, which is where it belongs: the one
    * task waiting for a signature is the reason the whole application does not get a
@@ -370,6 +425,22 @@ public class TaskAdapterProperties {
       final java.util.List<String> declaredTaskParams) {
 
     this.declaredTaskParams = declaredTaskParams;
+
+  }
+
+  /**
+   * Whether something other than this application serves this task
+   * (<code>implemented-externally</code>), so it needs no <code>&#64;WorkflowTask</code>
+   * method. The task is named by its element id or by its task definition, and the
+   * element id wins where both are written. <code>null</code> means "not configured at
+   * this level" (see {@link MigrationAdapterProperties#implementedExternally}).
+   *
+   * @param implementedExternally The value of {@link #implementedExternally}
+   */
+  public void setImplementedExternally(
+      final Boolean implementedExternally) {
+
+    this.implementedExternally = implementedExternally;
 
   }
 

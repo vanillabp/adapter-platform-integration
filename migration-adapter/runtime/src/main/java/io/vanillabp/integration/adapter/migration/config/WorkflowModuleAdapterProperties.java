@@ -80,6 +80,14 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   private java.util.List<String> declaredTaskParams;
 
   /**
+   * Whether something other than this application serves every task of this workflow
+   * module which does not say otherwise (<code>implemented-externally</code>, see
+   * {@link MigrationAdapterProperties#implementedExternally}). <code>null</code> means
+   * "not configured at this level".
+   */
+  private Boolean implementedExternally;
+
+  /**
    * Overrides <code>vanillabp.transactions</code> for this workflow module. A setting
    * left undefined here means the global one applies, so a single module can accept
    * unguarded writes while every other one keeps failing the startup check.
@@ -154,6 +162,14 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
      * developer declared (<code>declared-task-params</code>).
      */
     private java.util.List<String> declaredTaskParams;
+
+    /**
+     * Whether something other than this application serves every task of this workflow
+     * module which does not say otherwise (<code>implemented-externally</code>, see
+     * {@link MigrationAdapterProperties#implementedExternally}). <code>null</code> means
+     * "not configured at this level".
+     */
+    private Boolean implementedExternally;
 
     /**
      * Overrides <code>vanillabp.transactions</code> for this workflow module.
@@ -277,6 +293,23 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
     }
 
     /**
+     * Whether something other than this application serves every task of this workflow
+     * module which does not say otherwise (<code>implemented-externally</code>, see
+     * {@link MigrationAdapterProperties#implementedExternally}). <code>null</code> means
+     * "not configured at this level".
+     *
+     * @param implementedExternally The value of {@link #implementedExternally}
+     * @return This builder, so the calls chain
+     */
+    public B implementedExternally(
+        final Boolean implementedExternally) {
+
+      this.implementedExternally = implementedExternally;
+      return self();
+
+    }
+
+    /**
      * Overrides <code>vanillabp.transactions</code> for this workflow module.
      *
      * @param transactions The value of {@link #transactions}
@@ -383,6 +416,9 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
           + "declaredTaskParams="
           + declaredTaskParams
           + ", "
+          + "implementedExternally="
+          + implementedExternally
+          + ", "
           + "transactions="
           + transactions
           + ", "
@@ -456,6 +492,7 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
     this.allowFullSyncWithBpms = b.allowFullSyncWithBpms;
     this.acceptExpressionsInTheModel = b.acceptExpressionsInTheModel;
     this.declaredTaskParams = b.declaredTaskParams;
+    this.implementedExternally = b.implementedExternally;
     this.transactions = b.transactions;
     this.election = b.election;
     this.delivery = b.delivery;
@@ -543,6 +580,20 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   public java.util.List<String> getDeclaredTaskParams() {
 
     return declaredTaskParams;
+
+  }
+
+  /**
+   * Whether something other than this application serves every task of this workflow
+   * module which does not say otherwise (<code>implemented-externally</code>, see
+   * {@link MigrationAdapterProperties#implementedExternally}). <code>null</code> means
+   * "not configured at this level".
+   *
+   * @return The value of {@link #implementedExternally}
+   */
+  public Boolean getImplementedExternally() {
+
+    return implementedExternally;
 
   }
 
@@ -667,6 +718,21 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
       final java.util.List<String> declaredTaskParams) {
 
     this.declaredTaskParams = declaredTaskParams;
+
+  }
+
+  /**
+   * Whether something other than this application serves every task of this workflow
+   * module which does not say otherwise (<code>implemented-externally</code>, see
+   * {@link MigrationAdapterProperties#implementedExternally}). <code>null</code> means
+   * "not configured at this level".
+   *
+   * @param implementedExternally The value of {@link #implementedExternally}
+   */
+  public void setImplementedExternally(
+      final Boolean implementedExternally) {
+
+    this.implementedExternally = implementedExternally;
 
   }
 

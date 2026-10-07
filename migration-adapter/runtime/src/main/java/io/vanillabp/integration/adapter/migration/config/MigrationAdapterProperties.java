@@ -132,6 +132,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   private java.util.List<String> declaredTaskParams;
 
   /**
+   * Whether something other than this application serves every task which does not say
+   * otherwise (<code>implemented-externally</code>, see {@link #implementedExternally}).
+   * The least specific of the eight positions; <code>null</code> means "not configured
+   * at this level".
+   */
+  private Boolean implementedExternally;
+
+  /**
    * Configuration of the default election cache
    * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} (properties section
    * <code>vanillabp.workflow-adapter-cache</code>).
@@ -1520,6 +1528,211 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
     return "%s.workflow-modules.%s.workflows.%s.tasks.%s.declared-task-params"
         .formatted(PREFIX, workflowModuleId, bpmnProcessId, taskId);
+
+  }
+
+  /**
+   * Whether the application says that something other than itself serves a task
+   * (<code>implemented-externally</code>), over the eight positions every task setting may
+   * be written at:
+   *
+   * <pre>
+   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.tasks.&lt;task&gt;.adapters.&lt;id&gt;.implemented-externally  (most specific)
+   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.tasks.&lt;task&gt;.implemented-externally
+   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.adapters.&lt;id&gt;.implemented-externally
+   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.implemented-externally
+   * vanillabp.workflow-modules.&lt;module&gt;.adapters.&lt;id&gt;.implemented-externally
+   * vanillabp.workflow-modules.&lt;module&gt;.implemented-externally
+   * vanillabp.adapters.&lt;id&gt;.implemented-externally
+   * vanillabp.implemented-externally                                                                         (least specific)
+   * </pre>
+   *
+   * The most specific position which writes the key wins, and what one adapter is told beats
+   * what the same level says in general. A task is named at the task level by more than one
+   * name, its element id and its task definition, and the names are tried in the order given:
+   * the caller passes the element id first, so a line written for the element id wins over a
+   * line written for the task definition. Both task names are tried before the workflow is,
+   * because a line about the task is more specific than any line about the workflow.
+   * <p>
+   * Whether the value came from the task itself is
+   * {@link #implementedExternallyAtTheTask(String, String, List, String)}: a line above the
+   * task covers only the tasks without a method, which the caller decides.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param taskNames The names of the task at the task level, most important first;
+   *          <code>null</code> entries are skipped
+   * @param adapterId The adapter ID, or <code>null</code> to read no adapter position
+   * @return The value of the most specific position which writes one, or <code>null</code>
+   *         where none does
+   */
+  public Boolean implementedExternally(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final List<String> taskNames,
+      final String adapterId) {
+
+    final var module = workflowModuleId != null
+        ? workflowModules.get(workflowModuleId)
+        : null;
+    final var workflow = (module != null) && (bpmnProcessId != null)
+        ? module
+            .getWorkflows()
+            .get(bpmnProcessId)
+        : null;
+    final var atTheTask = implementedExternallyAtTheTask(workflowModuleId, bpmnProcessId, taskNames, adapterId);
+    if (atTheTask != null) {
+      return atTheTask;
+    }
+    if (workflow != null) {
+      final var value = firstWritten(
+          implementedExternallyOf(workflow.getAdapters(), adapterId),
+          workflow.getImplementedExternally());
+      if (value != null) {
+        return value;
+      }
+    }
+    if (module != null) {
+      final var value = firstWritten(
+          implementedExternallyOf(module.getAdapters(), adapterId),
+          module.getImplementedExternally());
+      if (value != null) {
+        return value;
+      }
+    }
+    return firstWritten(
+        implementedExternallyOf(adapters, adapterId),
+        implementedExternally);
+
+  }
+
+  /**
+   * What the task itself says about <code>implemented-externally</code>, at the two
+   * positions of the task level and nowhere else: for one adapter, and in general. The names
+   * are tried in the order given, the element id first.
+   * <p>
+   * A line at the task is the one which says something about THIS task, while a line above
+   * it covers whatever task below it has no method. That difference is what ends a start over
+   * a method next to the line: only a line at the task contradicts a method (see
+   * decision 119 in the repository's DECISIONS.md).
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param taskNames The names of the task, most important first; <code>null</code> entries are
+   *          skipped
+   * @param adapterId The adapter ID, or <code>null</code> to read no adapter position
+   * @return The value written at the task, or <code>null</code> where the task says nothing
+   */
+  public Boolean implementedExternallyAtTheTask(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final List<String> taskNames,
+      final String adapterId) {
+
+    final var module = workflowModuleId != null
+        ? workflowModules.get(workflowModuleId)
+        : null;
+    final var workflow = (module != null) && (bpmnProcessId != null)
+        ? module
+            .getWorkflows()
+            .get(bpmnProcessId)
+        : null;
+    if (workflow == null) {
+      return null;
+    }
+    for (final var taskName : taskNames) {
+      final var task = taskName != null
+          ? workflow
+              .getTasks()
+              .get(taskName)
+          : null;
+      if (task == null) {
+        continue;
+      }
+      final var value = firstWritten(
+          implementedExternallyOf(task.getAdapters(), adapterId),
+          task.getImplementedExternally());
+      if (value != null) {
+        return value;
+      }
+    }
+    return null;
+
+  }
+
+  /**
+   * What one adapter section of a level says about <code>implemented-externally</code>.
+   *
+   * @param adaptersOfLevel The adapter sections of the level
+   * @param adapterId The adapter ID, or <code>null</code> for none
+   * @return The value, or <code>null</code> where the section says nothing
+   */
+  private static Boolean implementedExternallyOf(
+      final Map<String, ? extends AdapterProperties> adaptersOfLevel,
+      final String adapterId) {
+
+    if ((adapterId == null) || (adaptersOfLevel == null)) {
+      return null;
+    }
+    return extractForAdapter(adaptersOfLevel, adapterId, AdapterProperties::getImplementedExternally);
+
+  }
+
+  /**
+   * The first of two values somebody wrote.
+   *
+   * @param moreSpecific The value of the more specific position
+   * @param lessSpecific The value of the less specific position
+   * @return The more specific value where it is written, else the other one
+   */
+  private static Boolean firstWritten(
+      final Boolean moreSpecific,
+      final Boolean lessSpecific) {
+
+    return moreSpecific != null
+        ? moreSpecific
+        : lessSpecific;
+
+  }
+
+  /**
+   * The task names of one workflow which a task-level line of
+   * <code>implemented-externally</code> is written for, at the task itself or for one of its
+   * adapters. What the startup holds against the names the deployed models know, because a
+   * line for a task no model has any more says nothing and should not stay.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return The task names, sorted, never <code>null</code>
+   */
+  public List<String> tasksMarkedImplementedExternally(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var module = workflowModuleId != null
+        ? workflowModules.get(workflowModuleId)
+        : null;
+    final var workflow = (module != null) && (bpmnProcessId != null)
+        ? module
+            .getWorkflows()
+            .get(bpmnProcessId)
+        : null;
+    if (workflow == null) {
+      return List.of();
+    }
+    return workflow
+        .getTasks()
+        .entrySet()
+        .stream()
+        .filter(task -> (task.getValue() != null) && ((task.getValue().getImplementedExternally() != null) || task
+            .getValue()
+            .getAdapters()
+            .values()
+            .stream()
+            .anyMatch(adapter -> (adapter != null) && (adapter.getImplementedExternally() != null))))
+        .map(Map.Entry::getKey)
+        .sorted()
+        .toList();
 
   }
 
@@ -3009,6 +3222,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     private java.util.List<String> declaredTaskParams;
 
     /**
+     * Whether something other than this application serves every task which does not say
+     * otherwise (<code>implemented-externally</code>, see {@link #implementedExternally}).
+     * The least specific of the eight positions; <code>null</code> means "not configured
+     * at this level".
+     */
+    private Boolean implementedExternally;
+
+    /**
      * Configuration of the default election cache
      * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} (properties section
      * <code>vanillabp.workflow-adapter-cache</code>). The builder starts from the same
@@ -3199,6 +3420,23 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     }
 
     /**
+     * Whether something other than this application serves every task which does not say
+     * otherwise (<code>implemented-externally</code>, see {@link #implementedExternally}).
+     * The least specific of the eight positions; <code>null</code> means "not configured
+     * at this level".
+     *
+     * @param implementedExternally The value of {@link #implementedExternally}
+     * @return This builder, so the calls chain
+     */
+    public B implementedExternally(
+        final Boolean implementedExternally) {
+
+      this.implementedExternally = implementedExternally;
+      return self();
+
+    }
+
+    /**
      * Configuration of the default election cache
      * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} (properties section
      * <code>vanillabp.workflow-adapter-cache</code>).
@@ -3380,6 +3618,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
           + "declaredTaskParams="
           + declaredTaskParams
           + ", "
+          + "implementedExternally="
+          + implementedExternally
+          + ", "
           + "workflowAdapterCache="
           + workflowAdapterCache
           + ", "
@@ -3467,6 +3708,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     this.allowFullSyncWithBpms = b.allowFullSyncWithBpms;
     this.acceptExpressionsInTheModel = b.acceptExpressionsInTheModel;
     this.declaredTaskParams = b.declaredTaskParams;
+    this.implementedExternally = b.implementedExternally;
     this.workflowAdapterCache = b.workflowAdapterCache;
     this.transactions = b.transactions;
     this.election = b.election;
@@ -3583,6 +3825,20 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   public java.util.List<String> getDeclaredTaskParams() {
 
     return declaredTaskParams;
+
+  }
+
+  /**
+   * Whether something other than this application serves every task which does not say
+   * otherwise (<code>implemented-externally</code>, see {@link #implementedExternally}).
+   * The least specific of the eight positions; <code>null</code> means "not configured
+   * at this level".
+   *
+   * @return The value of {@link #implementedExternally}
+   */
+  public Boolean getImplementedExternally() {
+
+    return implementedExternally;
 
   }
 
@@ -3778,6 +4034,21 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       final java.util.List<String> declaredTaskParams) {
 
     this.declaredTaskParams = declaredTaskParams;
+
+  }
+
+  /**
+   * Whether something other than this application serves every task which does not say
+   * otherwise (<code>implemented-externally</code>, see {@link #implementedExternally}).
+   * The least specific of the eight positions; <code>null</code> means "not configured
+   * at this level".
+   *
+   * @param implementedExternally The value of {@link #implementedExternally}
+   */
+  public void setImplementedExternally(
+      final Boolean implementedExternally) {
+
+    this.implementedExternally = implementedExternally;
 
   }
 

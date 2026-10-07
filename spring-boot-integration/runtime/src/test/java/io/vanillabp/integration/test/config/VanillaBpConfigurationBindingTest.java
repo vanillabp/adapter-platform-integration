@@ -361,6 +361,57 @@ public class VanillaBpConfigurationBindingTest {
   }
 
   @Test
+  @DisplayName("The line a message hands over for a job type with a colon binds as it is printed")
+  public void theProtectedLineOfImplementedExternallyBinds() {
+
+    // the message prints one line per platform for a name with a dot or a colon; the Spring
+    // Boot one is read here the way a properties file reads it, which is what a developer
+    // pastes it into
+    final var printed = io.vanillabp.integration.adapter.spi.workflowtask.ImplementedExternally
+        .propertyLine("test-module", "MyProcess", "io.camunda:http-json:1");
+    final var springBootLine = printed
+        .lines()
+        .dropWhile(line -> !line.equals("# Spring Boot"))
+        .skip(1)
+        .findFirst()
+        .orElseThrow();
+    final var fromTheFile = new java.util.Properties();
+    try {
+      fromTheFile.load(new java.io.StringReader(springBootLine));
+    } catch (final java.io.IOException e) {
+      throw new IllegalStateException(e);
+    }
+
+    contextRunner
+        .withPropertyValues(
+            "vanillabp.resources-location=classpath*:vanillabp-processes",
+            "vanillabp.adapters.test.type=dummy",
+            "vanillabp.workflow-modules.test-module.workflows.MyProcess.tasks.Activity_Review.adapters.test.implemented-externally=true")
+        .withInitializer(context -> context
+            .getEnvironment()
+            .getPropertySources()
+            .addFirst(new org.springframework.core.env.PropertiesPropertySource("pasted", fromTheFile)))
+        .run(context -> {
+
+          final var properties = context.getBean(MigrationAdapterProperties.class);
+          assertEquals(
+              Boolean.TRUE,
+              properties.implementedExternally("test-module", "MyProcess", List.of("io.camunda:http-json:1"), "test"),
+              () -> "the key as printed: "
+                  + springBootLine);
+          assertEquals(
+              Boolean.TRUE,
+              properties.implementedExternally("test-module", "MyProcess", List.of("Activity_Review"), "test"));
+          assertEquals(
+              null,
+              properties.implementedExternally("test-module", "MyProcess", List.of("Activity_Review"), "other"),
+              "a line for one adapter says nothing about another one");
+
+        });
+
+  }
+
+  @Test
   @DisplayName("The maximum age of an open task binds at all four levels")
   public void maxTaskAgeBindsAtEveryLevel() {
 
