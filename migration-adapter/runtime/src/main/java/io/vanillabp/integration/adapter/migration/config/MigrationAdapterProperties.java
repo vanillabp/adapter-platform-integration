@@ -1614,7 +1614,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * A line at the task is the one which says something about THIS task, while a line above
    * it covers whatever task below it has no method. That difference is what ends a start over
    * a method next to the line: only a line at the task contradicts a method (see
-   * {@code DECISIONS.pending/834.md}).
+   * decision 119 in the repository's DECISIONS.md).
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID

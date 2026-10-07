@@ -33,7 +33,7 @@ import io.vanillabp.integration.spi.startup.StartupTopic;
  * <p>
  * A list of names in a configuration file goes out of date without anybody noticing, which
  * was the reason against such a list. The warning about lines nothing needs is the answer to
- * that. Why the rule is what it is: {@code DECISIONS.pending/834.md}.
+ * that. Why the rule is what it is: decision 119 in the repository's DECISIONS.md.
  */
 final class ImplementedExternallyCheck {
 
