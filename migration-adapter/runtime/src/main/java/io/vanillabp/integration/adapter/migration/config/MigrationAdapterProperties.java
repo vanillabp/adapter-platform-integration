@@ -1668,7 +1668,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * the process belongs to somebody else: it was deployed only because it shares a file with a
    * claimed one. A line at the workflow module or at the application does not say that, because
    * it is written for many processes at once and cannot mean this one. See
-   * {@code DECISIONS.pending/937.md}.
+   * decision 120 in the repository's DECISIONS.md.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID

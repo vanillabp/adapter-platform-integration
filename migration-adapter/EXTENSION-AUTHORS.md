@@ -159,7 +159,7 @@ answers the `name` a modeller wrote on an element, kept from what the adapter ha
 wired.
 
 A process no `@WorkflowService` claims reaches your `wireBpmn` too, because the core hands you every
-process of the file. The adapter leaves such a process as it was modelled (`DECISIONS.pending/937.md`),
+process of the file. The adapter leaves such a process as it was modelled (decision 120 in the repository's DECISIONS.md),
 and an extension should do the same: report nothing about it and add nothing to it. Ask
 `WorkflowTaskWiring#isClaimedByAWorkflowService(workflowModuleId, bpmnProcessId)` to tell. Your
 extension gets `WorkflowTaskWiring` the way an adapter does, as a bean on Spring Boot and on

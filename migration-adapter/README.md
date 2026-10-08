@@ -964,7 +964,7 @@ reached the task.
    every such process of every module in one message. A marked process travels with its
    file and nothing else of VanillaBP touches it. Where a service DOES claim the process,
    nothing changed: an unmatched task ends the boot, because that is a defect the developer
-   can fix in their own code. The rule is in `DECISIONS.pending/937.md`.
+   can fix in their own code. The rule is in decision 120 in the repository's DECISIONS.md.
 
    That refusal is also where a platform may add a sentence of its own, through
    `UnclaimedBpmnProcessHints` - one question, one answer, handed to `DeploymentService`

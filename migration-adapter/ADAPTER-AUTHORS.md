@@ -546,7 +546,7 @@ deployed then. So a process nobody claims which reaches your `wireBpmn` is one t
 belongs to somebody else. Leave it as it was modelled: write nothing into its model beyond what the
 whole file needs (a prefix, say), open no worker or subscription for it, attach no listener, and run
 no check of your own which ends the start or warns because of it. A process somebody else deployed
-into the same BPMS gets nothing at all. The platform decided this in `DECISIONS.pending/937.md`,
+into the same BPMS gets nothing at all. The platform decided this in decision 120 in the repository's DECISIONS.md,
 which gets its number when it is merged.
 
 The four calls run per workflow module, in an order which matters.

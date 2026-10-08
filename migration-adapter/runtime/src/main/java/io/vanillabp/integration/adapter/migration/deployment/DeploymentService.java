@@ -655,7 +655,7 @@ public class DeploymentService {
    * <code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;process&gt;.implemented-externally=true</code>
    * for a process something else serves. A marked process is deployed with its file and left
    * alone otherwise: no adapter wires it, and no check ends the start because of it. See
-   * {@code DECISIONS.pending/937.md}.
+   * decision 120 in the repository's DECISIONS.md.
    *
    * @param processesNobodyClaims The processes nobody claims and nobody marked, with their
    *          files, per workflow module

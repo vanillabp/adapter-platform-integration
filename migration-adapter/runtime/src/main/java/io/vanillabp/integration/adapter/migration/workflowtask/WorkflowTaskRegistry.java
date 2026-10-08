@@ -2112,7 +2112,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    * {@link #resolveWorkflowAggregateIdName(String, String)}: the name of the aggregate's ID
    * property is asked of the persistence, and an application on a BPMS with a business key may
    * leave it unanswered, which says nothing about whether a workflow service claims the
-   * process. See {@code DECISIONS.pending/937.md}.
+   * process. See decision 120 in the repository's DECISIONS.md.
    */
   @Override
   public boolean isClaimedByAWorkflowService(
