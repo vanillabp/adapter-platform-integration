@@ -28,7 +28,6 @@ import io.vanillabp.integration.test.TestPhaseTwoOutboxConfiguration;
 import io.vanillabp.integration.test.TestTransactionRunnerConfiguration;
 import io.vanillabp.integration.test.WorkflowModuleConfiguration;
 import io.vanillabp.integration.test.deployment.DeploymentTest;
-import io.vanillabp.integration.test.utils.CapturedOutput;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
@@ -129,7 +128,10 @@ public class WorkflowServiceDiscoveryTest {
   @Test
   public void aWorkflowServiceOfALibraryIsFound() {
 
-    try (var context = application(ApplicationUsingTheLibrary.class).run()) {
+    // the library's workflow service claims a process of its own, and the model of the test
+    // resources is somebody else's
+    try (var context = application(ApplicationUsingTheLibrary.class)
+        .properties(io.vanillabp.integration.test.ThePlaceholderModel.BELONGS_TO_SOMEBODY_ELSE).run()) {
 
       // nothing about LibraryWorkflowService is reachable by a component scan of this
       // application, and its bean definition arrives after every configuration class
@@ -147,7 +149,8 @@ public class WorkflowServiceDiscoveryTest {
   @Test
   public void aWorkflowServiceInheritingItsAnnotationIsFound() {
 
-    try (var context = application(InheritedWorkflowService.class).run()) {
+    try (var context = application(InheritedWorkflowService.class)
+        .properties(io.vanillabp.integration.test.ThePlaceholderModel.BELONGS_TO_SOMEBODY_ELSE).run()) {
 
       // the annotation sits on the superclass, which is no bean itself
       Assertions.assertNotNull(
@@ -222,8 +225,7 @@ public class WorkflowServiceDiscoveryTest {
   }
 
   @Test
-  public void aWorkflowServiceOfAnInactiveProfileLeavesItsProcessUnclaimed(
-      final CapturedOutput output) {
+  public void aWorkflowServiceOfAnInactiveProfileLeavesItsProcessUnclaimed() {
 
     // with the profile: the handler of 'processTask' is a bean, so the model deployed
     // is completely wired
@@ -237,81 +239,72 @@ public class WorkflowServiceDiscoveryTest {
 
     }
 
-    // what the boot above already wrote - only the output of the second one answers
-    // the question
-    final var writtenBeforeThisBoot = output.getAll().length();
-
     // without the profile: the class is on the classpath but no bean of it exists. The
     // DEPLOYED model is what reports the gap, as the process which nothing serves - and
-    // the report names the class, because a boot which is already reporting a problem can
-    // afford to look for one
-    try (var context = application(ProfiledWorkflowService.class, DummyProcessWithOneTask.class)
-        .run()) {
+    // the refusal names the class, because a start which is already ending can afford to
+    // look for one
+    final var failure = Assertions.assertThrows(
+        Exception.class,
+        () -> application(ProfiledWorkflowService.class, DummyProcessWithOneTask.class)
+            .run()
+            .close());
 
-      final var captured = output.getAll().substring(writtenBeforeThisBoot);
-      Assertions.assertTrue(
-          captured.contains("process 'DummyProcess' of file 'DummyProcess.bpmn'"),
-          "unexpected output: "
-              + captured);
-      Assertions.assertTrue(
-          captured.contains("not get past its first task"),
-          "unexpected output: "
-              + captured);
-      Assertions.assertTrue(
-          captured.contains(ProfiledWorkflowService.class.getName()),
-          "the class of the inactive profile is not named: "
-              + captured);
-      // and it reads as a possibility rather than as a defect: the boot cannot tell the
-      // two apart, which is what decision 21 says in as many words
-      Assertions.assertTrue(
-          captured.contains("profile which is not active here"),
-          "the other reading is missing: "
-              + captured);
-
-    }
+    final var captured = everyMessageOf(failure);
+    Assertions.assertTrue(
+        captured.contains("process 'DummyProcess' of file 'DummyProcess.bpmn'"),
+        "unexpected output: "
+            + captured);
+    Assertions.assertTrue(
+        captured.contains("workflows.DummyProcess.implemented-externally=true"),
+        "unexpected output: "
+            + captured);
+    Assertions.assertTrue(
+        captured.contains(ProfiledWorkflowService.class.getName()),
+        "the class of the inactive profile is not named: "
+            + captured);
+    // and it reads as a possibility rather than as a defect: the boot cannot tell the
+    // two apart, which is what decision 21 says in as many words
+    Assertions.assertTrue(
+        captured.contains("profile which is not active here"),
+        "the other reading is missing: "
+            + captured);
 
   }
 
   @Test
-  public void aWorkflowServiceNothingMadeABeanIsNamedInTheReport(
-      final CapturedOutput output) {
-
-    final var writtenBeforeThisBoot = output.getAll().length();
+  public void aWorkflowServiceNothingMadeABeanIsNamedInTheReport() {
 
     // nothing here registers ForgottenWorkflowService, which is the support case: the
     // annotation is on the class, no bean of it exists, and the application used to do
     // nothing with it without saying a word
-    try (var context = application(DummyProcessWithOneTask.class).run()) {
+    final var failure = Assertions.assertThrows(
+        Exception.class,
+        () -> application(DummyProcessWithOneTask.class).run().close());
 
-      final var captured = output.getAll().substring(writtenBeforeThisBoot);
-      Assertions.assertTrue(
-          captured.contains(ForgottenWorkflowService.class.getName()),
-          "the class carrying the annotation is not named: "
-              + captured);
-      Assertions.assertTrue(
-          captured.contains("is no bean of this application"),
-          "the report does not say why VanillaBP did nothing with it: "
-              + captured);
-      Assertions.assertTrue(
-          captured.contains("@Service"),
-          "the report does not name the remedy: "
-              + captured);
-      // a class of the same classpath root declaring ANOTHER process says nothing about
-      // this one
-      Assertions.assertFalse(
-          captured.contains(LibraryWorkflowService.class.getName()),
-          "a class declaring a different process was named: "
-              + captured);
-
-    }
+    final var captured = everyMessageOf(failure);
+    Assertions.assertTrue(
+        captured.contains(ForgottenWorkflowService.class.getName()),
+        "the class carrying the annotation is not named: "
+            + captured);
+    Assertions.assertTrue(
+        captured.contains("is no bean of this application"),
+        "the report does not say why VanillaBP did nothing with it: "
+            + captured);
+    Assertions.assertTrue(
+        captured.contains("@Service"),
+        "the report does not name the remedy: "
+            + captured);
+    // a class of the same classpath root declaring ANOTHER process says nothing about
+    // this one
+    Assertions.assertFalse(
+        captured.contains(LibraryWorkflowService.class.getName()),
+        "a class declaring a different process was named: "
+            + captured);
 
   }
 
   @Test
-  public void aWorkflowServiceOfTheGlobalModuleIsFoundByTheFallback(
-      final CapturedOutput output) throws IOException {
-
-    final var writtenBeforeThisBoot = output.getAll().length();
+  public void aWorkflowServiceOfTheGlobalModuleIsFoundByTheFallback() throws IOException {
 
     // the descriptor of the workflow module sits in a root of its own, so the classes of
     // this application belong to the GLOBAL module: a root with no marker file at all,
@@ -321,11 +314,15 @@ public class WorkflowServiceDiscoveryTest {
         .addResource("META-INF/workflow-module", "test-module")
         .addResource("test-module/processes/dummy/DummyProcess.bpmn")
         .hideResource("META-INF/workflow-module")
-        .build(); var context = testApp
-            .applicationBuilder(applicationClasses(DummyProcessWithOneTask.class))
-            .run()) {
+        .build()) {
 
-      final var captured = output.getAll().substring(writtenBeforeThisBoot);
+      final var failure = Assertions.assertThrows(
+          Exception.class,
+          () -> testApp
+              .applicationBuilder(applicationClasses(DummyProcessWithOneTask.class))
+              .run()
+              .close());
+      final var captured = everyMessageOf(failure);
       Assertions.assertTrue(
           captured.contains(ForgottenWorkflowService.class.getName()),
           "the class of a root without a marker file was not found: "

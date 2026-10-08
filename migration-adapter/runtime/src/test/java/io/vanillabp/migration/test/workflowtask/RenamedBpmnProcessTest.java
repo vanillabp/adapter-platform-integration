@@ -548,13 +548,13 @@ public class RenamedBpmnProcessTest {
   }
 
   @Test
-  @DisplayName("A process nobody claims next to a rename is reported without touching the kept method")
+  @DisplayName("A process nobody claims next to a rename is not claimed, and the old id is")
   public void anUnclaimedProcessNextToARenameLeavesTheKeptMethodAlone() {
 
     theApplicationDeclares(ServiceKeepingTheOldGeneration.class);
     theAdapterDeployed(NEW_ID, "1");
-    // a BPMN file of the module carries a process nobody serves - it is collected, not
-    // validated, and the boot goes on to the module-level checks
+    // a BPMN file of the module carries a process nobody serves - it is not validated, and the
+    // boot goes on to the module-level checks
     registry
         .validateTaskWiring(
             MODULE,
@@ -566,9 +566,9 @@ public class RenamedBpmnProcessTest {
         process) -> catalog);
     registry.validateNoUnwiredWorkflowTaskMethods(MODULE);
 
-    assertEquals(
-        List.of("SomebodyElsesProcess"),
-        List.copyOf(registry.bpmnProcessesWithoutWorkflowService(MODULE)),
+    assertFalse(registry.isClaimedByAWorkflowService(MODULE, "SomebodyElsesProcess"));
+    assertTrue(
+        registry.isClaimedByAWorkflowService(MODULE, OLD_ID),
         "the old id is declared, so it is served rather than unclaimed");
 
   }

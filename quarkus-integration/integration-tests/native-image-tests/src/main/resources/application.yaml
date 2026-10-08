@@ -25,6 +25,9 @@ vanillabp:
       adapters:
         demo1:
           resources-location: classpath:jar-module/processes/dummy
+      workflows:
+        JarModuleProcess:
+          implemented-externally: true
 native-image-test:
   application-profile-section: from-the-plain-file
 '%tenant':

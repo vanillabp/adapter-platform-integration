@@ -303,7 +303,7 @@ public final class BpmsInitiatedStartExecution {
       final A workflowAggregate,
       final boolean created) {
 
-    final var aggregateIdName = processService.getAggregateIdName();
+    final var aggregateIdName = aggregateIdNameIfAnswered(processService);
     final var serializedId = String.valueOf(processService.getWorkflowAggregateId(workflowAggregate));
     // the aggregate and the workflow which runs it are both known right here, in the
     // transaction which persists the aggregate, so this is where the pair is written down. It
@@ -318,8 +318,31 @@ public final class BpmsInitiatedStartExecution {
             context.getNativeInstanceId(),
             context.getProcessVersion());
     final Map<String, Object> variables = new LinkedHashMap<>();
-    variables.put(aggregateIdName, serializedId);
+    if (aggregateIdName != null) {
+      variables.put(aggregateIdName, serializedId);
+    }
     return new BpmsInitiatedStartResult(serializedId, aggregateIdName, variables, created);
+
+  }
+
+  /**
+   * The name of the aggregate's ID property, where the persistence answers it. A BPMS with a
+   * business key of its own, Camunda 7 say, keeps the id there and reads no variable, so an
+   * application on it need not implement {@code AggregatePersistenceAware#getAggregateIdName}. A
+   * BPMS without a business key needs the name already while the model is wired, and the start of
+   * such an application ends there if the persistence does not answer.
+   *
+   * @param processService The process service of the workflow
+   * @return The name, or <code>null</code> where the persistence does not answer it
+   */
+  private static String aggregateIdNameIfAnswered(
+      final MigrationProcessService<?> processService) {
+
+    try {
+      return processService.getAggregateIdName();
+    } catch (final UnsupportedOperationException e) {
+      return null;
+    }
 
   }
 

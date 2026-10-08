@@ -111,7 +111,9 @@ public class TheEndOfAStartWithoutTheReadyEventTest {
     configurations.addAll(java.util.List.of(userConfigurations));
 
     return new ApplicationContextRunner()
-        .withPropertyValues("spring.config.location=classpath:application.yaml")
+        .withPropertyValues(
+            "spring.config.location=classpath:application.yaml",
+            io.vanillabp.integration.test.ThePlaceholderModel.BELONGS_TO_SOMEBODY_ELSE)
         .withInitializer(new ConfigDataApplicationContextInitializer())
         .withUserConfiguration(configurations.toArray(Class<?>[]::new))
         .withConfiguration(

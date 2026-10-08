@@ -126,7 +126,9 @@ public class TaskDeliveryLogStartupValidationTest {
       final String... properties) {
 
     final var propertyValues = new java.util.LinkedList<String>(
-        List.of("spring.config.location=classpath:application.yaml"));
+        List.of(
+            "spring.config.location=classpath:application.yaml",
+            io.vanillabp.integration.test.ThePlaceholderModel.BELONGS_TO_SOMEBODY_ELSE));
     propertyValues.addAll(List.of(properties));
     final var configurations = new java.util.LinkedList<Class<?>>(
         List.of(

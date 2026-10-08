@@ -14,7 +14,13 @@ vanillabp:
       adapters:
         test:
           resources-location: classpath*:test-module/processes/dummy
+      workflows:
+        dummy-process:
+          implemented-externally: true
     multi-bpmn-module:
       adapters:
         test:
           resources-location: classpath*:test-module/processes/dummy
+      workflows:
+        dummy-process:
+          implemented-externally: true

@@ -1333,53 +1333,27 @@ public class WorkflowTaskRegistryTest {
     }
 
     @Test
-    @DisplayName("A process no @WorkflowService claims is collected for the deployment's report")
-    public void noServiceRegisteredIsCollectedRatherThanThrown() {
+    @DisplayName("A process no @WorkflowService claims is not validated and not claimed")
+    public void noServiceRegisteredIsNotValidated() {
 
       // a BPMN file travels to the BPMS as a whole, so a process drawn next to the one
-      // the application asked for arrives here - demanding methods for it would end the
-      // boot over a model somebody else owns
+      // the application asked for may arrive here from an adapter which still wires it -
+      // demanding methods for it would end the boot over a model somebody else owns
       registry.validateTaskWiring(
           MODULE,
           "UnclaimedProcess",
           List.of(new BpmnTaskSpec("Activity_1", "someTask")));
 
-      assertEquals(
-          List.of("UnclaimedProcess"),
-          List.copyOf(registry.bpmnProcessesWithoutWorkflowService(MODULE)),
-          "the deployment says once per module what such a process costs");
+      assertFalse(registry.isClaimedByAWorkflowService(MODULE, "UnclaimedProcess"));
 
     }
 
     @Test
-    @DisplayName("The same unclaimed process wired by a second adapter is collected once")
-    public void anUnclaimedProcessOfTwoAdaptersIsCollectedOnce() {
+    @DisplayName("A process is claimed in its own workflow module only")
+    public void aProcessIsClaimedInItsOwnModuleOnly() {
 
-      registry.validateTaskWiring(MODULE, "UnclaimedProcess", List.of());
-      registry.validateTaskWiring(MODULE, "UnclaimedProcess", List.of());
-
-      assertEquals(
-          List.of("UnclaimedProcess"),
-          List.copyOf(registry.bpmnProcessesWithoutWorkflowService(MODULE)));
-
-    }
-
-    @Test
-    @DisplayName("A claimed process is not collected, and neither is an unclaimed one of another module")
-    public void onlyUnclaimedProcessesOfTheModuleAreCollected() {
-
-      registry.validateTaskWiring(
-          MODULE,
-          PROCESS,
-          List.of(new BpmnTaskSpec("Activity_1", "doSomething")));
-      registry.validateTaskWiring("other-module", "UnclaimedProcess", List.of());
-
-      assertTrue(
-          registry.bpmnProcessesWithoutWorkflowService(MODULE).isEmpty(),
-          "the module's only wired process is served");
-      assertEquals(
-          List.of("UnclaimedProcess"),
-          List.copyOf(registry.bpmnProcessesWithoutWorkflowService("other-module")));
+      assertTrue(registry.isClaimedByAWorkflowService(MODULE, PROCESS));
+      assertFalse(registry.isClaimedByAWorkflowService("other-module", PROCESS));
 
     }
 

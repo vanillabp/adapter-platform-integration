@@ -57,11 +57,19 @@ import java.util.Collection;
  * finished deploying: {@link #validateNoUnwiredWorkflowTaskMethods(String)},
  * {@link #registerVersionsOfProcessesNobodyDeployed(String, String, java.util.function.BiFunction)},
  * {@link #resolveProcessVersions(String)}, {@link #reportExtensionHandlerWiring(String)},
- * {@link #reportWhatACancelationCannotCarry(String)}
- * and the report about the processes
- * {@link #bpmnProcessesWithoutWorkflowService(String)} names. All of them are module-level
+ * and {@link #reportWhatACancelationCannotCarry(String)}. All of them are module-level
  * and answered from what the application declared next to what the adapters wired, so the
  * core knows the moment and takes the duty - an adapter must NOT call them.
+ * <p>
+ * <b>A process nobody claims</b> is one no <code>&#64;WorkflowService</code> class declares
+ * ({@link #isClaimedByAWorkflowService(String, String)} answers <code>false</code>). It is
+ * deployed only because it shares a file with a claimed one, and an adapter leaves it alone:
+ * no change of its model beyond what the whole file needs, no worker, no listener, no
+ * subscription, and no check of its own which ends the start because of it. The core ends the
+ * start over such a process before anything is deployed, unless the application marked it as
+ * somebody else's with
+ * <code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;process&gt;.implemented-externally=true</code>.
+ * A process which is not in a deployed file at all is not VanillaBP's business either.
  */
 public interface WorkflowTaskWiring {
 
@@ -77,13 +85,11 @@ public interface WorkflowTaskWiring {
    * matched method is marked as wired - the input for
    * {@link #validateNoUnwiredWorkflowTaskMethods(String)}.
    * <p>
-   * A process NO workflow service claims is not validated at all and does not end the
-   * boot: a BPMN file travels to the BPMS as a whole, so a process drawn next to the
-   * one the application asked for is deployed with it, and demanding methods for a
-   * model somebody else owns would stop the application over a file it cannot change.
-   * Such a process is reported by the deployment instead, see
-   * {@link #bpmnProcessesWithoutWorkflowService(String)}. Call this method for every
-   * executable process of a file anyway - it is what makes the report complete.
+   * Call this for the claimed processes only. A process NO workflow service claims is not
+   * validated: a BPMN file travels to the BPMS as a whole, so a process drawn next to the
+   * one the application asked for is deployed with it, and demanding methods for a model
+   * somebody else owns would stop the application over a file it cannot change. What
+   * happens to such a process is written at the type.
    * <p>
    * The adapter id is what lets a task be marked for one adapter only, the two adapters of
    * a migration being the reason.
@@ -153,25 +159,6 @@ public interface WorkflowTaskWiring {
 
   }
 
-  /**
-   * The BPMN processes of the workflow module which
-   * {@link #validateTaskWiring(String, String, Collection)} was called for while no
-   * <code>&#64;WorkflowService</code> class of the application claims them, sorted by
-   * process id and free of duplicates however many adapters wired them.
-   * <p>
-   * The core asks this once a workflow module finished deploying, to say in ONE
-   * message what such a process costs. An adapter neither implements nor calls it -
-   * the default keeps a test double of this SPI compiling.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @return The unclaimed BPMN process IDs; empty where every wired process is served
-   */
-  default Collection<String> bpmnProcessesWithoutWorkflowService(
-      final String workflowModuleId) {
-
-    return java.util.List.of();
-
-  }
 
   /**
    * Reports the elements of a BPMN process which can put a SECOND token into a
@@ -598,12 +585,20 @@ public interface WorkflowTaskWiring {
    * Whether a <code>&#64;WorkflowService</code> class of the application claims the given
    * BPMN process. A claimed process is one the application stands in for: its tasks are
    * asked for methods, and a task nothing serves ends the boot. A process nobody claims was
-   * deployed only because it shares a file with a claimed one.
+   * deployed only because it shares a file with a claimed one, and nothing of VanillaBP
+   * touches it beyond that (see the type).
    * <p>
-   * Answered by {@link #resolveWorkflowAggregateIdName(String, String)} and nothing else:
-   * only a claimed process has a workflow aggregate, so a name means claimed and the
-   * exception means not claimed. Adapters and extensions ask this instead of catching the
-   * exception themselves.
+   * The default answers by {@link #resolveWorkflowAggregateIdName(String, String)}: only a
+   * claimed process has a workflow aggregate, so a name means claimed and the exception means
+   * not claimed. The core answers from its registry instead, because the name is asked of the
+   * application's persistence, and an application on a BPMS with a business key need not
+   * answer it. Adapters and extensions ask this instead of catching the exception themselves. An extension gets this interface the way an adapter does, as a bean
+   * on Spring Boot and on Quarkus, and may ask it from the moment the workflow services are
+   * registered, which is before the first <code>wireBpmn</code>.
+   * <p>
+   * A process called by a call activity counts as claimed when a workflow service declares it,
+   * as the <code>secondaryBpmnProcesses</code> of the workflow service of the caller for
+   * example.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID, as the application declares it

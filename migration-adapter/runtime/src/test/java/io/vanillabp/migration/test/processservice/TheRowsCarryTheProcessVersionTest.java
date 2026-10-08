@@ -675,13 +675,15 @@ public class TheRowsCarryTheProcessVersionTest {
   }
 
   @Test
-  @DisplayName("An aggregate nothing was started for, or a process this application does not serve, answers nothing")
+  @DisplayName("An aggregate nothing was started for answers nothing, a process this application does not serve is refused")
   public void nothingKnownIsNothingAnswered() {
 
     givenAnAdapterWhich(new AnAdapterWhichReportsItsStarts("3", true));
 
     assertTrue(election().workflowStartOf(MODULE, PROCESS, "4799").isEmpty());
-    assertTrue(election().workflowStartOf(MODULE, "AnotherProcess", "4711").isEmpty());
+    org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalStateException.class,
+        () -> election().workflowStartOf(MODULE, "AnotherProcess", "4711"));
 
   }
 

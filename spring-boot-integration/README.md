@@ -188,7 +188,7 @@ built, primary and secondary alike; `PhaseTwoRouter` gets them from the auto-con
 A setter rather than another constructor parameter: the metrics exist once per application
 while process services exist per BPMN process, and that constructor is long enough.
 
-`WorkflowServicesWhichAreNoBeans` is the Spring half of the report about a BPMN process nothing
+`WorkflowServicesWhichAreNoBeans` is the Spring half of the refusal of a BPMN process nothing
 claims (`UnclaimedBpmnProcessHints` in the core). It reads the class resources of the workflow
 module being reported through a `PathMatchingResourcePatternResolver` and a `MetadataReaderFactory`,
 so no candidate class is loaded to answer a question about it, and names every class which carries

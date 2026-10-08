@@ -51,7 +51,10 @@ public class ConfigFileAddedInDevModeTest {
           .addAsResource("application.yaml")
           .add(new StringAsset("quarkus.http.port="
               + PORT
-              + "\n"), "application.properties")
+              + "\n"
+              // the BPMS double names the process after its file, and no class here claims it
+              + "vanillabp.workflow-modules.test-module.workflows.dummy.implemented-externally=true\n"),
+              "application.properties")
           .addAsResource("META-INF/workflow-module")
           // the resources location of the module, which is also what creates the
           // subdirectory one of the configuration files below is written into

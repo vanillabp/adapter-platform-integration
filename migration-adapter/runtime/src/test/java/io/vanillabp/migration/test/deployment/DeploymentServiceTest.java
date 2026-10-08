@@ -1301,12 +1301,14 @@ public class DeploymentServiceTest {
   @DisplayName("BPMN processes no workflow service claims")
   class UnclaimedBpmnProcessesTests {
 
+    private static final String FILE = "two-processes.bpmn";
+
     /**
-     * A wiring interface answering that the given processes of 'test-module' are
-     * claimed by nobody - what the registry collects while an adapter wires them.
+     * A wiring interface whose application claims the given processes of 'test-module' and no
+     * other - what the registry answers once the workflow services are registered.
      */
-    private io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring wiringReporting(
-        final String... unclaimedProcessIds) {
+    private io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring wiringClaiming(
+        final String... claimedProcessIds) {
 
       return new io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring() {
 
@@ -1323,19 +1325,15 @@ public class DeploymentServiceTest {
         }
 
         @Override
-        public java.util.Collection<String> bpmnProcessesWithoutWorkflowService(
-            final String workflowModuleId) {
-
-          return List.of(unclaimedProcessIds);
-
-        }
-
-        @Override
         public String resolveWorkflowAggregateIdName(
             final String workflowModuleId,
             final String bpmnProcessId) {
 
-          return null;
+          if (List.of(claimedProcessIds).contains(bpmnProcessId)) {
+            return "id";
+          }
+          throw new IllegalStateException("No @WorkflowService class is registered for "
+              + bpmnProcessId);
 
         }
 
@@ -1343,14 +1341,48 @@ public class DeploymentServiceTest {
 
     }
 
-    private DeploymentService deployTwoProcessesOfOneFile(
+    /**
+     * Configuration of 'test-module' deployed by 'adapter-test1', with a section for the
+     * process 'Unclaimed' where one is given.
+     */
+    private MigrationAdapterProperties propertiesWith(
+        final WorkflowAdapterProperties unclaimedWorkflow,
+        final Boolean moduleSaysImplementedExternally) {
+
+      final var properties = MigrationAdapterProperties
+          .builder()
+          .adapters(Map.of(
+              "adapter-test1", AdapterConfigProperties.ofType("dummy"),
+              "adapter-test2", AdapterConfigProperties.ofType("dummy")))
+          .workflowModules(Map.of(
+              "test-module",
+              WorkflowModuleAdapterProperties
+                  .builder()
+                  .workflowModuleId("test-module")
+                  .prioritizedAdapters(List.of("adapter-test1"))
+                  .implementedExternally(moduleSaysImplementedExternally)
+                  .adapters(Map.of("adapter-test1", AdapterProperties
+                      .builder()
+                      .resourcesLocation("classpath:test-module/processes")
+                      .build()))
+                  .workflows(unclaimedWorkflow == null
+                      ? Map.of()
+                      : Map.of("Unclaimed", unclaimedWorkflow))
+                  .build()))
+          .build();
+      properties.validateAndLink();
+      return remember(properties);
+
+    }
+
+    private void deployTwoProcessesOfOneFile(
+        final MigrationAdapterProperties properties,
         final io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring workflowTaskWiring) {
 
-      final var properties = createPropertiesWithAdapter("adapter-test1");
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
-          location -> Map.of("two-processes.bpmn", createDummyBpmnInputStream()));
+          location -> Map.of(FILE, createDummyBpmnInputStream()));
 
       // one file, two executable processes - what a modeller produces by drawing a
       // called process next to the calling one
@@ -1359,42 +1391,133 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(100);
 
-      final var testee = new DeploymentService(
-          properties, List.of(adapter1DeploymentService), List.of(), workflowTaskWiring);
-      testee.deployResources(List.of("test-module"), resourcesLoader);
-      return testee;
+      new DeploymentService(properties, List.of(adapter1DeploymentService), List.of(), workflowTaskWiring)
+          .deployResources(List.of("test-module"), resourcesLoader);
+
+    }
+
+    private String refusalOf(
+        final MigrationAdapterProperties properties,
+        final io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring workflowTaskWiring) {
+
+      final var refusal = assertThrows(
+          IllegalStateException.class,
+          () -> deployTwoProcessesOfOneFile(properties, workflowTaskWiring));
+      verify(adapter1DeploymentService, never()).deployResources(anyString(), any());
+      return refusal.getMessage();
 
     }
 
     @Test
-    @DisplayName("The WARN names the process, its file and the workflow module, and what it costs")
-    public void unclaimedProcessIsWarnedAboutNamingItsFile() {
+    @DisplayName("The start ends, naming the process, its file, the workflow module and both ways out")
+    public void anUnclaimedProcessEndsTheStart() {
 
-      deployTwoProcessesOfOneFile(wiringReporting("Unclaimed"));
+      final var refusal = refusalOf(propertiesWith(null, null), wiringClaiming("Claiming"));
 
-      final var warnings = reportedWarnings()
-          .stream()
-          .filter(message -> message.contains("no @WorkflowService class"))
-          .toList();
-      assertEquals(1, warnings.size(), "one report per workflow module, whatever it lists: "
-          + warnings);
-      final var warning = warnings.getFirst();
-      assertTrue(warning.contains("'test-module'"), warning);
-      assertTrue(warning.contains("process 'Unclaimed' of file 'two-processes.bpmn'"), warning);
-      assertTrue(warning.contains("not get past its first task"), warning);
-      assertTrue(warning.contains("@WorkflowService(bpmnProcess"), warning);
-      assertTrue(warning.contains("take the process out of its file"), warning);
-      assertFalse(warning.contains("Claiming"), "the claimed process of the same file is not reported: "
-          + warning);
+      assertTrue(refusal.contains("Workflow module 'test-module' deploys BPMN processes which no "
+          + "@WorkflowService class of this application claims"), refusal);
+      assertTrue(refusal.contains("process 'Unclaimed' of file 'two-processes.bpmn'"), refusal);
+      assertTrue(refusal.contains("@WorkflowService(bpmnProcess"), refusal);
+      assertTrue(refusal.contains(
+          "vanillabp.workflow-modules.test-module.workflows.Unclaimed.implemented-externally=true"), refusal);
+      assertFalse(refusal.contains("'Claiming'"), "the claimed process of the same file is not named: "
+          + refusal);
 
     }
 
     @Test
-    @DisplayName("A module whose processes are all claimed is not reported")
-    public void claimedProcessesAreNotWarnedAbout() {
+    @DisplayName("A process marked as somebody else's is deployed with its file and not reported")
+    public void aMarkedProcessIsDeployed() {
 
-      deployTwoProcessesOfOneFile(wiringReporting());
+      deployTwoProcessesOfOneFile(
+          propertiesWith(WorkflowAdapterProperties
+              .builder()
+              .bpmnProcessId("Unclaimed")
+              .implementedExternally(true)
+              .build(), null),
+          wiringClaiming("Claiming"));
 
+      verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(100));
+      assertTrue(
+          reported()
+              .stream()
+              .noneMatch(message -> message.contains("no @WorkflowService class")),
+          "a process the application marked is not reported: "
+              + reported());
+
+    }
+
+    @Test
+    @DisplayName("A process marked for the deploying adapter is deployed")
+    public void aProcessMarkedForTheAdapterIsDeployed() {
+
+      deployTwoProcessesOfOneFile(
+          propertiesWith(WorkflowAdapterProperties
+              .builder()
+              .bpmnProcessId("Unclaimed")
+              .adapters(Map.of("adapter-test1", AdapterProperties
+                  .builder()
+                  .implementedExternally(true)
+                  .build()))
+              .build(), null),
+          wiringClaiming("Claiming"));
+
+      verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(100));
+
+    }
+
+    @Test
+    @DisplayName("A process marked for another adapter ends the start")
+    public void aProcessMarkedForAnotherAdapterEndsTheStart() {
+
+      final var refusal = refusalOf(
+          propertiesWith(WorkflowAdapterProperties
+              .builder()
+              .bpmnProcessId("Unclaimed")
+              .adapters(Map.of("adapter-test2", AdapterProperties
+                  .builder()
+                  .implementedExternally(true)
+                  .build()))
+              .build(), null),
+          wiringClaiming("Claiming"));
+
+      assertTrue(refusal.contains("process 'Unclaimed' of file 'two-processes.bpmn'"), refusal);
+
+    }
+
+    @Test
+    @DisplayName("A line at the workflow module does not mark a process nobody claims")
+    public void aLineAtTheModuleMarksNoProcess() {
+
+      final var refusal = refusalOf(propertiesWith(null, true), wiringClaiming("Claiming"));
+
+      assertTrue(refusal.contains("process 'Unclaimed' of file 'two-processes.bpmn'"), refusal);
+
+    }
+
+    @Test
+    @DisplayName("A line at the workflow saying false is no mark")
+    public void aLineSayingFalseIsNoMark() {
+
+      final var refusal = refusalOf(
+          propertiesWith(WorkflowAdapterProperties
+              .builder()
+              .bpmnProcessId("Unclaimed")
+              .implementedExternally(false)
+              .build(), null),
+          wiringClaiming("Claiming"));
+
+      assertTrue(refusal.contains("process 'Unclaimed' of file 'two-processes.bpmn'"), refusal);
+
+    }
+
+    @Test
+    @DisplayName("A module whose processes are all claimed is deployed and not reported")
+    public void claimedProcessesAreDeployed() {
+
+      deployTwoProcessesOfOneFile(propertiesWith(null, null), wiringClaiming("Claiming", "Unclaimed"));
+
+      verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(100));
       assertTrue(
           reported()
               .stream()
@@ -1404,8 +1527,8 @@ public class DeploymentServiceTest {
     }
 
     @Test
-    @DisplayName("An adapter which does not answer the query leaves the deployment silent")
-    public void anAdapterWithoutTheQueryChangesNothing() {
+    @DisplayName("A pipeline without the core's wiring interface asks nobody")
+    public void aPipelineWithoutTheWiringInterfaceAsksNobody() {
 
       // the pipeline runs without the core's wiring interface in tests exercising
       // only the pipeline itself, and it has to stay silent then
@@ -1421,6 +1544,7 @@ public class DeploymentServiceTest {
       new DeploymentService(properties, List.of(adapter1DeploymentService), List.of())
           .deployResources(List.of("test-module"), resourcesLoader);
 
+      verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(100));
       assertTrue(
           reported()
               .stream()

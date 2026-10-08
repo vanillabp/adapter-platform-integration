@@ -339,9 +339,12 @@ public class TheStartOfAWorkflowLeavesItsBpmsIdBehindTest {
     assertTrue(
         election.workflowIdOf(MODULE, PROCESS, "4712").isEmpty(),
         "an aggregate nothing was started for is the same empty answer as an expired row");
-    assertTrue(
-        election.workflowIdOf(MODULE, "AnotherProcess", AGGREGATE).isEmpty(),
-        "a read answers what it knows about a process this application does not serve: nothing");
+    final var refused = org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalStateException.class,
+        () -> election.workflowIdOf(MODULE, "AnotherProcess", AGGREGATE),
+        "a process this application does not serve is refused, as the election refuses it");
+    assertTrue(refused.getMessage().contains("No @WorkflowService of this application declares BPMN process "
+        + "'AnotherProcess'"), refused.getMessage());
 
   }
 

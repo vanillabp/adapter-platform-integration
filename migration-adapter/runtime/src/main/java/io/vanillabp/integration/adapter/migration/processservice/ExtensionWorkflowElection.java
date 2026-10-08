@@ -45,19 +45,38 @@ public final class ExtensionWorkflowElection implements WorkflowElection {
       final String bpmnProcessId,
       final Object workflowAggregateId) {
 
+    return processServiceOf(workflowModuleId, bpmnProcessId, "which BPMS holds a workflow of it cannot be elected")
+        .locationOfWorkflow(workflowAggregateId);
+
+  }
+
+  /**
+   * The process service of a BPMN process this application serves.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param whatCannotBeDone What the caller cannot do for a process nobody serves, for the message
+   * @return The process service, never <code>null</code>
+   * @throws IllegalStateException If no workflow service declares the process
+   */
+  private MigrationProcessService<?> processServiceOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String whatCannotBeDone) {
+
     final var processService = router.processServiceOf(workflowModuleId, bpmnProcessId);
     if (processService == null) {
       throw new IllegalStateException(
           """
               No @WorkflowService of this application declares BPMN process '%s' of workflow module \
-              '%s', so which BPMS holds a workflow of it cannot be elected! The workflows this \
-              application serves are: %s."""
+              '%s', so %s! The workflows this application serves are: %s."""
               .formatted(
                   bpmnProcessId,
                   workflowModuleId,
+                  whatCannotBeDone,
                   String.join(", ", router.registeredWorkflows())));
     }
-    return processService.locationOfWorkflow(workflowAggregateId);
+    return processService;
 
   }
 
@@ -67,14 +86,12 @@ public final class ExtensionWorkflowElection implements WorkflowElection {
       final String bpmnProcessId,
       final Object workflowAggregateId) {
 
-    final var processService = router.processServiceOf(workflowModuleId, bpmnProcessId);
-    if (processService == null) {
-      // a read answers what it knows, and about a BPMN process this application does not serve it
-      // knows nothing. The two methods above refuse instead, because whoever elects is about to
-      // talk to a BPMS and a wrong process id would send the command somewhere else
-      return java.util.Optional.empty();
-    }
-    return java.util.Optional.ofNullable(processService.workflowIdOf(workflowAggregateId));
+    // a process nobody serves is refused like it is by the election. An empty answer would read
+    // as "VanillaBP does not know this workflow", and a wrong process id is a mistake of the
+    // caller which an empty answer hides
+    return java.util.Optional.ofNullable(
+        processServiceOf(workflowModuleId, bpmnProcessId, "its workflows have no id VanillaBP wrote down")
+            .workflowIdOf(workflowAggregateId));
 
   }
 
@@ -84,13 +101,10 @@ public final class ExtensionWorkflowElection implements WorkflowElection {
       final String bpmnProcessId,
       final Object workflowAggregateId) {
 
-    final var processService = router.processServiceOf(workflowModuleId, bpmnProcessId);
-    if (processService == null) {
-      // the same as for the id alone: about a BPMN process this application does not serve, a
-      // read knows nothing
-      return java.util.Optional.empty();
-    }
-    return java.util.Optional.ofNullable(processService.workflowStartOf(workflowAggregateId));
+    // the same reading as the id alone, refused in the same case
+    return java.util.Optional.ofNullable(
+        processServiceOf(workflowModuleId, bpmnProcessId, "its workflows have no id VanillaBP wrote down")
+            .workflowStartOf(workflowAggregateId));
 
   }
 

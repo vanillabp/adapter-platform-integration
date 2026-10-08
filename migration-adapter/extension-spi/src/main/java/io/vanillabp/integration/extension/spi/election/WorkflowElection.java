@@ -108,8 +108,8 @@ public interface WorkflowElection {
    *
    * They elect, which means they ask a BPMS and they fail where none knows the workflow. This
    * only reads what VanillaBP persisted: the row written when the workflow started, and the rows
-   * of the task deliveries of that workflow. No BPMS is asked, nothing is waited for, and nothing
-   * is thrown. An extension which wants the id to put into its own report asks this one; an
+   * of the task deliveries of that workflow. No BPMS is asked and nothing is waited for. An
+   * extension which wants the id to put into its own report asks this one; an
    * extension which is about to talk to a BPMS asks one of the two above.
    * <p>
    * The id is the one of the workflow the AGGREGATE is. On a BPMS with call activities that is the
@@ -125,6 +125,11 @@ public interface WorkflowElection {
    * aggregate at all. Empty therefore means "VanillaBP does not know", never "there is no such
    * workflow".
    * <p>
+   * A BPMN process no <code>&#64;WorkflowService</code> of this application declares is no such
+   * situation. It is refused, the way the two methods above refuse it: VanillaBP writes nothing
+   * down for such a process, so asking about it is a mistake of the caller, and an empty answer
+   * would hide it.
+   * <p>
    * A non-empty answer says what was true when the workflow started. It does not say that the
    * workflow still runs, and it must not be sent to a BPMS: the shape of the id belongs to the
    * adapter, and an extension addressing an engine behind the adapter's back is outside
@@ -138,6 +143,8 @@ public interface WorkflowElection {
    * @param workflowAggregateId The ID of its workflow aggregate
    * @return The workflow's id in the BPMS, or {@link java.util.Optional#empty()} where VanillaBP
    *         holds none
+   * @throws IllegalStateException If no workflow service of this application declares the BPMN
+   *           process
    */
   default java.util.Optional<String> workflowIdOf(
       final String workflowModuleId,
@@ -171,6 +178,8 @@ public interface WorkflowElection {
    * @param workflowAggregateId The ID of its workflow aggregate
    * @return What VanillaBP holds about the start, or {@link java.util.Optional#empty()} where it
    *         holds no workflow id
+   * @throws IllegalStateException If no workflow service of this application declares the BPMN
+   *           process
    */
   default java.util.Optional<WorkflowStart> workflowStartOf(
       final String workflowModuleId,

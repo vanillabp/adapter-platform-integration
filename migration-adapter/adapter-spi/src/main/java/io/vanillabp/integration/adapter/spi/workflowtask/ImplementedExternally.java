@@ -71,6 +71,39 @@ public final class ImplementedExternally {
   }
 
   /**
+   * The property key for a whole BPMN process, written as a line for
+   * <code>application.properties</code>. For a process no <code>&#64;WorkflowService</code>
+   * claims it says that the process belongs to somebody else: it is deployed with its file and
+   * left alone otherwise. A process id which a property key cannot carry as it is gets one line
+   * per platform, the same way {@link #propertyLine} does it for a task.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return One line, or one line per platform, each under a comment naming the platform
+   */
+  public static String processPropertyLine(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var prefix = "vanillabp.workflow-modules.%s.workflows".formatted(workflowModuleId);
+    if (PLAIN_KEY.matcher(bpmnProcessId).matches()) {
+      return "%s.%s.%s=true".formatted(prefix, bpmnProcessId, PROPERTY);
+    }
+    final var escaped = bpmnProcessId
+        .replace("\\", "\\\\")
+        .replace(":", "\\:")
+        .replace("=", "\\=")
+        .replace(" ", "\\ ");
+    return """
+        # Spring Boot
+        %s[%s].%s=true
+        # Quarkus
+        %s."%s".%s=true"""
+        .formatted(prefix, escaped, PROPERTY, prefix, escaped, PROPERTY);
+
+  }
+
+  /**
    * The name a message offers for marking one task. For a listener it is the task
    * definition, because the element id would mark the element and every other listener on
    * it as well. For anything else it is the element id, which is where the configuration of

@@ -353,6 +353,15 @@ public class InheritedWorkflowServiceTest {
       final SpringBootTestApplication testApp,
       final Class<?>... additionalClasses) {
 
+    return runTestApplication(testApp, new String[0], additionalClasses);
+
+  }
+
+  private ConfigurableApplicationContext runTestApplication(
+      final SpringBootTestApplication testApp,
+      final String[] properties,
+      final Class<?>... additionalClasses) {
+
     final var classes = new java.util.LinkedList<Class<?>>(List.of(
         DummyAdapterConfiguration.class,
         DummyAdapterProcessServiceConfiguration.class,
@@ -363,7 +372,10 @@ public class InheritedWorkflowServiceTest {
         WorkflowModuleConfiguration.class,
         DeploymentTest.TestConfig.class));
     classes.addAll(List.of(additionalClasses));
-    return testApp.applicationBuilder(classes.toArray(Class[]::new)).run();
+    return testApp
+        .applicationBuilder(classes.toArray(Class[]::new))
+        .properties(properties)
+        .run();
 
   }
 
@@ -439,7 +451,12 @@ public class InheritedWorkflowServiceTest {
   public void bothInvisibleHandlersAreReported(
       final CapturedOutput output) throws IOException {
 
+    // the file of this location holds the process of another test of this class, which no
+    // class of this application claims
     try (var testApp = buildTestApp("inheritance"); var context = runTestApplication(testApp,
+        new String[]{
+            "vanillabp.workflow-modules.test-module.workflows.InheritingWorkflowService.implemented-externally=true"
+        },
         InvisibleHandlersConfiguration.class,
         TestTransactionRunnerConfiguration.class)) {
 

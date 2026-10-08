@@ -128,7 +128,8 @@ public class GuessingAdapterStartupTest {
             GuessingAdapterConfiguration.class,
             // brings the deployment service: the check runs once the adapters deployed,
             // and the end of the start right behind it
-            DeploymentTest.TestConfig.class);
+            DeploymentTest.TestConfig.class)
+        .properties(io.vanillabp.integration.test.ThePlaceholderModel.BELONGS_TO_SOMEBODY_ELSE);
 
   }
 
