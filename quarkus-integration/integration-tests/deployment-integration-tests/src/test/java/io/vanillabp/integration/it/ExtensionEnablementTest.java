@@ -269,6 +269,41 @@ public class ExtensionEnablementTest {
   }
 
   @Test
+  @DisplayName("The extension is told which process variables the methods of an element read")
+  public void theExtensionReadsWhichTaskParametersItsMethodsTake() {
+
+    assertEquals(List.of("kind"),
+        handlers.taskParameterNames(SampleNote.class, MODULE, PROCESS, List.of("TheServiceTask")));
+    // the keys are walked like an invocation walks them: the method naming the element id
+    // serves every version, so the one naming the task definition never runs for it
+    assertEquals(
+        List.of(),
+        handlers
+            .taskParameterNames(
+                SampleNote.class,
+                MODULE,
+                PROCESS,
+                List.of(NoteTaskWiringSource.ACTIVITY_ID, NoteTaskWiringSource.TASK_DEFINITION)));
+    assertEquals(
+        List.of("reviewer"),
+        handlers
+            .taskParameterNames(
+                SampleNote.class,
+                MODULE,
+                PROCESS,
+                List.of(NoteTaskWiringSource.TASK_DEFINITION, NoteTaskWiringSource.ACTIVITY_ID)));
+    // two generations of one element: the event has to carry what either of them reads
+    assertEquals(
+        List.of("firstGenerationInput", "laterGenerationInput"),
+        handlers.taskParameterNames(SampleNote.class, MODULE, PROCESS, List.of("Activity_TwoGenerations")));
+    // the answer belongs to one BPMN process, not to the application
+    assertEquals(
+        List.of(),
+        handlers.taskParameterNames(SampleNote.class, MODULE, "NobodyDeclaredThis", List.of("TheServiceTask")));
+
+  }
+
+  @Test
   @DisplayName("The extension is told the name a modeller wrote on a BPMN element")
   public void theExtensionReadsTheBpmnName() {
 

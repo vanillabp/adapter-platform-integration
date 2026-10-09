@@ -239,6 +239,49 @@ public class ExtensionHandlerRegistryTest {
 
   }
 
+  /**
+   * Methods reading process variables, wired by element id, by task definition and to
+   * every element, plus one whose <code>&#64;TaskParam</code> the extension binds itself.
+   */
+  public static class ReadingService {
+
+    @Note(element = "Activity_Review")
+    public String byElementId(
+        @TaskParam("amount") final String amount,
+        @TaskParam("currency") final String currency,
+        @TaskParam("amount") final String amountOnceMore) {
+
+      return "by-element-id";
+
+    }
+
+    @Note(element = "reviewTheNote")
+    public String byTaskDefinition(
+        @TaskParam("reviewer") final String reviewer) {
+
+      return "by-task-definition";
+
+    }
+
+    @Note(element = HandlerContract.EVERY_KEY)
+    public String everything(
+        @TaskParam("fallback") final String fallback) {
+
+      return "every";
+
+    }
+
+    @Note(element = "Activity_OwnBinding")
+    public String boundByTheExtension(
+        @TaskParam("neverRead") final Payload payload,
+        final Aggregate aggregate) {
+
+      return "own-binding";
+
+    }
+
+  }
+
   public static class MultiInstanceService {
 
     @Note(element = "TheTask")
@@ -709,6 +752,98 @@ public class ExtensionHandlerRegistryTest {
                     .payload(new Payload("hello"))
                     .build())
             .isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("The process variables of an element are those of the methods its keys reach, in the order offered")
+  public void theTaskParametersFollowTheKeysOffered() {
+
+    final var handlers = fixture(ReadingService.class, ReadingService::new, true)
+        .registry()
+        .getExtensionHandlers();
+
+    // sorted and named once, and the method serving every element is not counted: the
+    // method naming the element serves every version, so the catch-all never runs here
+    assertEquals(
+        List.of("amount", "currency"),
+        handlers.taskParameterNames(Note.class, MODULE, PROCESS, List.of("Activity_Review")));
+    // the first key served wins, as it does for an invocation
+    assertEquals(
+        List.of("amount", "currency"),
+        handlers.taskParameterNames(Note.class, MODULE, PROCESS, List.of("Activity_Review", "reviewTheNote")));
+    assertEquals(
+        List.of("reviewer"),
+        handlers.taskParameterNames(Note.class, MODULE, PROCESS, List.of("reviewTheNote", "Activity_Review")));
+    assertEquals(
+        List.of("reviewer"),
+        handlers.taskParameterNames(Note.class, MODULE, PROCESS, List.of("NobodyServesThis", "reviewTheNote")));
+    // a key nobody names ends at the method serving every element
+    assertEquals(
+        List.of("fallback"),
+        handlers.taskParameterNames(Note.class, MODULE, PROCESS, List.of("NobodyServesThis")));
+
+  }
+
+  @Test
+  @DisplayName("A @TaskParam the extension binds itself is not a process variable VanillaBP reads")
+  public void aParameterTheExtensionBindsIsNotNamed() {
+
+    final var handlers = fixture(ReadingService.class, ReadingService::new, true)
+        .registry()
+        .getExtensionHandlers();
+
+    assertEquals(
+        List.of(),
+        handlers.taskParameterNames(Note.class, MODULE, PROCESS, List.of("Activity_OwnBinding")));
+
+  }
+
+  @Test
+  @DisplayName("The process variables are answered per BPMN process, not for the whole application")
+  public void theTaskParametersBelongToOneProcess() {
+
+    final var fixture = fixture(ReadingService.class, ReadingService::new, true);
+    fixture
+        .registry()
+        .registerWorkflowService(
+            MODULE,
+            "SecondProcess",
+            NotingService.class,
+            NotingService::new,
+            type -> null,
+            processService(fixture.persistence()));
+    final var handlers = fixture
+        .registry()
+        .getExtensionHandlers();
+
+    assertEquals(
+        List.of("kind"),
+        handlers.taskParameterNames(Note.class, MODULE, "SecondProcess", List.of("TheTask")));
+    assertEquals(
+        List.of("fallback"),
+        handlers.taskParameterNames(Note.class, MODULE, PROCESS, List.of("TheTask")));
+    assertEquals(
+        List.of(),
+        handlers.taskParameterNames(Note.class, MODULE, "AnotherProcess", List.of("TheTask")));
+    assertEquals(
+        List.of(),
+        handlers.taskParameterNames(Note.class, "other-module", PROCESS, List.of("Activity_Review")));
+
+  }
+
+  @Test
+  @DisplayName("Asking for the process variables of an annotation nobody registered is refused guiding")
+  public void theTaskParametersOfAnUnregisteredAnnotationAreRefused() {
+
+    final var handlers = fixture(ReadingService.class, ReadingService::new, true)
+        .registry()
+        .getExtensionHandlers();
+
+    final var refused = assertThrows(
+        IllegalStateException.class,
+        () -> handlers.taskParameterNames(Silent.class, MODULE, PROCESS, List.of("Activity_Review")));
+    assertTrue(refused.getMessage().contains("@Silent"), refused.getMessage());
 
   }
 

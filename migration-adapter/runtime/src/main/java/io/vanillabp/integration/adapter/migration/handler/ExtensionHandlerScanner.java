@@ -5,12 +5,15 @@ import java.util.Arrays;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
 import io.vanillabp.integration.adapter.migration.workflowtask.ServedVersions;
+import io.vanillabp.integration.extension.spi.handler.CoreHandlerParameter;
 import io.vanillabp.integration.extension.spi.handler.HandlerContract;
 import io.vanillabp.integration.extension.spi.handler.HandlerValueSource;
+import io.vanillabp.spi.service.TaskParam;
 
 /**
  * Scans a <code>&#64;WorkflowService</code> class for the methods of one extension
@@ -109,7 +112,7 @@ final class ExtensionHandlerScanner {
       lookupKeys.add(method.getName());
     }
 
-    final var binders = Arrays
+    final var boundParameters = Arrays
         .stream(method.getParameters())
         .map(parameter -> bind(
             contract,
@@ -118,10 +121,24 @@ final class ExtensionHandlerScanner {
             parameter,
             "parameter '%s' of %s".formatted(parameter.getName(), where)))
         .toList();
+    final var binders = boundParameters
+        .stream()
+        .map(BoundParameter::source)
+        .toList();
+    // the process variables the core reads for this method, which is what an extension
+    // has to ask its BPMS for before a delivery arrives. A @TaskParam parameter an
+    // extension binder claimed is the extension's own business and not among them
+    final var taskParameterNames = boundParameters
+        .stream()
+        .map(BoundParameter::taskParameterName)
+        .filter(Objects::nonNull)
+        .distinct()
+        .sorted()
+        .toList();
 
     return new ExtensionHandlerMethod(
         contract, workflowServiceClass, method, workflowServiceBean, binders, List
-            .copyOf(lookupKeys), versionsOf(contract, annotations, where));
+            .copyOf(lookupKeys), versionsOf(contract, annotations, where), taskParameterNames);
 
   }
 
@@ -178,7 +195,20 @@ final class ExtensionHandlerScanner {
 
   }
 
-  private static HandlerValueSource bind(
+  /**
+   * How one parameter gets its value, and the process variable it reads where the core
+   * binds it with <code>&#64;TaskParam</code>.
+   *
+   * @param source Produces the value at invocation time
+   * @param taskParameterName The name the <code>&#64;TaskParam</code> spells, or
+   *          <code>null</code> where the core reads no process variable for it
+   */
+  private record BoundParameter(
+                                HandlerValueSource source,
+                                String taskParameterName) {
+  }
+
+  private static BoundParameter bind(
       final HandlerContract contract,
       final Class<?> workflowAggregateClass,
       final Function<Class<?>, Object> beanResolver,
@@ -189,14 +219,14 @@ final class ExtensionHandlerScanner {
     for (final var binder : contract.getParameterBinders()) {
       final var bound = binder.bind(view);
       if ((bound != null) && bound.isPresent()) {
-        return bound.get();
+        return new BoundParameter(bound.get(), null);
       }
     }
 
     final var core = CoreParameterBinders
         .bind(parameter, workflowAggregateClass, contract.getCoreParameters(), beanResolver, location);
     if (core != null) {
-      return core;
+      return new BoundParameter(core, taskParameterNameOf(contract, parameter));
     }
 
     throw new IllegalStateException(
@@ -208,6 +238,25 @@ final class ExtensionHandlerScanner {
                 location,
                 contract.getExtensionId(),
                 describeCoreParameters(contract, workflowAggregateClass)));
+
+  }
+
+  /**
+   * The process variable the core reads for a parameter it bound. That is the case
+   * exactly where the contract allows <code>&#64;TaskParam</code> and the parameter
+   * carries it, because {@link CoreParameterBinders} tries that kind first.
+   */
+  private static String taskParameterNameOf(
+      final HandlerContract contract,
+      final java.lang.reflect.Parameter parameter) {
+
+    if (!contract.getCoreParameters().contains(CoreHandlerParameter.TASK_PARAM)) {
+      return null;
+    }
+    final var taskParam = parameter.getAnnotation(TaskParam.class);
+    return taskParam == null
+        ? null
+        : taskParam.value();
 
   }
 

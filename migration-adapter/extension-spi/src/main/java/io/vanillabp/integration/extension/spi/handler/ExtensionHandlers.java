@@ -1,6 +1,7 @@
 package io.vanillabp.integration.extension.spi.handler;
 
 import java.lang.annotation.Annotation;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -93,6 +94,54 @@ public interface ExtensionHandlers {
       String bpmnProcessId,
       List<String> lookupKeys,
       String processVersion);
+
+  /**
+   * The process variables the methods serving these keys read with
+   * <code>&#64;TaskParam</code>, the names as the annotation spells them. This is what an
+   * extension has to ask its BPMS for before the first event arrives, where the BPMS hands
+   * out only the variables somebody named. A Camunda 8 job worker is such a case.
+   * <p>
+   * The keys are resolved the way {@link #invoke(HandlerCall)} resolves them, but for
+   * every version of the BPMN process at once. The first key some method serves wins,
+   * and a later key or the method serving every key only counts in the versions no
+   * earlier key covers. So the answer is the UNION over every method which may run for
+   * this element in some version: the event has to satisfy whichever of them runs. Where
+   * several methods of one key split the versions between them, the method serving every
+   * key is counted as well, although it may never run. So the answer can name a variable
+   * too many, but never misses one (see decision 121 in the repository's DECISIONS.md).
+   * Pass the keys in the order you pass them to
+   * {@link HandlerCall.Builder#lookupKeys}.
+   * <p>
+   * The answer is per workflow module and BPMN process, like
+   * <code>WorkflowTaskWiring#taskParameterNames</code> answers it for
+   * <code>&#64;WorkflowTask</code> methods. It holds exactly the
+   * <code>&#64;TaskParam</code> names VanillaBP binds. A parameter one of your own
+   * binders claims is yours and not among them, and so is anything a multi-instance
+   * parameter reads. The names are sorted and duplicate-free, so a subscription built
+   * from them stays the same across restarts.
+   * <p>
+   * The answer covers the workflow services scanned so far, the same as
+   * {@link #hasHandler(Class, String, String, List)} does. The default answers nothing.
+   * Only the core implements this interface, so the default serves test doubles, not
+   * applications.
+   *
+   * @param annotationType The annotation of a registered contract
+   * @param workflowModuleId The workflow module
+   * @param bpmnProcessId The BPMN process
+   * @param lookupKeys The keys a method may be matched by, most wanted first
+   * @return The parameter names, sorted; empty where no method serves the keys or none of
+   *         them takes a <code>&#64;TaskParam</code>
+   * @throws IllegalStateException If no contract is registered for the annotation
+   */
+  default Collection<String> taskParameterNames(
+      final Class<? extends Annotation> annotationType,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final List<String> lookupKeys) {
+
+    return List.of();
+
+  }
 
   /**
    * Runs the method the call addresses: load the workflow aggregate (or take the one

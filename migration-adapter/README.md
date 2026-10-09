@@ -3796,6 +3796,17 @@ arrives, and a BPMN process an extension has no method for is not named at all.
 `ExtensionHandlerRegistryTest#theBootSaysWhatWasWired` holds the line in the core, and each platform
 reads it out of a booted application (`ExtensionHandlerWiringReportTest`).
 
+**Which process variables the methods of an element read.** `taskParameterNames(annotation,
+module, process, keys)` is the extension's counterpart of `WorkflowTaskWiring#taskParameterNames`.
+An extension whose BPMS hands out only the variables it named asks it before the first event. The
+scanner notes the `@TaskParam` names it binds per method, and leaves out a parameter one of the
+extension's own binders claimed. The registry walks the keys like `find` does, but for every version
+at once: a key counts, and the walk stops at the first method serving every version. Otherwise the
+next key counts too, and in the end the catch-all. The answer is the union, so it may name a variable
+too many but never misses one (decision 121 in the repository's `DECISIONS.md`).
+`ExtensionHandlerRegistryTest` and `ExtensionHandlerVersionsTest` hold the walk in the core, and
+each platform reads the answer out of a booted application.
+
 **Registration order does not matter.** Whether the extension's bean or the scan of the
 workflow services comes first depends on what else the application does, so a contract
 registered later is applied to the classes registered so far (decision 36 in the
