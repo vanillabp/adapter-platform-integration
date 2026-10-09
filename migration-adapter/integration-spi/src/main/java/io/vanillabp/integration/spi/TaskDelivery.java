@@ -41,7 +41,9 @@ import java.time.Instant;
  *          delivered. May be <code>null</code> in a record written before that field
  *          existed
  * @param workflowModuleId The ID of the workflow module the workflow belongs to
- * @param bpmnProcessId The BPMN process ID of the workflow
+ * @param bpmnProcessId The BPMN process ID. For a delivery it is the process the task belongs
+ *          to, so for a task of a called process the called process and not the one at the
+ *          top. For the row about a start it is the process the workflow was started with
  * @param workflowAggregateId The workflow aggregate's ID in serialized form
  * @param workflowId The BPMS' own id of the workflow the task belongs to - the running
  *          instance as the engine counts it, not the workflow aggregate's id. VanillaBP

@@ -76,7 +76,9 @@ public final class HandlerCall {
    *
    * @param annotationType The annotation of the contract to invoke
    * @param workflowModuleId The workflow module the workflow belongs to
-   * @param bpmnProcessId The BPMN process the workflow belongs to
+   * @param bpmnProcessId The BPMN process the element belongs to. For an element of a called
+   *          process this is the called process, not the one at the top (see
+   *          {@link #getBpmnProcessId()})
    * @return The builder
    */
   public static Builder of(
@@ -114,11 +116,19 @@ public final class HandlerCall {
   }
 
   /**
-   * The BPMN process of the workflow this call is about. Nothing is registered for a
-   * process whose workflow service carries no method of the annotation, and a call for it
-   * finds nothing instead of failing.
+   * The BPMN process this call is about: the process the element belongs to. Nothing is
+   * registered for a process whose workflow service carries no method of the annotation,
+   * and a call for it finds nothing instead of failing.
+   * <p>
+   * For an element of a called process (a call activity) this is the called process, not
+   * the process at the top which the workflow aggregate was started with. Methods are bound
+   * per workflow service class and per process it declares, the called one included through
+   * <code>secondaryBpmnProcesses</code>. A class serves every process it declares, so the id
+   * of the process at the top may find the same method. But the version of the call belongs
+   * to the called process, and under the id of the process at the top it is compared with
+   * the versions of the wrong process. Pass the id the BPMS reports for the element.
    *
-   * @return The BPMN process of the workflow
+   * @return The BPMN process the element belongs to
    */
   public String getBpmnProcessId() {
 
@@ -140,8 +150,8 @@ public final class HandlerCall {
   }
 
   /**
-   * The version of the BPMN process this call is about, as the BPMS reports it - what
-   * decides between methods serving different versions
+   * The version of the BPMN process this call is about ({@link #getBpmnProcessId()}), as
+   * the BPMS reports it - what decides between methods serving different versions
    * ({@link HandlerContract.Builder#versions(java.util.function.Function)}).
    *
    * @return The version, or <code>null</code> where the BPMS reported none
