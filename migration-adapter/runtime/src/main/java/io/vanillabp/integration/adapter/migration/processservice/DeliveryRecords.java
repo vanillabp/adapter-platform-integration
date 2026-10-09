@@ -776,14 +776,19 @@ public final class DeliveryRecords {
     if (deliveryLog == null) {
       return 0;
     }
-    final var released = deliveryLog
-        .releaseRecordsOf(workflowModuleId, bpmnProcessId, workflowAggregateId, recordedBefore);
+    // under every id this workflow service serves: the tasks of a called process are written
+    // down under the id of that process, and the end of a called process releases nothing,
+    // because the workflow goes on in the process which called it
+    var released = 0;
+    for (final var servedId : bpmnProcessIdsToReadUnder) {
+      released += deliveryLog.releaseRecordsOf(workflowModuleId, servedId, workflowAggregateId, recordedBefore);
+    }
     log.debug(
-        "Released {} task-delivery record(s) of the ended workflow '{}' (BPMN process '{}' of "
+        "Released {} task-delivery record(s) of the ended workflow '{}' (BPMN processes {} of "
             + "workflow module '{}')",
         released,
         workflowAggregateId,
-        bpmnProcessId,
+        bpmnProcessIdsToReadUnder,
         workflowModuleId);
     return released;
 
@@ -1365,11 +1370,13 @@ public final class DeliveryRecords {
   /**
    * The BPMS' own id of the workflow of the given aggregate, as far as a record knows one.
    * <p>
-   * Two reads, in this order, under every BPMN process id this workflow service serves. The row
-   * about the START of that workflow comes first: it is a lookup by key, it exists from the
+   * Two reads, in this order. The row about the START of that workflow comes first, under every
+   * BPMN process id this workflow service serves: it is a lookup by key, it exists from the
    * moment the workflow was created, and it holds the id of the workflow this aggregate IS. The
    * OPEN records of the aggregate are the second read, which answers for a workflow started
-   * before the start row existed and for one whose start row the retention took. Either way a
+   * before the start row existed and for one whose start row the retention took. That read
+   * looks under this process' own id only. A task of a called process names the instance of
+   * the called process, and that instance is not the workflow of the aggregate. Either way a
    * workflow VanillaBP heard about is named here after a restart, which the election cache
    * cannot promise. The first row naming a workflow answers - the rows of one aggregate and one
    * BPMN process belong to one workflow.
@@ -1401,17 +1408,17 @@ public final class DeliveryRecords {
           return started;
         }
       }
-      for (final var candidate : bpmnProcessIdsToReadUnder) {
-        final var known = deliveryLog
-            .openTasksOfAggregate(workflowModuleId, candidate, workflowAggregateId.toString())
-            .stream()
-            .map(TaskDelivery::workflowId)
-            .filter(java.util.Objects::nonNull)
-            .findFirst()
-            .orElse(null);
-        if (known != null) {
-          return known;
-        }
+      // the open tasks of THIS process only: a task of a called process names the instance of
+      // that process, which is not the workflow of the aggregate
+      final var known = deliveryLog
+          .openTasksOfAggregate(workflowModuleId, bpmnProcessId, workflowAggregateId.toString())
+          .stream()
+          .map(TaskDelivery::workflowId)
+          .filter(java.util.Objects::nonNull)
+          .findFirst()
+          .orElse(null);
+      if (known != null) {
+        return known;
       }
     } catch (final RuntimeException e) {
       // a hint nobody can read is a hint nobody has: the election runs either way, one
@@ -1464,21 +1471,21 @@ public final class DeliveryRecords {
                 ? versionOfThisProcess(started)
                 : versionOfAnOpenTask(deliveryLog, workflowAggregateId, started.workflowId()));
       }
-      for (final var candidate : bpmnProcessIdsToReadUnder) {
-        final var known = deliveryLog
-            .openTasksOfAggregate(workflowModuleId, candidate, workflowAggregateId.toString())
-            .stream()
-            .filter(row -> row.workflowId() != null)
-            .findFirst()
-            .orElse(null);
-        if (known != null) {
-          return startOf(
-              known.adapterId(),
-              known.workflowId(),
-              versionOfThisProcess(known) != null
-                  ? versionOfThisProcess(known)
-                  : versionOfAnOpenTask(deliveryLog, workflowAggregateId, known.workflowId()));
-        }
+      // the same rule as for the id alone: an open task of a called process names an instance
+      // which is not the workflow of the aggregate
+      final var known = deliveryLog
+          .openTasksOfAggregate(workflowModuleId, bpmnProcessId, workflowAggregateId.toString())
+          .stream()
+          .filter(row -> row.workflowId() != null)
+          .findFirst()
+          .orElse(null);
+      if (known != null) {
+        return startOf(
+            known.adapterId(),
+            known.workflowId(),
+            versionOfThisProcess(known) != null
+                ? versionOfThisProcess(known)
+                : versionOfAnOpenTask(deliveryLog, workflowAggregateId, known.workflowId()));
       }
     } catch (final RuntimeException e) {
       // the same as for the id alone: a record nobody can read is a record nobody has

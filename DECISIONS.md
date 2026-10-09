@@ -4611,6 +4611,9 @@ opens its own listener or job worker and asks for its own variables.
 
 ### 123. A task in a called process is bound by its own process, not by the one at the top
 
+*Decision 124 extends this: a called process is not a workflow of its own, so its start and its end do not reach
+the application. That decision waits in `DECISIONS.pending/949.md` for its number.*
+
 Proposed by story 948 after a question of the Business Cockpit. Decided by the maintainer on
 2026-10-09.
 

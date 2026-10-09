@@ -18,10 +18,17 @@ public interface WorkflowEndedInvoker {
   /**
    * Whether the application wants to be told about the end of workflows of the
    * given BPMN process.
+   * <p>
+   * The answer is <code>false</code> for a called process: a process the application
+   * declares only in <code>&#64;WorkflowService(secondaryBpmnProcesses = ...)</code> and
+   * which a model of this boot was deployed for. Its end is a step of the workflow which
+   * called it, and that workflow has not ended yet. An adapter which reports the
+   * cancelation of an instance to have its open tasks canceled may still do so for a
+   * called process, see {@link #workflowEnded(String, String, WorkflowEndedContext)}.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
-   * @return Whether a <code>&#64;WorkflowEnded</code> method is registered
+   * @return Whether the end of a workflow of that process has to be reported
    */
   boolean workflowEndedHandlerExists(
       String workflowModuleId,
@@ -37,6 +44,13 @@ public interface WorkflowEndedInvoker {
    * A missing workflow aggregate is NOT an error here: an application may delete
    * the aggregate of a workflow which ended, and a notification arriving after that
    * is logged and skipped rather than failing the BPMS' transaction.
+   * <p>
+   * <strong>A called process:</strong> for a process
+   * {@link #workflowEndedHandlerExists(String, String)} answers <code>false</code> for,
+   * the core only reports the tasks it still believes open in that instance as canceled.
+   * It calls no <code>&#64;WorkflowEnded</code> method, keeps the election hint and
+   * releases no delivery records, because the workflow goes on in the calling process.
+   * The records of a called process are released when the workflow at the top ends.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID

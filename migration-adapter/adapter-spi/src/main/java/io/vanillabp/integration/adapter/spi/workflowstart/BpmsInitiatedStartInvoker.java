@@ -122,4 +122,38 @@ public interface BpmsInitiatedStartInvoker {
       String bpmnProcessId,
       BpmsInitiatedStartContext context);
 
+  /**
+   * Whether the start of an instance of that BPMN process is the start of a workflow.
+   * <p>
+   * The answer is <code>false</code> for a called process: a process the application declares
+   * only in <code>&#64;WorkflowService(secondaryBpmnProcesses = ...)</code> and which a model of
+   * this boot was deployed for. Such an instance runs on the workflow aggregate of the process
+   * which called it, so its start is a step of that workflow and not a workflow of its own. The
+   * core builds no aggregate for it and writes no start row.
+   * <p>
+   * An adapter asks this before it reports a start through
+   * {@link #startWorkflowByBpms(String, String, BpmsInitiatedStartContext)}, and where the answer
+   * is <code>false</code> it reports nothing. Where the start listener is written into the model,
+   * the adapter asks while it wires the model and leaves the listener out. Where the listener is
+   * attached at runtime and has other work to do as well, the adapter asks when it fires.
+   * <p>
+   * An id the application declares as a secondary process without deploying a model for it is
+   * the id a renamed process left behind. Its workflows were started under that id, so for such
+   * an id the answer stays <code>true</code>.
+   * <p>
+   * The default answers <code>true</code>, which is what every process got before this method
+   * existed.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @return Whether the start of an instance of that process starts a workflow
+   */
+  default boolean startsAWorkflowOfItsOwn(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return true;
+
+  }
+
 }

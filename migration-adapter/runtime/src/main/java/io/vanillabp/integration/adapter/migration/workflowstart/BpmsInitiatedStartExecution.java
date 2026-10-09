@@ -98,6 +98,62 @@ public final class BpmsInitiatedStartExecution {
   }
 
   /**
+   * Answers the start of a called process, which is no workflow of its own. Nothing is built
+   * and no start row is written: the instance runs on the workflow aggregate of the process
+   * which called it, and the id of that aggregate is all the adapter is handed back.
+   * <p>
+   * Only a model deployed before adapters asked
+   * {@link io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker#startsAWorkflowOfItsOwn}
+   * still reports such a start, because it carries the start listener of that time.
+   *
+   * @param <A> The workflow-aggregate type
+   * @param processService The process service of the called process
+   * @param context The adapter's notification
+   * @return The id the instance already carries, as the variables the adapter writes back
+   * @throws IllegalStateException Where the instance carries no id: a called process which
+   *           does not know its caller's aggregate cannot run any task
+   */
+  public static <A> BpmsInitiatedStartResult theStartOfACalledProcess(
+      final MigrationProcessService<A> processService,
+      final BpmsInitiatedStartContext context) {
+
+    final var aggregateIdName = aggregateIdNameIfAnswered(processService);
+    final var nameTheBpmsHolds = (context.getBusinessKey() != null) || (aggregateIdName != null)
+        ? nameTheBpmsHolds(processService, context)
+        : null;
+    if (nameTheBpmsHolds == null) {
+      throw new IllegalStateException(
+          """
+              The called process '%s' of workflow module '%s' started at start event '%s'%s without \
+              the id of a workflow aggregate! It is declared in 'secondaryBpmnProcesses', so it \
+              runs on the aggregate of the process which called it, and VanillaBP builds no \
+              aggregate for it. Let the call activity hand over the id of the caller's workflow \
+              aggregate%s."""
+              .formatted(
+                  processService.getBpmnProcessId(),
+                  processService.getWorkflowModuleId(),
+                  context.getStartEventId(),
+                  describeOrigin(context),
+                  aggregateIdName == null
+                      ? ""
+                      : " in the process variable '%s'".formatted(aggregateIdName)));
+    }
+    log
+        .debug(
+            "The called process '{}' (workflow module '{}') started for workflow '{}' - it is a step of "
+                + "the workflow which called it, so nothing is built and no start is written down",
+            processService.getBpmnProcessId(),
+            processService.getWorkflowModuleId(),
+            nameTheBpmsHolds);
+    final Map<String, Object> variables = new LinkedHashMap<>();
+    if (aggregateIdName != null) {
+      variables.put(aggregateIdName, nameTheBpmsHolds);
+    }
+    return new BpmsInitiatedStartResult(nameTheBpmsHolds, aggregateIdName, variables, false);
+
+  }
+
+  /**
    * The name the BPMS already has for this workflow, wherever that BPMS keeps it.
    * <p>
    * Camunda 7 keeps it as the business key. A BPMS without a business key of its own -

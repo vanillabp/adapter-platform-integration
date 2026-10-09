@@ -1628,7 +1628,8 @@ since nothing of an ended instance can be redelivered.
   method answers `true` where the release is switched on, even without a
   `@WorkflowEnded` method. That is the whole reason no adapter had to change for this.
 - The deletion runs in `WorkflowEndedHandlers.workflowEnded`, inside the transaction that
-  notification opens anyway, bounded by workflow module, BPMN process, aggregate and by
+  notification opens anyway, under every BPMN process id the workflow service serves (a called
+  process reports no end of its own), bounded by workflow module, BPMN process, aggregate and by
   an `Instant` taken BEFORE the notification is processed. The time bound is what keeps
   the records of a SECOND workflow on the same aggregate, which is possible since
   aggregates outlive their workflows.
@@ -3054,6 +3055,22 @@ point is that nothing depends on it:
 
 `WorkflowEndedTest` holds all four bullets, `withoutAMethodNothingHappens` for the question
 asked while wiring and `aDeletedAggregateIsNoError` for the aggregate which is gone.
+
+#### A called process is no workflow of its own
+
+A process declared only in `secondaryBpmnProcesses`, with a model deployed during this boot, is a
+called process (`WorkflowTaskRegistry.isACalledProcess`). It runs on the aggregate of its caller,
+so its start and its end are steps of that workflow. `workflowEndedHandlerExists` and
+`startsAWorkflowOfItsOwn` answer `false` for it, and an adapter leaves its listeners out. A
+notification which still arrives is answered without effect on the workflow: an end only cancels
+the open tasks of that instance, a start builds nothing and writes no start row. The end of the
+workflow at the top releases the delivery records of every served id, because nothing else ends
+the records of the called process any more.
+
+The second half of the rule keeps renamed processes working. The id a renamed process left behind
+is declared as a secondary process too, but no model arrives for it, and the workflows the BPMS
+still holds under it were started under it. `ACalledProcessIsNoWorkflowTest` on both platforms
+holds both halves, see `DECISIONS.pending/949.md` in the repository.
 
 #### A workflow which is gone cancels what it was waiting for
 

@@ -348,6 +348,27 @@ public class OpenUserTasksOfAnAggregateTest {
   }
 
   @Test
+  @DisplayName("Without a start row the workflow of the aggregate is never the instance of a called process")
+  public void withoutAStartRowACalledProcessNamesNoWorkflow() {
+
+    givenAnOpenTask("approve", CALLED_PROCESS, SUB_WORKFLOW, "USER_TASK", "COMPLETION_PENDING", Instant.now());
+
+    assertTrue(
+        election.workflowIdOf(MODULE, PROCESS, AGGREGATE).isEmpty(),
+        "the open task of the called process names its own instance, which is not the workflow");
+    assertTrue(election.workflowStartOf(MODULE, PROCESS, AGGREGATE).isEmpty());
+
+    givenAnOpenTask("review", PROCESS, WORKFLOW, "USER_TASK", "COMPLETION_PENDING", Instant.now());
+
+    assertEquals(
+        java.util.Optional.of(WORKFLOW),
+        election.workflowIdOf(MODULE, PROCESS, AGGREGATE),
+        "an open task of the process itself still names the workflow where the start row is missing");
+    assertEquals(WORKFLOW, election.workflowStartOf(MODULE, PROCESS, AGGREGATE).orElseThrow().workflowId());
+
+  }
+
+  @Test
   @DisplayName("Nothing known, a process this application does not serve, and a log which cannot be read answer an empty list")
   public void nothingKnownIsAnEmptyList() {
 
