@@ -1,6 +1,7 @@
 package io.vanillabp.integration.adapter.spi.workflowtask;
 
 import java.util.Collection;
+import java.util.List;
 
 /**
  * What a BPMS adapter calls back into VanillaBP's core WHILE IT DEPLOYS, implemented by
@@ -21,6 +22,8 @@ import java.util.Collection;
  * <code>wireBpmn</code> honors the <code>deployment-failure</code> policy;</li>
  * <li>{@link #taskParameterNames(String, String, String)} - if your BPMS ships a variable
  * payload with a delivery, you have to know the names BEFORE you subscribe;</li>
+ * <li>{@link #extensionTaskParameterNames(String, String, List)} - the same for the
+ * methods of the extensions, if your BPMS hands a task to one channel only;</li>
  * <li>{@link #multiInstanceElementNames(String, String, String)} - which iterations a
  * handler wants the item of, so a model handing over none is refused while it is
  * deployed;</li>
@@ -453,6 +456,49 @@ public interface WorkflowTaskWiring {
       final String taskDefinitionOrActivityId) {
 
     return java.util.List.of();
+
+  }
+
+  /**
+   * The process variables the methods of the EXTENSIONS read with
+   * <code>&#64;TaskParam</code> for one element, over every extension which registered
+   * a handler contract - the names as the annotation spells them. The counterpart of
+   * {@link #taskParameterNames(String, String, String)}, which answers for the
+   * <code>&#64;WorkflowTask</code> methods only.
+   * <p>
+   * It is meant for a BPMS which hands a task to exactly ONE channel. The
+   * Process-Engine-API is one: it delivers a task to one subscription, so an extension
+   * gets no channel of its own and reads what the adapter's subscription delivered. That
+   * subscription has to ask for what the extensions read as well, and the adapter cannot
+   * ask each extension, because it does not know their annotations. A BPMS where an
+   * extension opens a channel of its own (a Camunda 7 listener, a Camunda 8 job worker)
+   * does not need this: the extension asks for its own variables there.
+   * <p>
+   * Pass the keys the way the extensions look an element up, most wanted first: the
+   * BPMN element id, then the task definition. Each extension's methods are found by
+   * walking those keys, and the answer is the UNION over every method which may run for
+   * this element in some version. It may name a variable too many, but never misses one.
+   * The names are sorted and duplicate-free, so a subscription built from them stays the
+   * same across restarts. Ask this next to {@link #taskParameterNames}, not instead of
+   * it, and fetch the union of both answers.
+   * <p>
+   * The answer covers the contracts registered and the workflow services scanned when it
+   * is asked, so ask it as late as you can: when you open the channel, not earlier. The
+   * default answers nothing, which keeps a test double compiled against an older core
+   * unchanged.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param lookupKeys The keys an extension method may be matched by, most wanted first
+   * @return The parameter names, sorted; empty if no extension registered a contract or
+   *         none of their methods serving these keys declares a <code>&#64;TaskParam</code>
+   */
+  default Collection<String> extensionTaskParameterNames(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final List<String> lookupKeys) {
+
+    return List.of();
 
   }
 

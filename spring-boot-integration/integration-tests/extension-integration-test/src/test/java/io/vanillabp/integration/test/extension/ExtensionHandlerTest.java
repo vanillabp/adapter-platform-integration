@@ -14,6 +14,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 import io.vanillabp.extension.sample.SampleNote;
 import io.vanillabp.extension.sample.SampleNoteDetails;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
@@ -35,6 +36,9 @@ public class ExtensionHandlerTest {
 
   @Autowired
   private ExtensionHandlers handlers;
+
+  @Autowired
+  private WorkflowTaskWiring workflowTaskWiring;
 
   @Autowired
   private TransactionTemplate transactionTemplate;
@@ -271,6 +275,39 @@ public class ExtensionHandlerTest {
         java.util.List.of(),
         handlers.taskParameterNames(SampleNote.class, "extension-module", "UnnotedProcess",
             java.util.List.of("Activity_1c9pa8d")));
+
+  }
+
+  @Test
+  @DisplayName("An adapter is told which process variables the methods of every extension read")
+  public void theAdapterReadsWhichTaskParametersTheExtensionsTake() {
+
+    // the keys in the order an extension looks an element up: element id first
+    assertEquals(
+        java.util.List.of(),
+        workflowTaskWiring
+            .extensionTaskParameterNames(
+                "extension-module",
+                "DummyProcess",
+                java.util.List.of(TestApplication.USER_TASK_ID, TestApplication.USER_TASK_DEFINITION)));
+    assertEquals(
+        java.util.List.of("reviewer"),
+        workflowTaskWiring
+            .extensionTaskParameterNames(
+                "extension-module",
+                "DummyProcess",
+                java.util.List.of(TestApplication.USER_TASK_DEFINITION, TestApplication.USER_TASK_ID)));
+    assertEquals(
+        java.util.List.of("firstGenerationInput", "laterGenerationInput"),
+        workflowTaskWiring
+            .extensionTaskParameterNames(
+                "extension-module",
+                "DummyProcess",
+                java.util.List.of("Activity_TwoGenerations")));
+    assertEquals(
+        java.util.List.of("kind"),
+        workflowTaskWiring
+            .extensionTaskParameterNames("extension-module", "DummyProcess", java.util.List.of("Activity_1c9pa8d")));
 
   }
 

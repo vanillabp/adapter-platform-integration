@@ -1624,6 +1624,16 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   }
 
+  @Override
+  public Collection<String> extensionTaskParameterNames(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final List<String> lookupKeys) {
+
+    return extensionHandlers.taskParameterNamesOfEveryContract(workflowModuleId, bpmnProcessId, lookupKeys);
+
+  }
+
   /**
    * Which elements of one task of one held version are iterated without naming the value
    * of a round although a method serving that version reads it.

@@ -20,6 +20,7 @@ import io.vanillabp.extension.sample.SampleNote;
 import io.vanillabp.extension.sample.SampleNoteDetails;
 import io.vanillabp.extension.sample.SampleNoteService;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import io.vanillabp.integration.extension.spi.election.WorkflowElection;
 import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
 import io.vanillabp.integration.runtime.delivery.JdbcTaskDeliveryLog;
@@ -72,6 +73,9 @@ public class ExtensionEnablementTest {
 
   @Inject
   ExtensionHandlers handlers;
+
+  @Inject
+  WorkflowTaskWiring workflowTaskWiring;
 
   @Inject
   WorkflowElection election;
@@ -300,6 +304,34 @@ public class ExtensionEnablementTest {
     assertEquals(
         List.of(),
         handlers.taskParameterNames(SampleNote.class, MODULE, "NobodyDeclaredThis", List.of("TheServiceTask")));
+
+  }
+
+  @Test
+  @DisplayName("An adapter is told which process variables the methods of every extension read")
+  public void theAdapterReadsWhichTaskParametersTheExtensionsTake() {
+
+    // the keys in the order an extension looks an element up: element id first
+    assertEquals(
+        List.of(),
+        workflowTaskWiring
+            .extensionTaskParameterNames(
+                MODULE,
+                PROCESS,
+                List.of(NoteTaskWiringSource.ACTIVITY_ID, NoteTaskWiringSource.TASK_DEFINITION)));
+    assertEquals(
+        List.of("reviewer"),
+        workflowTaskWiring
+            .extensionTaskParameterNames(
+                MODULE,
+                PROCESS,
+                List.of(NoteTaskWiringSource.TASK_DEFINITION, NoteTaskWiringSource.ACTIVITY_ID)));
+    assertEquals(
+        List.of("firstGenerationInput", "laterGenerationInput"),
+        workflowTaskWiring.extensionTaskParameterNames(MODULE, PROCESS, List.of("Activity_TwoGenerations")));
+    assertEquals(
+        List.of("kind"),
+        workflowTaskWiring.extensionTaskParameterNames(MODULE, PROCESS, List.of("TheServiceTask")));
 
   }
 

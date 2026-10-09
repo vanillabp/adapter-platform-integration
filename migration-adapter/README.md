@@ -3807,6 +3807,18 @@ too many but never misses one (decision 121 in the repository's `DECISIONS.md`).
 `ExtensionHandlerRegistryTest` and `ExtensionHandlerVersionsTest` hold the walk in the core, and
 each platform reads the answer out of a booted application.
 
+**What every extension reads, asked by an adapter.** Some BPMS hand a task to one channel only.
+The Process-Engine-API is one: a task goes to exactly one subscription, so an extension gets no
+channel of its own and reads what the adapter's subscription delivered. That subscription has to
+fetch what the extensions read too, but the adapter does not know their annotations.
+`WorkflowTaskWiring#extensionTaskParameterNames(module, process, keys)` answers it: the registry
+walks the keys for each registered contract on its own, the same walk as above, and returns the
+union over all of them. The adapter asks it next to `taskParameterNames` and fetches both. It is a
+second method rather than a wider answer of the first, so what `taskParameterNames` answers stays
+the same (decision 122 in the repository's `DECISIONS.md`).
+`ExtensionHandlerRegistryTest#theTaskParametersOfEveryExtensionAreUnited` holds it in the core, and
+each platform reads it out of a booted application.
+
 **Registration order does not matter.** Whether the extension's bean or the scan of the
 workflow services comes first depends on what else the application does, so a contract
 registered later is applied to the classes registered so far (decision 36 in the
