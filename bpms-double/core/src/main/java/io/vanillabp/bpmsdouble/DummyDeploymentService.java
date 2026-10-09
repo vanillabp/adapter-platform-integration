@@ -119,6 +119,24 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
   }
 
   /**
+   * Which BPMN processes got a start listener attached - only a process whose start is the
+   * start of a workflow gets one. A called process does not.
+   */
+  private final java.util.List<String> processesWithStartListener = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+  /**
+   * The BPMN processes this instance decided to attach a start listener to, in the order they
+   * were wired. A test reads it to show that a called process is left without one.
+   *
+   * @return A copy, so a test may keep it while the deployment goes on
+   */
+  public java.util.List<String> getProcessesWithStartListener() {
+
+    return java.util.List.copyOf(processesWithStartListener);
+
+  }
+
+  /**
    * Reports that a workflow ended, like a real adapter does from its process-end
    * listener. Triggered by integration tests.
    *
@@ -435,6 +453,15 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
             source -> collaborators
                 .workflowTaskWiring()
                 .registerProcessVersions(adapterId, workflowModuleId, bpmnProcessId, processVersions));
+
+    // like a real adapter: the start of a called process is a step of the workflow which
+    // called it, so it gets no start listener
+    if (collaborators
+        .bpmsInitiatedStartInvoker()
+        .map(invoker -> invoker.startsAWorkflowOfItsOwn(workflowModuleId, bpmnProcessId))
+        .orElse(Boolean.FALSE)) {
+      processesWithStartListener.add(bpmnProcessId);
+    }
 
     // like a real adapter: a model pays for the end notification only where the
     // application asked for one

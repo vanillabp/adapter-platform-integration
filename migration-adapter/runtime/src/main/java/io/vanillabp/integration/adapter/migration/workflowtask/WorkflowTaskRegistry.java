@@ -73,6 +73,12 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
      */
     private volatile boolean wiringValidated = false;
 
+    /**
+     * Whether a workflow service class declares this process as its
+     * <code>bpmnProcess</code>, and not only in its <code>secondaryBpmnProcesses</code>.
+     */
+    private volatile boolean declaredAsPrimary = false;
+
   }
 
   private final TransactionRunner transactionRunner;
@@ -458,6 +464,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
           });
       entry.workflowServiceClasses.add(workflowServiceClass);
       entry.processService = processService;
+      if (!declaresOnlyAsSecondary(workflowServiceClass, bpmnProcessId)) {
+        entry.declaredAsPrimary = true;
+      }
     }
     // the adapters report their catalogs of versions to this registry while they wire their
     // BPMN, and the process service needs them to judge a row written without a version
@@ -489,6 +498,48 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
             workflowServiceBean,
             beanResolver,
             processService);
+
+  }
+
+  /**
+   * Whether the class names that process in its <code>secondaryBpmnProcesses</code> and not as
+   * its <code>bpmnProcess</code>. A class without the annotation is a test double registering
+   * handlers directly, and it counts as declaring its process as the primary one.
+   */
+  private static boolean declaresOnlyAsSecondary(
+      final Class<?> workflowServiceClass,
+      final String bpmnProcessId) {
+
+    final var workflowService = workflowServiceClass.getAnnotation(io.vanillabp.spi.service.WorkflowService.class);
+    if ((workflowService == null) || bpmnProcessId.equals(workflowService.bpmnProcess().bpmnProcessId())) {
+      return false;
+    }
+    return java.util.Arrays
+        .stream(workflowService.secondaryBpmnProcesses())
+        .anyMatch(secondary -> bpmnProcessId.equals(secondary.bpmnProcessId()));
+
+  }
+
+  /**
+   * Whether that process is a called process: the application declares it only as a secondary
+   * process, and an adapter deployed a model for it during this boot. Such a process is no
+   * workflow of its own. It runs on the workflow aggregate of the process which called it, so
+   * its start and its end do not reach the application.
+   * <p>
+   * A secondary id without a model is the id a renamed process left behind. The BPMS still
+   * holds workflows which were started under that id, so they keep their start and their end.
+   * Why, see decision 124 in the repository's {@code DECISIONS.md}.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @return Whether an instance of that process is part of the workflow which called it
+   */
+  public boolean isACalledProcess(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    return (entry != null) && !entry.declaredAsPrimary && entry.wiringValidated;
 
   }
 
@@ -1393,6 +1444,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final String bpmnProcessId,
       final Collection<BpmsInitiatedStartSpec> startEvents) {
 
+    if (isACalledProcess(workflowModuleId, bpmnProcessId)) {
+      refuseStartEventsTheBpmsFiresInACalledProcess(workflowModuleId, bpmnProcessId, startEvents);
+      return;
+    }
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     bpmsInitiatedStarts
         .validate(
@@ -1405,6 +1460,39 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   }
 
+  /**
+   * Ends the deployment of a called process which holds a start event the BPMS fires by itself.
+   * The start of a called process starts no workflow, so nothing would build the aggregate of
+   * the instance such a start event creates. The <code>&#64;WorkflowStartedByBpms</code> methods
+   * of the class are not judged against a called process, because they serve the process which
+   * starts the workflow.
+   */
+  private static void refuseStartEventsTheBpmsFiresInACalledProcess(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final Collection<BpmsInitiatedStartSpec> startEvents) {
+
+    final var firedByTheBpms = startEvents
+        .stream()
+        .filter(spec -> (spec.kind() == io.vanillabp.spi.service.BpmsStartTrigger.Kind.TIMER) || (spec
+            .kind() == io.vanillabp.spi.service.BpmsStartTrigger.Kind.SIGNAL) || (spec
+                .kind() == io.vanillabp.spi.service.BpmsStartTrigger.Kind.CONDITIONAL))
+        .map(BpmsInitiatedStartSpec::elementId)
+        .toList();
+    if (firedByTheBpms.isEmpty()) {
+      return;
+    }
+    throw new IllegalStateException(
+        """
+            BPMN process '%s' of workflow module '%s' is declared in 'secondaryBpmnProcesses', so it \
+            is a called process and starts no workflow of its own. But it has start event(s) the \
+            BPMS fires on its own: %s. Nothing would build the workflow aggregate of an instance \
+            such a start event creates. Either declare the process as the 'bpmnProcess' of a \
+            @WorkflowService class, or remove those start events from the model."""
+            .formatted(bpmnProcessId, workflowModuleId, firedByTheBpms));
+
+  }
+
   @Override
   public void reportStartMessages(
       final String adapterId,
@@ -1413,6 +1501,15 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final Collection<String> messageNames) {
 
     startMessages.report(adapterId, workflowModuleId, bpmnProcessId, messageNames);
+
+  }
+
+  @Override
+  public boolean startsAWorkflowOfItsOwn(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return !isACalledProcess(workflowModuleId, bpmnProcessId);
 
   }
 
@@ -1438,6 +1535,14 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
                       .stream()
                       .map(key -> "'%s' (module '%s')".formatted(key.bpmnProcessId(), key.workflowModuleId()))
                       .collect(Collectors.joining(", "))));
+    }
+
+    if (isACalledProcess(workflowModuleId, bpmnProcessId)) {
+      // an adapter which asks startsAWorkflowOfItsOwn never gets here. A model deployed before
+      // the question existed still carries the listener, and its start is answered with the
+      // caller's aggregate, without a start row and without building anything
+      return io.vanillabp.integration.adapter.migration.workflowstart.BpmsInitiatedStartExecution
+          .theStartOfACalledProcess(entry.processService, context);
     }
 
     final var result = bpmsInitiatedStarts
@@ -1480,6 +1585,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final String workflowModuleId,
       final String bpmnProcessId) {
 
+    // the end of a called process is a step of the workflow which called it
+    if (isACalledProcess(workflowModuleId, bpmnProcessId)) {
+      return false;
+    }
     if (workflowEndedHandlers.handlerExists(workflowModuleId, bpmnProcessId)) {
       return true;
     }
@@ -1528,6 +1637,20 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     // ended has nothing open any more, so everything the application still believes is
     // open in it is gone and is reported as canceled
     reportTheTasksTheEndedWorkflowTookAway(workflowModuleId, entry, context);
+
+    if (isACalledProcess(workflowModuleId, bpmnProcessId)) {
+      // the tasks of the called instance are gone, and that is all there is to say: the
+      // workflow goes on in the process which called it, so no method is called, the
+      // election hint stays and the records are released when the workflow at the top ends
+      log
+          .debug(
+              "The called process '{}' of workflow module '{}' ended for workflow '{}' - that is a step "
+                  + "of the workflow which called it, so the application is not told",
+              bpmnProcessId,
+              workflowModuleId,
+              context.getWorkflowAggregateId());
+      return;
+    }
 
     workflowEndedHandlers
         .workflowEnded(entry.processService, context, entry.processService.getTransactionRunner(transactionRunner));

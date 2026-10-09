@@ -752,6 +752,24 @@ no `@WorkflowStartedByBpms` method never gets past the deployment (see decision 
 only plain or message start events needs no such method until somebody starts it past VanillaBP, and
 that start says so when it happens.
 
+A called process is not a workflow of its own. The application declares it in
+`@WorkflowService(secondaryBpmnProcesses = ...)`, and an instance of it runs on the aggregate of the
+process which called it. So its start and its end do not reach the application. Two questions tell
+your adapter which processes these are, and both are asked after `validateTaskWiring` of that
+process:
+
+- `BpmsInitiatedStartInvoker.startsAWorkflowOfItsOwn(module, process)` answers `false` for a called
+  process. Do not report its start. Where you write the start listener into the model, leave it out.
+  Where your listener is attached at runtime and has other work to do, such as handing the caller's
+  name on to the called instance, ask when it fires and skip only the report.
+- `WorkflowEndedInvoker.workflowEndedHandlerExists(module, process)` answers `false` for a called
+  process. A listener which only reports a cancelation, so that the core cancels the open tasks of
+  that instance, may stay. The core then reports those tasks and does nothing else.
+
+The id a renamed process left behind is declared as a secondary process too, but no model of this
+boot carries it. Its workflows were started under that id, so both questions answer `true` for it.
+Why, see decision 124 in the `DECISIONS.md` of the platform repository.
+
 ### 3.4 Letting the core work cancellations out for you
 
 A remote BPMS usually cannot say per element what it took away. Your adapter then calls

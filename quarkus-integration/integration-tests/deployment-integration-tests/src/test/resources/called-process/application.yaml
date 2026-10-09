@@ -1,0 +1,17 @@
+quarkus:
+  datasource:
+    db-kind: h2
+    jdbc:
+      url: jdbc:h2:mem:called-process;DB_CLOSE_DELAY=-1
+vanillabp:
+  adapters:
+    demo1:
+      type: dummy
+      test: 1
+  delivery:
+    release-on-workflow-end: true
+  workflow-modules:
+    called-module:
+      adapters:
+        demo1:
+          resources-location: classpath:processes/called
