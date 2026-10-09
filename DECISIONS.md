@@ -4608,3 +4608,51 @@ so the javadoc and the ADAPTER-AUTHORS guide state it.
 The method is a default method which answers nothing, as in decision 121, so a test double compiled
 against an older core keeps compiling. Camunda 7 and Camunda 8 do not need it. There an extension
 opens its own listener or job worker and asks for its own variables.
+
+### 123. A task in a called process is bound by its own process, not by the one at the top
+
+Proposed by story 948 after a question of the Business Cockpit. Decided by the maintainer on
+2026-10-09.
+
+A task, and every element an extension serves, belongs to the BPMN process which contains it. For
+an element of a called process (a call activity) that is the called process, never the process at
+the top which the workflow aggregate was started with. Whoever hands VanillaBP the BPMN process of
+a task or an element passes that id: an adapter delivering a task, and an extension asking about an
+element or calling a method for it.
+
+**Why.** The core registers methods per workflow service class and per BPMN process the class
+declares. A called process is declared through `secondaryBpmnProcesses`, and each declaration
+brings a version range of its own (decision 20). The version a BPMS reports with a task is the
+version of the called process, so only the id of the called process picks the declaration that
+version belongs to. The called process is also the one every adapter names with a task: Camunda 8
+takes it from the job, Camunda 7 from the model it wired the task in, and the Process-Engine-API
+from the meta data of the task. So nobody has to translate an id.
+
+The id of the process at the top is not refused. A class serves every process it declares, so the
+same method is registered under both ids, and a question like `taskParameterNames` gets the same
+answer under either. That is why a wrong id can go unnoticed. What it gets wrong is everything
+which is kept per process: the version range, the catalog a version tag is placed in, the delivery
+record and the election hint written for the task, and the name of the element, which the core
+keeps for the process the adapter wired the element in.
+
+**The one place the process at the top counts.** The delivery log writes one row per workflow start,
+under the process the workflow was started with. Its instance id is the instance at the top, because
+that is the workflow of the aggregate. An extension reads it to link a task to the aggregate's
+workflow. Every row about a delivery stands under the process which delivered the task.
+
+**A reader who has only one id.** Somebody who addresses a workflow through its process service has
+the id of the process at the top, while the record of a task may stand under a called one. Such a
+reader asks for every id the workflow service serves, its own id first. Decision 30 reads the
+delivery record that way, and decision 5 reads the election hint that way. A new reader of this kind
+does the same.
+
+**What does not change.** Nothing in the behaviour. The javadoc of the extension SPI, the adapter
+SPI and the integration SPI said "the BPMN process" and left it open which one. It now says the
+process the element belongs to, at the type and at each parameter which takes the id of an
+element's process. Decision 120 says when a called process counts as claimed.
+
+Two existing tests hold the rule. `ProcessVersionMatchingTest#aSecondaryProcessCarriesItsOwnRange`
+registers one method for a primary and a secondary process with different ranges: version 3 runs
+under the id of the secondary process and is refused under the id of the primary one.
+`SecondaryProcessDeliveryTest` on Spring Boot delivers a task under the id of the called process and
+finds its record from the primary process service.
