@@ -73,6 +73,15 @@ import java.util.List;
  * somebody else's with
  * <code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;process&gt;.implemented-externally=true</code>.
  * A process which is not in a deployed file at all is not VanillaBP's business either.
+ * <p>
+ * <b>The BPMN process of a task</b> is the process the task belongs to, wherever a method
+ * here asks for one. For a task of a called process (a call activity) that is the called
+ * process, not the process at the top which the workflow aggregate was started with. The
+ * core binds methods per workflow service class and per process it declares, the called
+ * one included through <code>secondaryBpmnProcesses</code>, and each declaration brings a
+ * version range of its own. A class serves every process it declares, so the id of the
+ * process at the top may find the same method. But it applies the range declared for the
+ * process at the top, and that is the wrong one for a task of the called process.
  */
 public interface WorkflowTaskWiring {
 
@@ -445,7 +454,8 @@ public interface WorkflowTaskWiring {
    * making an adapter fetch an incomplete list.
    *
    * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
+   * @param bpmnProcessId The BPMN process the task belongs to - for a task of a called
+   *          process the called process, not the one at the top
    * @param taskDefinitionOrActivityId The task definition or BPMN activity ID
    * @return The declared parameter names, sorted; empty if no method is registered
    *         or none of them declares a <code>&#64;TaskParam</code>
@@ -488,7 +498,8 @@ public interface WorkflowTaskWiring {
    * unchanged.
    *
    * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
+   * @param bpmnProcessId The BPMN process the task belongs to - for a task of a called
+   *          process the called process, not the one at the top
    * @param lookupKeys The keys an extension method may be matched by, most wanted first
    * @return The parameter names, sorted; empty if no extension registered a contract or
    *         none of their methods serving these keys declares a <code>&#64;TaskParam</code>

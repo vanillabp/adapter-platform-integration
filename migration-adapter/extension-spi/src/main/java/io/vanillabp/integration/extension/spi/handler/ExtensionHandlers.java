@@ -24,6 +24,15 @@ import java.util.Optional;
  * <b>Exceptions of a handler method propagate unchanged</b> - the extension decides what
  * a failure means for its own event, since only it knows whether the BPMS repeats the
  * notification.
+ * <p>
+ * <b>The BPMN process of an element</b> is the process the element belongs to, wherever a
+ * method here asks for one. For an element of a called process (a call activity) that is
+ * the called process, not the process at the top which the workflow aggregate was started
+ * with. Methods are bound per workflow service class and per process it declares, the
+ * called one included through <code>secondaryBpmnProcesses</code>. A class serves every
+ * process it declares, so the id of the process at the top may find the same method. But
+ * the version an event names belongs to the called process, and under the id of the
+ * process at the top it is compared with the versions of the wrong process.
  */
 public interface ExtensionHandlers {
 
@@ -55,7 +64,8 @@ public interface ExtensionHandlers {
    *
    * @param annotationType The annotation of a registered contract
    * @param workflowModuleId The workflow module
-   * @param bpmnProcessId The BPMN process
+   * @param bpmnProcessId The BPMN process the element belongs to - for an element of a
+   *          called process the called process, not the one at the top
    * @param lookupKeys The keys a method may be matched by, most wanted first
    * @return Whether a method serves any of those keys
    */
@@ -82,7 +92,8 @@ public interface ExtensionHandlers {
    *
    * @param annotationType The annotation of a registered contract
    * @param workflowModuleId The workflow module
-   * @param bpmnProcessId The BPMN process
+   * @param bpmnProcessId The BPMN process the element belongs to - for an element of a
+   *          called process the called process, not the one at the top
    * @param lookupKeys The keys a method may be matched by, most wanted first
    * @param processVersion The version the BPMS reports, or <code>null</code> where it
    *          reports none
@@ -127,7 +138,8 @@ public interface ExtensionHandlers {
    *
    * @param annotationType The annotation of a registered contract
    * @param workflowModuleId The workflow module
-   * @param bpmnProcessId The BPMN process
+   * @param bpmnProcessId The BPMN process the element belongs to - for an element of a
+   *          called process the called process, not the one at the top
    * @param lookupKeys The keys a method may be matched by, most wanted first
    * @return The parameter names, sorted; empty where no method serves the keys or none of
    *         them takes a <code>&#64;TaskParam</code>
@@ -205,7 +217,8 @@ public interface ExtensionHandlers {
    * deployed under that process at all.
    *
    * @param workflowModuleId The workflow module
-   * @param bpmnProcessId The BPMN process, spelled the way the application writes it
+   * @param bpmnProcessId The BPMN process the element belongs to, spelled the way the
+   *          application writes it - for an element of a called process the called process
    * @param activityId The <code>id</code> attribute of the element
    * @return The element's name, or empty
    */

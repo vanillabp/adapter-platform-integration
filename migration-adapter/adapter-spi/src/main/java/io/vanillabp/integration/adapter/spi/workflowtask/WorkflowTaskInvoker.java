@@ -17,6 +17,15 @@ package io.vanillabp.integration.adapter.spi.workflowtask;
  * The rest answers questions a delivery raises: which variable carries the aggregate's id,
  * which values the aggregate shares, and whether a notification (a user-task lifecycle
  * event) has a handler at all.
+ * <p>
+ * <b>The BPMN process of a delivery</b> is the process the task belongs to. For a task of a
+ * called process (a call activity) that is the called process, not the process at the top
+ * which the workflow aggregate was started with. The core binds methods per workflow
+ * service class and per process it declares, the called one included through
+ * <code>secondaryBpmnProcesses</code>, and each declaration brings a version range of its
+ * own. A class serves every process it declares, so the id of the process at the top may
+ * find the same method. But it applies the range declared for the process at the top, and
+ * the delivery is recorded under the wrong process.
  */
 public interface WorkflowTaskInvoker {
 
@@ -29,7 +38,8 @@ public interface WorkflowTaskInvoker {
    * {@link TaskInvocationContext#runInCurrentTransaction()}).
    *
    * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
+   * @param bpmnProcessId The BPMN process the task belongs to - for a task of a called
+   *          process the called process, not the one at the top
    * @param context The invocation context supplied by the adapter
    * @return The outcome the adapter maps to the BPMS (complete /
    *         complete-with-BPMN-error / leave open)
@@ -195,7 +205,8 @@ public interface WorkflowTaskInvoker {
    * of the workflow (see decision 54 in the repository's DECISIONS.md).
    *
    * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
+   * @param bpmnProcessId The BPMN process the task belongs to - for a task of a called
+   *          process the called process, not the one at the top
    * @param taskDefinitionOrActivityId The task definition or BPMN activity ID
    * @return Whether a matching method is registered
    */
