@@ -36,6 +36,10 @@
          proves it for outsiders by using it itself - see decision 33 in the repository's
          DECISIONS.md. -->
     <maven.deploy.skip>true</maven.deploy.skip>
+    <!-- the snapshot and the release go out through central-publishing-maven-plugin of the
+         profile 'central-portal', and that plugin does not read 'maven.deploy.skip'. This is
+         the property of release-parent which it does read -->
+    <skip.central.release>true</skip.central.release>
     <!-- and therefore no javadoc to check: the goal is bound in every module of this
          build, and a module which publishes nothing has no reader to write for -->
     <maven.javadoc.skip>true</maven.javadoc.skip>

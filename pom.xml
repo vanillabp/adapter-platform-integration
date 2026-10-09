@@ -5,7 +5,7 @@
   <parent>
     <groupId>io.vanillabp</groupId>
     <artifactId>release-parent</artifactId>
-    <version>1.2.1</version>
+    <version>1.3.0</version>
   </parent>
 
   <artifactId>adapter-platform-integration</artifactId>
@@ -51,14 +51,6 @@
     <developerConnection>scm:git:https://github.com/vanillabp/adapter-platform-integration.git</developerConnection>
     <url>http://github.com/vanillabp/adapter-platform-integration/tree/main</url>
   </scm>
-
-  <distributionManagement>
-    <snapshotRepository>
-      <id>github</id>
-      <name>Github Packages</name>
-      <url>https://maven.pkg.github.com/vanillabp/adapter-platform-integration</url>
-    </snapshotRepository>
-  </distributionManagement>
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
