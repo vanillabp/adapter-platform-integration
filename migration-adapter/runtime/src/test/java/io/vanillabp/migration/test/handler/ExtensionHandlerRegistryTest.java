@@ -96,6 +96,17 @@ public class ExtensionHandlerRegistryTest {
   }
 
   /**
+   * The annotation of a second extension, which reads process variables too.
+   */
+  @Retention(RetentionPolicy.RUNTIME)
+  @Target(ElementType.METHOD)
+  public @interface Glance {
+
+    String element() default "";
+
+  }
+
+  /**
    * The extension's own payload, bound by a binder it contributes.
    */
   public record Payload(String text) {
@@ -278,6 +289,36 @@ public class ExtensionHandlerRegistryTest {
 
       return "own-binding";
 
+    }
+
+  }
+
+  /**
+   * The methods of two extensions on the same elements, each reading variables of its
+   * own.
+   */
+  public static class ReadingTwoExtensionsService {
+
+    @Note(element = "Activity_Review")
+    public String noteByElementId(
+        @TaskParam("amount") final String amount) {
+
+      return "note";
+
+    }
+
+    @Note(element = "reviewTheNote")
+    public String noteByTaskDefinition(
+        @TaskParam("reviewer") final String reviewer) {
+
+      return "note";
+
+    }
+
+    @Glance(element = "reviewTheNote")
+    public void glanceByTaskDefinition(
+        @TaskParam("glanced") final String glanced,
+        @TaskParam("amount") final String amount) {
     }
 
   }
@@ -844,6 +885,61 @@ public class ExtensionHandlerRegistryTest {
         IllegalStateException.class,
         () -> handlers.taskParameterNames(Silent.class, MODULE, PROCESS, List.of("Activity_Review")));
     assertTrue(refused.getMessage().contains("@Silent"), refused.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("An adapter is told what the methods of every extension read for an element")
+  public void theTaskParametersOfEveryExtensionAreUnited() {
+
+    final var registry = new WorkflowTaskRegistry(new TransactionRunnerStub());
+    registry.getExtensionHandlers().register(noteContract());
+    registry
+        .getExtensionHandlers()
+        .register(HandlerContract
+            .of("glancing", Glance.class)
+            .lookupKeys(annotation -> List.of(((Glance) annotation).element()))
+            .coreParameters(CoreHandlerParameter.TASK_PARAM)
+            .build());
+    registry
+        .registerWorkflowService(
+            MODULE,
+            PROCESS,
+            ReadingTwoExtensionsService.class,
+            ReadingTwoExtensionsService::new,
+            type -> null,
+            processService(new InMemoryPersistence()));
+
+    // each extension walks the keys on its own: the method of the first one naming the
+    // element id ends its walk, while the second one serves only the task definition
+    assertEquals(
+        List.of("amount", "glanced"),
+        registry.extensionTaskParameterNames(MODULE, PROCESS, List.of("Activity_Review", "reviewTheNote")));
+    assertEquals(
+        List.of("amount", "glanced", "reviewer"),
+        registry.extensionTaskParameterNames(MODULE, PROCESS, List.of("reviewTheNote", "Activity_Review")));
+    // the answer belongs to one BPMN process
+    assertEquals(
+        List.of(),
+        registry.extensionTaskParameterNames(MODULE, "AnotherProcess", List.of("Activity_Review")));
+
+  }
+
+  @Test
+  @DisplayName("Where no extension registered a contract, an adapter is told no extension reads anything")
+  public void withoutAnExtensionNothingIsRead() {
+
+    final var registry = new WorkflowTaskRegistry(new TransactionRunnerStub());
+    registry
+        .registerWorkflowService(
+            MODULE,
+            PROCESS,
+            ReadingTwoExtensionsService.class,
+            ReadingTwoExtensionsService::new,
+            type -> null,
+            processService(new InMemoryPersistence()));
+
+    assertEquals(List.of(), registry.extensionTaskParameterNames(MODULE, PROCESS, List.of("Activity_Review")));
 
   }
 

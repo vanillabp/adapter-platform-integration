@@ -1029,6 +1029,9 @@ public class WorkflowTaskRegistryTest {
       assertTrue(
           untouched.taskParameterNames(MODULE, PROCESS, "withBindings").isEmpty(),
           "the SPI method is additive: an adapter which never heard of it keeps the behaviour it had");
+      assertTrue(
+          untouched.extensionTaskParameterNames(MODULE, PROCESS, java.util.List.of("withBindings")).isEmpty(),
+          "the SPI method is additive: a test double which never heard of it keeps compiling");
 
     }
 

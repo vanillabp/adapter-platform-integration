@@ -650,6 +650,45 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
       final List<String> lookupKeys) {
 
     requireContract(annotationType);
+    return namesReadBy(methodsWhichMayRun(annotationType, workflowModuleId, bpmnProcessId, lookupKeys));
+
+  }
+
+  /**
+   * What the methods of EVERY registered contract read for one element: the union of
+   * {@link #taskParameterNames(Class, String, String, List)} over all of them. This is
+   * what an adapter asks whose BPMS hands a task to one channel only, so that channel has
+   * to fetch what every extension reads as well (see decision 122 in the repository's
+   * DECISIONS.md).
+   *
+   * @param workflowModuleId The workflow module
+   * @param bpmnProcessId The BPMN process
+   * @param lookupKeys The keys a method may be matched by, most wanted first
+   * @return The parameter names, sorted and duplicate-free; empty where no contract is
+   *         registered or no method of any of them reads a variable here
+   */
+  public List<String> taskParameterNamesOfEveryContract(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final List<String> lookupKeys) {
+
+    // each contract is walked on its own: the keys of one extension never decide which
+    // method of another one runs
+    return namesReadBy(contracts
+        .keySet()
+        .stream()
+        .flatMap(annotationType -> methodsWhichMayRun(annotationType, workflowModuleId, bpmnProcessId, lookupKeys)
+            .stream())
+        .toList());
+
+  }
+
+  private List<ExtensionHandlerMethod> methodsWhichMayRun(
+      final Class<? extends Annotation> annotationType,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final List<String> lookupKeys) {
+
     final var registered = methods.get(new RegistryKey(workflowModuleId, bpmnProcessId, annotationType));
     if (registered == null) {
       return List.of();
@@ -668,7 +707,7 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
             .toList();
         mayRun.addAll(serving);
         if (serving.stream().anyMatch(ExtensionHandlerMethod::servesEveryVersion)) {
-          return namesReadBy(mayRun);
+          return mayRun;
         }
       }
       registered
@@ -676,7 +715,7 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
           .filter(ExtensionHandlerMethod::servesEveryKey)
           .forEach(mayRun::add);
     }
-    return namesReadBy(mayRun);
+    return mayRun;
 
   }
 
