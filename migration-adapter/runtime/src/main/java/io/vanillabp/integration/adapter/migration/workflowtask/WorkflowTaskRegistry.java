@@ -528,7 +528,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    * <p>
    * A secondary id without a model is the id a renamed process left behind. The BPMS still
    * holds workflows which were started under that id, so they keep their start and their end.
-   * Why, see {@code DECISIONS.pending/949.md} in the repository.
+   * Why, see decision 124 in the repository's {@code DECISIONS.md}.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID

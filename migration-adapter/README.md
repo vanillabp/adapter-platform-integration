@@ -3070,7 +3070,7 @@ the records of the called process any more.
 The second half of the rule keeps renamed processes working. The id a renamed process left behind
 is declared as a secondary process too, but no model arrives for it, and the workflows the BPMS
 still holds under it were started under it. `ACalledProcessIsNoWorkflowTest` on both platforms
-holds both halves, see `DECISIONS.pending/949.md` in the repository.
+holds both halves, see decision 124 in the repository's `DECISIONS.md`.
 
 #### A workflow which is gone cancels what it was waiting for
 

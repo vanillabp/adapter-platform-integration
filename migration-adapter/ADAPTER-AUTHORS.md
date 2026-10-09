@@ -768,7 +768,7 @@ process:
 
 The id a renamed process left behind is declared as a secondary process too, but no model of this
 boot carries it. Its workflows were started under that id, so both questions answer `true` for it.
-Why, see `DECISIONS.pending/949.md` in the platform repository.
+Why, see decision 124 in the `DECISIONS.md` of the platform repository.
 
 ### 3.4 Letting the core work cancellations out for you
 
