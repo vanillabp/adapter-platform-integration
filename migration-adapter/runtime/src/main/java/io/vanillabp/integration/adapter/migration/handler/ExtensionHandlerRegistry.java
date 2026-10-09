@@ -643,6 +643,62 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
   }
 
   @Override
+  public Collection<String> taskParameterNames(
+      final Class<? extends Annotation> annotationType,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final List<String> lookupKeys) {
+
+    requireContract(annotationType);
+    final var registered = methods.get(new RegistryKey(workflowModuleId, bpmnProcessId, annotationType));
+    if (registered == null) {
+      return List.of();
+    }
+    final var mayRun = new LinkedList<ExtensionHandlerMethod>();
+    synchronized (registered) {
+      // the walk of find, done for every version at once: a key reaches its methods only
+      // in the versions no earlier key serves, and the catch-all only where no key does.
+      // So the walk stops at the first method serving every version, because nothing
+      // after it ever runs for this element (see decision 121 in the repository's
+      // DECISIONS.md)
+      for (final var lookupKey : lookupKeys) {
+        final var serving = registered
+            .stream()
+            .filter(method -> method.serves(lookupKey))
+            .toList();
+        mayRun.addAll(serving);
+        if (serving.stream().anyMatch(ExtensionHandlerMethod::servesEveryVersion)) {
+          return namesReadBy(mayRun);
+        }
+      }
+      registered
+          .stream()
+          .filter(ExtensionHandlerMethod::servesEveryKey)
+          .forEach(mayRun::add);
+    }
+    return namesReadBy(mayRun);
+
+  }
+
+  /**
+   * The UNION of what the methods read, since a delivery has to satisfy whichever of them
+   * runs. Sorted, because a subscription which names variables is compared to itself
+   * across restarts.
+   */
+  private static List<String> namesReadBy(
+      final Collection<ExtensionHandlerMethod> methods) {
+
+    return methods
+        .stream()
+        .map(ExtensionHandlerMethod::getTaskParameterNames)
+        .flatMap(List::stream)
+        .distinct()
+        .sorted()
+        .toList();
+
+  }
+
+  @Override
   public Optional<Object> invoke(
       final HandlerCall call) {
 

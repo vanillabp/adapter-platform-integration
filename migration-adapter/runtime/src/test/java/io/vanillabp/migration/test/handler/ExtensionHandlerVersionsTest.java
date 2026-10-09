@@ -34,12 +34,14 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
 import io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog;
+import io.vanillabp.integration.extension.spi.handler.CoreHandlerParameter;
 import io.vanillabp.integration.extension.spi.handler.HandlerCall;
 import io.vanillabp.integration.extension.spi.handler.HandlerContext;
 import io.vanillabp.integration.extension.spi.handler.HandlerContract;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import io.vanillabp.spi.service.TaskParam;
 
 /**
  * The methods of an extension are chosen by the version of the BPMN process an event came
@@ -280,6 +282,46 @@ public class ExtensionHandlerVersionsTest {
 
   }
 
+  /**
+   * Two generations of one element reading different process variables, next to a method
+   * serving every element.
+   */
+  public static class ReadingGenerationsService {
+
+    @Note(element = "TheTask", version = "1")
+    public String theOldTask(
+        @TaskParam("oldInput") final String input) {
+
+      return "old";
+
+    }
+
+    @Note(element = "TheTask", version = ">1")
+    public String theNewTask(
+        @TaskParam("newInput") final String input) {
+
+      return "new";
+
+    }
+
+    @Note(element = HandlerContract.EVERY_KEY)
+    public String everything(
+        @TaskParam("fallback") final String fallback) {
+
+      return "every";
+
+    }
+
+    @Note(element = "AnotherTask", version = "2")
+    public String onlyForTheSecondVersion(
+        @TaskParam("secondInput") final String input) {
+
+      return "second";
+
+    }
+
+  }
+
   static class TransactionRunnerStub implements TransactionRunner {
 
     @Override
@@ -478,6 +520,7 @@ public class ExtensionHandlerVersionsTest {
             ? List.of()
             : List.of(((Note) annotation).element()))
         .versions(annotation -> List.of(((Note) annotation).version()))
+        .coreParameters(CoreHandlerParameter.TASK_PARAM)
         .parameterBinder(parameter -> parameter.getType().equals(Payload.class)
             ? Optional.of(HandlerContext::getPayload)
             : Optional.empty())
@@ -546,6 +589,27 @@ public class ExtensionHandlerVersionsTest {
     assertEquals("old/hello", handlers.invoke(call("TheTask", "1")).orElseThrow());
     assertEquals("new/hello", handlers.invoke(call("TheTask", "2")).orElseThrow());
     assertEquals("new/hello", handlers.invoke(call("TheTask", "7")).orElseThrow());
+
+  }
+
+  @Test
+  @DisplayName("The process variables of an element are the union over the versions its methods serve")
+  public void theTaskParametersCoverEveryVersion() {
+
+    final var handlers = registry(ReadingGenerationsService.class, ReadingGenerationsService::new, true)
+        .getExtensionHandlers();
+
+    // whichever generation the event comes from, it has to carry what that method reads.
+    // The method serving every element counts as well: no single method of the element
+    // serves every version, so the walk cannot rule the catch-all out, and one variable
+    // too many costs less than one missing
+    assertEquals(
+        List.of("fallback", "newInput", "oldInput"),
+        handlers.taskParameterNames(Note.class, MODULE, PROCESS, List.of("TheTask")));
+    // the catch-all runs in every version but the second for this element, so it counts
+    assertEquals(
+        List.of("fallback", "secondInput"),
+        handlers.taskParameterNames(Note.class, MODULE, PROCESS, List.of("AnotherTask")));
 
   }
 

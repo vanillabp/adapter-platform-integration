@@ -60,14 +60,18 @@ public class NoteWorkflowService {
   }
 
   /**
-   * The other one, naming the task definition of the same user task.
+   * The other one, naming the task definition of the same user task. It reads a process
+   * variable the method naming the element id does not, so the extension can tell which of
+   * the two its keys reach.
    *
    * @param prefilled The note this extension prefilled
+   * @param reviewer A process variable only this method reads
    * @return The note the extension publishes
    */
   @SampleNote(taskDefinition = NoteTaskWiringSource.TASK_DEFINITION)
   public SampleNoteDetails noteOfTheUserTaskByTaskDefinition(
-      final SampleNoteDetails prefilled) {
+      final SampleNoteDetails prefilled,
+      @TaskParam("reviewer") final String reviewer) {
 
     prefilled.setTitle("by-task-definition");
     return prefilled;
@@ -81,11 +85,13 @@ public class NoteWorkflowService {
    * each other here as well.
    *
    * @param prefilled The note this extension prefilled
+   * @param input A process variable the first generation of the model provides
    * @return The note the extension publishes
    */
   @SampleNote(element = "Activity_TwoGenerations", version = "1")
   public SampleNoteDetails noteOfTheFirstGeneration(
-      final SampleNoteDetails prefilled) {
+      final SampleNoteDetails prefilled,
+      @TaskParam("firstGenerationInput") final String input) {
 
     prefilled.setTitle("first generation");
     return prefilled;
@@ -96,11 +102,13 @@ public class NoteWorkflowService {
    * The other one, for every version deployed after the first.
    *
    * @param prefilled The note this extension prefilled
+   * @param input A process variable the later generations of the model provide
    * @return The note the extension publishes
    */
   @SampleNote(element = "Activity_TwoGenerations", version = ">1")
   public SampleNoteDetails noteOfTheLaterGenerations(
-      final SampleNoteDetails prefilled) {
+      final SampleNoteDetails prefilled,
+      @TaskParam("laterGenerationInput") final String input) {
 
     prefilled.setTitle("later generations");
     return prefilled;

@@ -232,6 +232,49 @@ public class ExtensionHandlerTest {
   }
 
   @Test
+  @DisplayName("The extension is told which process variables the methods of an element read")
+  public void theExtensionReadsWhichTaskParametersItsMethodsTake() {
+
+    assertEquals(
+        java.util.List.of("kind"),
+        handlers.taskParameterNames(SampleNote.class, "extension-module", "DummyProcess",
+            java.util.List.of("Activity_1c9pa8d")));
+    // the keys are walked like an invocation walks them: the method naming the element id
+    // serves every version, so the one naming the task definition never runs for it
+    assertEquals(
+        java.util.List.of(),
+        handlers
+            .taskParameterNames(
+                SampleNote.class,
+                "extension-module",
+                "DummyProcess",
+                java.util.List.of(TestApplication.USER_TASK_ID, TestApplication.USER_TASK_DEFINITION)));
+    assertEquals(
+        java.util.List.of("reviewer"),
+        handlers
+            .taskParameterNames(
+                SampleNote.class,
+                "extension-module",
+                "DummyProcess",
+                java.util.List.of(TestApplication.USER_TASK_DEFINITION, TestApplication.USER_TASK_ID)));
+    // two generations of one element: the event has to carry what either of them reads
+    assertEquals(
+        java.util.List.of("firstGenerationInput", "laterGenerationInput"),
+        handlers
+            .taskParameterNames(
+                SampleNote.class,
+                "extension-module",
+                "DummyProcess",
+                java.util.List.of("Activity_TwoGenerations")));
+    // the answer belongs to one BPMN process, not to the application
+    assertEquals(
+        java.util.List.of(),
+        handlers.taskParameterNames(SampleNote.class, "extension-module", "UnnotedProcess",
+            java.util.List.of("Activity_1c9pa8d")));
+
+  }
+
+  @Test
   @DisplayName("The extension is told the name a modeller wrote on a BPMN element")
   public void theExtensionReadsTheBpmnName() {
 

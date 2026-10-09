@@ -40,6 +40,12 @@ final class ExtensionHandlerMethod {
    */
   private final ServedVersions versions;
 
+  /**
+   * The process variables the core reads for this method's <code>&#64;TaskParam</code>
+   * parameters, sorted and duplicate-free.
+   */
+  private final List<String> taskParameterNames;
+
   ExtensionHandlerMethod(
       final HandlerContract contract,
       final Class<?> workflowServiceClass,
@@ -47,7 +53,8 @@ final class ExtensionHandlerMethod {
       final Supplier<Object> workflowServiceBean,
       final List<HandlerValueSource> parameterBinders,
       final List<String> lookupKeys,
-      final ServedVersions versions) {
+      final ServedVersions versions,
+      final List<String> taskParameterNames) {
 
     this.contract = contract;
     this.workflowServiceClass = workflowServiceClass;
@@ -56,6 +63,17 @@ final class ExtensionHandlerMethod {
     this.parameterBinders = parameterBinders;
     this.lookupKeys = lookupKeys;
     this.versions = versions;
+    this.taskParameterNames = taskParameterNames;
+
+  }
+
+  /**
+   * @return The process variables this method reads with <code>&#64;TaskParam</code>,
+   *         sorted, empty where it reads none
+   */
+  List<String> getTaskParameterNames() {
+
+    return taskParameterNames;
 
   }
 
