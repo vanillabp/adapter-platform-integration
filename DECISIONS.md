@@ -4545,3 +4545,39 @@ read as "VanillaBP does not know this workflow" and hide a wrong process id.
 `DeploymentServiceTest` holds the refusal, the line for the process and for one adapter, the line
 for another adapter, a line at the module and a line saying `false`. `UnclaimedBpmnProcessTest`
 holds both on both platforms.
+
+### 121. An extension asks the core which process variables its methods read
+
+An extension method may take a process variable with `@TaskParam`, like a `@WorkflowTask` method.
+Some BPMS hand out only the variables a subscriber named. A Camunda 8 job worker is one, and so is a
+Process-Engine-API subscription. Such an extension has to know the names before the first event
+arrives. For `@WorkflowTask` methods the core answers that with `WorkflowTaskWiring#taskParameterNames`.
+`ExtensionHandlers` had nothing like it, so the Business Cockpit noted the names itself while its
+methods were bound. It could only key them by the lookup key, so its answer was for the whole
+application and not for one BPMN process.
+
+`ExtensionHandlers#taskParameterNames(annotationType, workflowModuleId, bpmnProcessId, lookupKeys)`
+answers it now, from the registry which binds the methods. It differs from the `@WorkflowTask`
+method in two places. It takes the annotation, because one registry serves the contracts of every
+extension. And it takes the keys as a ranked list, because a method of an extension is found the way
+decision 51 describes, and the same keys have to give the same answer as `hasHandler` and `invoke`.
+
+The keys are walked like an invocation walks them, but for every version at once. The methods
+serving the first key count. If one of them serves every version, the walk stops, because no later
+key and no method serving every element can run for this element. Otherwise the next key counts as
+well, and in the end the method serving every element. The answer is the union of what all counted
+methods read: the event has to satisfy whichever of them runs.
+
+Where several methods of one key split the versions between them, the method serving every element
+counts although it may never run. Working that out would mean comparing version ranges and tags,
+some of which only the BPMS can place. A variable too many costs a few bytes per event. A variable
+missing gives a handler `null`. So the answer may hold one name too many, but never misses one.
+
+The answer holds exactly the `@TaskParam` names the core binds, as the `@WorkflowTask` method does.
+A `@TaskParam` parameter one of the extension's own binders claims is the extension's business, so
+it is left out. Multi-instance values are left out too. They are not plain process variables of the
+element, and the `@WorkflowTask` method does not name them either.
+
+The method is a default method which answers nothing. Only the core implements `ExtensionHandlers`,
+and an extension's test double should keep compiling. A default which answers nothing is wrong for
+an application, but no application ever sees it.
