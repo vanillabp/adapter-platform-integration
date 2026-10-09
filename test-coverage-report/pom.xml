@@ -23,6 +23,10 @@
   <properties>
     <!-- nothing to deploy - reports are published on Github pages -->
     <maven.deploy.skip>true</maven.deploy.skip>
+    <!-- the snapshot and the release go out through central-publishing-maven-plugin of the
+         profile 'central-portal', and that plugin does not read 'maven.deploy.skip'. This is
+         the property of release-parent which it does read -->
+    <skip.central.release>true</skip.central.release>
     <!-- and no javadoc either: these modules carry no source, they aggregate what the
          others measured -->
     <maven.javadoc.skip>true</maven.javadoc.skip>
