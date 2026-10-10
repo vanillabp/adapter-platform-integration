@@ -49,7 +49,7 @@
   <scm>
     <connection>scm:git:https://github.com/vanillabp/adapter-platform-integration.git</connection>
     <developerConnection>scm:git:https://github.com/vanillabp/adapter-platform-integration.git</developerConnection>
-    <url>http://github.com/vanillabp/adapter-platform-integration/tree/main</url>
+    <url>https://github.com/vanillabp/adapter-platform-integration/tree/main</url>
   </scm>
 
   <properties>
