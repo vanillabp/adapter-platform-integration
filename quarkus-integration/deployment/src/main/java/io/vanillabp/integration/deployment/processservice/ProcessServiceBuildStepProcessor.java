@@ -34,6 +34,7 @@ import io.quarkus.deployment.builditem.nativeimage.ReflectiveClassBuildItem;
 import io.quarkus.gizmo.ClassCreator;
 import io.quarkus.gizmo.MethodDescriptor;
 import io.quarkus.gizmo.SignatureBuilder;
+import io.vanillabp.integration.adapter.migration.workflowtask.AProcessBelongsToOneAggregate;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowServiceBelongsOnAClass;
 import io.vanillabp.integration.deployment.config.MigrationAdapterPropertiesBuildItem;
 import io.vanillabp.integration.deployment.validation.EnsureClassIsBeanValidationBuildItem;
@@ -178,6 +179,33 @@ public class ProcessServiceBuildStepProcessor {
     // classes which will serve the processes are resolved here, while the index can still
     // be asked who extends whom
     final var workflowServices = workflowServiceClassesOf(combinedIndex.getIndex(), workflowServiceAnnotations);
+
+    // a BPMN process belongs to exactly one workflow aggregate per workflow module, see
+    // decision 125 in the repository's DECISIONS.md. Said here, while building, with the same
+    // text Spring Boot uses while it starts
+    AProcessBelongsToOneAggregate.refuseProcessesOfSeveralAggregates(workflowServices
+        .stream()
+        .flatMap(service -> {
+          final var workflowModuleId = workflowModulesFound
+              .getWorkflowModuleId(
+                  applicationArchivesBuildItem,
+                  service.serviceClass());
+          final var aggregateClass = service
+              .annotation()
+              .value(ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS)
+              .asClass()
+              .name()
+              .toString();
+          final var primaryProcessId = primaryBpmnProcessId(service.annotation(), service.serviceClass());
+          return declaredBpmnProcessIds(service.annotation(), service.serviceClass())
+              .stream()
+              .map(declaredProcessId -> new AProcessBelongsToOneAggregate.Declaration(
+                  workflowModuleId, declaredProcessId, service
+                      .serviceClass()
+                      .name()
+                      .toString(), aggregateClass, declaredProcessId.equals(primaryProcessId)));
+        })
+        .toList());
 
     final var servicesByAggregate = new LinkedHashMap<Type, List<WorkflowServiceClass>>();
     workflowServices

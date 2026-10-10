@@ -421,26 +421,22 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         new RegistryKey(workflowModuleId, bpmnProcessId),
         key -> new RegistryEntry());
     synchronized (entry) {
-      // V1 semantics: if more than one @WorkflowService class declares the same
-      // BPMN process for DIFFERENT aggregates, the one previously built wins -
-      // later classes are skipped with a warning (same-aggregate classes merge)
+      // a BPMN process belongs to exactly one workflow aggregate, see
+      // decision 125 in the repository's DECISIONS.md. Both platforms refuse this
+      // earlier, Quarkus while building and Spring Boot once it knows the workflow modules,
+      // so this is the safety net for a platform which does not: keeping the class found
+      // first would let the order of the class scan decide what the process is
       if ((entry.processService != null) && !entry.processService.getWorkflowAggregateClass()
           .equals(processService.getWorkflowAggregateClass())) {
-        findings
-            .warn(
-                io.vanillabp.integration.spi.startup.StartupTopic.CODE,
-                "process '%s' of workflow module '%s'".formatted(bpmnProcessId, workflowModuleId),
-                """
-                    The @WorkflowService class '%s' (aggregate '%s') declares this BPMN process, \
-                    which is already served by '%s' (aggregate '%s') - the class found first wins, \
-                    '%s' is ignored for this BPMN process."""
-                    .formatted(
-                        workflowServiceClass.getName(),
-                        processService.getWorkflowAggregateClass().getName(),
-                        entry.workflowServiceClasses.getFirst().getName(),
-                        entry.processService.getWorkflowAggregateClass().getName(),
-                        workflowServiceClass.getName()));
-        return;
+        final var declarations = new java.util.LinkedList<AProcessBelongsToOneAggregate.Declaration>();
+        entry.workflowServiceClasses
+            .forEach(known -> declarations.add(new AProcessBelongsToOneAggregate.Declaration(
+                workflowModuleId, bpmnProcessId, known.getName(), entry.processService.getWorkflowAggregateClass()
+                    .getName(), !declaresOnlyAsSecondary(known, bpmnProcessId))));
+        declarations.add(new AProcessBelongsToOneAggregate.Declaration(
+            workflowModuleId, bpmnProcessId, workflowServiceClass.getName(), processService.getWorkflowAggregateClass()
+                .getName(), !declaresOnlyAsSecondary(workflowServiceClass, bpmnProcessId)));
+        AProcessBelongsToOneAggregate.refuseProcessesOfSeveralAggregates(declarations);
       }
       final var handlers = WorkflowTaskScanner.scan(
           workflowServiceClass,

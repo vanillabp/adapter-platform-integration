@@ -288,6 +288,28 @@ classes as long as each of them declares that same `bpmnProcess`. Version 2 says
 application starts, where version 1 picked one of the processes by the order the classes happened to
 be found in.
 
+#### A BPMN process belongs to one workflow aggregate
+
+Classes of different workflow aggregates may no longer declare the same BPMN process in one workflow
+module. It does not matter how each of them declares it, as `bpmnProcess` or in
+`secondaryBpmnProcesses`. Where two classes named the same `bpmnProcess`, version 1 logged a warning
+and kept the class it found first. Version 2 stops the start, on Quarkus already while the
+application is built. The message names both classes, both aggregates and how each declares the
+process.
+
+Decide what the process is:
+
+- A workflow of its own: only classes of its own aggregate declare it, and the other class does not
+  list it in `secondaryBpmnProcesses`. A call activity may still call it. Then the mappings of the
+  call activity in your BPMS set up the data the called workflow gets. Two workflows are usually
+  better started and synchronised by messages.
+- A step of another workflow: only the class of that workflow lists it in `secondaryBpmnProcesses`,
+  and no class of another aggregate declares it.
+
+Classes of one aggregate may still share a process. The wiki page
+[Workflow tasks](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-tasks#a-process-belongs-to-one-workflow-aggregate)
+has the details.
+
 #### Remove `@Transactional` from workflow services
 
 Version 1 asked you to write `@Transactional(noRollbackFor = TaskException.class)` on a workflow

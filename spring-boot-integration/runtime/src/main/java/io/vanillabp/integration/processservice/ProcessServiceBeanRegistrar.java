@@ -23,6 +23,7 @@ import io.vanillabp.integration.adapter.migration.processservice.InstrumentedWor
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics;
+import io.vanillabp.integration.adapter.migration.workflowtask.AProcessBelongsToOneAggregate;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.extension.spi.election.WorkflowElection;
@@ -263,6 +264,39 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
   }
 
   /**
+   * Ends the start where classes of different workflow aggregates declare the same BPMN
+   * process of one workflow module, see decision 125 in the repository's {@code DECISIONS.md}.
+   * Classes of one aggregate may share a process, their handlers are merged. Called while the
+   * first process service is built, because the workflow modules are known only then, and
+   * that is before any handler is registered.
+   *
+   * @param allWorkflowModules The workflow modules, already associated with their classes
+   * @param allWorkflowServiceClasses Every class annotated by {@link WorkflowService}
+   * @throws IllegalStateException If a process is declared for more than one aggregate
+   */
+  static void refuseProcessesOfSeveralAggregates(
+      final WorkflowModules allWorkflowModules,
+      final List<Class<?>> allWorkflowServiceClasses) {
+
+    final var declarations = new LinkedList<AProcessBelongsToOneAggregate.Declaration>();
+    for (final var serviceClass : allWorkflowServiceClasses) {
+      final var workflowModuleId = workflowModuleOf(allWorkflowModules, serviceClass);
+      final var aggregateClass = serviceClass
+          .getAnnotation(WorkflowService.class)
+          .workflowAggregateClass()
+          .getName();
+      final var primaryProcessId = primaryBpmnProcessId(serviceClass);
+      for (final var declaredProcessId : declaredBpmnProcessIds(serviceClass)) {
+        declarations.add(new AProcessBelongsToOneAggregate.Declaration(
+            workflowModuleId, declaredProcessId, serviceClass.getName(), aggregateClass, declaredProcessId
+                .equals(primaryProcessId)));
+      }
+    }
+    AProcessBelongsToOneAggregate.refuseProcessesOfSeveralAggregates(declarations);
+
+  }
+
+  /**
    * All BPMN process IDs a workflow service class declares: the primary
    * {@code bpmnProcess} plus every {@code secondaryBpmnProcesses} entry. Secondary
    * entries have to be explicit - there is no class-name convention for them.
@@ -327,6 +361,9 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
               // uses the application's resource loader to find the modules)
               final var allWorkflowModules = supplierContext.bean(WorkflowModules.class);
               allWorkflowModules.associateWorkflowServices(allWorkflowServiceClasses);
+              // the earliest moment the workflow module of every class is known, and a
+              // BPMN process belongs to one aggregate per workflow module
+              refuseProcessesOfSeveralAggregates(allWorkflowModules, allWorkflowServiceClasses);
 
               final var workflowModuleId = workflowModuleOf(allWorkflowModules, serviceClass);
 

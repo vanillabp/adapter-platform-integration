@@ -3072,6 +3072,13 @@ is declared as a secondary process too, but no model arrives for it, and the wor
 still holds under it were started under it. `ACalledProcessIsNoWorkflowTest` on both platforms
 holds both halves, see decision 124 in the repository's `DECISIONS.md`.
 
+Whether a process is a called one must not depend on the order the classes are found in. So a BPMN
+process belongs to exactly one workflow aggregate per workflow module. Classes of different
+aggregates declaring the same id end the start, whichever way each declares it. Quarkus says it
+while building, Spring Boot while the first `ProcessService` is built, and `registerWorkflowService`
+throws as well, for a platform which did not check. `AProcessBelongsToOneAggregate` builds the text
+for all three, see decision 125 in the repository's `DECISIONS.md`.
+
 #### A workflow which is gone cancels what it was waiting for
 
 Where the notification NAMES the workflow (`WorkflowEndedContext.getWorkflowId()`), the core
