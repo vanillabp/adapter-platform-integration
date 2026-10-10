@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
 
 import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -24,6 +25,7 @@ import io.vanillabp.bpmsdouble.DummyProcessVersionSource;
 import io.vanillabp.bpmsdouble.DummyTaskWiringSource;
 import io.vanillabp.bpmsdouble.springboot.DummyAdapterConfiguration;
 import io.vanillabp.bpmsdouble.springboot.DummyAdapterProcessServiceConfiguration;
+import io.vanillabp.integration.adapter.migration.workflowtask.DeployedProcessVersionsCheck;
 import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
@@ -66,6 +68,12 @@ public class ProcessVersionsTest {
      * How often the "BPMS" was asked - the query must not run per task delivery.
      */
     static final AtomicInteger QUERIES = new AtomicInteger();
+
+    /**
+     * The version the "BPMS" gave the model this start deployed, <code>null</code> to report
+     * none.
+     */
+    static final java.util.concurrent.atomic.AtomicReference<String> DEPLOYED = new java.util.concurrent.atomic.AtomicReference<>();
 
     @Bean
     AggregatePersistenceAware<VersionedAggregate> versionedPersistence() {
@@ -144,12 +152,31 @@ public class ProcessVersionsTest {
     @Bean
     DummyProcessVersionSource processVersionSource() {
 
-      return (
-          adapterId,
-          workflowModuleId,
-          bpmnProcessId) -> {
-        QUERIES.incrementAndGet();
-        return List.copyOf(VERSIONS);
+      return new DummyProcessVersionSource() {
+
+        @Override
+        public List<DeployedProcessVersion> versionsOf(
+            final String adapterId,
+            final String workflowModuleId,
+            final String bpmnProcessId) {
+
+          QUERIES.incrementAndGet();
+          return List.copyOf(VERSIONS);
+
+        }
+
+        @Override
+        public String deployedVersionOf(
+            final String adapterId,
+            final String workflowModuleId,
+            final String bpmnProcessId) {
+
+          return PROCESS.equals(bpmnProcessId)
+              ? DEPLOYED.get()
+              : null;
+
+        }
+
       };
 
     }
@@ -241,6 +268,7 @@ public class ProcessVersionsTest {
     VersionsConfiguration.AGGREGATES.clear();
     VersionsConfiguration.VERSIONS.clear();
     VersionsConfiguration.QUERIES.set(0);
+    VersionsConfiguration.DEPLOYED.set(null);
     VersionsConfiguration.VERSIONS.add(DeployedProcessVersion.of("1", null));
     VersionsConfiguration.VERSIONS.add(DeployedProcessVersion.of("2", null));
     VersionsConfiguration.VERSIONS.add(DeployedProcessVersion.of("3", null));
@@ -293,6 +321,52 @@ public class ProcessVersionsTest {
           () -> dummyAdapter.invokeTask(MODULE, PROCESS, context("4711", "4")));
       Assertions.assertTrue(unmatched.getMessage().contains("process version '4'"), unmatched.getMessage());
 
+    }
+
+  }
+
+  @Test
+  @DisplayName("The start ends where no method covers the version the BPMS gave the deployed model")
+  public void theDeployedVersionNeedsAMethod() throws IOException {
+
+    VersionsConfiguration.AGGREGATES.clear();
+    VersionsConfiguration.VERSIONS.clear();
+    VersionsConfiguration.QUERIES.set(0);
+    VersionsConfiguration.VERSIONS.add(DeployedProcessVersion.of("1", null));
+    VersionsConfiguration.VERSIONS.add(DeployedProcessVersion.of("2", null));
+    VersionsConfiguration.VERSIONS.add(DeployedProcessVersion.of("3", null));
+    VersionsConfiguration.VERSIONS.add(DeployedProcessVersion.of("4", "release-2026"));
+
+    // the tagged version is served by the method naming the tag
+    VersionsConfiguration.DEPLOYED.set("4");
+    try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
+      Assertions.assertNotNull(context);
+    }
+
+    // a fifth version without the tag, which none of the three methods serves
+    VersionsConfiguration.VERSIONS.add(DeployedProcessVersion.of("5", null));
+    VersionsConfiguration.DEPLOYED.set("5");
+    try (var testApp = buildTestApp()) {
+      final var failure = Assertions.assertThrows(
+          Exception.class,
+          () -> runTestApplication(testApp).close());
+      var cause = (Throwable) failure;
+      while (cause.getCause() != null) {
+        cause = cause.getCause();
+      }
+      final var message = cause.getMessage();
+      Assertions.assertTrue(
+          message.startsWith(
+              "Version '5' of BPMN process 'VersionedProcess' (workflow module 'test-module') is the version "
+                  + "adapter 'test' deployed during this start."),
+          message);
+      Assertions.assertTrue(message.contains(DeployedProcessVersionsCheck.SERVED_BY_NO_METHOD), message);
+      Assertions.assertTrue(message.contains("task 'Activity_Versioned' (task definition 'versionedTask')"), message);
+      Assertions.assertTrue(message.contains("(version '1-2')"), message);
+      Assertions.assertTrue(message.contains("(version 'release-2026')"), message);
+      Assertions.assertTrue(message.contains("version = \">=5\""), message);
+    } finally {
+      VersionsConfiguration.DEPLOYED.set(null);
     }
 
   }

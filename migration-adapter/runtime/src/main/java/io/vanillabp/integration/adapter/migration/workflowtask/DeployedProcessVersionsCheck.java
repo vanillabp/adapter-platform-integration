@@ -27,6 +27,11 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
  * BPMN process leaves behind, the old id living on in the BPMS with the workflows still
  * running on it - there is no border and every version the BPMS holds is an older one.
  * <p>
+ * The version this boot deployed is no older version, but it gets one question too: whether
+ * every task of it has a method for exactly that version. The wiring validation asks for a
+ * method before the deployment, when the version is not known yet, so a method whose range
+ * misses the deployed version gets through it. Such a finding ends the start.
+ * <p>
  * How loud a finding is depends on whether workflows still run on that version: a
  * version nobody runs is a warning, a version with running workflows is FATAL and,
  * where the operator asked for it, the end of the boot.
@@ -109,6 +114,33 @@ public class DeployedProcessVersionsCheck {
         String bpmnProcessId,
         String version,
         Collection<BpmnTaskSpec> tasks);
+
+  }
+
+  /**
+   * Which tasks of the model this start deployed no <code>&#64;WorkflowTask</code> method
+   * serves in the version the BPMS gave that model - answered by the
+   * {@link WorkflowTaskRegistry}, which keeps the tasks the adapter wired and knows the version
+   * ranges of the methods.
+   */
+  @FunctionalInterface
+  public interface TasksTheDeployedVersionLeavesUnserved {
+
+    /**
+     * Picks the tasks of the deployed model which no method serves in its version.
+     *
+     * @param adapterId The adapter which deployed the model
+     * @param workflowModuleId The workflow module ID
+     * @param bpmnProcessId The plain BPMN process ID
+     * @param deployedVersion The version the BPMS gave the model this start deployed
+     * @return Each task no method serves, with the methods wired to it described with their
+     *         version ranges, empty where every task is served
+     */
+    java.util.Map<BpmnTaskSpec, List<String>> of(
+        String adapterId,
+        String workflowModuleId,
+        String bpmnProcessId,
+        String deployedVersion);
 
   }
 
@@ -257,6 +289,12 @@ public class DeployedProcessVersionsCheck {
   private final ItemsAHeldVersionNeverNames itemsAHeldVersionNeverNames;
 
   /**
+   * Where the tasks of the model this start deployed are held against the version the BPMS gave
+   * it. Absent where no platform wired it.
+   */
+  private final TasksTheDeployedVersionLeavesUnserved tasksTheDeployedVersionLeavesUnserved;
+
+  /**
    * Where a finding which the start survives is left, so the whole start says it once.
    */
   private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
@@ -368,6 +406,38 @@ public class DeployedProcessVersionsCheck {
   }
 
   /**
+   * The check with every report about a held version, but without the check of the version this
+   * start deployed - what the tests of the multi-instance shape build.
+   *
+   * @param processVersions What the BPMS reported about their versions
+   * @param outfadedVersions Which versions the operator declared obsolete
+   * @param unservedTasks Which tasks of a held version no method serves
+   * @param deadHandlers Which methods of the module serve nothing worth serving
+   * @param declaredProcesses What the application declared and what was really deployed
+   * @param concurrentTokenElements Where the elements of a held version which can produce a
+   *          second token are judged
+   * @param identifiersOfHeldVersions Where the identifiers of a held version are held against
+   *          what this deployment scopes the same names to
+   * @param itemsAHeldVersionNeverNames Where the multi-instance shape of a held version is
+   *          held against what the methods serving it read
+   * @param findings Where a finding the start survives is left
+   */
+  public DeployedProcessVersionsCheck(
+      final ProcessVersions processVersions,
+      final OutfadedProcessVersions outfadedVersions,
+      final UnservedTasks unservedTasks,
+      final DeadHandlers deadHandlers,
+      final DeclaredBpmnProcesses declaredProcesses,
+      final ConcurrentTokenElementsOfHeldVersions concurrentTokenElements,
+      final IdentifiersOfHeldVersions identifiersOfHeldVersions,
+      final ItemsAHeldVersionNeverNames itemsAHeldVersionNeverNames,
+      final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
+
+    this(processVersions, outfadedVersions, unservedTasks, deadHandlers, declaredProcesses, concurrentTokenElements, identifiersOfHeldVersions, itemsAHeldVersionNeverNames, null, findings);
+
+  }
+
+  /**
    * The full check, which is what the {@link WorkflowTaskRegistry} builds while it is wired.
    * <p>
    * Every report is optional on purpose. A caller which does not want one hands
@@ -387,6 +457,9 @@ public class DeployedProcessVersionsCheck {
    * @param itemsAHeldVersionNeverNames Where the multi-instance shape of a held version is
    *          held against what the methods serving it read - <code>null</code> switches
    *          that question off
+   * @param tasksTheDeployedVersionLeavesUnserved Where the tasks of the model this start
+   *          deployed are held against the version the BPMS gave it - <code>null</code>
+   *          switches that question off
    * @param findings Where a finding the start survives is left
    */
   public DeployedProcessVersionsCheck(
@@ -398,6 +471,7 @@ public class DeployedProcessVersionsCheck {
       final ConcurrentTokenElementsOfHeldVersions concurrentTokenElements,
       final IdentifiersOfHeldVersions identifiersOfHeldVersions,
       final ItemsAHeldVersionNeverNames itemsAHeldVersionNeverNames,
+      final TasksTheDeployedVersionLeavesUnserved tasksTheDeployedVersionLeavesUnserved,
       final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
     this.processVersions = processVersions;
@@ -408,6 +482,7 @@ public class DeployedProcessVersionsCheck {
     this.concurrentTokenElements = concurrentTokenElements;
     this.identifiersOfHeldVersions = identifiersOfHeldVersions;
     this.itemsAHeldVersionNeverNames = itemsAHeldVersionNeverNames;
+    this.tasksTheDeployedVersionLeavesUnserved = tasksTheDeployedVersionLeavesUnserved;
     this.findings = findings;
 
   }
@@ -418,7 +493,8 @@ public class DeployedProcessVersionsCheck {
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @throws IllegalStateException If the configuration fades out the version this boot
-   *           deployed, or if workflows run on an outfaded version and the policy is
+   *           deployed, if a task of the version this boot deployed has no method for that
+   *           version, or if workflows run on an outfaded version and the policy is
    *           {@link OutfadedVersionsInUsePolicy#FAIL}
    */
   public void check(
@@ -467,6 +543,7 @@ public class DeployedProcessVersionsCheck {
     }
     if (deployed != null) {
       failIfDeployedVersionIsOutfaded(workflowModuleId, bpmnProcessId, adapterId, deployed, resolver);
+      failIfDeployedVersionLeavesATaskUnserved(workflowModuleId, bpmnProcessId, adapterId, deployed);
     }
 
     final var known = catalog.deployedVersionsOf(workflowModuleId, bpmnProcessId);
@@ -937,6 +1014,68 @@ public class DeployedProcessVersionsCheck {
                 covering.stream().map("'%s'"::formatted).collect(Collectors.joining(", ")),
                 OutfadedProcessVersions.propertyName(adapterId),
                 deployed));
+
+  }
+
+  /**
+   * Ends the start where a task of the model this start deployed has no method for the version
+   * the BPMS gave that model. The wiring validation accepted the task, because it runs before the
+   * deployment and cannot know the version. A delivery picks the method by version, so every
+   * workflow started now would fail at that task with an incident, see
+   * decision 126 in the repository's {@code DECISIONS.md}.
+   * <p>
+   * A method which serves no version at all is still only a warning (decision 60 in the
+   * repository's DECISIONS.md). The difference is the task: here a task of the deployed model is
+   * left without a method, there a method is left without a task.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param adapterId The adapter which deployed the model
+   * @param deployed The version the BPMS gave the model this start deployed
+   */
+  private void failIfDeployedVersionLeavesATaskUnserved(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String adapterId,
+      final String deployed) {
+
+    if (tasksTheDeployedVersionLeavesUnserved == null) {
+      return;
+    }
+    final var unserved = tasksTheDeployedVersionLeavesUnserved
+        .of(adapterId, workflowModuleId, bpmnProcessId, deployed);
+    if ((unserved == null) || unserved.isEmpty()) {
+      return;
+    }
+    final var message = new StringBuilder(
+        """
+            Version '%s' of BPMN process '%s' (workflow module '%s') is the version adapter '%s' \
+            deployed during this start. Some of its tasks are %s in this version:"""
+            .formatted(deployed, bpmnProcessId, workflowModuleId, adapterId, SERVED_BY_NO_METHOD));
+    unserved
+        .forEach((
+            task,
+            methods) -> message
+                .append(
+                    "%n  - task '%s' (task definition '%s'): %s"
+                        .formatted(
+                            task.activityId(),
+                            task.taskDefinition(),
+                            methods.isEmpty()
+                                ? "no method is wired to it."
+                                : "%s, which does not cover version '%s'."
+                                    .formatted(String.join(", ", methods), deployed))));
+    message
+        .append(
+            """
+
+                Every workflow started on this version would stop at such a task with an incident. \
+                Do one of these:
+                  - widen the version range of the method so it covers version '%s', e.g. version = ">=%s".
+                  - add a @WorkflowTask method for version '%s'.
+                  - deploy the model the method serves."""
+                .formatted(deployed, deployed, deployed));
+    throw new IllegalStateException(message.toString());
 
   }
 

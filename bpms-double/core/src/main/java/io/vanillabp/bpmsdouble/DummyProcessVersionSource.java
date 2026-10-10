@@ -29,4 +29,23 @@ public interface DummyProcessVersionSource {
       String workflowModuleId,
       String bpmnProcessId);
 
+  /**
+   * The version the BPMS gave the model the dummy adapter deployed during this start. A
+   * real adapter reports it after every deployment, and the core holds the tasks of that
+   * model against it. The default reports none, like a BPMS which counts no versions.
+   *
+   * @param adapterId The adapter ID being asked
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return The version, or <code>null</code> to report none
+   */
+  default String deployedVersionOf(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return null;
+
+  }
+
 }

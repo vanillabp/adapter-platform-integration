@@ -4110,6 +4110,15 @@ it means is not.
   wired), and which methods serve no version worth serving at all
   (`handlersNotServingAnyVersion`, for all three annotations carrying a `version`).
 
+The deployed version is checked as well. The wiring validation asks for a method for
+every task before the deployment, when the version is not known, so it ignores the ranges. Right
+after the deployment the check asks `WorkflowTaskRegistry#tasksTheDeployedVersionLeavesUnserved`
+which task of the model this boot wired has methods, none of which covers the version the BPMS
+gave that model, and ends the boot over such a task. The tasks are the ones the adapter handed to
+`validateTaskWiring`, kept per adapter, so no model is read again. A task with no method at all
+passed the wiring validation only through `implemented-externally` and is left alone. The reason is
+in decision 126 of the repository's `DECISIONS.md`, and `TheDeployedVersionNeedsAMethodTest` holds the cases.
+
 Two rules govern the reverse direction. A method whose version range
 excludes the deployed version needs no task in the deployed model - without that exemption
 an application could only serve an old version by keeping a dead task in its current BPMN -
