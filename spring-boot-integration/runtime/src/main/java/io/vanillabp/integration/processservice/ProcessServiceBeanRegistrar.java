@@ -265,7 +265,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
   /**
    * Ends the start where classes of different workflow aggregates declare the same BPMN
-   * process of one workflow module, see {@code DECISIONS.pending/952.md} in the repository.
+   * process of one workflow module, see decision 125 in the repository's {@code DECISIONS.md}.
    * Classes of one aggregate may share a process, their handlers are merged. Called while the
    * first process service is built, because the workflow modules are known only then, and
    * that is before any handler is registered.

@@ -3077,7 +3077,7 @@ process belongs to exactly one workflow aggregate per workflow module. Classes o
 aggregates declaring the same id end the start, whichever way each declares it. Quarkus says it
 while building, Spring Boot while the first `ProcessService` is built, and `registerWorkflowService`
 throws as well, for a platform which did not check. `AProcessBelongsToOneAggregate` builds the text
-for all three, see `DECISIONS.pending/952.md` in the repository.
+for all three, see decision 125 in the repository's `DECISIONS.md`.
 
 #### A workflow which is gone cancels what it was waiting for
 

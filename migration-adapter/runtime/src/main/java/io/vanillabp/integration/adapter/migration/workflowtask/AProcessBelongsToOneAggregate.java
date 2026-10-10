@@ -13,7 +13,7 @@ import java.util.stream.Collectors;
  * classes of different workflow aggregates declare the same BPMN process of one workflow module.
  * Which aggregate the tasks of such a process load, and whether the process is a workflow of its
  * own or a step of another one, would otherwise depend on the order the classes are found in.
- * Why that ends the start, see {@code DECISIONS.pending/952.md} in the repository.
+ * Why that ends the start, see decision 125 in the repository's {@code DECISIONS.md}.
  * <p>
  * The text lives in the core because three places say it: Spring Boot once it knows the
  * workflow module of every class, Quarkus while the application is built, and the registry of

@@ -422,7 +422,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         key -> new RegistryEntry());
     synchronized (entry) {
       // a BPMN process belongs to exactly one workflow aggregate, see
-      // DECISIONS.pending/952.md in the repository. Both platforms refuse this
+      // decision 125 in the repository's DECISIONS.md. Both platforms refuse this
       // earlier, Quarkus while building and Spring Boot once it knows the workflow modules,
       // so this is the safety net for a platform which does not: keeping the class found
       // first would let the order of the class scan decide what the process is

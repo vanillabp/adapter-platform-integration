@@ -181,7 +181,7 @@ public class ProcessServiceBuildStepProcessor {
     final var workflowServices = workflowServiceClassesOf(combinedIndex.getIndex(), workflowServiceAnnotations);
 
     // a BPMN process belongs to exactly one workflow aggregate per workflow module, see
-    // DECISIONS.pending/952.md in the repository. Said here, while building, with the same
+    // decision 125 in the repository's DECISIONS.md. Said here, while building, with the same
     // text Spring Boot uses while it starts
     AProcessBelongsToOneAggregate.refuseProcessesOfSeveralAggregates(workflowServices
         .stream()
