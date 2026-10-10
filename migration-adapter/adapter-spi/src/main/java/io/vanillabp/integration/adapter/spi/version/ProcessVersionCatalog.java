@@ -23,8 +23,10 @@ import java.util.List;
  * {@link CachingProcessVersionCatalog}, which implements exactly that and leaves the
  * BPMS query to the adapter.
  * <p>
- * Why an adapter answers two questions here instead of running the check for old process versions
- * itself is decision 15 in the repository's DECISIONS.md.
+ * Two questions here have to be answered: {@link #deployedVersionsOf} and
+ * {@link #resolveVersion}. The others are optional and come with a default answer, which each
+ * of them describes. Why an adapter answers questions here instead of running the check for
+ * old process versions itself is decision 15 in the repository's DECISIONS.md.
  */
 public interface ProcessVersionCatalog {
 

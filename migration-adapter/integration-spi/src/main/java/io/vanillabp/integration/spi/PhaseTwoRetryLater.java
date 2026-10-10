@@ -39,9 +39,10 @@ import java.time.Duration;
  * with JPA gets from <code>io.vanillabp:gruelbox-phase-two-outbox</code>. A window longer than <code>vanillabp.outbox.attempt-frequency</code> is
  * therefore waited out, and a window shorter than it is not waited past, so an adapter
  * naming thirty seconds gets the same answer whichever store the application chose
- * (decision 93 of <code>adapter-platform-integration</code>). What a store adds on top is
- * the time it takes to pick a due entry up, which is one poll of
- * <code>vanillabp.outbox.poll-interval</code>.
+ * (decision 93 of <code>adapter-platform-integration</code>). The stores VanillaBP ships add no
+ * wait of their own on top: the poller of a store sleeps until its earliest entry is due and
+ * learns the new due time when the attempt ends. <code>vanillabp.outbox.poll-interval</code> only
+ * caps that sleep, for a node which goes away while it holds work.
  * <p>
  * The price of that promise is the adapter's to pay. The entry sits for the window it named
  * and for one of its attempts, so a window of ten seconds for a read model which is a second
