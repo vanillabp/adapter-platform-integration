@@ -59,6 +59,17 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
                              String bpmnProcessId) {
   }
 
+  /**
+   * One model an adapter deployed: which adapter, and which BPMN process of which module.
+   * The adapter is part of the key, because each adapter of a module deploys and reports its
+   * own version.
+   */
+  private record DeployedModelKey(
+                                  String adapterId,
+                                  String workflowModuleId,
+                                  String bpmnProcessId) {
+  }
+
   private static class RegistryEntry {
 
     private final List<WorkflowTaskHandler> handlers = new LinkedList<>();
@@ -204,6 +215,13 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   private final ImplementedExternallyCheck implementedExternally;
 
   /**
+   * The tasks of every claimed model an adapter wired during this start. The version this start
+   * deployed is checked against them once the BPMS has told which version that is, and that is
+   * only known after the wiring.
+   */
+  private final Map<DeployedModelKey, List<BpmnTaskSpec>> tasksOfDeployedModels = new ConcurrentHashMap<>();
+
+  /**
    * The bare registry: handlers are wired and invoked, and no startup check runs.
    * <p>
    * What a platform integration knows is missing here - the sync model, the transaction
@@ -315,7 +333,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     this.deployedVersionsCheck = new DeployedProcessVersionsCheck(
         processVersions, outfadedVersions, this::tasksNotServedInVersion, this::handlersNotServingAnyVersion, this, this::reportConcurrentTokenElementsOfHeldVersions, scoping == null
             ? null
-            : scoping::reportIdentifiersOfHeldVersion, this::itemsAHeldVersionNeverNames, properties == null
+            : scoping::reportIdentifiersOfHeldVersion, this::itemsAHeldVersionNeverNames, this::tasksTheDeployedVersionLeavesUnserved, properties == null
                 // a registry built without a configuration is a test fixture, and it has no
                 // start to close either
                 ? new io.vanillabp.integration.adapter.migration.startup.StartupFindings()
@@ -789,6 +807,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     final var handlers = List.copyOf(entry.handlers);
     entry.wiringValidated = true;
     implementedExternally.rememberClaimed(workflowModuleId, bpmnProcessId);
+    tasksOfDeployedModels.put(new DeployedModelKey(adapterId, workflowModuleId, bpmnProcessId), List.copyOf(tasks));
 
     // mark every matched handler as wired - the reverse direction (methods
     // matching no task of ANY process of the module) is validated per module via
@@ -2212,6 +2231,74 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
             .stream()
             .noneMatch(handler -> matches(handler, task) && handler.matchesVersion(version, resolver)))
         .toList();
+
+  }
+
+  /**
+   * Which tasks of the model this start deployed no <code>&#64;WorkflowTask</code> method
+   * serves in the version the BPMS gave that model. The wiring validation could not ask it:
+   * it runs before the deployment, when the version is not known yet. A delivery picks the
+   * method by version, so a task left out here fails at every delivery, see
+   * {@code DECISIONS.pending/953.md}.
+   * <p>
+   * The tasks are the ones the adapter handed over while wiring, so no model is read again.
+   * The wiring validation has accepted them, so a task without any method is one the
+   * application says somebody else serves. A task with methods needs one whose version range
+   * covers the deployed version, a user task as well.
+   *
+   * @param adapterId The adapter which deployed the model
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param version The version the BPMS gave the model this start deployed
+   * @return Every task no method serves in that version, each with the methods wired to it
+   *         and their version ranges, empty where every task is served
+   */
+  public Map<BpmnTaskSpec, List<String>> tasksTheDeployedVersionLeavesUnserved(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String version) {
+
+    final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
+    if (entry == null) {
+      // nobody claimed the process, so no method is expected for it
+      return Map.of();
+    }
+    var tasks = tasksOfDeployedModels.get(new DeployedModelKey(adapterId, workflowModuleId, bpmnProcessId));
+    if (tasks == null) {
+      // an adapter which wired the model without naming itself
+      tasks = tasksOfDeployedModels.get(new DeployedModelKey(null, workflowModuleId, bpmnProcessId));
+    }
+    if (tasks == null) {
+      return Map.of();
+    }
+    final var handlers = List.copyOf(entry.handlers);
+    final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
+    final var unserved = new java.util.LinkedHashMap<BpmnTaskSpec, List<String>>();
+    for (final var task : tasks) {
+      final var wired = handlers
+          .stream()
+          .filter(handler -> matches(handler, task))
+          .toList();
+      if (wired.isEmpty()) {
+        // the wiring validation let a task without a method pass only because a line of
+        // 'implemented-externally' says that something else serves it
+        continue;
+      }
+      if (wired.stream().anyMatch(handler -> handler.matchesVersion(version, resolver))) {
+        continue;
+      }
+      unserved
+          .put(
+              task,
+              wired
+                  .stream()
+                  .map(handler -> "method '%s' (version %s)"
+                      .formatted(handler.describe(), handler.describeVersionsWithOrigin()))
+                  .distinct()
+                  .toList());
+    }
+    return unserved;
 
   }
 

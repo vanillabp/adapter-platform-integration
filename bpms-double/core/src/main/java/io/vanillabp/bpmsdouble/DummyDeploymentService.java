@@ -453,6 +453,14 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
             source -> collaborators
                 .workflowTaskWiring()
                 .registerProcessVersions(adapterId, workflowModuleId, bpmnProcessId, processVersions));
+    // and, like a real adapter, which version the BPMS gave the model of this start
+    processVersionSource
+        .first()
+        .map(source -> source.deployedVersionOf(adapterId, workflowModuleId, bpmnProcessId))
+        .ifPresent(
+            version -> collaborators
+                .workflowTaskWiring()
+                .registerDeployedVersion(adapterId, workflowModuleId, bpmnProcessId, version));
 
     // like a real adapter: the start of a called process is a step of the workflow which
     // called it, so it gets no start listener

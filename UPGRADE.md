@@ -547,12 +547,14 @@ Version 1 read that attribute nowhere either, so an application which wrote it b
 has to look at every `@BpmnProcess` it declares: the methods of such a class now serve what the class
 says and stop being called outside that range.
 
-Three things change for an application which already carries the attribute anywhere. Ranges which
+Four things change for an application which already carries the attribute anywhere. Ranges which
 were meant to be disjoint really are disjoint, so a version served by no method fails the delivery
-instead of running the first one. A BPMS which reports no version at all reaches methods without the
-attribute only. And two methods wired to one BPMN element with overlapping ranges end the boot naming
-both. An application which never wrote the attribute sees no change, because the default `*` leaves
-every method serving every version.
+instead of running the first one. A task of the model the boot deploys is the exception: where none
+of its methods covers the version the BPMS gives that model, the boot ends and names the task, the
+version and the methods with their ranges. A BPMS which reports no version at all reaches methods
+without the attribute only. And two methods wired to one BPMN element with overlapping ranges end the
+boot naming both. An application which never wrote the attribute sees no change, because the default
+`*` leaves every method serving every version.
 
 ### Behaviour under unchanged code
 
