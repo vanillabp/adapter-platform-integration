@@ -4,13 +4,17 @@ import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.spi.process.ProcessService;
+import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
 @Singleton
-@WorkflowService(workflowAggregateClass = Aggregate.class)
+// a process of its own: the sample of the other package is named after the same class, and a
+// BPMN process belongs to one workflow aggregate
+@WorkflowService(workflowAggregateClass = Aggregate.class,
+    bpmnProcess = @BpmnProcess(bpmnProcessId = "SampleWorkflow2"))
 public class SampleWorkflowService implements AggregatePersistenceAware<Aggregate> {
 
   @Inject

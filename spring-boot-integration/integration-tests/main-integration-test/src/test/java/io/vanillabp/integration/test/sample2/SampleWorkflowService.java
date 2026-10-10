@@ -5,11 +5,15 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import io.vanillabp.spi.process.ProcessService;
+import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 @Service("sampleWorkflowService2")
-@WorkflowService(workflowAggregateClass = Aggregate.class)
+// a process of its own: the sample of the other package is named after the same class, and a
+// BPMN process belongs to one workflow aggregate
+@WorkflowService(workflowAggregateClass = Aggregate.class,
+    bpmnProcess = @BpmnProcess(bpmnProcessId = "SampleWorkflow2"))
 public class SampleWorkflowService {
 
   @Autowired

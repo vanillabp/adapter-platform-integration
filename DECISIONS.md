@@ -4662,6 +4662,9 @@ finds its record from the primary process service.
 
 ### 124. A called process is not a workflow of its own, so its start and its end stay inside the workflow
 
+*A process declared for two workflow aggregates would make this decision depend on the order of the class scan.
+That ends the start now. The decision waits in `DECISIONS.pending/952.md` for its number.*
+
 Proposed by story 949 after analysis 948. Decided by the maintainer on 2026-10-09 ("only the one at the top").
 Extends decision 123.
 
