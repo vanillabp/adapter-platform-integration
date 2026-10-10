@@ -4117,7 +4117,7 @@ which task of the model this boot wired has methods, none of which covers the ve
 gave that model, and ends the boot over such a task. The tasks are the ones the adapter handed to
 `validateTaskWiring`, kept per adapter, so no model is read again. A task with no method at all
 passed the wiring validation only through `implemented-externally` and is left alone. The reason is
-in `DECISIONS.pending/953.md`, and `TheDeployedVersionNeedsAMethodTest` holds the cases.
+in decision 126 of the repository's `DECISIONS.md`, and `TheDeployedVersionNeedsAMethodTest` holds the cases.
 
 Two rules govern the reverse direction. A method whose version range
 excludes the deployed version needs no task in the deployed model - without that exemption

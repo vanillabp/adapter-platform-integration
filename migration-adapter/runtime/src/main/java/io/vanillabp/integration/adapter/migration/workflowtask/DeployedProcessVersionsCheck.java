@@ -1022,7 +1022,7 @@ public class DeployedProcessVersionsCheck {
    * the BPMS gave that model. The wiring validation accepted the task, because it runs before the
    * deployment and cannot know the version. A delivery picks the method by version, so every
    * workflow started now would fail at that task with an incident, see
-   * {@code DECISIONS.pending/953.md}.
+   * decision 126 in the repository's {@code DECISIONS.md}.
    * <p>
    * A method which serves no version at all is still only a warning (decision 60 in the
    * repository's DECISIONS.md). The difference is the task: here a task of the deployed model is

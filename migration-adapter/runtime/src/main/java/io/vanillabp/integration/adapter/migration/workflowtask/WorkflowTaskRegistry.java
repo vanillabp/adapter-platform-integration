@@ -2239,7 +2239,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    * serves in the version the BPMS gave that model. The wiring validation could not ask it:
    * it runs before the deployment, when the version is not known yet. A delivery picks the
    * method by version, so a task left out here fails at every delivery, see
-   * {@code DECISIONS.pending/953.md}.
+   * decision 126 in the repository's {@code DECISIONS.md}.
    * <p>
    * The tasks are the ones the adapter handed over while wiring, so no model is read again.
    * The wiring validation has accepted them, so a task without any method is one the
