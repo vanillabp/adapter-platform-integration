@@ -954,7 +954,10 @@ public class MigrationProcessService<A> {
         forgetWorkflowAdapter(context.getWorkflowAggregateId());
         // the delivery is refused, and no record of it is written: the record would sit in
         // the application which wrongly received the task, while whoever investigates reads
-        // the records of the application which owns the workflow
+        // the records of the application which owns the workflow. The row written at the start
+        // is read instead, because it says which of the two situations this is
+        final var startRecord = deliveryRecords
+            .startRecordOfAnUnknownWorkflow(context.getWorkflowAggregateId(), context.getWorkflowId());
         metrics
             .taskDeliveredForAnUnknownWorkflow(
                 context.getAdapterId(),
@@ -963,7 +966,7 @@ public class MigrationProcessService<A> {
                 context.getTaskDefinition());
         throw new DeliveryOfAnUnknownWorkflowException(
             context.getAdapterId(), workflowModuleId, bpmnProcessId, context.getTaskDefinition(), workflowAggregateClass
-                .getName(), context.getWorkflowAggregateId(), context.getWorkflowId());
+                .getName(), context.getWorkflowAggregateId(), context.getWorkflowId(), startRecord);
       }
       try {
         handler.invoke(workflowAggregate, context);

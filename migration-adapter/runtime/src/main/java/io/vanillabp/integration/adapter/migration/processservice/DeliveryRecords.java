@@ -18,6 +18,7 @@ import io.vanillabp.integration.adapter.migration.workflowtask.TaskDeliveryIdent
 import io.vanillabp.integration.adapter.migration.workflowtask.TaskDeliveryKey;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWorkflowException;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskKind;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -1595,6 +1596,56 @@ public final class DeliveryRecords {
               workflowModuleId,
               e);
       return null;
+    }
+
+  }
+
+  /**
+   * What the delivery log says about the start of a workflow whose workflow aggregate is not
+   * stored here. The row written at the start tells the two situations of such a delivery apart:
+   * a row naming this very workflow means this application started it and its aggregate was
+   * deleted, and no row at all means another application most likely owns it.
+   * <p>
+   * Nothing is known where there is no log, where it cannot be read, where the delivery names no
+   * workflow to compare with, or where the row names another workflow. A task of a called process
+   * names the instance of that process rather than the workflow of the aggregate, so it ends up
+   * in the last case and the refusal names both situations, as it did before rows were written.
+   *
+   * @param workflowAggregateId The workflow aggregate id the BPMS named, as it arrived
+   * @param workflowId The BPMS' own id of the workflow the delivery belongs to, or
+   *          <code>null</code> where the delivery carried none
+   * @return What the log says, never <code>null</code>
+   */
+  public DeliveryOfAnUnknownWorkflowException.StartRecord startRecordOfAnUnknownWorkflow(
+      final String workflowAggregateId,
+      final String workflowId) {
+
+    if ((workflowAggregateId == null) || (workflowId == null) || workflowId.isBlank()) {
+      return DeliveryOfAnUnknownWorkflowException.StartRecord.NOT_KNOWN;
+    }
+    final var deliveryLog = resolveLog();
+    if (deliveryLog == null) {
+      return DeliveryOfAnUnknownWorkflowException.StartRecord.NOT_KNOWN;
+    }
+    try {
+      final var started = startRowOf(deliveryLog, workflowAggregateId);
+      if (started == null) {
+        return DeliveryOfAnUnknownWorkflowException.StartRecord.NOT_STARTED_HERE;
+      }
+      return workflowId.equals(started.workflowId())
+          ? DeliveryOfAnUnknownWorkflowException.StartRecord.STARTED_HERE
+          : DeliveryOfAnUnknownWorkflowException.StartRecord.NOT_KNOWN;
+    } catch (final RuntimeException e) {
+      // a row nobody can read says nothing, so the refusal names both situations
+      log
+          .debug(
+              "Could not read the start of the workflow of aggregate '{}' (BPMN process '{}' of "
+                  + "workflow module '{}')",
+              workflowAggregateId,
+              bpmnProcessId,
+              workflowModuleId,
+              e);
+      return DeliveryOfAnUnknownWorkflowException.StartRecord.NOT_KNOWN;
     }
 
   }

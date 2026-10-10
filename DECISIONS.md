@@ -223,8 +223,8 @@ detected.
 
 A BPMS keeps every version of a process it ever deployed, and instances keep running on the old
 ones. Whether the application still serves them is a judgement with a message text, a policy and an
-outfading configuration attached, so it lives in the core; an adapter only answers two questions on
-`ProcessVersionCatalog` and reports through `registerDeployedVersion` which version THIS boot
+outfading configuration attached, so it lives in the core; an adapter answers two questions on
+`ProcessVersionCatalog`, plus optional ones with a default answer, and reports through `registerDeployedVersion` which version THIS boot
 deployed, which is the border between the application's own model and the older ones.
 
 Building the same judgement in every adapter would give every BPMS its own wording and its own
@@ -263,9 +263,9 @@ on 2026-10-06. What was decided did not change.*
 
 ### 17. An adapter id is an identity and is never renamed while anything is still open
 
-Every persisted record which belongs to a workflow carries the adapter id it was written for: the
-outbox entry so a pending call reaches the BPMS it was planned for, the delivery record so a
-redelivery is recognised as the same delivery. Renaming an id therefore orphans them, and the
+The persisted records which name a BPMS carry the adapter id they were written for: the outbox
+entry of a start or a signal, so a pending call reaches the BPMS it was planned for, and the
+delivery record, so a redelivery is recognised as the same delivery. Renaming an id therefore orphans them, and the
 symptom shows up much later as a workflow which was persisted and never started, or as a handler
 which runs a second time.
 
@@ -274,6 +274,10 @@ configured ones, and a mismatch warns with both readings and with the property w
 it. A warning, not a failed boot, because the entries are waiting rather than lost. A store which
 cannot answer at startup returns nothing, and the same warning then comes at the first dispatch of
 one of its entries (decision 47).
+
+*The first sentence said that every persisted record of a workflow carries the adapter id. The
+other outbox entries carry none, because their adapter is elected when they are dispatched
+(decision 25). The sentence was narrowed on 2026-10-10. What was decided did not change.*
 
 ### 18. Reading a metric costs no more than reading a number
 
@@ -567,6 +571,12 @@ documented per adapter rather than closed. And an adapter which cannot be asked 
 answers optimistically, which is safe while it is the only BPMS configured and is the reason
 a migration setup containing such an adapter routes by list order (see the wiki page
 "BPMS migration").
+
+*Since decision 108 the start row names the adapter which started a workflow. That row is a hint
+for the election (decisions 111 and 112) and not a source of truth: where it is missing or names an
+adapter which is not configured any more, the election asks the BPMS as before. So "not written
+down anywhere persistent" still holds for the answer, while the hint is now kept in the
+application's database.*
 
 ### 26. There is no switch which lets an adapter act in phase one
 
@@ -1646,7 +1656,7 @@ over a key no mapping knows - `UnknownExtensionSettingsKeyTest` writes such a ke
 position the resolution offers and the mapping does not declare would not be a position quietly
 read by nobody, it would be an application which does not start.
 
-### 54. The delivery log holds the work the application was handed, and nothing else
+### 54. A task no method ran for leaves no row in the delivery log
 
 A record is written where a `@WorkflowTask` method ran. A user task the application has no method
 for is therefore missing from the log, and `openTasksOfAggregate` does not name it either. That is
@@ -1687,6 +1697,11 @@ second one asks the BPMS through its own adapter half, which is where the knowle
 that BPMS lives anyway.
 
 *Superseded in part by decision 119: the paragraph saying that a user task without a method is a design and that the wiring validation lets it pass. Such a task now needs a method or the line `implemented-externally=true`, as version 1 asked for the method. The rest stands: a user task the application marked that way still writes no record, for the reasons above.*
+
+*The title said "The delivery log holds the work the application was handed, and nothing else"
+until 2026-10-10. Since decisions 107 and 108 the log also holds the start of a workflow and rows
+under a key nobody deduplicates, so "nothing else" was not true any more. The title now names only
+what this entry decided. What was decided did not change.*
 
 ### 55. A number reaches a handler as the number the BPMS reported, or not at all
 
@@ -2316,17 +2331,9 @@ the entry as it read then would hand the handler a payload reference which is go
 needs no such read: its claim is one atomic `findOneAndUpdate` and answers with the document
 as of that moment.
 
-Gruelbox has no API for replacing, so there the row goes: the waiting entry is deleted and the
-younger call is scheduled under the same `uniqueRequestId`, in the caller's transaction. Two
-things have to agree that no dispatch holds it. `version = 0` is gruelbox' own optimistic lock
-and covers every entry a flush picked up, on any instance. A commit, though, submits its entry
-straight away and writes nothing, so the row still reads as untouched while gruelbox holds it
-with `SELECT ... FOR UPDATE`, and a delete meeting that lock would make the application's
-transaction wait for a remote call - which is what an outbox exists to prevent. That case is
-asked of a register the submitter keeps, which is where gruelbox already hands every entry
-over before it invokes anything. The register answers for its own instance. What it leaves is
-one instance dispatching an entry while another replaces it, which means two instances writing
-one workflow at once, and VanillaBP names that the application's own business anyway.
+The gruelbox store replaces a waiting entry in a way of its own, because gruelbox has no API for
+it. That store has its own repository since decision 102, and decision 6 of
+gruelbox-phase-two-outbox's DECISIONS.md says how it does it.
 
 A store which never learned any of this says so.
 `PhaseTwoOutbox.scheduleReplacingWhatIsStillWaiting` has a default which discards the call the
@@ -2336,6 +2343,10 @@ called, and only the state was wrong. That is the one ending this must not have.
 
 Nothing is written in `UPGRADE.md`. The outbox of version 2 has not reached a release, so
 there is no behaviour a version-1 application could be upgrading from.
+
+*Until 2026-10-10 this entry also described how the gruelbox store replaces an entry. That
+paragraph described code of another repository, so it moved to decision 6 of
+gruelbox-phase-two-outbox's DECISIONS.md, and only the pointer above stays here.*
 
 ### 69. A business key counts only where it carries the workflow aggregate's id
 
@@ -3047,9 +3058,11 @@ asking earlier than that costs a failed attempt out of the budget which blocks t
 price is that an adapter can push an entry past a backoff a store keeps shorter on purpose, and
 that is the adapter's call to make: the window is a statement about the BPMS, not a hint.
 
-What a store still adds on its own is the poll it takes to pick a due entry up, at most
-`vanillabp.outbox.poll-interval` (decision 49). That is a property of polling and not of the
-window, and it is the same on all four stores.
+A store adds no wait of its own on top. The poller of each store sleeps until the earliest moment
+its store owes something (decision 42), and it is told the new due time when an attempt ends
+(decision 49). So the entry goes out when the window ends. `vanillabp.outbox.poll-interval` only
+caps that sleep, for a node which goes away while it holds work. A store written somewhere else
+decides on its own whether it polls or plans its wake-up, and one which polls adds its poll on top.
 
 The promise is written where an adapter author meets it: in the javadoc of `PhaseTwoRetryLater`
 and on the outbox page of both platform wikis.
@@ -3058,6 +3071,10 @@ gruelbox store since decision 102, holds the case which
 used to go the other way.
 
 *Superseded in part by decision 113: the part of a sentence saying that asking earlier costs a failed attempt, since asking earlier costs no attempt now and only asks in vain.*
+
+*The paragraph about what a store adds on top said "the poll it takes to pick a due entry up, at
+most `vanillabp.outbox.poll-interval`". That was the rhythm before decision 42, and it was
+corrected on 2026-10-10.*
 
 ### 94. A held version says which of its elements never name the item of a round
 
@@ -3120,8 +3137,8 @@ It goes into the block a start writes at its end, under the versions a BPMS stil
 
 VanillaBP looks at a lot while an application starts. It used to say each of it where it found
 it, so the findings stood between the lines of every other library and nobody read them unless
-they were already searching. There are 260 such messages across the platform and the four
-adapters, and of them at most 95 can appear on a start which survives.
+they were already searching. Counted on 2026-09-25, there were 260 such messages across the
+platform and the adapters, and of them at most 95 could appear on a start which survives.
 
 So a start collects what it finds and says it once, at its end, as one block between two rulers:
 `StartupFindings`. A check reports a finding instead of logging it, and the block is written in
@@ -3177,9 +3194,9 @@ the two ends.
 ### 97. An adapter reports through a bean, not through the adapter SPI
 
 The block at the end of a start (decision 96) belongs to the core. An adapter has to reach it,
-because 152 of the 260 startup messages of VanillaBP come from the four adapters, and a start
-which writes a block for the platform and a line per adapter is worse than one which writes lines
-for everything.
+because 152 of the 260 startup messages of VanillaBP came from the adapters when this was decided
+(counted on 2026-09-26). A start which writes a block for the platform and a line per adapter is
+worse than one which writes lines for everything.
 
 The way there is a bean. `io.vanillabp.integration.spi.startup.StartupReport` lives in the
 integration SPI, `StartupFindings` implements it, and both platform integrations publish one
@@ -3188,8 +3205,8 @@ constructor parameter on Spring Boot, an injection point or a producer parameter
 
 Not the adapter SPI, and not `AdapterCollaborators`. The collaborators are handed to the
 deployment service and the process service of an adapter, and most of what an adapter finds
-at a start is found before either of them exists: the Camunda 8 adapter alone has 75
-messages and nearly all of them are about its configuration, which is read while its beans
+at a start is found before either of them exists: the Camunda 8 adapter alone had 75
+messages on that day, and nearly all of them are about its configuration, which is read while its beans
 are built. A collaborator would reach half the places which need it, and the other half
 would need the bean anyway. Two ways to one object is one way too many.
 
@@ -3355,6 +3372,28 @@ subscriptions match a task type globally and it has no tenant, and today it answ
 
 `DeliveryOfAnUnknownWorkflowException` words the refusal, `MigrationProcessService#deliverWorkflowTask`
 throws it, and `MigrationProcessServiceTest` holds the message.
+
+**The start row tells the two situations apart.** Since decision 108 the delivery log holds a row
+for the start of every workflow this application starts. That is the durable record the paragraph
+above was waiting for, so the refusal reads it before it words the message. Stephan decided this on
+2026-10-07.
+
+- A start row which names the workflow of the delivery: this application started the workflow, so
+  its workflow aggregate was deleted. The message says that and nothing about another application.
+- No start row, while the delivery log can be read: most likely another application owns the
+  workflow. The message says so first. It still names the other reading, because a workflow which
+  started before VanillaBP 2, or longer ago than `vanillabp.delivery.workflow-start-retention`,
+  has no row either.
+- Where no row can be expected or read, both situations are named as before: there is no delivery
+  log, it cannot be read, the delivery names no workflow, or the row names another workflow of the
+  same aggregate id. A task of a called process falls into the last case, because it names the
+  instance of the called process.
+
+The exception carries the reading as `getStartRecord()`, and `TheRefusalOfAnUnknownWorkflowReadsTheStartRowTest`
+holds the three messages.
+
+*The paragraph "The two situations cannot be told apart" holds since then only where no start row
+can be expected or read.*
 
 ### 100. The order of one workflow's operations is a promise of VanillaBP's own stores only
 
@@ -3655,8 +3694,9 @@ convention writes its examples with a placeholder where the number goes. An exam
 it is a citation as far as the check can tell, and it would report a file which was never meant to
 exist.
 
-What is open: the other five repositories keep decisions the same way and none of them has the
-script. Rolling it out is a piece of work of its own, because each of them needs the CI job too.
+*A paragraph here said that the other repositories which keep decisions had no copy of the script
+yet. Since 2026-10-10 every repository with a `DECISIONS.md` has a copy and the CI job, so the
+paragraph was removed.*
 
 ### 105. A message an adapter asserts on is published as a phrase, and the adapter reads it from there
 
