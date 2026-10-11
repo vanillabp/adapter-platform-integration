@@ -5,10 +5,10 @@ package io.vanillabp.integration.adapter.spi;
  * Used by the migration adapter to elect the BPMS responsible for an existing workflow:
  * adapters are asked in the order of the configured prioritized adapters.
  * <p>
- * The distinction between {@link #UNKNOWN_TO_BPMS} and {@link #BPMS_UNAVAILABLE} is
- * crucial for BPMS providing eventual consistency (e.g. remote BPMS): only a definite
- * &quot;this BPMS does not know the workflow/task&quot; permits falling back to the next
- * adapter of the prioritized list, whereas a temporary failure must not.
+ * The difference between {@link #UNKNOWN_TO_BPMS} and {@link #BPMS_UNAVAILABLE} matters a
+ * lot for a BPMS which is only eventually consistent (e.g. a remote BPMS). Only a definite
+ * &quot;this BPMS does not know the workflow/task&quot; allows falling back to the next
+ * adapter of the prioritized list. A temporary failure does not.
  */
 public enum WorkflowAwareness {
 
@@ -20,8 +20,8 @@ public enum WorkflowAwareness {
 
   /**
    * The BPMS knows the workflow/task but it was already completed (or the
-   * workflow has ended). Do not fall back to the next adapter - the BPMS asked is
-   * (or was) the one responsible, the operation simply comes too late.
+   * workflow has ended). Do not fall back to the next adapter. The BPMS asked is (or
+   * was) the one responsible, and the operation just comes too late.
    */
   COMPLETED,
 
@@ -33,8 +33,8 @@ public enum WorkflowAwareness {
 
   /**
    * The BPMS could not be asked (e.g. temporarily unreachable, request timed out).
-   * Do <b>not</b> fall back to the next adapter - the workflow might live in this
-   * BPMS. The operation has to be retried later instead.
+   * Do <b>not</b> fall back to the next adapter, because the workflow might live in
+   * this BPMS. Retry the operation later instead.
    */
   BPMS_UNAVAILABLE
 

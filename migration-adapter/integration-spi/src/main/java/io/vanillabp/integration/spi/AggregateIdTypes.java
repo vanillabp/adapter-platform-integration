@@ -11,20 +11,20 @@ import java.util.Set;
  * Determines the ID of a workflow aggregate by reflection: its type (the
  * implementation behind the default of
  * {@link AggregatePersistenceAware#getAggregateIdType()}), its property name and its
- * value. The class hierarchy is walked considering also <i>private</i> members:
+ * value. It walks the class hierarchy and also looks at <i>private</i> members:
  * <ol>
  * <li>a field annotated with a persistence ID annotation
  * ({@code jakarta.persistence.Id}, {@code jakarta.persistence.EmbeddedId} or
  * {@code org.bson.codecs.pojo.annotations.BsonId}),</li>
- * <li>secondarily a getter carrying such an annotation (JPA property access),</li>
+ * <li>second, a getter with such an annotation (JPA property access),</li>
  * <li>a field named <code>id</code>,</li>
  * <li>a getter named <code>getId</code>.</li>
  * </ol>
- * Annotations are matched by name so this module does not depend on any persistence
- * API. Persistence-framework-backed implementations of
- * {@link AggregatePersistenceAware} (e.g. based on Spring Data) override
- * {@link AggregatePersistenceAware#getAggregateIdType()} with the framework's
- * authoritative answer instead.
+ * Annotations are matched by name, so this module does not depend on any persistence
+ * API. Implementations of {@link AggregatePersistenceAware} which are backed by a
+ * persistence framework (e.g. based on Spring Data) override
+ * {@link AggregatePersistenceAware#getAggregateIdType()} with the answer of the
+ * framework instead, which is the authority.
  */
 public final class AggregateIdTypes {
 
@@ -38,10 +38,10 @@ public final class AggregateIdTypes {
   }
 
   /**
-   * Determines the aggregate's ID type by reflection (see the class javadoc for the
-   * precedence rules; private members are considered, too, since
+   * Determines the ID type of the aggregate by reflection. See the class javadoc for the
+   * order of the rules. Private members are looked at too, because
    * {@link Class#getDeclaredFields()}/{@link Class#getDeclaredMethods()} include
-   * them).
+   * them.
    *
    * @param workflowAggregateClass The aggregate's class
    * @return The ID type or {@link Optional#empty()} if it cannot be determined
@@ -57,10 +57,10 @@ public final class AggregateIdTypes {
   }
 
   /**
-   * Determines the name of the aggregate's ID property using the same precedence
-   * rules as {@link #determineIdType(Class)} - the implementation behind
-   * {@link AggregatePersistenceAware#getAggregateIdName()} of the platform-provided
-   * persistence implementations. A getter contributes its property name
+   * Determines the name of the ID property of the aggregate, with the same rules as
+   * {@link #determineIdType(Class)}. It is the implementation behind
+   * {@link AggregatePersistenceAware#getAggregateIdName()} of the persistence
+   * implementations of the platform. A getter contributes its property name
    * ({@code getLoanRequestId} &rarr; {@code loanRequestId}).
    *
    * @param workflowAggregateClass The aggregate's class
@@ -78,16 +78,16 @@ public final class AggregateIdTypes {
   }
 
   /**
-   * Reads the aggregate's ID using the same precedence rules as
-   * {@link #determineIdType(Class)} - the implementation behind
-   * {@link AggregatePersistenceAware#getAggregateId(Object)} of the platform-provided
-   * persistence implementations. Fields are read directly (also private ones), which
-   * is what JPA and MongoDB codecs do as well.
+   * Reads the ID of the aggregate, with the same rules as {@link #determineIdType(Class)}.
+   * It is the implementation behind
+   * {@link AggregatePersistenceAware#getAggregateId(Object)} of the persistence
+   * implementations of the platform. Fields are read directly (private ones as well),
+   * as JPA and MongoDB codecs do.
    *
    * @param workflowAggregate The aggregate to read the ID from
-   * @return The ID, which may be <code>null</code> for an aggregate not persisted yet
-   *         (generated IDs)
-   * @throws IllegalStateException If the aggregate has no property qualifying as its ID
+   * @return The ID. It may be <code>null</code> for an aggregate which is not persisted
+   *         yet (generated IDs)
+   * @throws IllegalStateException If the aggregate has no property which can be its ID
    */
   public static Object readId(
       final Object workflowAggregate) {
@@ -119,8 +119,8 @@ public final class AggregateIdTypes {
   }
 
   /**
-   * The field or getter holding the aggregate's ID, see the class javadoc for the
-   * precedence rules.
+   * The field or getter which holds the ID of the aggregate. See the class javadoc for the
+   * order of the rules.
    */
   private static Optional<AccessibleObject> determineIdMember(
       final Class<?> workflowAggregateClass) {
@@ -132,7 +132,7 @@ public final class AggregateIdTypes {
         .getSuperclass()) {
       for (final var field : current.getDeclaredFields()) {
         if (isIdAnnotated(field.getAnnotations())) {
-          // an annotated field is the most specific evidence - return immediately
+          // an annotated field is the strongest evidence, so return at once
           return Optional.of(field);
         }
         if ((idNamedField == null) && field.getName().equals("id")) {

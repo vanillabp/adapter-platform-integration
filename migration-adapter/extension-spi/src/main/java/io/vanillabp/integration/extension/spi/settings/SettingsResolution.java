@@ -6,8 +6,8 @@ import java.util.List;
 import java.util.function.Function;
 
 /**
- * The walk over the levels a plug-in may be configured at, written once for every plug-in
- * (see decision 53 in the repository's DECISIONS.md).
+ * The walk over the levels at which a plug-in may be configured. It is written once, for every
+ * plug-in (see decision 53 in the repository's DECISIONS.md).
  * <p>
  * There are four levels, and each of them has two positions: what the level says in
  * general, and what it says for one adapter. That makes eight positions, from the least
@@ -24,12 +24,12 @@ import java.util.function.Function;
  * 8. task, one adapter              ...workflows.&lt;workflow&gt;.tasks.&lt;task&gt;.adapters.&lt;adapter&gt;.&lt;section&gt;
  * </pre>
  *
- * The most specific position which says something about a setting wins, and what an
- * adapter is told beats what the same level says in general. Which is the same rule an
- * adapter setting follows (decision 7), and the reason a plug-in does not write this walk
- * a second time (decision 48).
+ * The most specific position which says something about a setting wins. What an adapter
+ * is told wins over what the same level says in general. An adapter setting follows the
+ * same rule (decision 7). That is the reason why a plug-in does not write this walk a
+ * second time (decision 48).
  * <p>
- * What the sections MEAN is the plug-in's business. This class only knows their order.
+ * What the sections MEAN is up to the plug-in. This class only knows their order.
  */
 public final class SettingsResolution {
 
@@ -38,9 +38,9 @@ public final class SettingsResolution {
 
   /**
    * The positions of the configuration which apply to the given scope, the least specific
-   * one first. A position nothing is configured at is left out, so the list is shorter
-   * than eight entries wherever the application wrote less, and it is shorter than the
-   * levels asked for wherever the scope names no workflow module, no workflow or no task.
+   * one first. A position where nothing is configured is left out. So the list has fewer
+   * than eight entries if the application configured less. It is also shorter if the scope
+   * names no workflow module, no workflow or no task.
    *
    * @param <S> What a section is for the plug-in asking
    * @param application The most general level of the plug-in's configuration tree
@@ -89,10 +89,10 @@ public final class SettingsResolution {
    * @param <S> What a section is for the plug-in asking
    * @param <T> The type of the value read
    * @param positionsFromLeastSpecific The positions, as {@link #positions} answers them
-   * @param valueExtractor Reads the value out of one section; has to answer
-   *          <code>null</code> where that section says nothing about it
+   * @param valueExtractor Reads the value out of one section. It has to answer
+   *          <code>null</code> if that section says nothing about it
    * @return The value of the most specific position which writes it, or <code>null</code>
-   *         where no position does
+   *         if no position does
    */
   public static <S, T> T resolve(
       final List<S> positionsFromLeastSpecific,
@@ -109,7 +109,7 @@ public final class SettingsResolution {
   }
 
   /**
-   * The value the most specific position of the given scope writes -
+   * The value the most specific position of the given scope writes. This is
    * {@link #positions} and {@link #resolve(List, Function)} in one call.
    *
    * @param <S> What a section is for the plug-in asking

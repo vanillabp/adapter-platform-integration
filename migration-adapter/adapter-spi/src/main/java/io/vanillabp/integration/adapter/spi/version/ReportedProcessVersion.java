@@ -1,30 +1,30 @@
 package io.vanillabp.integration.adapter.spi.version;
 
 /**
- * What a delivery of a BPMS carries as its process version, told by an adapter which
- * keeps no {@link ProcessVersionCatalog} (see
+ * What a delivery of a BPMS carries as its process version. An adapter which keeps no
+ * {@link ProcessVersionCatalog} tells the core this (see
  * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#reportNoProcessVersionCatalog}).
  * <p>
- * An adapter which registers no catalog leaves the core with two readings: the BPMS was
- * not asked yet, or there is nothing to ask it. This is the second reading, and it is
- * what lets the core name the methods whose version will never be met on that BPMS.
+ * If an adapter registers no catalog, the core sees two possible reasons. Either the BPMS
+ * was not asked yet, or there is nothing to ask it. This enum says it is the second one.
+ * Then the core can name the methods whose version will never match on that BPMS.
  * <p>
- * A BPMS which counts its versions and can be asked about them registers a catalog and
- * never gets here, which is why there is no constant for a counted version.
+ * A BPMS which counts its versions, and which can be asked about them, registers a
+ * catalog and never gets here. That is why there is no constant for a counted version.
  */
 public enum ReportedProcessVersion {
 
   /**
-   * Nothing. A method naming a version never runs on this BPMS, whatever the version
-   * says.
+   * Nothing. A method which names a version never runs on this BPMS, whatever the
+   * version says.
    */
   NONE,
 
   /**
-   * The version tag of the model the workflow runs on, where the engine fills it. A
-   * version naming exactly that tag is met by such a delivery. A range is not: placing
-   * a version in a range needs the order the versions were deployed in, and that order
-   * is what a catalog holds.
+   * The version tag of the model the workflow runs on, if the engine fills it. Such a
+   * delivery matches a version which names exactly that tag. It does not match a range.
+   * To place a version in a range, you need the order in which the versions were
+   * deployed, and only a catalog holds that order.
    */
   VERSION_TAG
 

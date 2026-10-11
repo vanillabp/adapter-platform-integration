@@ -1,8 +1,8 @@
 package io.vanillabp.integration.extension.spi.handler;
 
 /**
- * What one invocation of a handler method binds its parameters from: the workflow
- * aggregate VanillaBP loaded, the process variables the caller passed and the
+ * Where one invocation of a handler method takes the values of its parameters from: the
+ * workflow aggregate VanillaBP loaded, the process variables the caller passed, and the
  * extension's own payload.
  *
  * @see HandlerValueSource
@@ -10,30 +10,30 @@ package io.vanillabp.integration.extension.spi.handler;
 public interface HandlerContext {
 
   /**
-   * The aggregate this invocation runs for - what a parameter taking the aggregate by its
-   * type is bound to. It is <code>null</code> where the call carried none.
+   * The aggregate this invocation runs for. A parameter which takes the aggregate by its
+   * type gets this value. It is <code>null</code> if the call carried none.
    *
    * @return The workflow aggregate of the workflow the handler runs for
    */
   Object getWorkflowAggregate();
 
   /**
-   * The object the extension handed to {@link ExtensionHandlers#invoke(HandlerCall)},
-   * which is what the binders of the extension read. The Business Cockpit passes its
-   * prefilled details object here.
+   * The object the extension passed to {@link ExtensionHandlers#invoke(HandlerCall)}. The
+   * binders of the extension read it. The Business Cockpit passes its prefilled details
+   * object here.
    *
    * @return The payload, or <code>null</code> if the call carried none
    */
   Object getPayload();
 
   /**
-   * The payload, cast to what the binder asking for it expects.
+   * The payload, cast to the type the binder which asks for it expects.
    *
    * @param <T> The expected type
    * @param type The expected type
    * @return The payload
-   * @throws IllegalStateException If the payload is missing or of another type - which
-   *           is a defect of whoever built the call, and the message says so
+   * @throws IllegalStateException If the payload is missing or of another type. That is a
+   *           bug of whoever built the call, and the message says so
    */
   default <T> T payload(
       final Class<T> type) {
@@ -55,8 +55,8 @@ public interface HandlerContext {
   }
 
   /**
-   * The value of one process variable of this invocation, as the caller passed it and
-   * before any conversion to a parameter's type.
+   * The value of one process variable of this invocation, as the caller passed it, before
+   * it is converted to the type of a parameter.
    *
    * @param name The name of the process variable
    * @return Its value, or <code>null</code> if the call carried none of that name
@@ -65,10 +65,10 @@ public interface HandlerContext {
       String name);
 
   /**
-   * The multi-instance scopes this invocation runs in, one per BPMN element carrying
-   * multi-instance characteristics. Read a scope by the element id it is keyed under, or
-   * walk the map: nested elements come outermost first, whether the invocation is a
-   * workflow task or a {@link HandlerCall} an extension built (see
+   * The multi-instance scopes this invocation runs in, one per BPMN element which has
+   * multi-instance characteristics. Read a scope by its element id, or walk through the
+   * map. Nested elements come outermost first. This is true for a workflow task and for a
+   * {@link HandlerCall} an extension built (see
    * {@code NestedMultiInstancesKeepTheirOrderTest}).
    *
    * @return The multi-instance scopes of this invocation, keyed by BPMN element id

@@ -2,29 +2,28 @@ package io.vanillabp.integration.adapter.spi.workflowtask;
 
 /**
  * The refusal of a task delivery whose workflow aggregate is not stored in this
- * application. The core words it, an adapter carries it out: the delivery is answered as a
- * failure, and the message below is what the BPMS shows to whoever looks at it.
+ * application. The core writes the words, an adapter carries it out. The delivery is
+ * answered as a failure, and the BPMS shows the message below to whoever looks at it.
  * <p>
- * The situation this is written for is two applications sharing one BPMS. A task of a
- * workflow the OTHER application owns reaches this one, because both deploy a BPMN process
- * of the same name and a worker takes whatever its subscription matches. Nothing about that
- * is a defect of the application which received the job, which is why the message does not
- * read as one.
+ * This is written for two applications which share one BPMS. A task of a workflow which the
+ * OTHER application owns reaches this one. That happens because both deploy a BPMN process
+ * of the same name, and a worker takes whatever its subscription matches. This is not a
+ * defect of the application which received the job, so the message does not read as one.
  * <p>
- * <b>The row written at the start tells the two situations apart.</b> A workflow aggregate
- * this application never had and one it had and deleted look the same in the database of the
- * aggregates. The delivery log holds a row for the start of every workflow this application
- * started, though, and the core reads it before it refuses ({@link StartRecord}). Where that row
- * names the workflow of the delivery, this application started it and the aggregate was
- * deleted. Where there is no row, another application most likely owns the workflow. Where no
- * such row can be expected at all, because there is no delivery log or the delivery names no
- * workflow, the message names both situations and accuses nobody of either.
+ * <b>The row written at the start tells the two situations apart.</b> In the database of the
+ * aggregates, a workflow aggregate this application never had looks the same as one it had
+ * and deleted. But the delivery log holds a row for the start of every workflow this
+ * application started, and the core reads it before it refuses ({@link StartRecord}). If that
+ * row names the workflow of the delivery, this application started it and the aggregate was
+ * deleted. If there is no row, another application most likely owns the workflow. Sometimes
+ * no such row can be expected at all, because there is no delivery log or the delivery names
+ * no workflow. Then the message names both situations and blames nobody.
  * <p>
- * The refusal is counted as <code>vanillabp.task.deliveries.unknown.workflow</code>, so the
- * question whether this happens often has an answer the second time somebody asks it. It
- * deliberately writes no delivery record: the record would be written by the
- * application which wrongly received the task, while whoever investigates reads the records
- * of the application which owns the workflow, and there it would be missing.
+ * The refusal is counted as <code>vanillabp.task.deliveries.unknown.workflow</code>. So when
+ * somebody asks a second time whether this happens often, there is an answer. It writes no
+ * delivery record, on purpose. The application which wrongly received the task would write
+ * the record. But whoever investigates reads the records of the application which owns the
+ * workflow, and the record would be missing there.
  * <p>
  * Why the refusal stays loud is decision 99 in the repository's DECISIONS.md.
  */
@@ -62,39 +61,39 @@ public class DeliveryOfAnUnknownWorkflowException extends RuntimeException {
   }
 
   /**
-   * The adapter whose worker was handed this task. An application may run two adapters of the
-   * same BPMS, so this is what says on which of them the refusal happened.
+   * The adapter whose worker received this task. An application may run two adapters of the
+   * same BPMS, so this says on which of them the refusal happened.
    */
   private final String adapterId;
 
   /**
-   * The workflow module the BPMN process belongs to. Two modules may carry the same BPMN
-   * process id, so an adapter reporting the process alone would name the wrong one.
+   * The workflow module the BPMN process belongs to. Two modules may have the same BPMN
+   * process id. So an adapter which reports only the process might name the wrong one.
    */
   private final String workflowModuleId;
 
   /**
-   * The BPMN process the refused task belongs to, in the plain spelling the application uses.
-   * Whatever the adapter prefixes it with on its way to the BPMS is not part of it.
+   * The BPMN process the refused task belongs to, spelled as the application spells it. Any
+   * prefix the adapter adds on the way to the BPMS is not part of it.
    */
   private final String bpmnProcessId;
 
   /**
-   * The task definition the delivery was routed by. It is what tells one refused task of a
-   * process from another, which is what a count per task needs.
+   * The task definition the delivery was routed by. It tells one refused task of a process
+   * from another, and a count per task needs that.
    */
   private final String taskDefinition;
 
   /**
-   * The id the BPMS named the workflow aggregate by, serialized as it arrived. No workflow
-   * aggregate of it is stored in this application, which is the whole finding.
+   * The id by which the BPMS named the workflow aggregate, serialized as it arrived. This
+   * application stores no workflow aggregate with this id. That is the whole problem.
    */
   private final String workflowAggregateId;
 
   /**
-   * The BPMS' own id of the workflow, or <code>null</code> where the delivery carried none.
-   * It is the value somebody searches the other application by, so an adapter which writes
-   * the refusal anywhere writes this with it.
+   * The BPMS' own id of the workflow, or <code>null</code> if the delivery carried none.
+   * Somebody searches the other application by this value. So an adapter which writes the
+   * refusal anywhere writes this id with it.
    */
   private final String workflowId;
 
@@ -104,8 +103,8 @@ public class DeliveryOfAnUnknownWorkflowException extends RuntimeException {
   private final StartRecord startRecord;
 
   /**
-   * Refuses one task delivery and words the refusal for the case where nothing is known about
-   * the start of the workflow, so the message names both situations.
+   * Refuses one task delivery when nothing is known about the start of the workflow. So the
+   * message names both situations.
    *
    * @param adapterId The id of the adapter which delivered the task
    * @param workflowModuleId The workflow module the BPMN process belongs to
@@ -115,7 +114,7 @@ public class DeliveryOfAnUnknownWorkflowException extends RuntimeException {
    *          works on
    * @param workflowAggregateId The ID of the workflow aggregate the BPMS named, serialized
    *          as it arrived
-   * @param workflowId The BPMS' own id of the workflow, or <code>null</code> where the
+   * @param workflowId The BPMS' own id of the workflow, or <code>null</code> if the
    *          delivery carried none
    */
   public DeliveryOfAnUnknownWorkflowException(
@@ -133,8 +132,8 @@ public class DeliveryOfAnUnknownWorkflowException extends RuntimeException {
   }
 
   /**
-   * Refuses one task delivery and words the refusal after what the delivery log said about the
-   * start of the workflow.
+   * Refuses one task delivery. The words follow what the delivery log said about the start of
+   * the workflow.
    *
    * @param adapterId The id of the adapter which delivered the task
    * @param workflowModuleId The workflow module the BPMN process belongs to
@@ -144,7 +143,7 @@ public class DeliveryOfAnUnknownWorkflowException extends RuntimeException {
    *          works on
    * @param workflowAggregateId The ID of the workflow aggregate the BPMS named, serialized
    *          as it arrived
-   * @param workflowId The BPMS' own id of the workflow, or <code>null</code> where the
+   * @param workflowId The BPMS' own id of the workflow, or <code>null</code> if the
    *          delivery carried none
    * @param startRecord What the delivery log said about the start of the workflow
    */
@@ -183,13 +182,12 @@ public class DeliveryOfAnUnknownWorkflowException extends RuntimeException {
   }
 
   /**
-   * What the reader of the incident, respectively of the adapter's log, gets to see.
+   * What the reader of the incident, or of the adapter's log, gets to see.
    * <p>
-   * It says what happened before it says what to do about it. Where the delivery log cannot
-   * tell the two situations apart, it says what to do for both of them. The property key it
-   * names is the one which keeps two applications apart on a BPMS which has no isolation of its
-   * own, and it is spelled for THIS workflow module and THIS adapter, so it can be copied into
-   * the configuration as it stands.
+   * It first says what happened, then what to do about it. If the delivery log cannot tell the
+   * two situations apart, it says what to do for both. The property key it names keeps two
+   * applications apart on a BPMS which cannot keep them apart itself. The key is spelled for
+   * THIS workflow module and THIS adapter, so it can be copied into the configuration as it is.
    */
   private static String message(
       final String adapterId,
@@ -257,8 +255,8 @@ public class DeliveryOfAnUnknownWorkflowException extends RuntimeException {
   }
 
   /**
-   * What the delivery log said about the start of the workflow, which is what the message
-   * names as the likely situation.
+   * What the delivery log said about the start of the workflow. The message names the likely
+   * situation based on it.
    *
    * @return What the delivery log said, never <code>null</code>
    */
@@ -324,10 +322,10 @@ public class DeliveryOfAnUnknownWorkflowException extends RuntimeException {
   }
 
   /**
-   * The BPMS' own id of the workflow, which is what somebody searching the other
-   * application starts from.
+   * The BPMS' own id of the workflow. Somebody who searches the other application starts
+   * from it.
    *
-   * @return The workflow id, or <code>null</code> where the delivery carried none
+   * @return The workflow id, or <code>null</code> if the delivery carried none
    */
   public String getWorkflowId() {
 

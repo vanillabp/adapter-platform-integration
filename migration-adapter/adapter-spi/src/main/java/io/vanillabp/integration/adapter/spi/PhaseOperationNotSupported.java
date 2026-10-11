@@ -5,11 +5,10 @@ import java.util.Map;
 import io.vanillabp.integration.spi.PhaseOperation;
 
 /**
- * Thrown where an application asks for an operation the elected adapter has no handler
- * for. Only an operation which is not
- * {@link PhaseOperation#requiredOfEveryAdapter()} can end up here - a required one is
- * refused while the application boots, naming the adapter, so nobody learns about it
- * from a workflow standing still.
+ * Thrown if an application asks for an operation which the elected adapter has no handler
+ * for. Only an operation which is not {@link PhaseOperation#requiredOfEveryAdapter()} can
+ * end up here. A missing required one stops the application while it starts, and the
+ * message names the adapter. So nobody learns about it from a workflow which stands still.
  * <p>
  * The message says what the adapter cannot do, and the operation itself says what to do
  * instead ({@link PhaseOperation.Wording#remedyWhenUnsupported()}).
@@ -19,9 +18,9 @@ public class PhaseOperationNotSupported extends UnsupportedOperationException {
   private static final long serialVersionUID = 1L;
 
   /**
-   * Builds the message the application is refused with: what this adapter cannot do, which
-   * workflow it was asked about, and what to do instead where the operation names a way
-   * out.
+   * Builds the message the application gets. It says what this adapter cannot do and which
+   * workflow it was asked about. If the operation names a way out, it also says what to do
+   * instead.
    *
    * @param adapterId The ID of the adapter which has no handler for the operation
    * @param operation The operation asked for

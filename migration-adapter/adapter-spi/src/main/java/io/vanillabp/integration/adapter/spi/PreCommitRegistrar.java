@@ -4,18 +4,17 @@ package io.vanillabp.integration.adapter.spi;
  * Lets a BPMS adapter run a phase-one check right before the transaction of the workflow
  * aggregate commits.
  * <p>
- * A phase-one check must not advance the process, but it may ASK - whether the task still
- * exists, whether the model declares a message - and the answer can go stale between the
- * question and the phase-two dispatch. The later the check runs, the smaller that window,
- * so an adapter hands its check here instead of running it when the application calls.
- * A check which throws aborts the commit, which is what makes the application learn about
- * a stale operation where it made the call.
+ * A phase-one check must not move the process forward, but it may ASK. For example, it may
+ * ask whether the task still exists, or whether the model declares a message. The answer
+ * can be out of date by the time phase two is sent. The later the check runs, the smaller
+ * that gap. So an adapter hands its check over here, instead of running it when the
+ * application calls. If the check throws, the commit is aborted. That way the application
+ * learns about an outdated operation at the place where it made the call.
  * <p>
- * The platform integrations implement this by resolving the transaction runner of the
- * workflow aggregate (which may be a runner the APPLICATION contributed) and
- * asking it, so an application-owned unit of work is hooked into rather than bypassed. A
- * runner which does not implement the hook runs the check immediately - the behaviour of
- * every adapter before this existed.
+ * The platform integrations look up the transaction runner of the workflow aggregate and
+ * ask it. This may be a runner the APPLICATION contributed. So a unit of work owned by the
+ * application is hooked into, not bypassed. A runner which does not implement the hook runs
+ * the check at once. Every adapter behaved like this before this interface existed.
  */
 @FunctionalInterface
 public interface PreCommitRegistrar {
@@ -24,7 +23,7 @@ public interface PreCommitRegistrar {
    * Runs the given check right before the transaction of the given workflow aggregate
    * commits, or immediately where that cannot be arranged.
    *
-   * @param workflowAggregateClass The workflow aggregate whose transaction is meant - it
+   * @param workflowAggregateClass The workflow aggregate whose transaction is meant. It
    *          decides which runner is asked
    * @param check The check to run; throwing aborts the commit
    */

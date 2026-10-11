@@ -8,64 +8,63 @@ import java.util.function.Function;
 
 /**
  * What an extension tells VanillaBP about an annotation of its own, so that the
- * mechanics behind <code>&#64;WorkflowTask</code> serve it as well: which methods of a
- * <code>&#64;WorkflowService</code> class belong to the extension, what they are
- * matched by, what may stand in their parameter list and whether what they return is
+ * mechanics behind <code>&#64;WorkflowTask</code> serve it as well. It says which methods
+ * of a <code>&#64;WorkflowService</code> class belong to the extension, what they are
+ * matched by, what may stand in their parameter list, and whether what they return is
  * handed back to the caller.
  * <p>
- * A contract is registered once at startup ({@link ExtensionHandlers#register}) and the
+ * A contract is registered once at startup ({@link ExtensionHandlers#register}). The
  * methods it describes are then invoked through
- * {@link ExtensionHandlers#invoke(HandlerCall)}: VanillaBP loads the workflow
- * aggregate, binds the parameters, calls the method and saves the aggregate, all in one
- * transaction - the same steps a workflow task goes through.
+ * {@link ExtensionHandlers#invoke(HandlerCall)}. VanillaBP loads the workflow aggregate,
+ * binds the parameters, calls the method and saves the aggregate, all in one transaction.
+ * These are the same steps a workflow task goes through.
  * <p>
- * <b>Matching.</b> Every method carrying the annotation serves the lookup keys
- * {@link Builder#lookupKeys(Function)} reads from it. A method whose annotation names
- * none serves its own METHOD NAME, which is the convention
- * <code>&#64;WorkflowTask</code> follows too; {@link #EVERY_KEY} makes it serve every
- * key of its BPMN process. An invocation hands in the keys it accepts (an element id and
- * a task definition, say), and the method NAMING one of them runs; where none does, the
- * method serving every key runs. So a catch-all may stand next to methods for single
- * elements, and the specific one wins - the rule
- * <code>&#64;WorkflowStartedByBpms</code> follows for its start events too.
+ * <b>Matching.</b> Every method with the annotation serves the lookup keys which
+ * {@link Builder#lookupKeys(Function)} reads from it. A method whose annotation names no
+ * key serves its own METHOD NAME. <code>&#64;WorkflowTask</code> follows the same
+ * convention. {@link #EVERY_KEY} makes a method serve every key of its BPMN process. An
+ * invocation passes in the keys it accepts (an element id and a task definition, for
+ * example), and the method which NAMES one of them runs. If no method names one, the
+ * method which serves every key runs. So a catch-all may stand next to methods for single
+ * elements, and the specific one wins. <code>&#64;WorkflowStartedByBpms</code> follows
+ * the same rule for its start events.
  * <p>
- * <b>Which key wins is the order of the invocation's list.</b> Where two methods serve
- * one element under two keys, the key offered first decides, so an extension says with
- * that order which identity of an element it prefers. The keys a METHOD declares carry no
- * such rank: a method says what it answers to, and that is a set (see decision 51 in the
- * repository's DECISIONS.md).
+ * <b>The order of the invocation's list decides which key wins.</b> If two methods serve
+ * one element under two keys, the key offered first decides. So with that order an
+ * extension says which identity of an element it prefers. The keys a METHOD declares have
+ * no such rank. A method says what it answers to, and that is a set (see decision 51 in
+ * the repository's DECISIONS.md).
  * <p>
- * <b>Versions narrow a method further.</b> Where your annotation carries a version
- * attribute, {@link Builder#versions(Function)} reads it and VanillaBP applies the same
- * selection its own <code>&#64;WorkflowTask</code> uses: a method runs for the versions
- * of the BPMN process it names, and a method naming none runs for every version, which
- * is what a contract saying nothing about versions gets. The call names the version it
- * is about ({@link HandlerCall.Builder#processVersion(String)}), and a contract whose
- * calls carry one says so once
- * ({@link Builder#callsCarryTheProcessVersion()}), so a method nothing could ever
- * reach is reported at startup rather than at the first event.
+ * <b>Versions narrow a method further.</b> If your annotation has a version attribute,
+ * {@link Builder#versions(Function)} reads it. VanillaBP then applies the same selection
+ * its own <code>&#64;WorkflowTask</code> uses. A method runs for the versions of the BPMN
+ * process it names. A method which names none runs for every version, and that is what a
+ * contract which says nothing about versions gets. The call names the version it is about
+ * ({@link HandlerCall.Builder#processVersion(String)}). A contract whose calls carry a
+ * version says so once ({@link Builder#callsCarryTheProcessVersion()}). Then a method
+ * nothing could ever reach is reported at startup, not at the first event.
  * <p>
- * <b>Zero matches are legal.</b> Nothing is registered for a BPMN process whose
- * workflow service carries no such method, and an invocation for it answers
- * {@link ExtensionHandlers#hasHandler} with <code>false</code> respectively returns an
- * empty result - what an extension does instead is its own business (the Business
- * Cockpit passes its prefilled details through unchanged). Two methods naming the same
- * key of one BPMN process, on the other hand, end the boot, and so do two catch-alls:
- * which of them was meant cannot be guessed. Two methods whose versions do not overlap
- * are not such a pair, because the version says which of them is meant.
+ * <b>Zero matches are allowed.</b> Nothing is registered for a BPMN process whose workflow
+ * service has no such method. For it, {@link ExtensionHandlers#hasHandler} answers
+ * <code>false</code>, and an invocation returns an empty result. What an extension does
+ * instead is up to the extension (the Business Cockpit passes its prefilled details
+ * through unchanged). But if two methods name the same key of one BPMN process, the
+ * application does not start. The same holds for two catch-alls, because nobody can guess
+ * which of them was meant. Two methods whose versions do not overlap are not such a pair,
+ * because the version says which of them is meant.
  * <p>
- * <b>Saving the workflow aggregate is the normal case</b> and a call may switch it off
- * ({@link HandlerCall.Builder#withoutSavingTheWorkflowAggregate()}). An extension whose
- * methods never write says it here instead
+ * <b>Saving the workflow aggregate is the normal case.</b> A call may switch it off
+ * ({@link HandlerCall.Builder#withoutSavingTheWorkflowAggregate()}). If the methods of an
+ * extension never write, it says so here instead
  * ({@link Builder#neverSavesTheWorkflowAggregate()}), once, for all of them.
  */
 public final class HandlerContract {
 
   /**
-   * A lookup key standing for "every key of this BPMN process" - the default of the
-   * Business Cockpit's <code>&#64;WorkflowDetailsProvider</code>, which exists once per
-   * process, and of a <code>&#64;WorkflowStartedByBpms</code> method naming no start
-   * event.
+   * A lookup key which stands for "every key of this BPMN process". It is the default of
+   * the Business Cockpit's <code>&#64;WorkflowDetailsProvider</code>, which exists once per
+   * process. It is also the default of a <code>&#64;WorkflowStartedByBpms</code> method
+   * which names no start event.
    */
   public static final String EVERY_KEY = "*";
 
@@ -114,10 +113,10 @@ public final class HandlerContract {
   /**
    * Starts building a contract.
    *
-   * @param extensionId The extension's id, e.g. <code>business-cockpit</code> - it
+   * @param extensionId The extension's id, e.g. <code>business-cockpit</code>. It
    *          names the extension in every message about one of its methods
-   * @param annotationType The annotation the extension's methods carry; repeatable
-   *          annotations are supported, a method then serves every key of every
+   * @param annotationType The annotation the extension's methods carry. Repeatable
+   *          annotations are supported. A method then serves every key of every
    *          repetition
    * @return The builder
    */
@@ -131,7 +130,7 @@ public final class HandlerContract {
 
   /**
    * The extension this contract belongs to. It names the extension in every message about
-   * one of its methods, so a developer reads which library asked for what.
+   * one of its methods, so a developer can read which library asked for what.
    *
    * @return The id of the extension owning this contract
    */
@@ -142,9 +141,9 @@ public final class HandlerContract {
   }
 
   /**
-   * The annotation the extension's handler methods carry. It is what a
-   * {@link HandlerCall} names to reach them, and what the scan looks for on the methods of
-   * a <code>&#64;WorkflowService</code> class.
+   * The annotation the extension's handler methods carry. A {@link HandlerCall} names it to
+   * reach them, and the scan looks for it on the methods of a
+   * <code>&#64;WorkflowService</code> class.
    *
    * @return The annotation the extension's handler methods carry
    */
@@ -155,9 +154,9 @@ public final class HandlerContract {
   }
 
   /**
-   * How the keys a method serves are read out of one occurrence of the annotation.
+   * How the keys a method serves are read out of one use of the annotation.
    *
-   * @return Reads the keys one occurrence of the annotation names, or an empty list
+   * @return Reads the keys one use of the annotation names, or an empty list
    *         for "the method's name"
    */
   public Function<Annotation, List<String>> getLookupKeys() {
@@ -167,10 +166,9 @@ public final class HandlerContract {
   }
 
   /**
-   * How the process versions a method serves are read out of one occurrence of the
-   * annotation.
+   * How the process versions a method serves are read out of one use of the annotation.
    *
-   * @return Reads the version specifications one occurrence of the annotation names,
+   * @return Reads the version specifications one use of the annotation names,
    *         or an empty list for "every version"
    */
   public Function<Annotation, List<String>> getVersions() {
@@ -181,7 +179,7 @@ public final class HandlerContract {
 
   /**
    * Whether the calls of this contract name the version of the BPMN process. Only the
-   * extension can answer it, and the answer is what lets the boot report a method no call
+   * extension can answer it. With the answer, the startup can report a method which no call
    * could ever reach (see decision 56 in the repository's DECISIONS.md).
    *
    * @return Whether the calls of this contract name the version of the BPMN process they
@@ -194,12 +192,12 @@ public final class HandlerContract {
   }
 
   /**
-   * Whether the start ends where an element of the model it deployed has methods of this
-   * contract, but none of them covers the version the BPMS gave that model. The elements are
-   * the ones the extension reports through
+   * Whether the start ends if an element of the deployed model has methods of this contract,
+   * but none of them covers the version which the BPMS gave that model. The extension reports
+   * the elements through
    * {@link ExtensionHandlers#elementsOfTheDeployedModel(Class, String, String, List)}.
    *
-   * @return Whether the version a start deployed needs a method for every reported element
+   * @return Whether the deployed version needs a method for each reported element
    * @see Builder#theDeployedVersionNeedsAMethod()
    */
   public boolean deployedVersionNeedsAMethod() {
@@ -209,10 +207,10 @@ public final class HandlerContract {
   }
 
   /**
-   * What it means for the extension that an element has no method in the version this start
-   * deployed. The message which ends the start says it next to the element.
+   * What it means for the extension if an element has no method in the version which this
+   * start deployed. The message which ends the start shows it next to the element.
    *
-   * @return The sentence the extension gave, or <code>null</code> where it gave none and the
+   * @return The sentence the extension gave. <code>null</code> if it gave none, then the
    *         message uses a neutral sentence of its own
    * @see Builder#theDeployedVersionNeedsAMethod(String)
    */
@@ -224,8 +222,8 @@ public final class HandlerContract {
 
   /**
    * Which of the parameters VanillaBP binds itself the methods of this contract may ask
-   * for. A parameter of a kind left out is refused while the method is scanned, so the
-   * developer reads it at the start instead of receiving <code>null</code> later.
+   * for. A parameter of a kind which is left out is refused while the method is scanned. So
+   * the developer reads about it at the start, and does not get <code>null</code> later.
    *
    * @return The parameter kinds VanillaBP binds for these methods
    */
@@ -236,9 +234,9 @@ public final class HandlerContract {
   }
 
   /**
-   * The binders of the parameter kinds the extension's own SPI adds. They are asked before
-   * VanillaBP tries its own, so an extension may serve a parameter VanillaBP would
-   * otherwise take.
+   * The binders of the parameter kinds which the extension's own SPI adds. They are asked
+   * before VanillaBP tries its own. So an extension may serve a parameter which VanillaBP
+   * would otherwise take.
    *
    * @return The binders the extension contributes, asked in the order they were added
    */
@@ -249,11 +247,11 @@ public final class HandlerContract {
   }
 
   /**
-   * What the extension checks about one occurrence of its annotation, run while the scan
-   * still holds the method carrying it.
+   * What the extension checks about one use of its annotation. It runs while the scan still
+   * holds the method which carries the annotation.
    *
-   * @return What the extension checks about one occurrence of its annotation while the
-   *         method carrying it is scanned, or <code>null</code> where it checks nothing
+   * @return What the extension checks about one use of its annotation while the
+   *         method carrying it is scanned, or <code>null</code> if it checks nothing
    */
   public HandlerAnnotationCheck getAnnotationCheck() {
 
@@ -263,7 +261,7 @@ public final class HandlerContract {
 
   /**
    * Whether what a method returns reaches the caller of
-   * {@link ExtensionHandlers#invoke(HandlerCall)}. Where it does not, a method of this
+   * {@link ExtensionHandlers#invoke(HandlerCall)}. If it does not, a method of this
    * contract has to be <code>void</code>.
    *
    * @return Whether what a method returns is handed back to the caller
@@ -276,10 +274,10 @@ public final class HandlerContract {
 
   /**
    * Whether VanillaBP saves the workflow aggregate after a method of this contract ran.
-   * <code>false</code> is the extension's statement that none of its methods writes, and
-   * then no call of this contract saves either.
+   * With <code>false</code> the extension says that none of its methods writes. Then no
+   * call of this contract saves either.
    *
-   * @return Whether the aggregate is saved where the call asks for it
+   * @return Whether the aggregate is saved if the call asks for it
    */
   public boolean savesWorkflowAggregate() {
 
@@ -326,15 +324,15 @@ public final class HandlerContract {
     }
 
     /**
-     * How the keys a method serves are read from one occurrence of the annotation -
-     * typically the annotation's <code>id</code> or <code>taskDefinition</code>
-     * attribute. Returning an EMPTY list means "the method's name", the convention
-     * VanillaBP's own annotations follow; returning {@link HandlerContract#EVERY_KEY}
-     * makes the method serve every key of its BPMN process.
+     * How the keys a method serves are read from one use of the annotation, usually
+     * from the annotation's <code>id</code> or <code>taskDefinition</code> attribute. An
+     * EMPTY list means "the method's name", the convention VanillaBP's own annotations
+     * follow. {@link HandlerContract#EVERY_KEY} makes the method serve every key of its
+     * BPMN process.
      * <p>
      * Without this the methods are matched by their name only.
      *
-     * @param lookupKeys Reads the keys of one occurrence of the annotation
+     * @param lookupKeys Reads the keys of one use of the annotation
      * @return This builder
      */
     public Builder lookupKeys(
@@ -346,24 +344,24 @@ public final class HandlerContract {
     }
 
     /**
-     * How the process versions a method serves are read from one occurrence of the
-     * annotation - typically its <code>version</code> attribute. The specifications are
-     * written the way <code>&#64;WorkflowTask(version = ...)</code> writes them, version
-     * tags included: <code>3</code>, <code>release-2024</code>, <code>1-3</code>,
+     * How the process versions a method serves are read from one use of the
+     * annotation, usually from its <code>version</code> attribute. The specifications
+     * are written the way <code>&#64;WorkflowTask(version = ...)</code> writes them,
+     * version tags included: <code>3</code>, <code>release-2024</code>, <code>1-3</code>,
      * <code>v1.0..v2.0</code>, <code>&gt;3</code>, <code>&lt;=v2.0</code> and
      * <code>*</code> for every version.
      * <p>
-     * Returning an EMPTY list means every version, which is what a method naming
-     * nothing serves and what a contract leaving this out gets for all of its methods.
-     * Two methods serving one key end the boot only where their versions overlap, so
-     * one method per generation of a model is a legitimate way to write them.
+     * An EMPTY list means every version. A method which names nothing serves every
+     * version, and so do all methods of a contract which leaves this out. Two methods
+     * which serve one key stop the start of the application only if their versions
+     * overlap. So one method per generation of a model is a valid way to write them.
      * <p>
-     * A method is compared to the version the call names
+     * A method is compared with the version the call names
      * ({@link HandlerCall.Builder#processVersion(String)}). Say
-     * {@link #callsCarryTheProcessVersion()} where your calls name one, so a method
+     * {@link #callsCarryTheProcessVersion()} if your calls name one. Then a method
      * VanillaBP could never reach is reported at startup.
      *
-     * @param versions Reads the version specifications of one occurrence of the
+     * @param versions Reads the version specifications of one use of the
      *          annotation
      * @return This builder
      */
@@ -377,21 +375,21 @@ public final class HandlerContract {
 
     /**
      * Declares that the calls of this contract name the version of the BPMN process they
-     * are about ({@link HandlerCall.Builder#processVersion(String)}) wherever the BPMS
+     * are about ({@link HandlerCall.Builder#processVersion(String)}), whenever the BPMS
      * reports one.
      * <p>
-     * It is what makes a version attribute usable, and what VanillaBP judges the methods
-     * of an application by while it boots. Without it a method naming a version can never
-     * run, because a call without a version is served by a method naming none, and the
-     * start says so for every such method instead of leaving the application to notice at
-     * the first event which does not arrive.
+     * This makes a version attribute usable, and VanillaBP checks the methods of an
+     * application against it at startup. Without it, a method which names a version can
+     * never run, because a call without a version is served by a method which names none.
+     * The startup says so for every such method. The application does not have to notice
+     * it at the first event which does not arrive.
      * <p>
-     * Say it only where a version really does arrive. Which BPMS your extension runs on
-     * decides that: a Camunda 8 job carries the version of its process, a Camunda 7
-     * process definition knows it, and an engine behind the Process-Engine-API fills a
-     * version tag only where it wants to. Where your extension has halves per BPMS, the
-     * half which is in use is what this answers for, and a single event which arrives
-     * without a version is served by the methods naming none.
+     * Say it only if a version really arrives. The BPMS your extension runs on decides
+     * that. A Camunda 8 job carries the version of its process, and a Camunda 7 process
+     * definition knows it. An engine behind the Process-Engine-API fills a version tag only
+     * if it wants to. If your extension has one part per BPMS, this answers for the part in
+     * use. A single event which arrives without a version is served by the methods which
+     * name none.
      *
      * @return This builder
      */
@@ -403,23 +401,23 @@ public final class HandlerContract {
     }
 
     /**
-     * Declares that the version a start deployed needs a method of this contract for every
-     * element the extension reports, wherever such an element has methods at all. The start
-     * ends where none of them covers that version, with the same message a
-     * <code>&#64;WorkflowTask</code> method gets in that case.
+     * Says that the version which a start deployed needs a method of this contract for
+     * each element the extension reports, if that element has methods at all. If none of
+     * them covers that version, the start ends. The message is the same as for a
+     * <code>&#64;WorkflowTask</code> method in that case.
      * <p>
-     * The reason is the one behind <code>&#64;WorkflowTask</code>. The wiring is checked
-     * before the deployment, when nobody knows the version yet, and a call picks its method by
-     * version. So a method whose range misses the deployed version passes the start, and then
-     * no call of that version ever finds it. Say this where such a silent miss is a defect of
-     * the application and not a choice.
+     * The reason is the same as for <code>&#64;WorkflowTask</code>. VanillaBP checks the
+     * wiring before the deployment, when nobody knows the version yet. But a call picks its
+     * method by version. So a method whose range misses the deployed version passes the
+     * start. After that, no call of that version ever finds it. Use this where such a silent
+     * miss is a defect of the application, and not a choice.
      * <p>
-     * VanillaBP knows the methods but not the elements of the model, so the extension names
+     * VanillaBP knows the methods, but not the elements of the model. So the extension names
      * them: call {@link ExtensionHandlers#elementsOfTheDeployedModel(Class, String, String, List)}
-     * from its <code>wireBpmn</code>. An element without any method of this contract is not
-     * asked about, because no method is a legal answer. The calls of this contract have to
-     * name the version as well ({@link #callsCarryTheProcessVersion()}), since a version is
-     * what the methods are held against.
+     * from its <code>wireBpmn</code>. If an element has no method of this contract, the check
+     * does not ask about it, because "no method" is a valid answer. The calls of this
+     * contract must name the version too ({@link #callsCarryTheProcessVersion()}), because the
+     * methods are checked against a version.
      *
      * @return This builder
      */
@@ -431,11 +429,11 @@ public final class HandlerContract {
     }
 
     /**
-     * The same as {@link #theDeployedVersionNeedsAMethod()}, with one sentence for the message
-     * which ends the start. It says what an element without a method means for your
-     * extension, so the developer knows what the defect costs. For example "The cockpit shows
-     * such a task without the details of its provider." Without it the message uses a neutral
-     * sentence.
+     * Does the same as {@link #theDeployedVersionNeedsAMethod()}, and adds one sentence to
+     * the message which ends the start. The sentence says what an element without a method
+     * means for your extension. Then the developer knows what the defect costs. For example:
+     * "The cockpit shows such a task without the details of its provider." Without it, the
+     * message uses a neutral sentence.
      *
      * @param consequenceOfAnElementWithoutAMethod One full sentence, written for the
      *          developer of the application
@@ -455,10 +453,10 @@ public final class HandlerContract {
     }
 
     /**
-     * Allows a parameter kind VanillaBP binds itself. Everything not allowed is
-     * refused at startup - an extension whose event has no process variables around it
-     * says so by leaving {@link CoreHandlerParameter#TASK_PARAM} out, and the developer
-     * reads that instead of receiving <code>null</code>.
+     * Allows a parameter kind which VanillaBP binds itself. Everything not allowed is
+     * refused at startup. For example, an extension whose event has no process variables
+     * leaves {@link CoreHandlerParameter#TASK_PARAM} out. Then the developer reads that,
+     * and does not get <code>null</code>.
      *
      * @param parameters The kinds to allow
      * @return This builder
@@ -487,15 +485,15 @@ public final class HandlerContract {
     }
 
     /**
-     * What the extension checks about one occurrence of its annotation, run while the
-     * scan holds the method carrying it - once per occurrence, so a repeatable
-     * annotation is checked as often as it is written. A check refusing by throwing
-     * ends the boot with a message naming the annotation, the class, the method and the
-     * extension in front of what the check said.
+     * What the extension checks about one use of its annotation. It runs while the scan
+     * holds the method which carries the annotation, once per use. So a repeatable
+     * annotation is checked as often as it is written. If a check refuses by throwing,
+     * the application does not start. The message names the annotation, the class, the
+     * method and the extension, and then what the check said.
      * <p>
-     * This is where an attribute the {@link HandlerContract} cannot describe is
-     * judged. Without it an extension has to walk the classes of the application again
-     * to find the method, and that walk reads different methods than the scan does.
+     * Here an attribute is checked which the {@link HandlerContract} cannot describe.
+     * Without it, an extension has to walk through the classes of the application again
+     * to find the method, and that walk reads other methods than the scan does.
      *
      * @param annotationCheck The check
      * @return This builder
@@ -510,8 +508,8 @@ public final class HandlerContract {
 
     /**
      * Declares that what a method returns is handed back to the caller of
-     * {@link ExtensionHandlers#invoke(HandlerCall)}. Without this a method has to be
-     * <code>void</code>, which is what <code>&#64;WorkflowTask</code> methods are.
+     * {@link ExtensionHandlers#invoke(HandlerCall)}. Without this, a method has to be
+     * <code>void</code>, like a <code>&#64;WorkflowTask</code> method.
      *
      * @return This builder
      */
@@ -523,20 +521,20 @@ public final class HandlerContract {
     }
 
     /**
-     * Declares that no method of this contract ever writes the workflow aggregate, so
-     * VanillaBP never saves it after one of them ran - whatever a single call asks for.
+     * Declares that no method of this contract ever writes the workflow aggregate. So
+     * VanillaBP never saves it after one of them ran, whatever a single call asks for.
      * <p>
-     * It is the same statement a call makes with
-     * {@link HandlerCall.Builder#withoutSavingTheWorkflowAggregate()}, made once and for
-     * all methods the annotation carries. The difference is who can read it: at the call
-     * only the caller knows, while this is known while the methods are wired, which is
-     * where VanillaBP warns about a handler which may write an aggregate nothing would
-     * notice a second writer on (see decision 50 in the repository's DECISIONS.md).
-     * Such a contract is not warned about, because there is nothing to warn about.
+     * A call says the same with
+     * {@link HandlerCall.Builder#withoutSavingTheWorkflowAggregate()}. Here it is said once,
+     * for all methods with the annotation. The difference is who can read it. At the call
+     * only the caller knows. This is known while the methods are wired. There VanillaBP
+     * warns about a handler which may write an aggregate where nothing would notice a
+     * second writer (see decision 50 in the repository's DECISIONS.md). Such a contract
+     * gets no warning, because there is nothing to warn about.
      * <p>
      * Say it only if it holds for every method of the annotation. An extension with
-     * reading providers and writing notifications describes them as two contracts, and
-     * that is the more precise application anyway.
+     * reading providers and writing notifications describes them as two contracts. That
+     * is the more precise way anyway.
      *
      * @return This builder
      */
@@ -554,7 +552,7 @@ public final class HandlerContract {
      * @return The contract
      * @throws IllegalArgumentException If the extension id is missing or blank, if no
      *           annotation was named, or if the contract asks for a method for the deployed
-     *           version although its calls name no version (guiding message)
+     *           version, but its calls name no version (guiding message)
      */
     public HandlerContract build() {
 

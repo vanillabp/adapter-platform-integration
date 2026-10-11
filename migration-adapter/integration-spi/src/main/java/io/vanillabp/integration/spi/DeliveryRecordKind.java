@@ -1,31 +1,30 @@
 package io.vanillabp.integration.spi;
 
 /**
- * What a row of the {@link TaskDeliveryLog} is about. It is the KIND of the row and not the
- * result of anything: {@link TaskDelivery#outcome()} keeps saying what a delivery reported,
+ * What a row of the {@link TaskDeliveryLog} is about. It is the KIND of the row, and not the
+ * result of anything. {@link TaskDelivery#outcome()} keeps saying what a delivery reported,
  * and a row which reports nothing says so here.
  * <p>
- * Two kinds today. A task delivery is what the log was built for, and a workflow start is the
- * row written when a workflow of an aggregate begins, so the BPMS' own id of that workflow can
- * be read back without asking a BPMS. The two are told apart by this field rather than by a
- * value borrowed from the outcome, because every question about open work filters on it and a
- * borrowed value would make a start look like a delivery to each of them.
- * <p>
+ * There are two kinds today. A task delivery is what the log was built for. A workflow start
+ * is the row written when a workflow of an aggregate begins. With it, the BPMS' own id of that
+ * workflow can be read back without asking a BPMS. The two are told apart by this field and
+ * not by a value borrowed from the outcome. Every question about open work filters on it, and
+ * a borrowed value would make a start look like a delivery to each of those questions.
  * Why the row says its kind in a field of its own is decision 108 in the repository's
  * DECISIONS.md.
  */
 public enum DeliveryRecordKind {
 
   /**
-   * A task the application was handed and what its handler reported. This is what a row
-   * written before the kind existed is, so a store reading no kind reads this one.
+   * A task the application was handed, and what its handler reported. A row written before
+   * the kind existed is of this kind. So a store which reads no kind reads this one.
    */
   TASK_DELIVERY,
 
   /**
-   * The start of a workflow: it carries the workflow aggregate and the BPMS' own id of the
+   * The start of a workflow. It carries the workflow aggregate and the BPMS' own id of the
    * workflow, and nothing about a task. No question about open work counts it, and it
-   * outlives the workflow it names - see
+   * outlives the workflow it names. See
    * {@link TaskDeliveryLog#workflowStartOf(String, String, String)}.
    */
   WORKFLOW_START;
@@ -35,8 +34,8 @@ public enum DeliveryRecordKind {
    *
    * @param recordedKind The text the row holds, <code>null</code> in a row written before the
    *          field existed
-   * @return The kind, {@link #TASK_DELIVERY} where the row names none, and <code>null</code>
-   *         where it names something this version does not know (a row written by a newer
+   * @return The kind. It is {@link #TASK_DELIVERY} if the row names none, and <code>null</code>
+   *         if it names something this version does not know (a row written by a newer
    *         VanillaBP)
    */
   public static DeliveryRecordKind of(

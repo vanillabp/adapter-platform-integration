@@ -4,29 +4,28 @@ package io.vanillabp.integration.spi;
  * Selects the {@link PhaseTwoOutbox} used for aggregates of the given type.
  * <p>
  * The outbox entry MUST be enlisted in the same transaction which persists the
- * workflow aggregate (see the scheduling contract of {@link PhaseTwoOutbox}), so
- * which outbox to use is determined by the aggregate's persistence - PER AGGREGATE,
- * not per application: a JPA-persisted aggregate and a MongoDB-persisted aggregate in
- * the same application use different outboxes, each riding its own aggregate's
- * transaction. A dedicated outbox (on its own store) may also be assigned to isolate
- * a high-load process from the others.
+ * workflow aggregate (see the scheduling contract of {@link PhaseTwoOutbox}). So the
+ * persistence of the aggregate decides which outbox to use. This is decided PER
+ * AGGREGATE, not per application. An aggregate persisted with JPA and an aggregate
+ * persisted with MongoDB in the same application use different outboxes. Each one uses
+ * the transaction of its own aggregate. You may also assign an outbox of its own (on its
+ * own store), to keep a process with a high load apart from the others.
  * <p>
  * Implementations are CDI/Spring beans. The implementation with the most specific
- * aggregate class is chosen, taking superclasses and implemented interfaces into
- * account - the same selection semantics as
- * {@link AggregatePersistenceAware}. Without any
- * matching implementation the platform integration falls back to its default
- * selection (the outbox matching the persistence technology managing the aggregate,
- * or the single available outbox).
+ * aggregate class is chosen, and superclasses and implemented interfaces are taken into
+ * account. The selection works like for {@link AggregatePersistenceAware}. If no
+ * implementation matches, the platform integration falls back to its default selection
+ * (the outbox which matches the persistence technology of the aggregate, or the only
+ * outbox available).
  * <p>
- * Every {@link PhaseTwoOutbox} instance needs its own store (table/collection): two
- * dispatchers polling the same store would compete and double-dispatch. The
- * platform-provided outbox implementations accept a store name for this purpose (see
+ * Every {@link PhaseTwoOutbox} instance needs its own store (table/collection). Two
+ * dispatchers which poll the same store would compete and dispatch twice. The outbox
+ * implementations of the platform accept a store name for this (see
  * <code>vanillabp.outbox.*</code>).
  * <p>
- * All methods are <code>default</code> methods throwing an
- * {@link UnsupportedOperationException} with a guiding message: this keeps
- * hand-written implementations source-compatible when methods are added to this
+ * All methods are <code>default</code> methods. They throw an
+ * {@link UnsupportedOperationException} with a message which guides the developer. So
+ * implementations written by hand still compile when methods are added to this
  * interface.
  *
  * @param <A> The aggregate type
@@ -35,7 +34,7 @@ public interface PhaseTwoOutboxAware<A> {
 
   /**
    * Which aggregates this selection is about. VanillaBP picks the implementation whose
-   * class fits an aggregate most closely, so the answer decides whose entries go into the
+   * class fits an aggregate most closely. So the answer decides whose entries go into the
    * outbox below.
    *
    * @return The aggregate class this outbox selection applies to.
@@ -54,8 +53,8 @@ public interface PhaseTwoOutboxAware<A> {
   /**
    * The outbox used for aggregates of {@link #getAggregateClass()}. The returned
    * outbox MUST enlist entries in the same transaction which persists these
-   * aggregates, and MUST use its own store (table/collection) not shared with any
-   * other outbox instance.
+   * aggregates. It MUST use its own store (table/collection), which no other outbox
+   * instance shares.
    *
    * @return The outbox to use
    */

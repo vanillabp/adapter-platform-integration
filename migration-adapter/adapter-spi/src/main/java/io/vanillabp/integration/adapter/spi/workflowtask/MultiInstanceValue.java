@@ -1,8 +1,8 @@
 package io.vanillabp.integration.adapter.spi.workflowtask;
 
 /**
- * The context of one multi-instance execution a task runs in, supplied by the BPMS
- * adapter via {@link TaskInvocationContext#getMultiInstances()}.
+ * The context of one multi-instance execution a task runs in. The BPMS adapter supplies it
+ * through {@link TaskInvocationContext#getMultiInstances()}.
  *
  * @param element The current element of the multi-instance iteration (bound to
  *          <code>&#64;MultiInstanceElement</code> parameters)

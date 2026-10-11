@@ -2,16 +2,16 @@ package io.vanillabp.integration.adapter.spi.expressions;
 
 /**
  * Where in a BPMN model an expression sits. An adapter names the place it read the
- * expression from, so the startup message can point at it without knowing anything about
+ * expression from. So the startup message can point at it without knowing anything about
  * the BPMS.
  * <p>
- * The places are the ones a modeller puts data reads into. They are not a list of
- * everything a BPMS evaluates: an expression naming a wired task, a delegate class or a
- * form key is not a data read and is none of this check's business.
+ * These are the places where a modeller reads data. They are not a list of everything a
+ * BPMS evaluates. An expression which names a wired task, a delegate class or a form key
+ * does not read data, so this check ignores it.
  * <p>
- * An adapter whose model carries an expression in a place nothing here describes reports
- * {@link #SOMEWHERE_ELSE} rather than the closest match. A wrong place sends the reader to
- * the wrong part of the model, and the element ID beside it is precise enough on its own.
+ * Sometimes a model has an expression in a place which nothing here describes. Then the
+ * adapter reports {@link #SOMEWHERE_ELSE}, not the closest match. A wrong place sends the
+ * reader to the wrong part of the model, and the element ID next to it is precise enough.
  */
 public enum ExpressionPlace {
 
@@ -19,8 +19,8 @@ public enum ExpressionPlace {
   SEQUENCE_FLOW_CONDITION("the condition of a sequence flow"),
 
   /**
-   * The condition of a conditional event - a catching intermediate event, a boundary
-   * event or the start event of an event subprocess.
+   * The condition of a conditional event. That is a catching intermediate event, a
+   * boundary event or the start event of an event subprocess.
    */
   CONDITIONAL_EVENT_CONDITION("the condition of a conditional event"),
 
@@ -33,13 +33,13 @@ public enum ExpressionPlace {
   /** The collection a multi-instance element iterates. */
   MULTI_INSTANCE_COLLECTION("the collection of a multi-instance element"),
 
-  /** When a multi-instance element stops although instances are left. */
+  /** When a multi-instance element stops, even though instances are left. */
   MULTI_INSTANCE_COMPLETION_CONDITION("the completion condition of a multi-instance element"),
 
   /** The loop condition of a standard loop. */
   LOOP_CONDITION("the condition of a loop"),
 
-  /** The value a message waits to be correlated by. */
+  /** The value by which a waiting message is correlated. */
   MESSAGE_CORRELATION_KEY("the correlation key of a message"),
 
   /** An input of a decision the model calls, which a DMN table reads. */
@@ -61,7 +61,7 @@ public enum ExpressionPlace {
   }
 
   /**
-   * The words the startup message uses for this place, written so they fit behind the
+   * The words the startup message uses for this place. They are written to fit after the
    * element they were read from.
    *
    * @return The wording

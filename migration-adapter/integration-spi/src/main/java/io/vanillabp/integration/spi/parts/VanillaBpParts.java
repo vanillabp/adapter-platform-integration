@@ -11,25 +11,25 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Keeps an application from starting whose VanillaBP parts do not belong together.
+ * Stops an application from starting if its VanillaBP parts do not belong together.
  * <p>
  * An application puts together artifacts of several release cycles: the platform
  * integration, one or more BPMS adapters, and the extensions it uses. Each of them is
- * released at its own pace, so a dependency update can easily leave a pair behind which
- * was never built and never tested together. Neither Maven nor Gradle reports that: a
+ * released at its own pace. So a dependency update can easily leave a pair which was
+ * never built and never tested together. Neither Maven nor Gradle reports that. A
  * version the application manages always wins over the version a part asks for
- * transitively, silently and even if that means a downgrade. The build stays green, and
- * the mismatch shows up while the application runs, as a
+ * transitively. This happens silently, even if it means a downgrade. The build stays
+ * green, and the mismatch shows up while the application runs, as a
  * <code>NoSuchMethodError</code> or a <code>NoClassDefFoundError</code> in a place which
  * seems to have nothing to do with the update.
  * <p>
- * Therefore every part says which platform integration it was built against, the platform
+ * So every part says which platform integration it was built against. The platform
  * says which parts it still serves, and the boot compares the two. What the rule is and
  * why is decision 71 in the repository's <code>DECISIONS.md</code>.
  *
  * <h2>The version descriptor</h2>
  *
- * Every part ships a properties file, filled by its own build through resource filtering:
+ * Every part ships a properties file. Its own build fills it through resource filtering:
  *
  * <pre>
  * META-INF/vanillabp/adapter-camunda7.properties      (a BPMS adapter)
@@ -40,35 +40,36 @@ import org.slf4j.LoggerFactory;
  * platform.version=${adapter-platform.version}
  * </pre>
  *
- * The name carries the part into the file name, which keeps the descriptors apart when
- * several adapters are on the classpath. That is the normal case while an application
- * migrates from one BPMS to another.
+ * The name of the part is in the file name. That keeps the descriptors apart when several
+ * adapters are on the classpath, which is the normal case while an application migrates
+ * from one BPMS to another.
  * <p>
- * A properties file is read, not scanned for: it survives a Spring Boot fat jar, a shaded
- * jar and the native image of Quarkus, as long as the resource is registered. The Quarkus
- * extension registers it for every part it finds while building.
+ * A properties file is read, not scanned for. So it survives a Spring Boot fat jar, a
+ * shaded jar and the native image of Quarkus, as long as the resource is registered. The
+ * Quarkus extension registers it for every part it finds while building.
  *
  * <h2>Who asks</h2>
  *
- * The core judges every adapter and every extension it knows at startup, which is the one
- * place the rule lives. An adapter asks as well, by calling
+ * At startup the core judges every adapter and every extension it knows. That is the one
+ * place where the rule lives. An adapter asks as well, by calling
  * {@link #requireAdapterFitsPlatform(String, Class)} in the constructor of its deployment
- * service. That call is not a repetition: code of a platform integration which is older
- * than the check cannot contain the check, so the only part able to report a platform
- * which is too old is the part itself.
+ * service. That call is not a repetition. The code of a platform integration which is
+ * older than the check cannot contain the check. So only the part itself can report a
+ * platform which is too old.
  */
 public final class VanillaBpParts {
 
   private static final Logger log = LoggerFactory.getLogger(VanillaBpParts.class);
 
   /**
-   * Version descriptor of the platform integration itself, part of the
+   * The version descriptor of the platform integration itself. It is part of the
    * <code>vanillabp-integration-spi</code> JAR.
    */
   public static final String PLATFORM_DESCRIPTOR = "META-INF/vanillabp/platform-version.properties";
 
   /**
-   * Version descriptor of a part, part of the JAR the part's own build produces.
+   * The version descriptor of a part. It is part of the JAR which the own build of the part
+   * produces.
    */
   public static final String PART_DESCRIPTOR = "META-INF/vanillabp/%s-%s.properties";
 
@@ -95,9 +96,9 @@ public final class VanillaBpParts {
   private static final String UNKNOWN_VERSION = "unknown";
 
   /**
-   * Parts nobody has to be told about again, so a setup having several adapter ids of one
-   * type pays for the check once and says a warning once. A part which stops the boot is
-   * not remembered: it has to reach every caller asking.
+   * Parts nobody has to be told about again. So a setup with several adapter ids of one
+   * type pays for the check once, and gives a warning once. A part which stops the boot is
+   * not remembered, because it has to reach every caller which asks.
    */
   private static final Set<String> ALREADY_JUDGED = ConcurrentHashMap.newKeySet();
 
@@ -111,7 +112,7 @@ public final class VanillaBpParts {
    * What the boot has to say about one part.
    *
    * @param stopsTheBoot Whether the application must not start
-   * @param message The text naming both versions and the line to change
+   * @param message The text which names both versions and the line to change
    */
   public record PartVerdict(boolean stopsTheBoot, String message) {
   }
@@ -132,9 +133,9 @@ public final class VanillaBpParts {
   }
 
   /**
-   * The oldest part this platform integration still serves. It is a single number, set
-   * deliberately with every release, not a list of pairs: a list would have to name
-   * versions which do not exist yet, and every release would have to touch it.
+   * The oldest part this platform integration still serves. It is a single number, set on
+   * purpose with every release, and not a list of pairs. A list would have to name
+   * versions which do not exist yet, and every release would have to change it.
    *
    * @return The oldest version of a part this platform integration serves, or
    *         <code>null</code> if the platform names none
@@ -148,14 +149,14 @@ public final class VanillaBpParts {
   /**
    * Fails if the given BPMS adapter and the platform integration on the classpath do not
    * belong together, and warns if that cannot be told. An adapter calls this from the
-   * constructor of its deployment service, because a platform integration older than this
-   * check cannot contain the check and the adapter is then the only part able to report
-   * the pair.
+   * constructor of its deployment service. A platform integration older than this check
+   * cannot contain the check, and then the adapter is the only part which can report the
+   * pair.
    * <p>
-   * What is judged is the descriptor the adapter ships,
-   * <code>META-INF/vanillabp/adapter-&lt;adapterType&gt;.properties</code> - see the type
-   * javadoc for the three keys and for what is read when the file is missing or
-   * incomplete. Without that file there is nothing to judge and this call warns once.
+   * The check judges the descriptor the adapter ships,
+   * <code>META-INF/vanillabp/adapter-&lt;adapterType&gt;.properties</code>. See the type
+   * javadoc for the three keys, and for what is read if the file is missing or
+   * incomplete. Without that file there is nothing to judge, and this call warns once.
    *
    * @param adapterType The adapter's type (e.g. <code>camunda7</code>), which also names
    *        the descriptor
@@ -208,7 +209,7 @@ public final class VanillaBpParts {
     }
 
     final var verdict = judge(kind, name, readDescriptor(partClass, descriptorOf(kind, name)));
-    // a warning is said once, a part which stops the boot is reported to every caller
+    // a warning is given once; a part which stops the boot is reported to every caller
     if (verdict.map(found -> !found.stopsTheBoot()).orElse(Boolean.TRUE)) {
       ALREADY_JUDGED.add(key(kind, name));
     }
@@ -217,8 +218,8 @@ public final class VanillaBpParts {
   }
 
   /**
-   * Judges one part whose version descriptor was already read, which is what the Quarkus
-   * extension does while building: it walks the archives of the application and finds the
+   * Judges one part whose version descriptor was already read. The Quarkus extension does
+   * this while building: it walks through the archives of the application and finds the
    * descriptors there.
    *
    * @param kind Whether the part is an adapter or an extension
@@ -345,8 +346,8 @@ public final class VanillaBpParts {
   }
 
   /**
-   * Where a part's version descriptor lies on the classpath. A part which wants to be
-   * judged puts its file there; a part which ships none is only warned about (see
+   * Where the version descriptor of a part lies on the classpath. A part which wants to be
+   * judged puts its file there. For a part which ships none there is only a warning (see
    * decision 71 in the repository's DECISIONS.md).
    *
    * @param kind Whether the part is an adapter or an extension
@@ -362,8 +363,8 @@ public final class VanillaBpParts {
   }
 
   /**
-   * Compares two versions by their numeric parts, ignoring the qualifier, so
-   * <code>2.0.0-SNAPSHOT</code> counts as <code>2.0.0</code> and a development build
+   * Compares two versions by their numeric parts and ignores the qualifier. So
+   * <code>2.0.0-SNAPSHOT</code> counts as <code>2.0.0</code>, and a development build
    * works.
    *
    * @param actual The version found
@@ -405,8 +406,8 @@ public final class VanillaBpParts {
   }
 
   /**
-   * Reports a verdict the way the caller asked for it: a part which must not run stops
-   * the boot, a part nobody can judge is worth a warning.
+   * Reports a verdict the way the caller asked for it. A part which must not run stops
+   * the boot. A part nobody can judge is worth a warning.
    *
    * @param verdict What the check found
    */
