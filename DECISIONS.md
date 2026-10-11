@@ -4844,3 +4844,5 @@ BPMS gave the model.
 **No exception for a rolling deployment.** While another node deploys a newer model, this node may start on the
 older one. The version this node deployed is the one it starts on, and the workflows it starts run on that version.
 So the rule holds there too.
+
+*Story 954 adds the elements an extension reports, where its contract asks for it, see `DECISIONS.pending/954.md`.*

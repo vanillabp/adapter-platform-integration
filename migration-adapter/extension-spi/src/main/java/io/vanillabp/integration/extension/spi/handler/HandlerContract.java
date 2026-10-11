@@ -89,6 +89,10 @@ public final class HandlerContract {
 
   private final boolean callsCarryTheProcessVersion;
 
+  private final boolean deployedVersionNeedsAMethod;
+
+  private final String consequenceOfAnElementWithoutAMethod;
+
   private HandlerContract(
       final Builder builder) {
 
@@ -97,6 +101,8 @@ public final class HandlerContract {
     this.lookupKeys = builder.lookupKeys;
     this.versions = builder.versions;
     this.callsCarryTheProcessVersion = builder.callsCarryTheProcessVersion;
+    this.deployedVersionNeedsAMethod = builder.deployedVersionNeedsAMethod;
+    this.consequenceOfAnElementWithoutAMethod = builder.consequenceOfAnElementWithoutAMethod;
     this.coreParameters = Set.copyOf(builder.coreParameters);
     this.parameterBinders = List.copyOf(builder.parameterBinders);
     this.annotationCheck = builder.annotationCheck;
@@ -184,6 +190,35 @@ public final class HandlerContract {
   public boolean callsCarryTheProcessVersion() {
 
     return callsCarryTheProcessVersion;
+
+  }
+
+  /**
+   * Whether the start ends where an element of the model it deployed has methods of this
+   * contract, but none of them covers the version the BPMS gave that model. The elements are
+   * the ones the extension reports through
+   * {@link ExtensionHandlers#elementsOfTheDeployedModel(Class, String, String, List)}.
+   *
+   * @return Whether the version a start deployed needs a method for every reported element
+   * @see Builder#theDeployedVersionNeedsAMethod()
+   */
+  public boolean deployedVersionNeedsAMethod() {
+
+    return deployedVersionNeedsAMethod;
+
+  }
+
+  /**
+   * What it means for the extension that an element has no method in the version this start
+   * deployed. The message which ends the start says it next to the element.
+   *
+   * @return The sentence the extension gave, or <code>null</code> where it gave none and the
+   *         message uses a neutral sentence of its own
+   * @see Builder#theDeployedVersionNeedsAMethod(String)
+   */
+  public String getConsequenceOfAnElementWithoutAMethod() {
+
+    return consequenceOfAnElementWithoutAMethod;
 
   }
 
@@ -277,6 +312,10 @@ public final class HandlerContract {
 
     private boolean callsCarryTheProcessVersion = false;
 
+    private boolean deployedVersionNeedsAMethod = false;
+
+    private String consequenceOfAnElementWithoutAMethod;
+
     private Builder(
         final String extensionId,
         final Class<? extends Annotation> annotationType) {
@@ -359,6 +398,58 @@ public final class HandlerContract {
     public Builder callsCarryTheProcessVersion() {
 
       this.callsCarryTheProcessVersion = true;
+      return this;
+
+    }
+
+    /**
+     * Declares that the version a start deployed needs a method of this contract for every
+     * element the extension reports, wherever such an element has methods at all. The start
+     * ends where none of them covers that version, with the same message a
+     * <code>&#64;WorkflowTask</code> method gets in that case.
+     * <p>
+     * The reason is the one behind <code>&#64;WorkflowTask</code>. The wiring is checked
+     * before the deployment, when nobody knows the version yet, and a call picks its method by
+     * version. So a method whose range misses the deployed version passes the start, and then
+     * no call of that version ever finds it. Say this where such a silent miss is a defect of
+     * the application and not a choice.
+     * <p>
+     * VanillaBP knows the methods but not the elements of the model, so the extension names
+     * them: call {@link ExtensionHandlers#elementsOfTheDeployedModel(Class, String, String, List)}
+     * from its <code>wireBpmn</code>. An element without any method of this contract is not
+     * asked about, because no method is a legal answer. The calls of this contract have to
+     * name the version as well ({@link #callsCarryTheProcessVersion()}), since a version is
+     * what the methods are held against.
+     *
+     * @return This builder
+     */
+    public Builder theDeployedVersionNeedsAMethod() {
+
+      this.deployedVersionNeedsAMethod = true;
+      return this;
+
+    }
+
+    /**
+     * The same as {@link #theDeployedVersionNeedsAMethod()}, with one sentence for the message
+     * which ends the start. It says what an element without a method means for your
+     * extension, so the developer knows what the defect costs. For example "The cockpit shows
+     * such a task without the details of its provider." Without it the message uses a neutral
+     * sentence.
+     *
+     * @param consequenceOfAnElementWithoutAMethod One full sentence, written for the
+     *          developer of the application
+     * @return This builder
+     */
+    public Builder theDeployedVersionNeedsAMethod(
+        final String consequenceOfAnElementWithoutAMethod) {
+
+      this.deployedVersionNeedsAMethod = true;
+      final var saysNothing = (consequenceOfAnElementWithoutAMethod == null) || consequenceOfAnElementWithoutAMethod
+          .isBlank();
+      this.consequenceOfAnElementWithoutAMethod = saysNothing
+          ? null
+          : consequenceOfAnElementWithoutAMethod.strip();
       return this;
 
     }
@@ -461,8 +552,9 @@ public final class HandlerContract {
      * annotation it is about.
      *
      * @return The contract
-     * @throws IllegalArgumentException If the extension id is missing or blank, or if no
-     *           annotation was named (guiding message)
+     * @throws IllegalArgumentException If the extension id is missing or blank, if no
+     *           annotation was named, or if the contract asks for a method for the deployed
+     *           version although its calls name no version (guiding message)
      */
     public HandlerContract build() {
 
@@ -477,6 +569,16 @@ public final class HandlerContract {
                 The handler contract of extension '%s' names no annotation! Pass the annotation your \
                 extension's methods carry to HandlerContract.of(extensionId, annotationType)."""
                 .formatted(extensionId));
+      }
+      if (deployedVersionNeedsAMethod && !callsCarryTheProcessVersion) {
+        throw new IllegalArgumentException(
+            """
+                The handler contract of extension '%s' for '@%s' says theDeployedVersionNeedsAMethod() \
+                but not callsCarryTheProcessVersion()! A method is held against the deployed version \
+                only where the calls name a version, because a call without one never picks a method \
+                by version. Add callsCarryTheProcessVersion() if your calls name the version, or drop \
+                theDeployedVersionNeedsAMethod()."""
+                .formatted(extensionId, annotationType.getSimpleName()));
       }
       return new HandlerContract(this);
 

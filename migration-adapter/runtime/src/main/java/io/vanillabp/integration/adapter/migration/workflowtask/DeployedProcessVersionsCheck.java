@@ -92,6 +92,23 @@ public class DeployedProcessVersionsCheck {
   public static final String STILL_RUN_ON_AN_OUTFADED_VERSION = "still run on version '%s'";
 
   /**
+   * The words of the message which ends the start where an element of the model it deployed
+   * has methods, but none for the version the BPMS gave that model. The element is a task
+   * with <code>&#64;WorkflowTask</code> methods or an element an extension reported.
+   * <p>
+   * Public for adapter tests, see {@link #A_VERSION_OF_A_PROCESS}.
+   */
+  public static final String ELEMENTS_SERVED_BY_NO_METHOD_IN_THIS_VERSION = "Some of its elements are served by NO "
+      + "method of this application in this version";
+
+  /**
+   * What a task without a method for the deployed version means, said once in the message
+   * which ends the start.
+   */
+  public static final String A_TASK_WITHOUT_A_METHOD_STOPS_EVERY_WORKFLOW = "Every workflow started on this version "
+      + "would stop at such a task with an incident.";
+
+  /**
    * Which of the given tasks no <code>&#64;WorkflowTask</code> method serves in that
    * version - answered by the {@link WorkflowTaskRegistry}, which is the only place
    * knowing the version ranges of the methods.
@@ -118,25 +135,41 @@ public class DeployedProcessVersionsCheck {
   }
 
   /**
-   * Which tasks of the model this start deployed no <code>&#64;WorkflowTask</code> method
-   * serves in the version the BPMS gave that model - answered by the
-   * {@link WorkflowTaskRegistry}, which keeps the tasks the adapter wired and knows the version
-   * ranges of the methods.
+   * One element of the model this start deployed which has methods, but none for the version
+   * the BPMS gave that model.
+   *
+   * @param element The element, worded for the message, e.g.
+   *          <code>task 'Activity_Review' (task definition 'review')</code>
+   * @param methods The methods which serve the element in other versions, each with its
+   *          version range and worded for the message
+   * @param consequence What the missing method means, one full sentence. Elements with the
+   *          same sentence share it in the message
+   */
+  public record UnservedElement(
+                                String element,
+                                List<String> methods,
+                                String consequence) {
+  }
+
+  /**
+   * Which elements of the model this start deployed no method serves in the version the BPMS
+   * gave that model - answered by the {@link WorkflowTaskRegistry}, which keeps the tasks the
+   * adapter wired, knows the version ranges of the methods and asks the extensions about the
+   * elements they reported.
    */
   @FunctionalInterface
-  public interface TasksTheDeployedVersionLeavesUnserved {
+  public interface ElementsTheDeployedVersionLeavesUnserved {
 
     /**
-     * Picks the tasks of the deployed model which no method serves in its version.
+     * Picks the elements of the deployed model which no method serves in its version.
      *
      * @param adapterId The adapter which deployed the model
      * @param workflowModuleId The workflow module ID
      * @param bpmnProcessId The plain BPMN process ID
      * @param deployedVersion The version the BPMS gave the model this start deployed
-     * @return Each task no method serves, with the methods wired to it described with their
-     *         version ranges, empty where every task is served
+     * @return Each element no method serves, empty where every element is served
      */
-    java.util.Map<BpmnTaskSpec, List<String>> of(
+    List<UnservedElement> of(
         String adapterId,
         String workflowModuleId,
         String bpmnProcessId,
@@ -289,10 +322,10 @@ public class DeployedProcessVersionsCheck {
   private final ItemsAHeldVersionNeverNames itemsAHeldVersionNeverNames;
 
   /**
-   * Where the tasks of the model this start deployed are held against the version the BPMS gave
-   * it. Absent where no platform wired it.
+   * Where the elements of the model this start deployed are held against the version the BPMS
+   * gave it. Absent where no platform wired it.
    */
-  private final TasksTheDeployedVersionLeavesUnserved tasksTheDeployedVersionLeavesUnserved;
+  private final ElementsTheDeployedVersionLeavesUnserved elementsTheDeployedVersionLeavesUnserved;
 
   /**
    * Where a finding which the start survives is left, so the whole start says it once.
@@ -457,7 +490,7 @@ public class DeployedProcessVersionsCheck {
    * @param itemsAHeldVersionNeverNames Where the multi-instance shape of a held version is
    *          held against what the methods serving it read - <code>null</code> switches
    *          that question off
-   * @param tasksTheDeployedVersionLeavesUnserved Where the tasks of the model this start
+   * @param elementsTheDeployedVersionLeavesUnserved Where the elements of the model this start
    *          deployed are held against the version the BPMS gave it - <code>null</code>
    *          switches that question off
    * @param findings Where a finding the start survives is left
@@ -471,7 +504,7 @@ public class DeployedProcessVersionsCheck {
       final ConcurrentTokenElementsOfHeldVersions concurrentTokenElements,
       final IdentifiersOfHeldVersions identifiersOfHeldVersions,
       final ItemsAHeldVersionNeverNames itemsAHeldVersionNeverNames,
-      final TasksTheDeployedVersionLeavesUnserved tasksTheDeployedVersionLeavesUnserved,
+      final ElementsTheDeployedVersionLeavesUnserved elementsTheDeployedVersionLeavesUnserved,
       final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
     this.processVersions = processVersions;
@@ -482,7 +515,7 @@ public class DeployedProcessVersionsCheck {
     this.concurrentTokenElements = concurrentTokenElements;
     this.identifiersOfHeldVersions = identifiersOfHeldVersions;
     this.itemsAHeldVersionNeverNames = itemsAHeldVersionNeverNames;
-    this.tasksTheDeployedVersionLeavesUnserved = tasksTheDeployedVersionLeavesUnserved;
+    this.elementsTheDeployedVersionLeavesUnserved = elementsTheDeployedVersionLeavesUnserved;
     this.findings = findings;
 
   }
@@ -493,7 +526,7 @@ public class DeployedProcessVersionsCheck {
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @throws IllegalStateException If the configuration fades out the version this boot
-   *           deployed, if a task of the version this boot deployed has no method for that
+   *           deployed, if an element of the version this boot deployed has no method for that
    *           version, or if workflows run on an outfaded version and the policy is
    *           {@link OutfadedVersionsInUsePolicy#FAIL}
    */
@@ -543,7 +576,7 @@ public class DeployedProcessVersionsCheck {
     }
     if (deployed != null) {
       failIfDeployedVersionIsOutfaded(workflowModuleId, bpmnProcessId, adapterId, deployed, resolver);
-      failIfDeployedVersionLeavesATaskUnserved(workflowModuleId, bpmnProcessId, adapterId, deployed);
+      failIfDeployedVersionLeavesAnElementUnserved(workflowModuleId, bpmnProcessId, adapterId, deployed);
     }
 
     final var known = catalog.deployedVersionsOf(workflowModuleId, bpmnProcessId);
@@ -1018,31 +1051,32 @@ public class DeployedProcessVersionsCheck {
   }
 
   /**
-   * Ends the start where a task of the model this start deployed has no method for the version
-   * the BPMS gave that model. The wiring validation accepted the task, because it runs before the
-   * deployment and cannot know the version. A delivery picks the method by version, so every
-   * workflow started now would fail at that task with an incident, see
-   * decision 126 in the repository's {@code DECISIONS.md}.
+   * Ends the start where an element of the model this start deployed has methods, but none for
+   * the version the BPMS gave that model. The wiring validation accepted the element, because it
+   * runs before the deployment and cannot know the version. A call picks the method by version,
+   * so no call of this version would find one, see
+   * decision 126 in the repository's {@code DECISIONS.md}. An element of an extension counts
+   * as well where its contract asks for it, see {@code DECISIONS.pending/954.md}.
    * <p>
    * A method which serves no version at all is still only a warning (decision 60 in the
-   * repository's DECISIONS.md). The difference is the task: here a task of the deployed model is
-   * left without a method, there a method is left without a task.
+   * repository's DECISIONS.md). The difference is the element: here an element of the deployed
+   * model is left without a method, there a method is left without an element.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @param adapterId The adapter which deployed the model
    * @param deployed The version the BPMS gave the model this start deployed
    */
-  private void failIfDeployedVersionLeavesATaskUnserved(
+  private void failIfDeployedVersionLeavesAnElementUnserved(
       final String workflowModuleId,
       final String bpmnProcessId,
       final String adapterId,
       final String deployed) {
 
-    if (tasksTheDeployedVersionLeavesUnserved == null) {
+    if (elementsTheDeployedVersionLeavesUnserved == null) {
       return;
     }
-    final var unserved = tasksTheDeployedVersionLeavesUnserved
+    final var unserved = elementsTheDeployedVersionLeavesUnserved
         .of(adapterId, workflowModuleId, bpmnProcessId, deployed);
     if ((unserved == null) || unserved.isEmpty()) {
       return;
@@ -1050,29 +1084,34 @@ public class DeployedProcessVersionsCheck {
     final var message = new StringBuilder(
         """
             Version '%s' of BPMN process '%s' (workflow module '%s') is the version adapter '%s' \
-            deployed during this start. Some of its tasks are %s in this version:"""
-            .formatted(deployed, bpmnProcessId, workflowModuleId, adapterId, SERVED_BY_NO_METHOD));
+            deployed during this start. %s:"""
+            .formatted(deployed, bpmnProcessId, workflowModuleId, adapterId,
+                ELEMENTS_SERVED_BY_NO_METHOD_IN_THIS_VERSION));
     unserved
-        .forEach((
-            task,
-            methods) -> message
-                .append(
-                    "%n  - task '%s' (task definition '%s'): %s"
-                        .formatted(
-                            task.activityId(),
-                            task.taskDefinition(),
-                            methods.isEmpty()
-                                ? "no method is wired to it."
-                                : "%s, which does not cover version '%s'."
-                                    .formatted(String.join(", ", methods), deployed))));
+        .forEach(element -> message
+            .append(
+                "%n  - %s: %s"
+                    .formatted(
+                        element.element(),
+                        element.methods().isEmpty()
+                            ? "no method is wired to it."
+                            : "%s, which does not cover version '%s'."
+                                .formatted(String.join(", ", element.methods()), deployed))));
+    // elements with the same consequence share its sentence, so a model with ten such tasks
+    // reads it once
+    unserved
+        .stream()
+        .map(UnservedElement::consequence)
+        .filter(java.util.Objects::nonNull)
+        .distinct()
+        .forEach(consequence -> message.append("%n%s".formatted(consequence)));
     message
         .append(
             """
 
-                Every workflow started on this version would stop at such a task with an incident. \
                 Do one of these:
                   - widen the version range of the method so it covers version '%s', e.g. version = ">=%s".
-                  - add a @WorkflowTask method for version '%s'.
+                  - add a method with the same annotation for version '%s'.
                   - deploy the model the method serves."""
                 .formatted(deployed, deployed, deployed));
     throw new IllegalStateException(message.toString());

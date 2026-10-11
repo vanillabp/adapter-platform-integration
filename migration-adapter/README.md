@@ -3748,17 +3748,18 @@ HandlerContract
     .build();
 ```
 
-|        Part of the contract        |                                                          What it decides                                                           |
-|------------------------------------|------------------------------------------------------------------------------------------------------------------------------------|
-| annotation type                    | which methods belong to the extension; repeatable annotations are supported                                                        |
-| `lookupKeys(…)`                    | the keys one occurrence names — an EMPTY list means the method's own name, `EVERY_KEY` means every element of the process          |
-| `versions(…)`                      | the process versions one occurrence names, written as `@WorkflowTask(version = …)` writes them — an EMPTY list means every version |
-| `callsCarryTheProcessVersion()`    | that the calls of this contract name the version of their BPMN process wherever the BPMS reports one                               |
-| `coreParameters(…)`                | which of the parameters VanillaBP binds itself may stand there (`@TaskId`/`@TaskEvent` are deliberately not among them)            |
-| `parameterBinder(…)`               | the parameters of the extension's own SPI, recognized by type or by annotation                                                     |
-| `deliversReturnValue()`            | whether what a method returns reaches the caller; without it a method has to be `void`                                             |
-| `validatingAnnotation(…)`          | what the extension checks about one occurrence of its annotation, while the scan holds the method carrying it                      |
-| `neverSavesTheWorkflowAggregate()` | that no method of this annotation ever writes the aggregate, so nothing is saved and nothing is warned about                       |
+|        Part of the contract         |                                                             What it decides                                                              |
+|-------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------|
+| annotation type                     | which methods belong to the extension; repeatable annotations are supported                                                              |
+| `lookupKeys(…)`                     | the keys one occurrence names — an EMPTY list means the method's own name, `EVERY_KEY` means every element of the process                |
+| `versions(…)`                       | the process versions one occurrence names, written as `@WorkflowTask(version = …)` writes them — an EMPTY list means every version       |
+| `callsCarryTheProcessVersion()`     | that the calls of this contract name the version of their BPMN process wherever the BPMS reports one                                     |
+| `theDeployedVersionNeedsAMethod(…)` | that the start ends where an element the extension reports (`elementsOfTheDeployedModel`) has methods, but none for the deployed version |
+| `coreParameters(…)`                 | which of the parameters VanillaBP binds itself may stand there (`@TaskId`/`@TaskEvent` are deliberately not among them)                  |
+| `parameterBinder(…)`                | the parameters of the extension's own SPI, recognized by type or by annotation                                                           |
+| `deliversReturnValue()`             | whether what a method returns reaches the caller; without it a method has to be `void`                                                   |
+| `validatingAnnotation(…)`           | what the extension checks about one occurrence of its annotation, while the scan holds the method carrying it                            |
+| `neverSavesTheWorkflowAggregate()`  | that no method of this annotation ever writes the aggregate, so nothing is saved and nothing is warned about                             |
 
 An invocation (`ExtensionHandlers#invoke`) names the keys it accepts — an element id and
 a task definition, say — and the method NAMING any of them runs; where none does, the
@@ -4118,6 +4119,13 @@ gave that model, and ends the boot over such a task. The tasks are the ones the 
 `validateTaskWiring`, kept per adapter, so no model is read again. A task with no method at all
 passed the wiring validation only through `implemented-externally` and is left alone. The reason is
 in decision 126 of the repository's `DECISIONS.md`, and `TheDeployedVersionNeedsAMethodTest` holds the cases.
+
+An extension can join this check. Its contract says `theDeployedVersionNeedsAMethod()`, and its
+`wireBpmn` names the elements through `ExtensionHandlers#elementsOfTheDeployedModel`, each as the
+lookup keys a call would offer. `WorkflowTaskRegistry#elementsTheDeployedVersionLeavesUnserved`
+hands the check the tasks and then what `ExtensionHandlerRegistry` finds: an element whose methods
+all miss the deployed version. An element with no method at all is left alone. One message names
+both kinds, each with its own sentence about what the gap means. See `DECISIONS.pending/954.md`.
 
 Two rules govern the reverse direction. A method whose version range
 excludes the deployed version needs no task in the deployed model - without that exemption

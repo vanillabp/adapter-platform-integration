@@ -439,6 +439,56 @@ a Camunda 8 job carries the version of its process, a Camunda 7 process definiti
 engine behind the Process-Engine-API fills a version tag only where it wants to, so an extension
 with halves per BPMS answers for the half in use (decision 56).
 
+A version attribute has a trap. VanillaBP checks the wiring before the deployment, when nobody knows
+the version yet, and a call picks its method by version. So a method whose range misses the version
+the BPMS gives the deployed model passes the start, and then no call of that version finds it.
+`@WorkflowTask` ends the start in that case (decision 126). Your contract can ask for the same:
+
+```java
+.callsCarryTheProcessVersion()
+.theDeployedVersionNeedsAMethod("The cockpit shows such a task without the details of its provider.")
+```
+
+The core knows your methods but not which elements of the model they are for, so name the elements
+in your `wireBpmn`, once per BPMN process:
+
+```java
+extensionHandlers.elementsOfTheDeployedModel(
+    UserTaskDetailsProvider.class, workflowModuleId, bpmnProcessId,
+    List.of(List.of("Activity_Review", "reviewForm"),   // a user task: element id, task definition
+            List.of()));                                // the process itself
+```
+
+Each element is the list of keys you hand to `HandlerCall.Builder#lookupKeys` for it, in the same
+order. An empty list stands for the process, which only a method serving every key serves. Once the
+BPMS has reported the version, the core takes the methods a call for that element may reach. Where
+there are none, the element is left alone, because no method is a legal answer. Where one of them
+covers the version, all is well. Otherwise the start ends, with the message `@WorkflowTask` gets:
+
+```text
+Version '1' of BPMN process 'loan_approval' (workflow module 'loan-approval') is the version adapter 'camunda7'
+deployed during this start. Some of its elements are served by NO method of this application in this version:
+  - element 'Activity_Review' (also matched by 'reviewForm'): @UserTaskDetailsProvider method
+    'blueprint.LoanApprovalDetails#review' of extension 'business-cockpit' (version '>1'), which does not
+    cover version '1'.
+For @UserTaskDetailsProvider of extension 'business-cockpit': The cockpit shows such a task without the details of
+its provider.
+Do one of these:
+  - widen the version range of the method so it covers version '1', e.g. version = ">=1".
+  - add a method with the same annotation for version '1'.
+  - deploy the model the method serves.
+```
+
+The sentence in `theDeployedVersionNeedsAMethod(...)` is optional. It tells the developer what the
+gap costs. Without it the message says that the extension goes on without a method. The flag needs
+`callsCarryTheProcessVersion()`: a call without a version never picks a method by version, so a
+contract with the flag and without the other ends the boot.
+
+The elements are kept per workflow module and BPMN process, not per adapter, because `wireBpmn`
+names no adapter. Each adapter holds them against the version its own BPMS gave the model. Where two
+adapters deploy different models of one process, they share what you reported. The reason for all of
+this is in `DECISIONS.pending/954.md`.
+
 The contract is described in full under
 [The extension's own annotation: handler contracts](./README.md#the-extensions-own-annotation-handler-contracts)
 in the core's README. What matters most while you design yours is what an invocation does. You name
