@@ -3,11 +3,10 @@ package io.vanillabp.bpmsdouble;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 
 /**
- * Test hook steering the dummy adapter's
- * {@link DummyProcessService#awarenessOfTask} answer -
- * integration tests probe the core's adapter election (the
- * {@code WorkflowLocator} walk) without a real BPMS. Without such a bean the dummy
- * does not know any task.
+ * Test hook which steers the answer of the dummy adapter's
+ * {@link DummyProcessService#awarenessOfTask}. With it, integration tests probe the
+ * core's adapter election (the {@code WorkflowLocator} walk) without a real BPMS.
+ * Without such a bean the double knows no task.
  */
 public interface DummyTaskAwarenessSource {
 
@@ -26,8 +25,8 @@ public interface DummyTaskAwarenessSource {
       String taskId);
 
   /**
-   * The awareness the dummy adapter reports for a WORKFLOW - defaults to the
-   * service-task answer (probes for message correlation).
+   * The awareness the dummy adapter reports for a WORKFLOW, used by the probes for
+   * message correlation. By default it is the answer for a service task.
    *
    * @param adapterId The dummy adapter's ID
    * @param workflowAggregateId The ID of the workflow aggregate
@@ -42,10 +41,10 @@ public interface DummyTaskAwarenessSource {
   }
 
   /**
-   * The awareness the dummy adapter reports for a WORKFLOW whose BPMS id VanillaBP holds -
-   * the shortcut an adapter of an eventually consistent BPMS uses to ask its engine by key
-   * instead of searching its read model. Defaults to the answer without the id, which is
-   * what an adapter that cannot use it does.
+   * The awareness the dummy adapter reports for a WORKFLOW whose BPMS id VanillaBP holds.
+   * An adapter of an eventually consistent BPMS uses this shortcut: it asks its engine by
+   * key instead of searching its read model. By default it is the answer without the id.
+   * An adapter which cannot use the id answers the same way.
    *
    * @param adapterId The dummy adapter's ID
    * @param workflowAggregateId The ID of the workflow aggregate
@@ -64,8 +63,9 @@ public interface DummyTaskAwarenessSource {
 
   /**
    * Whether the dummy adapter of the given ID can ask its BPMS whether it holds a
-   * workflow - the capability the core refuses to combine with a second adapter
-   * (a Camunda 8 cluster without secondary storage answers <code>false</code> here).
+   * workflow. Without this ability, the core refuses to combine the adapter with a
+   * second one. A Camunda 8 cluster without secondary storage answers <code>false</code>
+   * here.
    *
    * @param adapterId The dummy adapter's ID
    * @return Whether the workflow probe of that adapter asks rather than guesses
@@ -78,8 +78,8 @@ public interface DummyTaskAwarenessSource {
   }
 
   /**
-   * The awareness the dummy adapter reports for a USER task - defaults to the
-   * service-task answer.
+   * The awareness the dummy adapter reports for a USER task. By default it is the answer
+   * for a service task.
    *
    * @param adapterId The dummy adapter's ID
    * @param workflowAggregateId The ID of the workflow aggregate
@@ -96,10 +96,10 @@ public interface DummyTaskAwarenessSource {
   }
 
   /**
-   * The visibility window the dummy adapter reports: how long the core
-   * keeps asking a hinted adapter which answers
-   * {@link WorkflowAwareness#UNKNOWN_TO_BPMS}. <code>null</code> means none, which
-   * is what an adapter of an immediately consistent BPMS reports.
+   * The visibility window the dummy adapter reports. It says how long the core keeps
+   * asking a hinted adapter which answers {@link WorkflowAwareness#UNKNOWN_TO_BPMS}.
+   * <code>null</code> means none. An adapter of an immediately consistent BPMS reports
+   * that.
    *
    * @param adapterId The dummy adapter's ID
    * @return The delay or <code>null</code>

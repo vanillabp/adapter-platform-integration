@@ -11,16 +11,15 @@ import io.vanillabp.integration.spi.PhaseOperation;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The process service of the double: it logs what it was asked and tells the hooks a
- * test declared, and it changes nothing anywhere. One instance exists per configured
- * adapter id of the type {@link DummyAdapter#ADAPTER_TYPE}, and the adapter id is a
- * constructor parameter, which is what lets a test play a migration between two of
- * them.
+ * The process service of the double. It logs what it was asked and tells the hooks a
+ * test declared. It changes nothing anywhere. There is one instance per configured
+ * adapter id of the type {@link DummyAdapter#ADAPTER_TYPE}. The adapter id is a
+ * constructor parameter, so a test can play a migration between two of them.
  * <p>
- * {@link DummyPhaseTwoListener} beans are notified on phase two, and the properties of
- * {@link DummyAdapter} switch on the two behaviours a real BPMS has and a logging
- * double otherwise would not: repeating a task whose outcome it never learned, and
- * reading the aggregate while phase two runs.
+ * {@link DummyPhaseTwoListener} beans are notified in phase two. The properties of
+ * {@link DummyAdapter} switch on two behaviours which a real BPMS has and a logging
+ * double would not: repeating a task whose outcome it never learned, and reading the
+ * aggregate while phase two runs.
  *
  * @param <A> The workflow aggregate's type, as the application declared it
  */
@@ -41,8 +40,8 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
 
   /**
    * Builds the process service of one configured adapter id. Each platform module
-   * calls this once per id, so a test which configures two ids can move a workflow
-   * from one of them to the other.
+   * calls this once per id. So a test which configures two ids can move a workflow
+   * from one to the other.
    *
    * @param adapterId The id this instance answers for
    * @param deliversTasksAtLeastOnce See {@link DummyAdapter#PROPERTY_AT_LEAST_ONCE_DELIVERY}
@@ -76,8 +75,8 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
   }
 
   /**
-   * What this dummy does for each operation: it logs, and it tells the listeners a test
-   * registered. Phase one changes nothing, phase two is what a test watches.
+   * What the double does for each operation: it logs, and it tells the listeners a test
+   * registered. Phase one changes nothing. A test watches phase two.
    */
   @Override
   public Map<PhaseOperation, PhaseOperationHandler<A>> phaseOperations() {
@@ -132,8 +131,8 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
     log.info("Dummy-Adapter[{}]: Checking awareness of task '{}' of workflow aggregate '{}'", adapterId, taskId,
         workflowAggregateId);
 
-    // tests steer the answer via DummyTaskAwarenessSource beans; without one the
-    // dummy does not know any task
+    // Tests steer the answer with DummyTaskAwarenessSource beans. Without one the double
+    // knows no task.
     return taskAwarenessSources
         .all()
         .map(source -> source.awarenessOfTask(adapterId, workflowAggregateId, taskId))
@@ -179,9 +178,9 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
   }
 
   /**
-   * The same question with the BPMS' own id of the workflow, which the election passes
-   * where VanillaBP holds one. The dummy hands it to its hooks, so a test can show that a
-   * fake adapter really sees it.
+   * The same question with the BPMS' own id of the workflow. The election passes it where
+   * VanillaBP holds one. The double hands it to its hooks, so a test can show that a fake
+   * adapter really sees it.
    */
   @Override
   public WorkflowAwareness awarenessOfWorkflow(
@@ -207,9 +206,9 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
   }
 
   /**
-   * Whether this dummy stands in for a BPMS which can be asked whether it holds a
-   * workflow - a test steers it through {@link DummyTaskAwarenessSource}, which is how
-   * the core's refusal to combine a guessing adapter with a second one is exercised.
+   * Whether the double plays a BPMS which can answer whether it holds a workflow. A test
+   * steers this through {@link DummyTaskAwarenessSource}. This is how a test makes the
+   * core refuse to combine a guessing adapter with a second one.
    */
   @Override
   public boolean canLocateWorkflows() {
@@ -236,9 +235,9 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
   public boolean isPhaseTwoFailureRepeatable(
       final Throwable failure) {
 
-    // An adapter tells the store which failures are worth repeating. This
-    // double reports exactly one kind as permanent, so a test can prove that such an
-    // entry is blocked immediately instead of after the configured attempts
+    // An adapter tells the store which failures are worth repeating. This double reports
+    // exactly one kind as permanent. So a test can prove that such an entry is blocked at
+    // once, not after the configured attempts.
     var candidate = failure;
     while (candidate != null) {
       if (candidate instanceof DummyPermanentFailure) {
@@ -253,8 +252,8 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
   }
 
   /**
-   * Whether this dummy stands in for a BPMS repeating a task it did not learn the
-   * outcome of - switched on by {@link DummyAdapter#PROPERTY_AT_LEAST_ONCE_DELIVERY}.
+   * Whether the double plays a BPMS which repeats a task when it did not learn its
+   * outcome. Switched on by {@link DummyAdapter#PROPERTY_AT_LEAST_ONCE_DELIVERY}.
    */
   @Override
   public boolean deliversTasksAtLeastOnce() {
@@ -264,12 +263,11 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
   }
 
   /**
-   * Loads the workflow aggregate the way an adapter of a remote BPMS does in phase
-   * two: it builds the variables it sends out of the aggregate, so it calls the
-   * application's persistence from the outbox dispatcher's thread. Switched on by
-   * {@link DummyAdapter#PROPERTY_READ_AGGREGATE_IN_PHASE_TWO}, and off by default
-   * because most test doubles of {@link AggregatePersistenceAware} implement nothing
-   * but save.
+   * Loads the workflow aggregate the way an adapter of a remote BPMS does in phase two.
+   * Such an adapter builds the variables it sends from the aggregate. So it calls the
+   * application's persistence from the thread of the outbox dispatcher. Switched on by
+   * {@link DummyAdapter#PROPERTY_READ_AGGREGATE_IN_PHASE_TWO}. It is off by default,
+   * because most test doubles of {@link AggregatePersistenceAware} implement only save.
    *
    * @param aggregatePersistence The application's persistence of this aggregate
    * @param workflowAggregateId The aggregate's ID

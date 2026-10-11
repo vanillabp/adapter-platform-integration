@@ -17,27 +17,27 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 
 /**
- * Provides the double's {@link DummyDeploymentService} instances - the
- * reference implementation of the per-adapter-id bean convention every VanillaBP
- * adapter follows on Quarkus (same shape as for the process services, see
+ * Provides the double's {@link DummyDeploymentService} instances. It is the reference
+ * for the bean rule every VanillaBP adapter follows on Quarkus, one instance per adapter
+ * id. The shape is the same as for the process services (see
  * {@link DummyProcessServiceProducer}): ONE bean of type
- * <code>List&lt;AdapterDeploymentService&lt;Object, Object&gt;&gt;</code> with one
+ * <code>List&lt;AdapterDeploymentService&lt;Object, Object&gt;&gt;</code>, with one
  * instance PER configured adapter id of its type.
  * <p>
- * Conventions (part of the platform contract):
+ * The rules (part of the platform contract):
  * <ul>
- *   <li>The List's element type is the SPI interface with BOTH type parameters
- *       literally {@code Object} - regardless of the adapter's actual model and
- *       context classes (unchecked cast if needed): CDI's parameterized-type
- *       matching of differing type arguments is not reliable across modes, so the
- *       platform looks the beans up with the exact type. The pipeline matches
- *       models via {@code getModelType()}/{@code getProcessContextType()}, never
- *       via the generics.</li>
- *   <li>The producer method is {@code @Singleton}: deployment-service
- *       implementations usually have no no-arg constructor and are therefore not
- *       client-proxyable - a normal-scoped <i>element</i> bean of the
- *       implementation class would fail the deployment.</li>
- *   <li>The adapter-id set ALWAYS comes from the platform's core properties
+ *   <li>The element type of the List is the SPI interface with BOTH type parameters
+ *       written as {@code Object}. This holds whatever the adapter's real model and
+ *       context classes are; cast unchecked if needed. CDI does not match generic types
+ *       with different type arguments reliably in every mode. So the platform looks the
+ *       beans up by the exact type. The pipeline matches models through
+ *       {@code getModelType()} and {@code getProcessContextType()}, never through the
+ *       generics.</li>
+ *   <li>The producer method is {@code @Singleton}. A deployment service usually has no
+ *       constructor without arguments, so CDI cannot build a client proxy for it. A
+ *       normal-scoped <i>element</i> bean of the implementation class would make the
+ *       deployment fail.</li>
+ *   <li>The set of adapter ids ALWAYS comes from the platform's core properties
  *       ({@code adapterIdsOfType()}, see {@link DummyProcessServiceProducer}).</li>
  * </ul>
  */
@@ -46,7 +46,7 @@ public class DummyDeploymentServiceProducer {
 
   /**
    * CDI builds this producer once per application. A test never creates it and never
-   * calls the method below: it asks the container for the deployment services, or lets
+   * calls the method below. It asks the container for the deployment services, or lets
    * the platform's deployment pipeline do it.
    */
   public DummyDeploymentServiceProducer() {
@@ -56,7 +56,7 @@ public class DummyDeploymentServiceProducer {
    * Builds one {@link DummyDeploymentService} per configured adapter id of the dummy
    * type, as the one List bean described above.
    * <p>
-   * Every collaborator is passed to the constructor and none is set afterwards - see
+   * Every collaborator is passed to the constructor, and none is set later. See
    * decision 28 in the repository's DECISIONS.md.
    *
    * @param properties The platform's core properties, the only place the adapter ids

@@ -10,21 +10,20 @@ import io.smallrye.config.ConfigMapping;
 
 /**
  * The dummy adapter's OVERLAY of the shared <code>vanillabp.*</code> configuration
- * tree - the reference implementation of the pattern every VanillaBP adapter
- * extension uses to contribute its own keys (e.g. connection settings) to the
- * canonical per-adapter location <code>vanillabp.adapters.&lt;id&gt;.*</code>:
+ * tree. It is the reference for the pattern every VanillaBP adapter extension uses to
+ * add its own keys (for example connection settings) at the usual place of each
+ * adapter, <code>vanillabp.adapters.&lt;id&gt;.*</code>:
  * <ul>
- *   <li>a second RUN_TIME {@code @ConfigMapping} over the same prefix coexists with
- *       the platform's mapping - overlapping keys are served to both;</li>
- *   <li>SmallRye's unknown-key validation passes if ANY registered mapping knows a
- *       key, so platform keys ({@code type}, {@code deployment-failure}) and
- *       adapter keys ({@code test}) validate each other's sections - no blanket
- *       {@code withMappingIgnore} needed (a typo under {@code vanillabp.*} fails
- *       the startup again);</li>
- *   <li>the adapter-id set is NEVER derived from this overlay map - it always
- *       comes from the platform's core properties
- *       ({@code MigrationAdapterProperties.adapterTypes()}), the overlay is a
- *       per-known-id lookup only.</li>
+ *   <li>A second RUN_TIME {@code @ConfigMapping} over the same prefix lives next to the
+ *       platform's mapping. Keys found in both are served to both.</li>
+ *   <li>SmallRye's check for unknown keys passes if ANY registered mapping knows a key.
+ *       So platform keys ({@code type}, {@code deployment-failure}) and adapter keys
+ *       ({@code test}) make each other's sections valid. No general
+ *       {@code withMappingIgnore} is needed, so a typo under {@code vanillabp.*} fails
+ *       the startup again.</li>
+ *   <li>The set of adapter ids NEVER comes from this overlay map. It always comes from
+ *       the platform's core properties ({@code MigrationAdapterProperties.adapterTypes()}).
+ *       The overlay is only looked up by ids already known.</li>
  * </ul>
  */
 @StaticInitSafe
@@ -33,7 +32,7 @@ import io.smallrye.config.ConfigMapping;
 public interface DummyAdapterOverlayProperties {
 
   /**
-   * The adapter sections of the shared tree, keyed by adapter ID - only the dummy
+   * The adapter sections of the shared tree, keyed by adapter ID. Only the dummy
    * adapter's own keys are modeled here.
    *
    * @return The sections keyed by adapter ID, empty where an application configures
@@ -42,11 +41,11 @@ public interface DummyAdapterOverlayProperties {
   Map<String, DummyAdapterConfig> adapters();
 
   /**
-   * The workflow-module sections of the shared tree, keyed by workflow module ID -
-   * the overlay mirrors the levels of the most-specific-wins resolution of
-   * adapter-scoped properties (task &gt; workflow &gt; workflow-module &gt;
-   * adapter), so scope-specific adapter keys (like a per-task job timeout of a
-   * real BPMS) resolve from real application configuration.
+   * The workflow-module sections of the shared tree, keyed by workflow module ID. The
+   * overlay has the same levels as the core, where the most specific value of an adapter
+   * property wins (task &gt; workflow &gt; workflow-module &gt; adapter). So adapter keys
+   * set for one level, like the job timeout of one task in a real BPMS, are read from
+   * real application configuration.
    *
    * @return The sections keyed by workflow module ID, empty where no module sets a key
    *         of this adapter
@@ -54,11 +53,10 @@ public interface DummyAdapterOverlayProperties {
   Map<String, ModuleOverlay> workflowModules();
 
   /**
-   * Resolves the dummy adapter's <code>test</code> key with most-specific-wins
-   * semantics across the four levels - the reference implementation of how a real
-   * adapter resolves its scope-specific keys from its overlay (the core's
-   * <code>resolveForAdapter</code> covers the core-owned keys; overlay keys are
-   * walked by the adapter itself, same order).
+   * Resolves the dummy adapter's <code>test</code> key over the four levels. The most
+   * specific value wins. This is the reference for how a real adapter resolves its own
+   * keys per level from its overlay. The core's <code>resolveForAdapter</code> covers the
+   * keys the core owns. The adapter walks its overlay keys itself, in the same order.
    *
    * @param workflowModuleId The workflow module ID or <code>null</code>
    * @param bpmnProcessId The BPMN process ID or <code>null</code>
@@ -111,13 +109,13 @@ public interface DummyAdapterOverlayProperties {
   interface DummyAdapterConfig {
 
     /**
-     * A test value used by the platform integration's tests to prove that
-     * adapter-specific keys inside the shared tree are tolerated and reach the
-     * adapter's overlay typed.
+     * A test value. The platform integration's tests use it to prove two things: keys of
+     * an adapter inside the shared tree are accepted, and they reach the adapter's
+     * overlay with their type.
      *
-     * @return The value set on the level this section belongs to, empty where that
-     *         level says nothing - {@link DummyAdapterOverlayProperties#testFor}
-     *         walks the levels and takes the first one which does
+     * @return The value set on the level of this section, or empty where that level sets
+     *         nothing. {@link DummyAdapterOverlayProperties#testFor} walks the levels and
+     *         takes the first one which sets it
      */
     Optional<Integer> test();
 
@@ -166,7 +164,7 @@ public interface DummyAdapterOverlayProperties {
   }
 
   /**
-   * The dummy adapter's view of one task section - the MOST specific level.
+   * The dummy adapter's view of one task section. This is the MOST specific level.
    */
   interface TaskOverlay {
 

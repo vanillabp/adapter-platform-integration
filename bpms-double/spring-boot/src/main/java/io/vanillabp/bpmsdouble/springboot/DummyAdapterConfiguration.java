@@ -27,9 +27,9 @@ public class DummyAdapterConfiguration extends AdapterConfigurationBase {
   }
 
   /**
-   * @return The adapter TYPE of the double, which is not an adapter id: the same type
-   *         may be configured under several ids, and that is what lets a test play a
-   *         migration between two of them
+   * @return The adapter TYPE of the double. It is not an adapter id. The same type may be
+   *         configured under several ids, so a test can play a migration between two of
+   *         them
    */
   @Override
   public String getAdapterType() {

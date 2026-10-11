@@ -1,11 +1,11 @@
 package io.vanillabp.bpmsdouble;
 
 /**
- * Test hook of the dummy adapter's {@link DummyDeploymentService}: beans
- * implementing this interface are notified about every deployment-pipeline call.
- * Integration tests use it to assert the pipeline order and to inject failures
- * (a listener throwing a {@link RuntimeException} makes the pipeline call fail,
- * e.g. to test the <code>deployment-failure</code> policy).
+ * Test hook of the dummy adapter's {@link DummyDeploymentService}. Beans which implement
+ * this interface hear about every call of the deployment pipeline. Integration tests use
+ * it to check the order of the pipeline and to cause failures. A listener which throws a
+ * {@link RuntimeException} makes the pipeline call fail, for example to test the
+ * <code>deployment-failure</code> policy.
  */
 public interface DummyDeploymentListener {
 

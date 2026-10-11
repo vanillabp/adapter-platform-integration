@@ -18,29 +18,29 @@ import io.vanillabp.bpmsdouble.DummyViewerSource;
 import io.vanillabp.integration.adapter.AdapterBeanRegistrarSupport;
 
 /**
- * Registers the double's per-adapter-id beans - the reference implementation of the
- * per-id bean convention every VanillaBP adapter follows on Spring Boot: for EACH
- * configured adapter id of the adapter's type (multiple ids of one BPMS type = the
- * migration scenario) one {@code MigratableProcessService} <i>element</i> bean and one
- * {@code AdapterDeploymentService} <i>element</i> bean are registered - never beans of
- * type {@code List<...>}: the platform collects element beans via
+ * Registers the double's beans, one set per adapter id. It is the reference for the bean
+ * rule every VanillaBP adapter follows on Spring Boot. For EACH configured adapter id of
+ * the adapter's type, one {@code MigratableProcessService} <i>element</i> bean and one
+ * {@code AdapterDeploymentService} <i>element</i> bean are registered. Several ids of
+ * one BPMS type are the migration scenario. There are never beans of type
+ * {@code List<...>}, because the platform collects element beans through
  * {@code ObjectProvider.stream()}.
  * <p>
- * The id set comes from the runtime configuration, so the beans are registered
- * programmatically ({@link BeanRegistrar} +
- * {@link AdapterBeanRegistrarSupport#forEachConfiguredAdapterId}); the adapter id is a
- * CONSTRUCTOR parameter of each instance. The bean suppliers are lazy: other beans are
- * resolved through the {@code SupplierContext} at bean-creation time.
+ * The set of ids comes from the runtime configuration. So the beans are registered in
+ * code ({@link BeanRegistrar} and
+ * {@link AdapterBeanRegistrarSupport#forEachConfiguredAdapterId}). The adapter id is a
+ * CONSTRUCTOR parameter of each instance. The bean suppliers are lazy: they get other
+ * beans through the {@code SupplierContext} only when the bean is created.
  * <p>
- * The names of the two beans are part of what this artifact promises, because tests
- * pull the deployment service out of the container by its name to play the BPMS. See
- * the readme of the <code>bpms-double</code> module.
+ * This artifact promises the names of the two beans. Tests get the deployment service
+ * from the container by its name, to play the BPMS. See the readme of the
+ * <code>bpms-double</code> module.
  */
 public class DummyAdapterBeanRegistrar implements BeanRegistrar {
 
   /**
    * Spring builds the registrar once, because the auto-configuration imports it. A test
-   * neither creates it nor calls it - it looks the registered beans up by their names.
+   * neither creates it nor calls it. It looks up the registered beans by their names.
    */
   public DummyAdapterBeanRegistrar() {
   }

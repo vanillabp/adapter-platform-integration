@@ -11,8 +11,8 @@ import io.vanillabp.integration.deployment.processservice.VanillaBpMigratablePro
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The build-time half of the BPMS double's Quarkus extension: it announces the two
- * producer beans, and the VanillaBP extension registers what is announced.
+ * The build-time half of the BPMS double's Quarkus extension. It announces the two
+ * producer beans, and the VanillaBP extension registers them.
  */
 @Slf4j
 class DummyIntegrationProcessor {
@@ -27,10 +27,10 @@ class DummyIntegrationProcessor {
   }
 
   /**
-   * Builds the {@link VanillaBpMigratableProcessServiceBuildItem} build item
-   * used by VanillaBP Quarkus integration to determine and register the
-   * process-service bean of the adapter - the VanillaBP extension registers the
-   * announced bean class, no separate self-registration is needed.
+   * Builds the {@link VanillaBpMigratableProcessServiceBuildItem}. The VanillaBP Quarkus
+   * integration uses it to find and register the adapter's process-service bean. The
+   * VanillaBP extension registers the announced bean class, so the adapter does not
+   * register it itself.
    *
    * @param featureProducer Feature build item producer used to register the dummy adapter extension
    * @return The {@link VanillaBpMigratableProcessServiceBuildItem} build item
@@ -50,11 +50,10 @@ class DummyIntegrationProcessor {
   }
 
   /**
-   * Builds the {@link VanillaBpAdapterDeploymentServiceBuildItem} build item used
-   * by the VanillaBP Quarkus integration to determine and register the
-   * deployment-service bean of the adapter (consumed by the runtime deployment
-   * pipeline) - the VanillaBP extension registers the announced bean class, no
-   * separate self-registration is needed.
+   * Builds the {@link VanillaBpAdapterDeploymentServiceBuildItem}. The VanillaBP Quarkus
+   * integration uses it to find and register the adapter's deployment-service bean,
+   * which the deployment pipeline uses at runtime. The VanillaBP extension registers the
+   * announced bean class, so the adapter does not register it itself.
    *
    * @return The {@link VanillaBpAdapterDeploymentServiceBuildItem} build item
    */

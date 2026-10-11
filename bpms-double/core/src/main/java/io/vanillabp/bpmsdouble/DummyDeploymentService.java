@@ -17,13 +17,13 @@ import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 
 /**
- * The double's deployment service - one instance per configured adapter id. It does
- * not parse BPMN: the model and the processing context are plain {@link Object}s and
- * the BPMN process id is the filename below the module's BPMN location with the
- * <code>.bpmn</code> extension stripped, so two files of one workflow module stay
- * apart even when they sit in different subdirectories. Every pipeline call is logged
- * and offered to {@link DummyDeploymentListener} beans, which is how a test asserts
- * the order of the pipeline and how it makes a call fail.
+ * The double's deployment service. There is one instance per configured adapter id. It
+ * does not parse BPMN. The model and the processing context are plain {@link Object}s.
+ * The BPMN process id is the filename below the module's BPMN location, without the
+ * <code>.bpmn</code> extension. So two files of one workflow module stay apart, even in
+ * different subdirectories. Every pipeline call is logged and offered to
+ * {@link DummyDeploymentListener} beans. This is how a test checks the order of the
+ * pipeline and how it makes a call fail.
  * <p>
  * What a test may rely on here is written down in the readme of the
  * <code>bpms-double</code> module.
@@ -37,8 +37,8 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
   private final HookBeans<DummyDeploymentListener> listeners;
 
   /**
-   * Everything the platform hands over, in one object: an adapter which is registered
-   * incompletely does not come into existence (see
+   * Everything the platform hands over, in one object. An adapter with an incomplete
+   * registration is never created (see
    * {@link io.vanillabp.integration.adapter.spi.AdapterCollaborators}).
    */
   private final io.vanillabp.integration.adapter.spi.AdapterCollaborators collaborators;
@@ -77,8 +77,8 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
   }
 
   /**
-   * The versions of the deployed BPMN processes, cached like a real adapter caches
-   * them - the test's {@link DummyProcessVersionSource} plays the BPMS query.
+   * The versions of the deployed BPMN processes, cached the way a real adapter caches
+   * them. The test's {@link DummyProcessVersionSource} plays the BPMS query.
    */
   private final io.vanillabp.integration.adapter.spi.version.CachingProcessVersionCatalog processVersions = new io.vanillabp.integration.adapter.spi.version.CachingProcessVersionCatalog(
       java.time.Duration.ZERO) {
@@ -98,17 +98,16 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
   };
 
   /**
-   * Which BPMN processes got an end listener attached - a real adapter modifies its
-   * model here, the dummy records the decision so a test can assert that a process
+   * The BPMN processes which got an end listener. A real adapter changes its model at
+   * this point. The double only records the decision, so a test can check that a process
    * without a handler pays nothing.
    */
   private final java.util.List<String> processesWithEndListener = new java.util.concurrent.CopyOnWriteArrayList<>();
 
   /**
-   * The BPMN processes this instance decided to attach an end listener to, in the
-   * order they were wired. A test reads it to show that a process whose application
-   * declares no end handler is left alone, which is the model change a real adapter
-   * saves there.
+   * The BPMN processes this instance attached an end listener to, in the order they were
+   * wired. A test reads it to show that a process without an end handler in the
+   * application is left alone. A real adapter saves this change of its model there.
    *
    * @return A copy, so a test may keep it while the deployment goes on
    */
@@ -119,14 +118,14 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
   }
 
   /**
-   * Which BPMN processes got a start listener attached - only a process whose start is the
-   * start of a workflow gets one. A called process does not.
+   * The BPMN processes which got a start listener. Only a process whose start is the start
+   * of a workflow gets one. A called process does not.
    */
   private final java.util.List<String> processesWithStartListener = new java.util.concurrent.CopyOnWriteArrayList<>();
 
   /**
-   * The BPMN processes this instance decided to attach a start listener to, in the order they
-   * were wired. A test reads it to show that a called process is left without one.
+   * The BPMN processes this instance attached a start listener to, in the order they were
+   * wired. A test reads it to show that a called process gets none.
    *
    * @return A copy, so a test may keep it while the deployment goes on
    */
@@ -156,8 +155,8 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
         workflowModuleId,
         context.getKind());
 
-    // an adapter registered without this collaborator reports nothing, which is what the
-    // build of the collaborators warned about
+    // An adapter registered without this collaborator reports nothing. The build of the
+    // collaborators already warned about that.
     collaborators
         .workflowEndedInvoker()
         .ifPresent(invoker -> invoker.workflowEnded(workflowModuleId, bpmnProcessId, context));
@@ -166,11 +165,11 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
 
   /**
    * Builds the deployment service of one configured adapter id. Each platform module
-   * calls this once per id, so a test which configures two ids gets two doubles and
-   * can play a migration between them.
+   * calls this once per id. So a test which configures two ids gets two doubles and can
+   * play a migration between them.
    * <p>
-   * Every collaborator arrives here and none is set afterwards - see decision 28 in
-   * the repository's DECISIONS.md.
+   * Every collaborator arrives here, and none is set later. See decision 28 in the
+   * repository's DECISIONS.md.
    *
    * @param adapterId The id this instance answers for
    * @param listeners The hooks watching the deployment pipeline
@@ -251,8 +250,8 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
 
   /**
    * Asks the core to look at the other tasks it believes are open in the workflow of the
-   * given delivery, the way an adapter of a remote BPMS does after it handed a delivery
-   * over. Triggered by integration tests, which supply the probe themselves.
+   * given delivery. An adapter of a remote BPMS does this after it handed a delivery
+   * over. Triggered by integration tests, which bring their own probe.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -327,9 +326,9 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
     log.info("Dummy-Adapter[{}]: Reading BPMN '{}' for {}", adapterId, filename, workflowModuleId);
     notifyListeners("readBpmn", workflowModuleId, filename);
 
-    // a test may declare what the file holds, which is how a file with a SECOND
-    // executable process is modelled; otherwise one process per file, named after the
-    // file
+    // A test may declare what the file holds. This is how a test models a file with a
+    // SECOND executable process. Without that, each file holds one process, named after
+    // the file.
     final var declaredProcesses = taskWiringSource
         .all()
         .map(source -> source.executableProcessesOf(adapterId, workflowModuleId, filename))
@@ -359,8 +358,8 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
     log.info("Dummy-Adapter[{}]: Reading DMN '{}' for {}", adapterId, filename, workflowModuleId);
     notifyListeners("readDmn", workflowModuleId, filename);
 
-    // like a real adapter: the file is taken as bytes and travels in the context which
-    // the module's processes produced
+    // Like a real adapter: the file is read as bytes and travels in the context which the
+    // module's processes produced.
     DmnDecisionIds.bytesOf(dmn);
     return existingContext;
 
@@ -394,10 +393,10 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
     log.info("Dummy-Adapter[{}]: Wiring BPMN process '{}' for {}", adapterId, bpmnProcessId, workflowModuleId);
     notifyListeners("wireBpmn", workflowModuleId, bpmnProcessId);
 
-    // like a real adapter: validate that every task of the "BPMN" (supplied by the
-    // test's DummyTaskWiringSource - the dummy has no real model) has a
-    // @WorkflowTask method and vice versa; throwing here honors the
-    // deployment-failure policy automatically
+    // Like a real adapter: check that every task of the "BPMN" has a @WorkflowTask method,
+    // and the other way round. The test's DummyTaskWiringSource supplies the tasks,
+    // because the double has no real model. An exception thrown here follows the
+    // deployment-failure policy on its own.
     taskWiringSource
         .first()
         .ifPresent(
@@ -407,8 +406,8 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
                 bpmnProcessId,
                 source.tasksOf(adapterId, workflowModuleId, bpmnProcessId)));
 
-    // like a real adapter: report the expressions of the model, so the core can say what
-    // the ones which are more than the name of a variable bind
+    // Like a real adapter: report the expressions of the model. Some expressions are more
+    // than the name of a variable, and the core says what those bind.
     taskWiringSource
         .first()
         .ifPresent(
@@ -417,8 +416,8 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
                 bpmnProcessId,
                 source.expressionsOf(adapterId, workflowModuleId, bpmnProcessId)));
 
-    // like a real adapter: report the start events the BPMS fires on its own, so the
-    // core can check the application's @WorkflowStartedByBpms methods against them
+    // Like a real adapter: report the start events the BPMS fires on its own. The core
+    // checks the application's @WorkflowStartedByBpms methods against them.
     collaborators
         .bpmsInitiatedStartInvoker()
         .ifPresent(
@@ -430,8 +429,8 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
                         bpmnProcessId,
                         source.startEventsOf(adapterId, workflowModuleId, bpmnProcessId))));
 
-    // like a real adapter which reads its model: report the messages which start the
-    // process, so the core can check a start by message against them
+    // Like a real adapter which reads its model: report the messages which start the
+    // process. The core checks a start by message against them.
     collaborators
         .bpmsInitiatedStartInvoker()
         .ifPresent(
@@ -445,15 +444,15 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
                         bpmnProcessId,
                         messageNames)));
 
-    // like a real adapter which can be asked about its deployed versions: hand the
-    // catalog over, so version specifications naming a version tag can be resolved
+    // Like a real adapter which can answer about its deployed versions: hand over the
+    // catalog. Then a version specification which names a version tag can be resolved.
     processVersionSource
         .first()
         .ifPresent(
             source -> collaborators
                 .workflowTaskWiring()
                 .registerProcessVersions(adapterId, workflowModuleId, bpmnProcessId, processVersions));
-    // and, like a real adapter, which version the BPMS gave the model of this start
+    // Also like a real adapter: report the version the BPMS gave the model of this start.
     processVersionSource
         .first()
         .map(source -> source.deployedVersionOf(adapterId, workflowModuleId, bpmnProcessId))
@@ -462,8 +461,8 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
                 .workflowTaskWiring()
                 .registerDeployedVersion(adapterId, workflowModuleId, bpmnProcessId, version));
 
-    // like a real adapter: the start of a called process is a step of the workflow which
-    // called it, so it gets no start listener
+    // Like a real adapter: the start of a called process is a step of the workflow which
+    // called it. So it gets no start listener.
     if (collaborators
         .bpmsInitiatedStartInvoker()
         .map(invoker -> invoker.startsAWorkflowOfItsOwn(workflowModuleId, bpmnProcessId))
@@ -471,8 +470,8 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
       processesWithStartListener.add(bpmnProcessId);
     }
 
-    // like a real adapter: a model pays for the end notification only where the
-    // application asked for one
+    // Like a real adapter: a model pays for the end notification only where the
+    // application asked for one.
     if (collaborators
         .workflowEndedInvoker()
         .map(invoker -> invoker.workflowEndedHandlerExists(workflowModuleId, bpmnProcessId))
@@ -495,9 +494,9 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
     log.info("Dummy-Adapter[{}]: Deploying resources for {}", adapterId, workflowModuleId);
     notifyListeners("deployResources", workflowModuleId, null);
 
-    // like a real adapter: nothing module-level is called here. The reverse wiring
-    // check and the version resolution are the core's own duty since the SPI was split
-    // (see WorkflowTaskWiring), which is what keeps an adapter from forgetting them
+    // Like a real adapter: nothing for the whole module is called here. Since the SPI was
+    // split, the reverse wiring check and the version resolution are the core's own job
+    // (see WorkflowTaskWiring). So an adapter cannot forget them.
 
   }
 
