@@ -34,17 +34,18 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.migration.test.TestPhaseOperations;
 
 /**
- * One workflow whose BPMS has not made it searchable yet used to hold every other entry
- * of the same store: the dispatch waited out the adapter's visibility window on the one
- * thread which dispatched everything back then, ten seconds on Camunda 8. So a burst of
- * "start, then correlate" pairs stalled in batches, and the workflows in it had nothing
- * to do with each other.
+ * One workflow which its BPMS has not made searchable yet used to hold up every other entry
+ * of the same store. The dispatch waited out the visibility window of the adapter, ten
+ * seconds on Camunda 8. It did so on the one thread which dispatched everything back then.
+ * So a burst of "start, then correlate" pairs stalled in batches, although the workflows in
+ * it had nothing to do with each other.
  * <p>
- * What happens instead is here: the entry is handed back with the window as its due
+ * This test holds what happens instead. The entry is handed back with the window as its due
  * time, and the lane goes on to the next entry. The store does not count that as an
- * attempt. What ends a workflow that never becomes visible is the time since the entry was
- * written, <code>vanillabp.outbox.wait-for-visibility-at-most</code>, which
- * <code>WaitingForAReadModelUsesNoAttemptsTest</code> holds for the relational store.
+ * attempt. A workflow which never becomes visible is ended by the time since the entry was
+ * written, <code>vanillabp.outbox.wait-for-visibility-at-most</code>.
+ * <code>WaitingForAReadModelUsesNoAttemptsTest</code> holds that for the relational
+ * store.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class NotVisibleWorkflowDoesNotStallDispatchTest {
@@ -56,8 +57,8 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
   private static final String ADAPTER = "test-adapter";
 
   /**
-   * The window a Camunda-8-like adapter reports, short enough for a test and long
-   * enough that waiting it out would be plain to see.
+   * The window which an adapter like the one of Camunda 8 reports. It is short enough for a
+   * test, and long enough that waiting it out would be plain to see.
    */
   private static final Duration WINDOW = Duration.ofSeconds(2);
 
@@ -66,8 +67,8 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
   private static final String FINDABLE = "43";
 
   /**
-   * An eventually consistent BPMS: it reports the workflow of {@link #FINDABLE} and
-   * has not caught up with the one of {@link #NOT_VISIBLE_YET}, whatever it is asked.
+   * An eventually consistent BPMS. It reports the workflow of {@link #FINDABLE}. It has not
+   * caught up with the one of {@link #NOT_VISIBLE_YET}, whatever it is asked.
    */
   private static class LaggingAdapter implements MigratableProcessService<Object> {
 
@@ -80,8 +81,8 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
 
     /**
      * How often the BPMS was asked about the workflow it has not caught up with. Waiting
-     * for that workflow means asking again every twenty milliseconds, so this number is
-     * what says whether anybody waited.
+     * for that workflow means asking again every twenty milliseconds. So this number says
+     * whether anybody waited.
      */
     private final java.util.concurrent.atomic.AtomicInteger probesOfTheLaggingWorkflow = new java.util.concurrent.atomic.AtomicInteger();
 
@@ -152,8 +153,9 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
   }
 
   /**
-   * A process service whose cache knows both workflows sit in the lagging adapter -
-   * the hint is what makes an unknown answer worth repeating instead of a stale entry.
+   * A process service whose cache knows that both workflows sit in the lagging adapter.
+   * With the hint, an unknown answer is worth repeating, and it does not mean a stale
+   * entry.
    */
   private static MigrationProcessService<Object> serviceKnowingBothWorkflows(
       final LaggingAdapter adapter) {
@@ -163,9 +165,9 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
   }
 
   /**
-   * The same, with the BPMS' own id of the workflow which is not visible yet written into
-   * the hint - what a delivery or a start leaves behind, and what lets the adapter answer
-   * its window for that one workflow.
+   * The same, but the hint also holds the id which the BPMS gave the workflow that is not
+   * visible yet. A delivery or a start leaves this behind. It lets the adapter answer its
+   * window for that one workflow.
    */
   private static MigrationProcessService<Object> serviceKnowingBothWorkflows(
       final LaggingAdapter adapter,
@@ -235,17 +237,17 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
         PhaseTwoRetryLater.class,
         () -> dispatchCorrelation(service, NOT_VISIBLE_YET),
         "the entry of a workflow which is not searchable yet has to come back to the store");
-    // the entry says when asking again can help, and that is the adapter's own window
+    // the entry says when asking again can help. That is the own window of the adapter
     assertEquals(WINDOW, retryLater.getRetryAfter());
 
-    // the very next entry, of a workflow the same BPMS reports, on the same thread
+    // the very next entry, of a workflow which the same BPMS reports, on the same thread
     dispatchCorrelation(service, FINDABLE);
 
     assertEquals(List.of(FINDABLE), adapter.correlated);
-    // a thread waiting out the window would have asked the BPMS a hundred times, once
-    // every twenty milliseconds. A wall clock would be the same claim read from a worse
-    // instrument: a machine carrying several builds stops this JVM for seconds at a time,
-    // and a stopped JVM looks like a thread which waited
+    // a thread which waited out the window would have asked the BPMS a hundred times, once
+    // every twenty milliseconds. A wall clock would read the same claim from a worse
+    // instrument. A machine with several builds stops this JVM for seconds at a time, and a
+    // stopped JVM looks like a thread which waited
     assertEquals(
         1,
         adapter.probesOfTheLaggingWorkflow.get(),
@@ -257,8 +259,8 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
   @DisplayName("An adapter answering per workflow decides how soon its entry comes back")
   public void theDueTimeIsTheWindowOfThatWorkflow() {
 
-    // the adapter knows this workflow by its own id and its engine says the workflow is
-    // gone, so nothing is served by giving the read model the window a young workflow
+    // the adapter knows this workflow by its own id, and its engine says the workflow is
+    // gone. So nothing is gained by giving the read model the window a young workflow
     // needs
     final var shortWindow = Duration.ofMillis(900);
     final var adapter = new LaggingAdapter() {
@@ -299,9 +301,9 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
     final var adapter = new LaggingAdapter();
     final var service = serviceKnowingBothWorkflows(adapter);
 
-    // more repetitions than the stores allow failed attempts by default: the core gives
-    // the entry back the same way each time, and it is the store which decides when the
-    // waiting is over, by the time the entry has waited and not by these answers
+    // more repetitions than the stores allow failed attempts by default. The core gives the
+    // entry back the same way each time. The store decides when the waiting is over, by the
+    // time the entry has waited, and not by these answers
     final var moreThanTheAttemptsAllowed = io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties
         .builder()
         .build()
@@ -310,7 +312,7 @@ public class NotVisibleWorkflowDoesNotStallDispatchTest {
       final var retryLater = assertThrows(
           PhaseTwoRetryLater.class,
           () -> dispatchCorrelation(service, NOT_VISIBLE_YET));
-      // the window is the adapter's and stays short: the growing backoff of a failing
+      // the window belongs to the adapter and stays short. The growing backoff of a failing
       // entry is NOT applied to it
       assertEquals(WINDOW, retryLater.getRetryAfter(), "repetition "
           + repetition

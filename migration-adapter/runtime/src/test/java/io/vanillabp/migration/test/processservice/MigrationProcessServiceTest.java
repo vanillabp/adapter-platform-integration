@@ -37,8 +37,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 public class MigrationProcessServiceTest {
 
   /**
-   * What a probe is asked about. Any scope does here: the adapters of this
-   * test answer from what the test told them, not from a deployment.
+   * What a probe is asked about. Any scope does here. The adapters of this test answer from
+   * what the test told them, not from a deployment.
    */
   private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
       .of("test-module", "TestProcess");
@@ -47,8 +47,8 @@ public class MigrationProcessServiceTest {
   private MigratableProcessService<Object> processService;
 
   /**
-   * What the adapter was asked to do - a mocked adapter answers no phase operations at
-   * all unless it is told to, see {@link io.vanillabp.migration.test.AdapterMocks}.
+   * What the adapter was asked to do. A mocked adapter answers no phase operations at all
+   * unless it is told to, see {@link io.vanillabp.migration.test.AdapterMocks}.
    */
   private io.vanillabp.migration.test.RecordedPhaseOperations<Object> recorded;
 
@@ -69,7 +69,7 @@ public class MigrationProcessServiceTest {
   private PhaseTwoOutboxResolver phaseTwoOutboxResolver;
 
   /**
-   * Creates properties with one configured and prioritized adapter 'test-adapter'.
+   * Creates properties with one configured and prioritized adapter, 'test-adapter'.
    */
   private MigrationAdapterProperties createProperties() {
 
@@ -84,8 +84,8 @@ public class MigrationProcessServiceTest {
   }
 
   /**
-   * The call a start of aggregate 42 schedules: everything of it is fixed except the moment it
-   * was planned, which only has to be there.
+   * The call which a start of aggregate 42 schedules. Everything of it is fixed except the
+   * moment it was planned. That moment only has to be there.
    */
   private static boolean isTheStartOfAggregate42(
       final PhaseTwoCall call) {
@@ -113,7 +113,8 @@ public class MigrationProcessServiceTest {
             .processServices(List.of())
             .build());
 
-    // the exception has to name the workflow module, the BPMN process ID and the prioritized adapters
+    // the exception has to name the workflow module, the BPMN process ID and the
+    // prioritized adapters
     assertTrue(exception.getMessage().contains("test-module"));
     assertTrue(exception.getMessage().contains("TestProcess"));
     assertTrue(exception.getMessage().contains("test-adapter"));
@@ -143,8 +144,8 @@ public class MigrationProcessServiceTest {
   }
 
   /**
-   * Creates properties with two configured and prioritized adapters
-   * 'first-adapter' and 'second-adapter' (in this priority order).
+   * Creates properties with two configured and prioritized adapters, 'first-adapter' and
+   * 'second-adapter', in this order of priority.
    */
   private MigrationAdapterProperties createTwoAdapterProperties() {
 
@@ -164,8 +165,8 @@ public class MigrationProcessServiceTest {
   @DisplayName("Constructor fails fast if ANY prioritized adapter has no process service (B2)")
   public void constructorFailsFastOnAnyMissingPrioritizedAdapter() {
 
-    // only the SECOND prioritized adapter is served - before the fix the missing
-    // one was silently dropped and workflows started in the wrong BPMS
+    // only the SECOND prioritized adapter is served. Before the fix, the missing one was
+    // silently dropped, and workflows started in the wrong BPMS
     when(processService.getAdapterId()).thenReturn("second-adapter");
 
     final var exception = assertThrowsExactly(
@@ -178,8 +179,8 @@ public class MigrationProcessServiceTest {
                 .of(processService))
             .build());
 
-    // the guiding message has to name the adapter id, module, process and the
-    // likely causes (missing dependency, typo in the prioritized-adapters keys)
+    // the guiding message has to name the adapter id, module and process. It also names
+    // the likely causes: a missing dependency, or a typo in the keys of prioritized-adapters
     assertTrue(exception.getMessage().contains("first-adapter"));
     assertTrue(exception.getMessage().contains("test-module"));
     assertTrue(exception.getMessage().contains("TestProcess"));
@@ -200,8 +201,8 @@ public class MigrationProcessServiceTest {
     when(processService.getAdapterId()).thenReturn("first-adapter");
     when(secondAdapter.getAdapterId()).thenReturn("second-adapter");
 
-    // beans are passed in REVERSE priority order - the election must follow the
-    // configured priorities nevertheless
+    // the beans come in REVERSE order of priority. The election must still follow the
+    // configured priorities
     final var testee = MigrationProcessService
         .forBpmnProcess("test-module", "TestProcess", Object.class)
         .properties(createTwoAdapterProperties())
@@ -218,7 +219,7 @@ public class MigrationProcessServiceTest {
 
     testee.startWorkflow(aggregate);
 
-    // phase one has to run in the highest-priority adapter only
+    // phase one has to run only in the adapter with the highest priority
     final var phaseOne = recorded.phaseOneOf(PhaseOperation.START_WORKFLOW);
     assertEquals(1, phaseOne.size());
     assertEquals("test-module", phaseOne.getFirst().workflowModuleId());
@@ -281,8 +282,8 @@ public class MigrationProcessServiceTest {
         .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
         .build();
 
-    // with JPA and generated IDs the attached aggregate returned by save may
-    // be another object than the detached one passed to startWorkflow
+    // with JPA and generated IDs, the attached aggregate which save returns may be another
+    // object than the detached one passed to startWorkflow
     final var detachedAggregate = new Object();
     final var attachedAggregate = new Object();
     when(aggregatePersistence.save(detachedAggregate)).thenReturn(attachedAggregate);
@@ -291,7 +292,7 @@ public class MigrationProcessServiceTest {
     final var result = testee.startWorkflow(detachedAggregate);
 
     assertSame(attachedAggregate, result);
-    // the ATTACHED aggregate reaches phase one, never the one the caller handed in
+    // the ATTACHED aggregate reaches phase one, never the one which the caller handed in
     final var phaseOne = recorded.phaseOneOf(PhaseOperation.START_WORKFLOW);
     assertEquals(1, phaseOne.size());
     assertEquals(attachedAggregate, phaseOne.getFirst().workflowAggregate());
@@ -321,9 +322,8 @@ public class MigrationProcessServiceTest {
 
     testee.startWorkflow(aggregate);
 
-    // the adapter elected in phase one is part of the scheduled call: phase two
-    // uses exactly this adapter instead of re-electing one from the then-current
-    // priorities
+    // the adapter elected in phase one is part of the scheduled call. Phase two uses exactly
+    // this adapter. It does not elect one again from the priorities of that later moment
     verify(phaseTwoOutbox)
         .schedule(
             org.mockito.ArgumentMatchers.argThat(MigrationProcessServiceTest::isTheStartOfAggregate42));
@@ -372,8 +372,8 @@ public class MigrationProcessServiceTest {
         IllegalStateException.class,
         () -> testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "removed-adapter", Map.of(), false));
 
-    // the message has to name the stale adapter, the BPMN process, the workflow
-    // module and that the entry is stale after a configuration change
+    // the message has to name the stale adapter, the BPMN process and the workflow module.
+    // It also says that the entry is stale after a configuration change
     assertTrue(exception.getMessage().contains("removed-adapter"));
     assertTrue(exception.getMessage().contains("TestProcess"));
     assertTrue(exception.getMessage().contains("test-module"));
@@ -401,7 +401,7 @@ public class MigrationProcessServiceTest {
 
     testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), true);
 
-    // the previous dispatch already started the workflow - no second start
+    // the previous dispatch already started the workflow, so there is no second start
     assertTrue(recorded.phaseTwo().isEmpty());
 
   }
@@ -533,8 +533,8 @@ public class MigrationProcessServiceTest {
         IllegalStateException.class,
         () -> testee.startWorkflow(aggregate));
 
-    // the exception has to name the adapter, the BPMN process ID, the workflow module
-    // and the missing SPI interface
+    // the exception has to name the adapter, the BPMN process ID, the workflow module and
+    // the missing SPI interface
     assertTrue(exception.getMessage().contains("test-adapter"));
     assertTrue(exception.getMessage().contains("TestProcess"));
     assertTrue(exception.getMessage().contains("test-module"));
@@ -566,8 +566,8 @@ public class MigrationProcessServiceTest {
     final var exception = properties.startupFindings().theRefusal();
     assertNotNull(exception, "the start has to be refused");
 
-    // the message names the adapter, process, module, aggregate, the platform's
-    // remedies and the SPI escape hatches
+    // the message names the adapter, process, module and aggregate, the remedies of the
+    // platform and the escape hatches of the SPI
     assertTrue(exception.getMessage().contains("test-adapter"));
     assertTrue(exception.getMessage().contains("TestProcess"));
     assertTrue(exception.getMessage().contains("test-module"));
@@ -575,8 +575,8 @@ public class MigrationProcessServiceTest {
     assertTrue(exception.getMessage().contains("add the platform's outbox starter"));
     assertTrue(exception.getMessage().contains("PhaseTwoOutbox"));
     assertTrue(exception.getMessage().contains("PhaseTwoOutboxAware"));
-    // the box indents what it renders, so the rule about consecutive spaces is about the
-    // message a check reported rather than about the block it ends up in
+    // the box indents what it renders. So the rule about consecutive spaces is about the
+    // message a check reported, not about the block it ends up in
     final var reported = properties
         .startupFindings()
         .findings()
@@ -612,7 +612,7 @@ public class MigrationProcessServiceTest {
     verify(phaseTwoOutbox)
         .schedule(
             org.mockito.ArgumentMatchers.argThat(MigrationProcessServiceTest::isTheStartOfAggregate42));
-    // resolved exactly once (at startup), not per workflow start
+    // resolved exactly once (at startup), not per start of a workflow
     verify(phaseTwoOutboxResolver).resolveFor(Object.class);
 
   }
@@ -708,8 +708,8 @@ public class MigrationProcessServiceTest {
         () -> testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false));
 
     assertEquals(rejected, failure.getCause());
-    // the store blocks the entry on this, so the message has to say why it will not
-    // be retried
+    // the store blocks the entry on this. So the message has to say why it will not be
+    // tried again
     assertTrue(failure.getMessage().contains("test-adapter"), failure.getMessage());
     assertTrue(failure.getMessage().contains("repeating it cannot help"), failure.getMessage());
 
@@ -764,8 +764,8 @@ public class MigrationProcessServiceTest {
         .build();
     testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false);
 
-    // the next operation on that workflow probes this adapter first, which is what
-    // lets it wait out an eventually consistent BPMS instead of failing
+    // the next operation on that workflow probes this adapter first. That lets it wait
+    // out an eventually consistent BPMS instead of failing
     assertEquals(
         "test-adapter", cache.get("test-module", "TestProcess", "42").orElseThrow());
 
@@ -787,8 +787,8 @@ public class MigrationProcessServiceTest {
         .workflowAdapterCache(cache)
         .build();
 
-    // a handler which does not subscribe to the delivered event: the delivery still
-    // proves where the workflow lives, which is why the recording happens first
+    // a handler which does not subscribe to the delivered event. The delivery still proves
+    // where the workflow lives. That is why the recording happens first
     final var handler = org.mockito.Mockito
         .mock(io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskHandler.class);
     when(handler.acceptsEvent(any())).thenReturn(false);
@@ -823,8 +823,8 @@ public class MigrationProcessServiceTest {
   }
 
   /**
-   * Runs the work handed to it, right here. A delivery which reaches the workflow
-   * aggregate needs a transaction, and this test has no platform to open one.
+   * Runs the work it is handed, right here. A delivery which reaches the workflow aggregate
+   * needs a transaction, and this test has no platform to open one.
    */
   private static class RunItRightHere implements io.vanillabp.integration.spi.TransactionRunner {
 
@@ -901,7 +901,7 @@ public class MigrationProcessServiceTest {
   }
 
   /**
-   * A handler which subscribes to whatever is delivered, so the delivery reaches the
+   * A handler which subscribes to whatever is delivered. So the delivery reaches the
    * workflow aggregate.
    */
   private static io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskHandler aHandlerTakingEverything() {
@@ -917,8 +917,8 @@ public class MigrationProcessServiceTest {
   @DisplayName("A delivery for a workflow aggregate this application does not have is refused, and the message says why without blaming anybody")
   public void aDeliveryOfAnUnknownWorkflowIsRefusedWithAMessageWhichExplainsIt() {
 
-    // no workflow aggregate '42' here: either it belongs to another application on the
-    // same BPMS, or it was deleted here - and nothing can tell the two apart
+    // there is no workflow aggregate '42' here. Either it belongs to another application on
+    // the same BPMS, or it was deleted here. Nothing can tell the two apart
     when(aggregatePersistence.loadById(any())).thenReturn(null);
 
     final var testee = serviceTakingDeliveries();
@@ -934,7 +934,8 @@ public class MigrationProcessServiceTest {
 
     final var message = exception.getMessage();
 
-    // what happened, in the words of somebody who knows it may be neither side's fault
+    // what happened, in the words of somebody who knows that it may be the fault of neither
+    // side
     assertTrue(
         message.startsWith("This application was given a task of a workflow it does not own."),
         message);
@@ -964,7 +965,7 @@ public class MigrationProcessServiceTest {
     assertTrue(message.contains("the workflow aggregate was deleted while the workflow was still running"), message);
     assertTrue(message.contains("the BPMS still holds the task"), message);
 
-    // the facts an adapter reads off the refusal instead of off its text
+    // the facts which an adapter reads off the refusal, instead of off its text
     assertEquals("test-adapter", exception.getAdapterId());
     assertEquals("test-module", exception.getWorkflowModuleId());
     assertEquals("TestProcess", exception.getBpmnProcessId());
@@ -1014,9 +1015,9 @@ public class MigrationProcessServiceTest {
   @DisplayName("A delivery refused because the workflow is not ours leaves no note about it behind")
   public void aRefusedDeliveryTakesItsNoteBack() {
 
-    // the note which adapter holds a workflow is written when the delivery arrives,
-    // because it has to hold for a delivery the handler does not subscribe to as well -
-    // and only reading the aggregate tells whether this application owns the workflow
+    // the note which adapter holds a workflow is written when the delivery arrives. It has
+    // to hold also for a delivery to which the handler does not subscribe. And only reading
+    // the aggregate tells whether this application owns the workflow
     when(aggregatePersistence.loadById(any())).thenReturn(null);
     when(processService.getAdapterId()).thenReturn("test-adapter");
 
@@ -1069,8 +1070,8 @@ public class MigrationProcessServiceTest {
             new RunItRightHere(),
             List.of());
 
-    // the counterpart of the test above: withdrawing on a refusal must not withdraw on
-    // the ordinary delivery, which is the one the note exists for
+    // the counterpart of the test above. Withdrawing on a refusal must not withdraw on the
+    // ordinary delivery, and the note exists for that one
     final var hint = cache.hintOf("test-module", "TestProcess", "42");
     assertTrue(hint.isPresent(), "an accepted delivery has to leave its note");
     assertEquals("test-adapter", hint.get().adapterId());

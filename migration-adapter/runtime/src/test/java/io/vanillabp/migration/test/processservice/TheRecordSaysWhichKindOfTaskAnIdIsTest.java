@@ -40,21 +40,22 @@ import io.vanillabp.spi.process.TaskNotFoundException;
 /**
  * Completing a task with the id of a user task is answered with what the id IS.
  * <p>
- * The mistake is an ordinary one: <code>completeTask</code> is called with the key of a user
- * task, the BPMS reads that key as a job key, no job carries it, and the answer is "not
- * found". What the developer used to read was a list of three things it could have been -
- * the id is wrong, the task was completed long ago, the workflow was canceled - and not one
- * of them was true. VanillaBP knows better than that: it wrote a record when the handler of
- * that user task ran, and the record says which kind of task the id belongs to.
+ * The mistake is an ordinary one. <code>completeTask</code> is called with the key of a user
+ * task. The BPMS reads that key as a job key, no job carries it, and the answer is "not
+ * found". The developer used to read a list of three things it could have been: the id is
+ * wrong, the task was completed long ago, or the workflow was canceled. Not one of them was
+ * true. VanillaBP knows better. It wrote a record when the handler of that user task ran,
+ * and the record says which kind of task the id belongs to.
  * <p>
- * Two things have to happen for that answer to come out. The record must not ELECT an adapter
- * for a command of the other kind, because such a command reaches the BPMS which really holds
- * the task and fails there, at dispatch time, with nobody left to tell. And the failure which
- * follows reads the record again and names the method which asks about the kind the id is.
+ * Two things have to happen for that answer to come out. First, the record must not ELECT
+ * an adapter for a command of the other kind. Such a command reaches the BPMS which really
+ * holds the task, and it fails there at dispatch time, with nobody left to tell. Second, the
+ * failure which follows reads the record again. It names the method which asks about the
+ * kind the id is.
  * <p>
- * Where nothing was written down, nothing is claimed: an id no record knows gets the list it
- * always got, plus the one thing which explains the silence - a record does not outlive the
- * retention.
+ * Where nothing was written down, nothing is claimed. An id which no record knows gets the
+ * list it always got. It also gets the one thing which explains the silence: a record does
+ * not outlive the retention.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheRecordSaysWhichKindOfTaskAnIdIsTest {
@@ -67,18 +68,18 @@ public class TheRecordSaysWhichKindOfTaskAnIdIsTest {
 
   private static final String AGGREGATE = "4711";
 
-  /** The id of a user task, which is what the mistake hands to a task operation. */
+  /** The id of a user task. The mistake hands it to a task operation. */
   private static final String USER_TASK = "user-task-1";
 
-  /** The id of a task, which is what the mistake hands to a user-task operation. */
+  /** The id of a task. The mistake hands it to a user-task operation. */
   private static final String TASK = "job-1";
 
   private static final String ERROR_CODE = "PAYMENT_FAILED";
 
   /**
-   * An adapter whose BPMS knows none of the ids asked about, which is the answer every BPMS
-   * gives for an id of the other kind. It counts the questions, so a test can tell "the
-   * record answered" from "nobody knew".
+   * An adapter whose BPMS knows none of the ids asked about. Every BPMS gives this answer for
+   * an id of the other kind. It counts the questions. So a test can tell "the record
+   * answered" from "nobody knew".
    */
   static class NothingIsKnownHere implements MigratableProcessService<Object> {
 
@@ -184,7 +185,7 @@ public class TheRecordSaysWhichKindOfTaskAnIdIsTest {
 
   }
 
-  /** The outbox, reduced to what it is here: what phase two was planned with. */
+  /** The outbox, cut down to what it is here: what phase two was planned with. */
   static class CapturingOutbox implements PhaseTwoOutbox {
 
     final List<PhaseTwoCall> scheduled = new ArrayList<>();
@@ -310,8 +311,8 @@ public class TheRecordSaysWhichKindOfTaskAnIdIsTest {
   }
 
   /**
-   * The record of a task the handler left open, as the core writes it while the handler
-   * runs - naming the kind of task the delivery was about.
+   * The record of a task which the handler left open, as the core writes it while the
+   * handler runs. It names the kind of task the delivery was about.
    *
    * @param taskId The task the record is about
    * @param kind What the delivering adapter said the id is the id of, or <code>null</code>

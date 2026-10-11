@@ -25,9 +25,9 @@ import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An adapter which cannot serve an operation every adapter has to serve is refused
- * while the application boots. The map an adapter answers IS its statement about what
- * it serves, so a forgotten operation is caught before a workflow waits for it.
+ * An adapter which cannot serve an operation that every adapter has to serve is refused
+ * while the application boots. The map which an adapter answers IS its statement about what
+ * it serves. So a forgotten operation is caught before a workflow waits for it.
  * <p>
  * An adapter which still runs on the compatibility bridge serves every core operation
  * by definition, which the second test holds: the check must not refuse the three
@@ -41,7 +41,7 @@ public class AdapterOperationsAtStartupTest {
   private static final String PROCESS = "TestProcess";
 
   /**
-   * An adapter in the new shape, serving exactly the operations it is given.
+   * An adapter in the new shape, which serves exactly the operations it is given.
    */
   private static class HandlerAdapter implements MigratableProcessService<Object> {
 
@@ -112,7 +112,7 @@ public class AdapterOperationsAtStartupTest {
   }
 
   /**
-   * The configuration the last process service was built on - a refusal is collected
+   * The configuration on which the last process service was built. A refusal is collected
    * there and thrown once, at the end of the start.
    */
   private MigrationAdapterProperties lastProperties;
@@ -177,11 +177,11 @@ public class AdapterOperationsAtStartupTest {
 
     final var adapter = new HandlerAdapter(everyRequiredOperation());
 
-    // signals and aggregate pushes are not required of every adapter, and this one
-    // serves neither
+    // signals and aggregate pushes are not required of every adapter, and this one serves
+    // neither
     processService(adapter).validateAdapterOperationsAtStartup();
 
-    // the application asking for one is where it learns so
+    // the application learns it when it asks for one
     final var exception = assertThrowsExactly(
         PhaseOperationNotSupported.class,
         () -> processService(adapter).sendSignal("OrderReceived"));

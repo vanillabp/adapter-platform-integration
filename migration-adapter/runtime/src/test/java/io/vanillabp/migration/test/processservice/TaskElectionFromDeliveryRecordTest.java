@@ -41,18 +41,18 @@ import io.vanillabp.migration.test.RecordedPhaseOperations;
  * Completing a task asks the delivery record instead of the BPMS.
  * <p>
  * VanillaBP wrote that record while the handler of the task ran, in the database of the
- * workflow aggregate, and it names the adapter which delivered the task. So the walk over
- * the adapters - one command against a remote BPMS per operation, and on Camunda 8 the very
- * command the adapter's own phase one sends a moment later - is not needed while the record
- * answers. What it must NOT do is answer where it cannot: no record, an adapter which is not
- * prioritized any more, a store which cannot be queried by a task, and the probe decides as
- * it always did.
+ * workflow aggregate. It names the adapter which delivered the task. So the walk over the
+ * adapters is not needed while the record answers. That walk costs one command against a
+ * remote BPMS per operation. On Camunda 8 it is even the same command which phase one of the
+ * adapter sends a moment later. But the record must NOT answer where it cannot. That is the
+ * case without a record, with an adapter which is no longer prioritized, and with a store
+ * which cannot be queried by a task. Then the probe decides, as it always did.
  * <p>
- * The same holds for a call which names a task although its operation is about the workflow -
- * pushing a changed aggregate into the scope of one task. It asks about that task like every
- * other call naming one, as long as the task is open; a task which is over says nothing about
- * the workflow around it. And how often the record answered is counted, because that number is
- * what says whether reading it was worth anything.
+ * The same holds for a call which names a task although its operation is about the
+ * workflow, such as pushing a changed aggregate into the scope of one task. It asks about
+ * that task like every other call which names one, as long as the task is open. A task
+ * which is over says nothing about the workflow around it. And the test counts how often
+ * the record answered. That number says whether reading it was worth anything.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TaskElectionFromDeliveryRecordTest {
@@ -62,9 +62,9 @@ public class TaskElectionFromDeliveryRecordTest {
   private static final String PROCESS = "TestProcess";
 
   /**
-   * A second process of the same workflow service, called by the primary one. Its
-   * deliveries reach the instance of THIS id, so what they write down carries it, while
-   * the application calls its operations on the primary service.
+   * A second process of the same workflow service, which the primary one calls. Its
+   * deliveries reach the instance of THIS id, so what they write down carries it. But the
+   * application calls its operations on the primary service.
    */
   private static final String SECONDARY_PROCESS = "CalledProcess";
 
@@ -75,9 +75,9 @@ public class TaskElectionFromDeliveryRecordTest {
   private static final String TASK = "job-1";
 
   /**
-   * An adapter which counts every question the election puts to it, and would answer that
-   * it holds the task - so a test asserting that nothing was asked really asserts the
-   * saving and not a failure.
+   * An adapter which counts every question the election puts to it. It would answer that
+   * it holds the task. So a test which asserts that nothing was asked really asserts the
+   * saving, and not a failure.
    */
   static class ProbeAdapter implements MigratableProcessService<Object> {
 
@@ -220,8 +220,8 @@ public class TaskElectionFromDeliveryRecordTest {
   }
 
   /**
-   * A store which cannot be queried by a task - every log written before this existed, and
-   * the shape the fallback has to survive.
+   * A store which cannot be queried by a task. Every log written before this existed looks
+   * like this, and the fallback has to survive it.
    */
   static class LogWithoutTaskLookup implements TaskDeliveryLog {
 
@@ -277,7 +277,7 @@ public class TaskElectionFromDeliveryRecordTest {
 
   }
 
-  /** The outbox, reduced to what it is here: what phase two was planned with. */
+  /** The outbox, cut down to what it is here: what phase two was planned with. */
   static class CapturingOutbox implements PhaseTwoOutbox {
 
     final List<PhaseTwoCall> scheduled = new ArrayList<>();
@@ -407,8 +407,8 @@ public class TaskElectionFromDeliveryRecordTest {
   }
 
   /**
-   * The primary process service of a workflow service which also serves a called
-   * process - what the platform integration builds and hands the served ids to.
+   * The primary process service of a workflow service which also serves a called process.
+   * The platform integration builds it and hands the served ids to it.
    *
    * @param adapter The one configured adapter
    * @return The service of the PRIMARY id, which is the one the application calls
@@ -438,8 +438,8 @@ public class TaskElectionFromDeliveryRecordTest {
   }
 
   /**
-   * The same record, written by the instance of the BPMN process which delivered the
-   * task - which is the secondary id where a called process handed the task out.
+   * The same record, written by the instance of the BPMN process which delivered the task.
+   * That is the secondary id where a called process handed the task out.
    *
    * @param adapterId The adapter which delivered
    * @param bpmnProcessId The process which delivered
@@ -464,8 +464,8 @@ public class TaskElectionFromDeliveryRecordTest {
 
     final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
     logWatcher.start();
-    // the process service says some of this itself and lets its collaborator say the rest,
-    // so both are listened to - which class a message comes from is not what is under test
+    // the process service says some of this itself and lets its collaborator say the rest.
+    // So the test listens to both. Which class a message comes from is not under test
     final var loggers = java.util.List
         .of(
             (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(MigrationProcessService.class),
@@ -841,8 +841,8 @@ public class TaskElectionFromDeliveryRecordTest {
     service
         .executePhaseTwo(PhaseOperation.COMPLETE_TASK, AGGREGATE, planned.adapterId(), planned.args(), false);
     final var phaseOneSoFar = adapter.operations.phaseOneOf(PhaseOperation.COMPLETE_TASK).size();
-    // phase two elects by probing whatever a record said in phase one, so what the second
-    // completion may add to is the count the dispatch left behind
+    // phase two elects by probing whatever a record said in phase one. So the second
+    // completion may add to the count which the dispatch left behind
     final var probesSoFar = adapter.probes.get();
 
     final var messages = loggedBy(() -> service.completeTask(new Object(), TASK));

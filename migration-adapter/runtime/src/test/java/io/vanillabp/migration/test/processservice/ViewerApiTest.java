@@ -41,17 +41,17 @@ import io.vanillabp.spi.process.WorkflowHistory;
 import io.vanillabp.spi.process.WorkflowNotFoundException;
 
 /**
- * The core's part of the viewer/history API: electing the adapter
- * holding the workflow, namespacing the adapter-native process definition ids and
- * the guiding errors of the two SPI exceptions.
+ * The part of the core in the viewer and history API. It elects the adapter which holds the
+ * workflow. It puts the native process definition ids of the adapters into namespaces. And
+ * it gives the guiding errors of the two SPI exceptions.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
 public class ViewerApiTest {
 
   /**
-   * What a probe is asked about. Any scope does here: the adapters of this
-   * test answer from what the test told them, not from a deployment.
+   * What a probe is asked about. Any scope does here. The adapters of this test answer from
+   * what the test told them, not from a deployment.
    */
   private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
       .of("test-module", "TestProcess");
@@ -96,9 +96,9 @@ public class ViewerApiTest {
   }
 
   /**
-   * A process service with an election cache, which is what a hint needs to exist at
-   * all - the adapter ids are stubbed leniently because a read answered by the hinted
-   * adapter never asks the other one for its id.
+   * A process service with an election cache. A hint needs one to exist at all. The adapter
+   * ids are stubbed leniently, because a read which the hinted adapter answers never asks
+   * the other one for its id.
    */
   private MigrationProcessService<Object> createProcessService(
       final WorkflowAdapterCache cache) {
@@ -172,8 +172,8 @@ public class ViewerApiTest {
     final var cache = new InMemoryWorkflowAdapterCache();
     final var processService = createProcessService(cache);
     when(aggregatePersistence.getAggregateId(aggregate)).thenReturn("42");
-    // VanillaBP started this workflow there, which is why "not findable" is a read
-    // model running behind rather than a workflow nobody ever heard of
+    // VanillaBP started this workflow there. That is why "not findable" means a read model
+    // which runs behind, and not a workflow which nobody ever heard of
     processService.rememberWorkflowAdapter("42", "first-adapter");
     when(firstAdapter.workflowVisibilityDelay(null))
         .thenReturn(new WorkflowVisibilityDelay(Duration.ofSeconds(5), Duration.ofMillis(20)));
@@ -181,7 +181,7 @@ public class ViewerApiTest {
         .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS)
         .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS)
         .thenReturn(WorkflowAwareness.ACTIVE);
-    // a read which does not wait ends up here and fails - the answer this test is about
+    // a read which does not wait ends up here and fails. This test is about that answer
     lenient()
         .when(secondAdapter.awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null))
         .thenReturn(WorkflowAwareness.UNKNOWN_TO_BPMS);
@@ -189,8 +189,8 @@ public class ViewerApiTest {
         eq("test-module"), eq("TestProcess"), any(), eq("42"), eq(null)))
         .thenReturn(new WorkflowHistory("native:1:abc", OffsetDateTime.now(), null, List.of()));
 
-    // a viewer opened right after the start is the ordinary case: nothing repeats this
-    // read later, so waiting here is the only chance the exporter gets
+    // a viewer opened right after the start is the ordinary case. Nothing repeats this read
+    // later. So waiting here is the only chance the exporter gets
     final var history = processService.getWorkflowHistory(aggregate, null);
 
     assertEquals("first-adapter#native:1:abc", history.processDefinitionId());
@@ -218,11 +218,11 @@ public class ViewerApiTest {
         WorkflowNotFoundException.class,
         () -> processService.getWorkflowHistory(aggregate, null));
 
-    // the hinted adapter was asked more than once: the read used up the window before
-    // giving up, which is the difference to an adapter nobody expects anything from
+    // the hinted adapter was asked more than once. The read used up the window before it
+    // gave up. That is the difference to an adapter from which nobody expects anything
     verify(firstAdapter, atLeast(2)).awarenessOfWorkflow(SCOPE, aggregatePersistence, "42", null);
-    // an exporter which stopped looks exactly like one which is behind, so the message
-    // says which adapter was expected to answer and that its window has passed
+    // an exporter which stopped looks exactly like one which is behind. So the message says
+    // which adapter was expected to answer, and that its window has passed
     assertTrue(exception.getMessage().contains("first-adapter"));
     assertTrue(exception.getMessage().contains("workflowVisibilityDelay"));
 

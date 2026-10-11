@@ -20,22 +20,21 @@ import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The election contract of {@code MigratableProcessService}: an adapter
- * answers the awareness probes ONLY for the workflows and tasks of its own scope.
+ * The election contract of {@code MigratableProcessService}. An adapter answers the
+ * awareness probes ONLY for the workflows and tasks of its own scope.
  * <p>
- * The core cannot enforce that. Which adapters may be asked is its business, which
- * workflows an adapter owns is only the adapter's, so the contract is a duty of the
- * implementations and this is where it is written down as a test. Two stories arrived
- * at it the hard way: Camunda 8 had two adapter ids on one cluster where
- * every key is global, and Camunda 7 answers for any workflow module of
- * its engine carrying the same aggregate id. Both read an SPI which never said
- * otherwise.
+ * The core cannot enforce that. Which adapters may be asked is its business. Which
+ * workflows an adapter owns is only the business of the adapter. So the contract is a duty
+ * of the implementations, and this test writes it down. Two adapters learned it the hard
+ * way. Camunda 8 had two adapter ids on one cluster, where every key is global. Camunda 7
+ * answers for any workflow module of its engine which carries the same aggregate id. Both
+ * read an SPI which never said otherwise.
  * <p>
- * Two adapters with DISJOINT scopes are what the tests below run through the real
- * {@link WorkflowLocator}: the first one holds nothing of what is asked for, the
- * second one holds it. What the contract buys is the first test; what breaking it
- * costs is the second, asserted rather than assumed, because a test which only shows
- * the good case says nothing about why the rule exists.
+ * The tests below run two adapters with DISJOINT scopes through the real
+ * {@link WorkflowLocator}. The first one holds nothing of what is asked for. The second one
+ * holds it. The first test shows what the contract buys. The second shows what breaking it
+ * costs. It asserts this and does not assume it, because a test which only shows the good
+ * case says nothing about why the rule exists.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ElectionScopeContractTest {
@@ -45,13 +44,13 @@ public class ElectionScopeContractTest {
   private static final String PROCESS = "TestProcess";
 
   /**
-   * The workflow the tests ask about. It belongs to the SECOND adapter throughout.
+   * The workflow the tests ask about. It belongs to the SECOND adapter all the time.
    */
   private static final String AGGREGATE_OF_THE_SECOND = "42";
 
   /**
-   * What the probes of these tests are asked about: the module and process the locator
-   * was built for.
+   * What the probes of these tests are asked about: the module and process for which the
+   * locator was built.
    */
   private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
       .of(MODULE, PROCESS);
@@ -64,20 +63,20 @@ public class ElectionScopeContractTest {
 
 
   /**
-   * An adapter which answers for its own scope, which here is a set of workflow
-   * aggregate ids - a test double needs nothing of the tenant, prefix or table prefix
-   * a real BPMS keeps its scopes apart with, only the ability to say "not mine".
+   * An adapter which answers for its own scope. Here the scope is a set of ids of workflow
+   * aggregates. A real BPMS keeps its scopes apart with a tenant, a prefix or a table prefix.
+   * A test double needs none of that, only the ability to say "not mine".
    * <p>
-   * It reuses the SPI stubs of {@link WorkflowLocatorTest.ProbeAdapter} (same package,
-   * same subject) and replaces the three probes with the scoped answer.
+   * It reuses the SPI stubs of {@link WorkflowLocatorTest.ProbeAdapter} (same package, same
+   * subject) and replaces the three probes with the scoped answer.
    */
   static class ScopedAdapter extends WorkflowLocatorTest.ProbeAdapter {
 
     private final Set<String> ownWorkflows;
 
     /**
-     * The scope those workflows live in - an adapter serving several workflow modules
-     * answers for the one it is ASKED about, not for all of them.
+     * The scope in which those workflows live. An adapter which serves several workflow
+     * modules answers for the one it is ASKED about, not for all of them.
      */
     private io.vanillabp.integration.adapter.spi.WorkflowScope ownScope = SCOPE;
 
@@ -92,9 +91,9 @@ public class ElectionScopeContractTest {
     }
 
     /**
-     * @param answerForOwn What this adapter answers for a workflow it DOES hold -
-     *          {@link WorkflowAwareness#BPMS_UNAVAILABLE} makes it the holder which
-     *          cannot answer right now
+     * @param answerForOwn What this adapter answers for a workflow it DOES hold.
+     *          {@link WorkflowAwareness#BPMS_UNAVAILABLE} makes it the holder which cannot
+     *          answer right now
      */
     ScopedAdapter(
         final String adapterId,
@@ -153,8 +152,8 @@ public class ElectionScopeContractTest {
   }
 
   /**
-   * An adapter which breaks the contract: it claims every workflow it is asked about,
-   * which is what an unscoped probe does on a backend it shares with another adapter.
+   * An adapter which breaks the contract. It claims every workflow it is asked about. An
+   * unscoped probe does this on a backend which it shares with another adapter.
    */
   static class ClaimsEverythingAdapter extends WorkflowLocatorTest.ProbeAdapter {
 
@@ -199,7 +198,7 @@ public class ElectionScopeContractTest {
   }
 
   /**
-   * The three probes the election uses, each as the caller passes it to the locator.
+   * The three probes which the election uses, each as the caller passes it to the locator.
    */
   private static final List<ProbeUnderTest> PROBES = List
       .of(
@@ -300,9 +299,9 @@ public class ElectionScopeContractTest {
 
     PROBES
         .forEach(probe -> {
-          // one adapter, two workflow modules: the workflow with this aggregate id lives
-          // in the other one. A probe which is not told which module is meant would
-          // answer for everything the adapter holds.
+          // one adapter, two workflow modules. The workflow with this aggregate id lives in
+          // the other one. A probe which is not told which module is meant would answer for
+          // everything the adapter holds.
           final var adapter = new ScopedAdapter("only-adapter", Set.of(AGGREGATE_OF_THE_SECOND))
               .holdingThemIn(OTHER_SCOPE);
 

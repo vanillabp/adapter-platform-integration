@@ -16,9 +16,9 @@ import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An aware bean may name an interface all aggregates of a workflow module
- * implement, a bean naming the aggregate itself still wins, and a tie is reported instead
- * of being decided by the order the beans were found in.
+ * An aware bean may name an interface which all aggregates of a workflow module implement.
+ * A bean which names the aggregate itself still wins. A tie is reported, instead of being
+ * decided by the order in which the beans were found.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AwareSelectionAmbiguityTest {

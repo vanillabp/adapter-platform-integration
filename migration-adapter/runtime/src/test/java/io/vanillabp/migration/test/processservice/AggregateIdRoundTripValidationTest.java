@@ -17,11 +17,11 @@ import io.vanillabp.integration.spi.AggregateIdTypes;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Startup check of the aggregate-ID round-trip: the ID crosses the phase-two outbox
- * serialized as a String, so an ID
- * type which does not convert from/to String losslessly has to fail the startup
- * with a guiding message. The ID type is detected as the interface default of
- * {@code AggregatePersistenceAware#getAggregateIdType()} does.
+ * The startup check of the round trip of the aggregate ID. The ID crosses the phase-two
+ * outbox serialized as a String. So an ID type which does not convert to and from String
+ * without loss has to fail the startup with a guiding message. The ID type is detected the
+ * way the interface default of {@code AggregatePersistenceAware#getAggregateIdType()} does
+ * it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AggregateIdRoundTripValidationTest {
@@ -84,8 +84,8 @@ public class AggregateIdRoundTripValidationTest {
 
     assertTrue(exception.getMessage().contains(DateIdAggregate.class.getName()));
     assertTrue(exception.getMessage().contains(Date.class.getName()));
-    // phrases spanning the text block's line breaks: guards against broken
-    // continuations gluing words together or inserting indentation whitespace
+    // phrases which span the line breaks of the text block. They guard against broken
+    // continuations which glue words together or insert indentation whitespace
     assertTrue(exception.getMessage().contains("converted from/to String!"));
     assertTrue(exception.getMessage().contains("round-trip losslessly"));
     assertTrue(exception.getMessage().contains("AggregatePersistenceAware"));

@@ -15,14 +15,14 @@ import io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflo
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What the in-memory election cache reports about ITSELF: the bounds come from the
- * configuration, an entry dropped for lack of space before it was ever read is told
- * apart from one which did its job, and the warning about eviction pressure appears
- * only where hints were really lost - and then at most once per hour.
+ * What the election cache in memory reports about ITSELF. The bounds come from the
+ * configuration. An entry dropped for lack of space before it was ever read is told apart
+ * from one which did its job. The warning about eviction pressure appears only where hints
+ * were really lost, and then at most once per hour.
  * <p>
  * None of it goes through the decorator around the cache. These numbers belong to the
- * implementation, so the implementation produces them, and a test which needed the
- * decorator to see them would be asserting the wrong thing.
+ * implementation, so the implementation produces them. A test which needed the decorator to
+ * see them would assert the wrong thing.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class InMemoryWorkflowAdapterCacheStatisticsTest {
@@ -89,8 +89,8 @@ public class InMemoryWorkflowAdapterCacheStatisticsTest {
 
     cache.put(MODULE, PROCESS, "used", "adapter-a");
     cache.put(MODULE, PROCESS, "unused", "adapter-a");
-    // read "used" - it did its job AND becomes the most recently used entry, so the
-    // next put evicts "unused"
+    // read "used". It did its job AND becomes the most recently used entry. So the next put
+    // evicts "unused"
     assertTrue(cache.get(MODULE, PROCESS, "used").isPresent());
     cache.put(MODULE, PROCESS, "another", "adapter-a");
 
@@ -98,7 +98,7 @@ public class InMemoryWorkflowAdapterCacheStatisticsTest {
     assertEquals(1, statistics.getEvictionsBeforeFirstUse());
     assertEquals(0, statistics.getLostHints(), "nobody asked for the evicted entry yet");
 
-    // now "used" is the least recently used entry and IS evicted having been read
+    // now "used" is the least recently used entry, and it IS evicted after it was read
     cache.put(MODULE, PROCESS, "yet-another", "adapter-a");
 
     assertEquals(2, statistics.getEvictions());
@@ -134,8 +134,8 @@ public class InMemoryWorkflowAdapterCacheStatisticsTest {
 
       final var cache = new InMemoryWorkflowAdapterCache(boundedTo(1));
 
-      // fewer lost hints than the threshold: a single unlucky workflow is no reason
-      // to shout
+      // fewer lost hints than the threshold. A single unlucky workflow is no reason to
+      // shout
       loseHints(cache, 0, InMemoryWorkflowAdapterCacheStatistics.LOST_HINTS_WARNING_THRESHOLD - 1);
       assertTrue(warnings.list.isEmpty(), "a few lost hints must not produce a warning");
 
@@ -155,7 +155,7 @@ public class InMemoryWorkflowAdapterCacheStatisticsTest {
           "and it has to name the way out for a cluster, which is a shared cache: "
               + warning);
 
-      // the next hour's worth of losses stays silent
+      // the losses of the next hour stay silent
       loseHints(cache, 1000, 10 * InMemoryWorkflowAdapterCacheStatistics.LOST_HINTS_WARNING_THRESHOLD);
       assertEquals(1, warnings.list.size(), "at most one warning per hour");
 
@@ -166,8 +166,8 @@ public class InMemoryWorkflowAdapterCacheStatisticsTest {
   }
 
   /**
-   * Fills and overflows a cache bounded to one entry, then asks for the entry which
-   * was dropped - each round is one lost hint.
+   * Fills and overflows a cache bounded to one entry. Then it asks for the entry which was
+   * dropped. Each round is one lost hint.
    */
   private static void loseHints(
       final InMemoryWorkflowAdapterCache cache,
@@ -185,8 +185,8 @@ public class InMemoryWorkflowAdapterCacheStatisticsTest {
   }
 
   /**
-   * Attaches an appender to the statistics' logger - the core's test setup writes no
-   * log output at all, so the warning is asserted where it is emitted.
+   * Attaches an appender to the logger of the statistics. The test setup of the core writes
+   * no log output at all. So the warning is asserted where it is emitted.
    */
   private static CapturedWarnings captureWarnings() {
 

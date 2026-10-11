@@ -14,8 +14,8 @@ import io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflo
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The bounds of the default in-memory {@link InMemoryWorkflowAdapterCache}: LRU
- * eviction beyond the size bound, expiry after the time-to-live, invalidation, and the
+ * The bounds of the default cache in memory, {@link InMemoryWorkflowAdapterCache}: LRU
+ * eviction beyond the size bound, expiry after the time to live, invalidation, and the
  * shorter lifetime of the hint of a workflow which ended.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -58,8 +58,8 @@ public class InMemoryWorkflowAdapterCacheTest {
     assertEquals("2251799813685249", hint.workflowId());
     assertEquals("adapter-a", cache.get(MODULE, PROCESS, "42").orElseThrow(), "and the old read still answers");
 
-    // the end of a workflow marks the entry and keeps what it knew: the workflow is over,
-    // its id was not wrong
+    // the end of a workflow marks the entry and keeps what it knew. The workflow is over,
+    // but its id was not wrong
     cache.putEnded(MODULE, PROCESS, "42", "adapter-a");
     assertEquals("2251799813685249", cache.hintOf(MODULE, PROCESS, "42").orElseThrow().workflowId());
 
@@ -78,7 +78,7 @@ public class InMemoryWorkflowAdapterCacheTest {
 
     cache.put(MODULE, PROCESS, "1", "adapter-a");
     cache.put(MODULE, PROCESS, "2", "adapter-a");
-    // touch "1" so "2" is the least recently used entry
+    // touch "1", so "2" is the least recently used entry
     cache.get(MODULE, PROCESS, "1");
     cache.put(MODULE, PROCESS, "3", "adapter-a");
 
@@ -92,7 +92,7 @@ public class InMemoryWorkflowAdapterCacheTest {
   @DisplayName("The hint of an ended workflow answers, and expires on its own lifetime")
   public void endedEntriesExpireEarlier() throws Exception {
 
-    // the same reasoning as in the expiry test: hundreds of milliseconds, not tens
+    // the same reason as in the expiry test: hundreds of milliseconds, not tens
     final var cache = new InMemoryWorkflowAdapterCache(10, Duration.ofHours(1), Duration.ofMillis(500));
 
     cache.putEnded(MODULE, PROCESS, "42", "adapter-a");
@@ -109,7 +109,7 @@ public class InMemoryWorkflowAdapterCacheTest {
         "the hint of an ended workflow must not wait for the time-to-live of a living one");
     assertEquals(0, cache.endedSize(), "an expired entry is gone from the count as well");
 
-    // and so is one an invalidation takes
+    // and so is one which an invalidation takes
     cache.putEnded(MODULE, PROCESS, "43", "adapter-a");
     cache.invalidate(MODULE, PROCESS, "43");
     assertEquals(0, cache.endedSize());
@@ -120,10 +120,10 @@ public class InMemoryWorkflowAdapterCacheTest {
   @DisplayName("A workflow started on the same aggregate outlives the mark of the one before it")
   public void aSecondWorkflowOnTheSameAggregateWins() {
 
-    // the key is the aggregate and not the instance, so both events write the same entry
+    // the key is the aggregate and not the instance. So both events write the same entry
     final var cache = new InMemoryWorkflowAdapterCache(10, Duration.ofHours(1), Duration.ofMinutes(5));
 
-    // the end arrives first, then the second workflow starts elsewhere
+    // the end arrives first. Then the second workflow starts elsewhere
     cache.putEnded(MODULE, PROCESS, "42", "adapter-a");
     cache.put(MODULE, PROCESS, "42", "adapter-b");
     assertEquals("adapter-b", cache.get(MODULE, PROCESS, "42").orElseThrow());
@@ -143,9 +143,9 @@ public class InMemoryWorkflowAdapterCacheTest {
   @DisplayName("Entries expire after the time-to-live")
   public void expiry() throws Exception {
 
-    // a TTL of a few hundred milliseconds, not tens: under load (a full build runs
-    // tests in parallel with other JVMs) the get right after the put would
-    // otherwise race the expiry and fail spuriously
+    // a TTL of a few hundred milliseconds, not tens. Under load, a full build runs tests in
+    // parallel with other JVMs. The get right after the put would then race the expiry and
+    // fail for no real reason
     final var cache = new InMemoryWorkflowAdapterCache(10, Duration.ofMillis(500));
 
     cache.put(MODULE, PROCESS, "42", "adapter-a");

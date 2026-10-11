@@ -27,10 +27,10 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Broadcasting a BPMN signal. A signal is not addressed to a workflow, so
- * nothing is probed and no aggregate is touched - what matters is WHO gets it
- * (every BPMS the workflow module is deployed to) and WHEN (never inside the
- * caller's transaction: one outbox entry per BPMS, dispatched after the commit).
+ * Broadcasting a BPMN signal. A signal is not addressed to a workflow. So nothing is probed,
+ * and no aggregate is touched. What matters is WHO gets it: every BPMS to which the workflow
+ * module is deployed. And WHEN: never inside the transaction of the caller. There is one
+ * outbox entry per BPMS, dispatched after the commit.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SendSignalTest {
@@ -40,7 +40,7 @@ public class SendSignalTest {
   private static final String PROCESS = "TestProcess";
 
   /**
-   * Records what an adapter was asked to broadcast, and can be made to fail.
+   * Records what an adapter was asked to broadcast. It can be made to fail.
    */
   static class RecordingAdapter implements MigratableProcessService<Object> {
 
@@ -134,9 +134,9 @@ public class SendSignalTest {
   }
 
   /**
-   * One workflow module with TWO adapters, but only the first one is prioritized
-   * for this process - the second serves another workflow of the module, which is
-   * exactly what the deployment union covers.
+   * One workflow module with TWO adapters, but only the first one is prioritized for this
+   * process. The second serves another workflow of the module. The union of the deployment
+   * covers exactly this.
    */
   private MigrationAdapterProperties properties() {
 
@@ -209,8 +209,8 @@ public class SendSignalTest {
 
     processService(List.of(first, second), outbox).sendSignal("OrderReceived");
 
-    // the second adapter serves another workflow of the module, not this process -
-    // a broadcast reaching only the elected BPMS would miss the workflows waiting
+    // the second adapter serves another workflow of the module, not this process. A
+    // broadcast which reached only the elected BPMS would miss the workflows which wait
     // there
     assertEquals(List.of("OrderReceived"), first.phaseOne);
     assertEquals(List.of("OrderReceived"), second.phaseOne);
@@ -228,7 +228,7 @@ public class SendSignalTest {
 
     processService(List.of(first, second), outbox).sendSignal("OrderReceived");
 
-    // nothing was broadcast inside the caller's transaction
+    // nothing was broadcast inside the transaction of the caller
     assertTrue(first.phaseTwo.isEmpty());
     assertTrue(second.phaseTwo.isEmpty());
 
@@ -306,7 +306,7 @@ public class SendSignalTest {
   @DisplayName("An adapter whose BPMS has no signals says so, naming both ways out")
   public void anAdapterWithoutSignalsSaysSo() {
 
-    // the SPI's own default, not a stub: an adapter which never implemented signals
+    // the own default of the SPI, not a stub. An adapter which never implemented signals
     // inherits it, and its text is the only thing the developer gets
     @SuppressWarnings("unchecked")
     final MigratableProcessService<Object> signalless = Mockito

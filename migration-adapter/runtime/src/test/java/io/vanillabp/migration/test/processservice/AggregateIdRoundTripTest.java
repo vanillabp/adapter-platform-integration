@@ -22,7 +22,7 @@ public class AggregateIdRoundTripTest {
 
   static class FieldAnnotatedAggregate {
 
-    // private on purpose: private fields have to be considered, too
+    // private on purpose, because private fields have to be considered, too
     @SuppressWarnings("unused")
     @jakarta.persistence.Id
     private Long key;
@@ -34,7 +34,7 @@ public class AggregateIdRoundTripTest {
     @SuppressWarnings("unused")
     private Long key;
 
-    // JPA property access: the ID annotation sits on the getter, not the field
+    // JPA property access: the ID annotation sits on the getter, not on the field
     @jakarta.persistence.Id
     public Long getKey() {
       return key;

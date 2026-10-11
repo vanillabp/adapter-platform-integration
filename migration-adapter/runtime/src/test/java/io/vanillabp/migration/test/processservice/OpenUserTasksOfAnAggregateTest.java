@@ -36,9 +36,9 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An extension reads the open user tasks of an aggregate from the delivery log, without an
- * election and without asking a BPMS. A task of a called process names the instance it runs in,
- * and the workflow of the aggregate comes from the row written when the workflow started.
+ * An extension reads the open user tasks of an aggregate from the delivery log. It needs no
+ * election and asks no BPMS. A task of a called process names the instance in which it runs.
+ * The workflow of the aggregate comes from the row written when the workflow started.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OpenUserTasksOfAnAggregateTest {
@@ -57,7 +57,7 @@ public class OpenUserTasksOfAnAggregateTest {
 
   private static final String AGGREGATE = "4711";
 
-  /** A delivery log in memory, which keeps what it is told and answers by key and by aggregate. */
+  /** A delivery log in memory. It keeps what it is told and answers by key and by aggregate. */
   static class DeliveryLogInMemory implements TaskDeliveryLog {
 
     final Map<String, TaskDelivery> records = new HashMap<>();
@@ -103,7 +103,7 @@ public class OpenUserTasksOfAnAggregateTest {
 
   }
 
-  /** An adapter which is never asked: every answer here comes from the delivery log. */
+  /** An adapter which is never asked, because every answer here comes from the delivery log. */
   static class AnAdapterNobodyAsks implements MigratableProcessService<Object> {
 
     @Override
@@ -157,7 +157,7 @@ public class OpenUserTasksOfAnAggregateTest {
 
   }
 
-  /** The aggregates are never read: every answer here comes from the delivery log. */
+  /** The aggregates are never read, because every answer here comes from the delivery log. */
   static class NoAggregatesAreRead implements AggregatePersistenceAware<Object> {
 
     @Override

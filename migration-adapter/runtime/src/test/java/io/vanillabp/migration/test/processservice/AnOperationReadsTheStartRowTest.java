@@ -40,11 +40,12 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.WorkflowNotFoundException;
 
 /**
- * An operation on a workflow, for a node which has no hint about that workflow in its election
- * cache: after a restart, on a second node, or after the cache forgot. The row written when the
- * workflow started is in the application's database and says which adapter started it, so an
- * adapter which does not report the workflow yet reads as "not visible yet" rather than as "nobody
- * knows this workflow". Without the row everything stays as it was.
+ * An operation on a workflow, for a node which has no hint about that workflow in its
+ * election cache. That happens after a restart, on a second node, or after the cache forgot.
+ * The row written when the workflow started is in the database of the application. It says
+ * which adapter started the workflow. So an adapter which does not report the workflow yet
+ * reads as "not visible yet", and not as "nobody knows this workflow". Without the row,
+ * everything stays as it was.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AnOperationReadsTheStartRowTest {
@@ -62,8 +63,8 @@ public class AnOperationReadsTheStartRowTest {
   private static final String TASK = "2251799813685300";
 
   /**
-   * An adapter whose read model is behind: it answers what the test sets, counts its phase two
-   * per operation and writes down the workflow id it was handed.
+   * An adapter whose read model is behind. It answers what the test sets, counts its phase
+   * two per operation, and writes down the workflow id it was handed.
    */
   static class AnAdapterWithALaggingReadModel implements MigratableProcessService<Object> {
 
@@ -189,7 +190,7 @@ public class AnOperationReadsTheStartRowTest {
 
   }
 
-  /** A delivery log in memory which answers by key, which is all the start row needs. */
+  /** A delivery log in memory which answers by key. The start row needs nothing more. */
   static class DeliveryLogInMemory implements TaskDeliveryLog {
 
     final Map<String, TaskDelivery> records = new HashMap<>();
