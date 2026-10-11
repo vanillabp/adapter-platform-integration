@@ -33,7 +33,6 @@ public interface UnclaimedBpmnProcessHints {
    * Finding nothing is the normal case, and it gets no word.
    *
    * @param workflowModuleId The workflow module being reported
-   * @param bpmnProcessIds The BPMN process ids of that module nothing claims
    * @param bpmnProcessIds The BPMN process ids of that module which nothing claims
    * @return One sentence per finding, in the order they should be read. Empty where there is
    *         nothing to add
