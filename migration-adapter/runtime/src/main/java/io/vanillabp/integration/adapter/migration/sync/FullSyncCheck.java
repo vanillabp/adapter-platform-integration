@@ -6,17 +6,16 @@ import io.vanillabp.spi.service.WorkflowService;
 
 /**
  * Refuses to start an application whose workflow aggregate shares EVERYTHING with the
- * BPMS, as long as the workflow did not allow exactly that.
+ * BPMS, unless the workflow allowed exactly that.
  * <p>
- * An aggregate carrying no {@code @NoSyncWithBPMS} anywhere hands every attribute it
- * reaches to the BPMS, at every sync point, and on a remote BPMS that means the values
- * leave the application. It is not a decision anybody takes, it is where an application
- * lands by doing nothing, which is why it is said out loud once instead of being written
- * into a log nobody reads.
+ * An aggregate without any {@code @NoSyncWithBPMS} hands every attribute it reaches to the
+ * BPMS, at every sync point. On a remote BPMS that means the values leave the application.
+ * Nobody decides this. An application ends up here by doing nothing. That is why it is
+ * said out loud once, and not written into a log which nobody reads.
  * <p>
- * The way out an application usually wants is to say what its models really need. The
- * other one is the permission, and it belongs to the single workflow: see decision 66 in
- * the repository's DECISIONS.md for why it is not inherited from anywhere.
+ * The way out which an application usually wants is to say what its models really need.
+ * The other way out is the permission, and it belongs to the single workflow. Decision 66
+ * in the repository's DECISIONS.md says why it is not inherited from anywhere.
  */
 public class FullSyncCheck {
 
@@ -27,8 +26,9 @@ public class FullSyncCheck {
   /**
    * Built by the registry which registers the workflows, once per application.
    * <p>
-   * Both of these may be missing where a test registers workflow services directly. Nothing
-   * is refused then, because neither what an aggregate shares nor the permission can be read.
+   * Both of these may be missing where a test registers workflow services directly. Then
+   * nothing is refused, because neither what an aggregate shares nor the permission can be
+   * read.
    *
    * @param aggregateSync The core's sync model, which answers what an aggregate shares
    * @param properties The VanillaBP configuration, which holds the permission
@@ -43,10 +43,10 @@ public class FullSyncCheck {
   }
 
   /**
-   * Ends the startup where the workflow shares its entire aggregate without saying so.
-   * Called once per registered workflow, which is as early as the permission can be
-   * read: the sync model comes from the classes and the permission from the
-   * configuration, and both are there when the workflow services are registered.
+   * Ends the startup where the workflow shares its entire aggregate without saying so. It
+   * is called once per registered workflow, which is the earliest point where the
+   * permission can be read. The sync model comes from the classes and the permission from
+   * the configuration. Both are there when the workflow services are registered.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID being registered
@@ -68,16 +68,16 @@ public class FullSyncCheck {
       return;
     }
     if (isSecondaryProcessOf(workflowServiceClass, bpmnProcessId)) {
-      // a secondary process runs on the workflow of the primary one, so the permission
-      // of the primary process covers it - it is the id the configuration knows
+      // a secondary process runs on the workflow of the primary one, so the permission of
+      // the primary process covers it. That is the id the configuration knows
       return;
     }
     if (properties.allowsFullSyncWithBpms(workflowModuleId, bpmnProcessId)) {
       return;
     }
-    // a persistence which does not name the ID attribute leaves the conventional name,
-    // which is the one every persistence VanillaBP ships derives anyway: an aggregate made
-    // of nothing but its ID must not be refused because nobody could name that attribute
+    // a persistence which does not name the ID attribute leaves the conventional name.
+    // Every persistence which VanillaBP ships derives that name anyway. An aggregate which
+    // has nothing but its ID must not be refused because nobody could name that attribute
     final var idAttribute = aggregateIdAttribute != null
         ? aggregateIdAttribute
         : "id";
@@ -113,7 +113,7 @@ public class FullSyncCheck {
 
   /**
    * Whether that BPMN process is one of the <code>secondaryBpmnProcesses</code> of the
-   * declaring class rather than the process it primarily serves.
+   * declaring class, and not the process it mainly serves.
    *
    * @param workflowServiceClass The <code>&#64;WorkflowService</code> class
    * @param bpmnProcessId The BPMN process ID being registered

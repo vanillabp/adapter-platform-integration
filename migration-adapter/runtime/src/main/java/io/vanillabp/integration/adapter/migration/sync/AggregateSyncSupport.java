@@ -22,115 +22,111 @@ import io.vanillabp.spi.service.SyncWithBPMS;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * THE sync model: which attributes of a workflow aggregate are shared
- * with the BPMS, and what their values look like. BPMS-neutral by design - the
- * adapters only decide their {@link AggregateSyncMode} default and what to do with
- * the result.
+ * THE sync model: which attributes of a workflow aggregate are shared with the BPMS, and
+ * what their values look like. It does not depend on any BPMS on purpose. The adapters
+ * only decide their {@link AggregateSyncMode} default and what to do with the result.
  *
- * <h2>Inheritance - the principle of least astonishment</h2>
+ * <h2>Inheritance: no surprises</h2>
  *
- * Every attribute <b>inherits the behavior of its owner</b> until the application
- * says otherwise:
+ * Every attribute <b>inherits the behavior of its owner</b> until the application says
+ * otherwise:
  *
  * <ol>
- * <li>the outermost default is the ADAPTER's ({@link AggregateSyncMode}) - it
- * applies as long as the aggregate carries NO annotation at all,</li>
- * <li>the mode of a class is its own annotation ({@code @SyncWithBPMS} /
- * {@code @NoSyncWithBPMS}) or, if it has none, the mode DERIVED from its
- * attributes (see below) - it overrides the adapter's default for all of its
- * attributes,</li>
- * <li>an annotation on an attribute (field or getter) overrides it for that
- * attribute AND everything below it - a nested object's attributes and a
- * collection's elements inherit from the attribute they belong to,</li>
- * <li>a nested TYPE decides its own mode the same way (own annotation, else
- * derived from its attributes) and thereby overrides what its members inherited
- * through the attribute holding it (so a DTO may narrow what it exposes wherever
- * it is used).</li>
+ * <li>The outermost default is the ADAPTER's ({@link AggregateSyncMode}). It applies as
+ * long as the aggregate has NO annotation at all.</li>
+ * <li>The mode of a class is its own annotation ({@code @SyncWithBPMS} or
+ * {@code @NoSyncWithBPMS}). If it has none, the mode is DERIVED from its attributes (see
+ * below). The mode of the class overrides the adapter's default for all its
+ * attributes.</li>
+ * <li>An annotation on an attribute (field or getter) overrides it for that attribute AND
+ * everything below it. The attributes of a nested object and the elements of a collection
+ * inherit from the attribute they belong to.</li>
+ * <li>A nested TYPE decides its own mode the same way: its own annotation, or else derived
+ * from its attributes. This overrides what its members inherited through the attribute
+ * which holds it. So a DTO may narrow what it exposes wherever it is used.</li>
  * </ol>
  *
- * A DTO carrying neither its own nor derivable annotations therefore behaves
- * exactly like the attribute holding it - it is never "fully shared" on its own
- * account.
+ * So a DTO without annotations of its own, and without any to derive from, behaves exactly
+ * like the attribute which holds it. It is never "fully shared" on its own account.
  *
- * <h2>Deriving a class' mode from its attributes</h2>
+ * <h2>Deriving the mode of a class from its attributes</h2>
  *
- * The moment the FIRST sync annotation appears anywhere on a type, the application
- * has taken control - the adapter's default no longer applies to it. If only
- * ATTRIBUTES are annotated, the class' mode is the OPPOSITE of what they state,
- * because that is what a developer writing only one of the two annotations means:
+ * As soon as the FIRST sync annotation appears anywhere on a type, the application has
+ * taken control. The adapter's default no longer applies to it. If only ATTRIBUTES are
+ * annotated, the mode of the class is the OPPOSITE of what they say. That is what a
+ * developer means who writes only one of the two annotations:
  *
  * <ul>
- * <li>attributes marked {@code @SyncWithBPMS} imply {@code @NoSyncWithBPMS} on the
- * class (opt-in: share exactly the named attributes),</li>
- * <li>attributes marked {@code @NoSyncWithBPMS} imply {@code @SyncWithBPMS} on the
- * class (opt-out: share everything but the named attributes),</li>
- * <li>BOTH kinds among the attributes of a class carrying none itself is
- * AMBIGUOUS - which of them is the exception cannot be derived. This is a defect
- * reported with a guiding message; {@link #validateSyncModel(Class)} raises it at
- * STARTUP for every registered workflow-aggregate class (and every nested type
- * reachable from it), so it never surfaces at the first sync point.</li>
+ * <li>Attributes marked {@code @SyncWithBPMS} mean {@code @NoSyncWithBPMS} on the class
+ * (opt-in: share exactly the named attributes).</li>
+ * <li>Attributes marked {@code @NoSyncWithBPMS} mean {@code @SyncWithBPMS} on the class
+ * (opt-out: share everything except the named attributes).</li>
+ * <li>BOTH kinds among the attributes of a class without its own annotation is AMBIGUOUS.
+ * Nothing can tell which of them is the exception. This is a defect, reported with a
+ * guiding message. {@link #validateSyncModel(Class)} raises it at STARTUP for every
+ * registered workflow-aggregate class, and for every nested type reachable from it. So it
+ * never shows up first at a sync point.</li>
  * </ul>
  *
  * <h2>Which attributes exist</h2>
  *
- * Readable JavaBean properties (public getters incl. {@code isX()}) - the
- * intention-revealing getters the wiki recommends are attributes like any other.
- * A getter's annotation wins over the annotation of a field of the same name.
- * {@code getClass} and getters taking arguments are ignored, as are static and
- * synthetic members.
+ * The readable JavaBean properties, which are the public getters including {@code isX()}.
+ * The getters with a telling name which the wiki recommends are attributes like any other.
+ * The annotation of a getter wins over the annotation of a field with the same name.
+ * {@code getClass} and getters with arguments are ignored, and so are static and synthetic
+ * members.
  *
  * <h2>Which values are produced</h2>
  *
  * <ul>
- * <li>{@code null}, primitives/wrappers, {@link String}, {@link Number},
- * {@link Boolean} and {@link Character} are taken as they are,</li>
- * <li>enums become their {@link Enum#name()}, and a value type of the JDK becomes the
- * text {@link TextValueTypes} names for it, which for most of them is their own
- * {@code toString()},</li>
- * <li>collections and arrays become {@link List}s of converted elements, maps
- * become maps with their keys converted to strings,</li>
- * <li>any other object becomes a {@link Map} of its shared attributes.</li>
+ * <li>{@code null}, primitives and their wrappers, {@link String}, {@link Number},
+ * {@link Boolean} and {@link Character} are taken as they are.</li>
+ * <li>Enums become their {@link Enum#name()}. A value type of the JDK becomes the text
+ * which {@link TextValueTypes} names for it. For most of them that is their own
+ * {@code toString()}.</li>
+ * <li>Collections and arrays become {@link List}s of converted elements. Maps become maps
+ * whose keys are converted to strings.</li>
+ * <li>Any other object becomes a {@link Map} of its shared attributes.</li>
  * </ul>
  *
- * The result is deliberately made of plain JDK types: every BPMS' variable
- * serialization (and Camunda 8's FEEL) copes with them.
+ * The result is made of plain JDK types on purpose. The variable serialization of every
+ * BPMS, and the FEEL of Camunda 8, can handle them.
  *
  * <h2>Cycles</h2>
  *
- * Bidirectional relations are the NORMAL case of an entity model (an order holds
- * its items, every item points back to its order). An object already on the
- * current path is therefore not expanded again - which would repeat the whole
- * subtree once per nesting level - but replaced by a reference to it (its type and
- * identity; deliberately not {@code toString()}, which recurses on exactly these
- * graphs). Independently of that, nesting is followed at most {@link #MAX_DEPTH}
- * levels deep.
+ * Relations in both directions are the NORMAL case in an entity model. An order holds its
+ * items, and every item points back to its order. So an object which is already on the
+ * current path is not expanded again, because that would repeat the whole subtree once per
+ * level. It is replaced by a reference to it: its type and identity. This is deliberately
+ * not {@code toString()}, which recurses on exactly these graphs. Apart from that, nesting
+ * is followed at most {@link #MAX_DEPTH} levels deep.
  * <p>
- * Why the sync model exists at all, and why the aggregate-id variable is not part of it, is
- * decision 10 in the repository's DECISIONS.md.
+ * Decision 10 in the repository's DECISIONS.md says why the sync model exists at all, and
+ * why the aggregate-id variable is not part of it.
  */
 @Slf4j
 public class AggregateSyncSupport implements WorkflowAggregateSync {
 
   /**
-   * How deep nested objects are followed - a guard against cyclic object graphs
-   * (a workflow aggregate is not a graph database).
+   * How deep nested objects are followed. This guards against cyclic object graphs. A
+   * workflow aggregate is not a graph database.
    */
   public static final int MAX_DEPTH = 10;
 
   /**
-   * The readable properties per class, resolved once (reflection is not free and
-   * sync points are hot paths).
+   * The readable properties per class, resolved once. Reflection is not free, and sync
+   * points are hot paths.
    */
   private final Map<Class<?>, List<Property>> propertiesByClass = new ConcurrentHashMap<>();
 
   /**
-   * The base mode per class - its own annotation or the mode derived from its
-   * attributes; {@link Optional#empty()} means "inherits" (see the class comment).
+   * The base mode per class: its own annotation, or the mode derived from its attributes.
+   * {@link Optional#empty()} means "inherits" (see the class comment).
    */
   private final Map<Class<?>, Optional<Boolean>> baseModeByClass = new ConcurrentHashMap<>();
 
   /**
-   * One readable attribute of a class: its name, how to read it and whether the
+   * One readable attribute of a class: its name, how to read it, and whether the
    * application annotated it.
    */
   private record Property(
@@ -156,15 +152,15 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * Where a finding about an aggregate class goes, so the whole start says it once.
+   * Where a finding about an aggregate class goes, so that the whole start says it once.
    */
   private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
 
   /**
    * Built by the platform integration, once per application.
    * <p>
-   * Nothing is read here. What an aggregate class shares is derived the first time that class
-   * turns up and kept afterwards, because a sync point is a hot path and reflection is not
+   * Nothing is read here. What an aggregate class shares is derived when the class first
+   * turns up, and kept after that. A sync point is a hot path, and reflection is not
    * free.
    *
    * @param findings Where a finding about an aggregate class is left
@@ -177,16 +173,16 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * What the application declared about the values of its aggregates - read from the
-   * configuration while the application starts, and applied at every sync point. Never
-   * <code>null</code>, empty where nothing was declared.
+   * What the application declared about the values of its aggregates. It is read from the
+   * configuration while the application starts, and applied at every sync point. It is
+   * never <code>null</code>, and empty where nothing was declared.
    */
   private final DeclaredAggregateValues declaredValues = new DeclaredAggregateValues();
 
   /**
-   * The declarations of the application, so the startup check can fill them and the sync
-   * points can read them. There is one of them per application, and it belongs to the sync
-   * model because that is where the values are built.
+   * The declarations of the application, so that the startup check can fill them and the
+   * sync points can read them. There is one per application. It belongs to the sync model,
+   * because that is where the values are built.
    *
    * @return The declarations, never <code>null</code>
    */
@@ -213,8 +209,8 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
         effective,
         0,
         java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>()));
-    // a value the application declared has to be there, and the declaration may say what
-    // to share while the object holding it is still null
+    // a value which the application declared has to be there. The declaration may say what
+    // to share while the object which holds it is still null
     declaredValues.completeOrRefuse(workflowAggregate.getClass(), values);
     return values;
 
@@ -233,21 +229,21 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
         .anyMatch(property -> property.name().equals(propertyName))) {
       return true;
     }
-    // MIGRATION (to be removed together with the Camunda 7 EL
-    // resolver's fallback): what VanillaBP 1 resolved and the sync model does not is an
-    // attribute of the aggregate as well, and it is the case which has to be named
-    // loudest - a model relying on such a name breaks silently. Neither of the two can
-    // ever be shared, so isSharedWithBpms answers false and the check reports them:
-    // a FIELD without a getter, and an isX() method returning something other than
-    // boolean (version 1 read those, the JavaBean rule does not).
+    // MIGRATION (to be removed together with the fallback of the Camunda 7 EL resolver):
+    // what VanillaBP 1 resolved and the sync model does not is an attribute of the
+    // aggregate as well. It is the case which has to be named loudest, because a model which
+    // relies on such a name breaks silently. Neither of the two kinds can ever be shared, so
+    // isSharedWithBpms answers false and the check reports them: a FIELD without a getter,
+    // and an isX() method which returns something other than boolean (version 1 read those,
+    // the JavaBean rule does not).
     return (findField(workflowAggregateClass, propertyName) != null) || (version1OnlyGetter(workflowAggregateClass,
         propertyName) != null);
 
   }
 
   /**
-   * The <code>isX()</code> method of that name whose return type is NOT boolean - what
-   * VanillaBP 1 resolved and {@link #propertyNameOf(Method)} rejects.
+   * The <code>isX()</code> method of that name whose return type is NOT boolean. VanillaBP
+   * 1 resolved it, and {@link #propertyNameOf(Method)} rejects it.
    *
    * @param workflowAggregateClass The workflow-aggregate class
    * @param propertyName The attribute's name
@@ -282,13 +278,13 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
     if (workflowAggregateClass == null) {
       return List.of();
     }
-    // FULL is the default of every adapter, so an aggregate which annotates nothing
-    // shares as a whole - the same starting point validateSyncModel walks from
+    // FULL is the default of every adapter. So an aggregate which annotates nothing shares
+    // as a whole. validateSyncModel starts its walk from the same point
     if (!nothingIsHeldBack(workflowAggregateClass, 0, new java.util.HashSet<>())) {
       return List.of();
     }
-    // nothing is held back, so every attribute travels; the ID travels anyway (see the
-    // SPI), which is why an aggregate made of it alone answers an empty list here
+    // nothing is held back, so every attribute travels. The ID travels anyway (see the
+    // SPI). That is why an aggregate which has only the ID answers an empty list here
     return propertiesOf(workflowAggregateClass)
         .stream()
         .map(Property::name)
@@ -298,22 +294,21 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * EVERY value of that aggregate class which reaches the BPMS, named by the path a BPMN
-   * expression reads it under and by the type the attribute declares.
+   * EVERY value of that aggregate class which reaches the BPMS. Each is named by the path
+   * which a BPMN expression reads it under, and by the type the attribute declares.
    * <p>
-   * The walk follows the sync model the way {@link #syncedValues} follows it and stops
-   * where a value carries no members of its own: a number, a text, a boolean, an enum and
-   * the JDK types which travel as their text are leaves, everything else is walked into. A
-   * collection is walked as its element type, because that is what a model navigating into
-   * it reads.
+   * The walk follows the sync model the same way as {@link #syncedValues}. It stops where a
+   * value has no members of its own. A number, a text, a boolean, an enum and the JDK types
+   * which travel as text are leaves. The walk goes into everything else. A collection is
+   * walked as its element type, because a model which navigates into it reads an element.
    * <p>
-   * Where the declared types decide nothing the walk reports the attribute itself as the
-   * leaf: an {@code Object}, a {@link Map}, a raw collection, an interface and an abstract
-   * type all hold whatever they were given, and what travels below them is not knowable
-   * from the source.
+   * Where the declared types decide nothing, the walk reports the attribute itself as the
+   * leaf. An {@code Object}, a {@link Map}, a raw collection, an interface and an abstract
+   * type all hold whatever they were given. The source does not tell what travels below
+   * them.
    *
    * @param workflowAggregateClass The workflow-aggregate class (may be <code>null</code>)
-   * @param adapterDefault The adapter's default for aggregates carrying no annotation of
+   * @param adapterDefault The adapter's default for aggregates without an annotation of
    *          their own
    * @return One entry per value which reaches the BPMS, never <code>null</code>
    */
@@ -352,8 +347,8 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * Collects the leaves below one type, threading the inherited mode exactly the way
-   * {@link #walk} threads it.
+   * Collects the leaves below one type. It passes the inherited mode down exactly the way
+   * {@link #walk} does.
    *
    * @param owner The type whose attributes are read
    * @param inherited What an attribute without an annotation of its own does
@@ -396,8 +391,8 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
         final var behind = typeBehind(property.getter().getGenericReturnType());
         if ((behind == null) || travelsAsASingleValue(behind) || holdsWhateverItWasGiven(behind) || behind
             .isInterface() || Modifier.isAbstract(behind.getModifiers())) {
-          // either the elements of a collection are a value of their own, or the
-          // declared type decides nothing at all - both end the walk here
+          // either the elements of a collection are a value of their own, or the declared
+          // type decides nothing at all. Both end the walk here
           values
               .add(new SharedValue(path, behind != null
                   ? behind
@@ -422,13 +417,13 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * Whether the sync model of that type and of every type reachable from its attributes
+   * Whether the sync model of that type, and of every type reachable from its attributes,
    * keeps not a single attribute from the BPMS.
    *
    * @param clazz The type, reached on a path which shares everything above it
    * @param depth The current nesting depth
-   * @param visited The types walked already (cyclic type graphs); a second look adds
-   *          nothing, because the first one was on a path sharing everything too
+   * @param visited The types already walked (cyclic type graphs). A second look adds
+   *          nothing, because the first one was on a path which shares everything too
    * @return Whether everything of it travels
    */
   private boolean nothingIsHeldBack(
@@ -445,15 +440,15 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
       return false;
     }
     if (Boolean.FALSE.equals(ownMode)) {
-      // the type shares only the attributes it names, so something stays at home
+      // the type shares only the attributes it names, so something stays behind
       return false;
     }
     if (!visited.add(clazz)) {
       return true;
     }
     if (depth >= MAX_DEPTH) {
-      // the documented limit cuts the VALUES, not the sync model - what the
-      // application annotated is what this question is about
+      // the documented limit cuts the VALUES, not the sync model. This question is about
+      // what the application annotated
       return true;
     }
     for (final var property : propertiesOf(clazz)) {
@@ -511,14 +506,15 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
       final List<String> path,
       final AggregateSyncMode adapterDefault) {
 
-    // the same walk answers both questions, so the type and the verdict can never
-    // disagree about a path: a type exists exactly where the walk reached a value
+    // the same walk answers both questions. So the type and the verdict can never disagree
+    // about a path: there is a type exactly where the walk reached a value
     return Optional.ofNullable(walked(workflowAggregateClass, path, adapterDefault).declaredType());
 
   }
 
   /**
-   * Walks the path once, guarding the arguments and the sync model both questions share.
+   * Walks the path once. It checks the arguments and the sync model which both questions
+   * share.
    *
    * @param workflowAggregateClass The type the first segment is read against
    * @param path The segments
@@ -539,8 +535,8 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
       return walk(workflowAggregateClass, path, adapterDefault);
     } catch (final IllegalStateException ambiguousSyncModel) {
       // an aggregate whose sync model cannot be interpreted is refused while the
-      // application boots (validateSyncModel), so nothing can act on a second report
-      // here - and a check about expressions must not be the thing which fails
+      // application boots (validateSyncModel). So nothing can act on a second report here,
+      // and a check about expressions must not be the thing which fails
       log.debug(
           "Could not decide what the path '{}' of '{}' finds: {}",
           String.join(".", path),
@@ -552,8 +548,8 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * What one walk answered: what the path finds, and the declared type it ends at, which
-   * exists only where it reached a value the BPMS holds.
+   * What one walk answered: what the path finds, and the declared type it ends at. That
+   * type exists only where the walk reached a value which the BPMS holds.
    *
    * @param verdict What the path finds
    * @param declaredType The type of the last segment, <code>null</code> wherever the
@@ -577,9 +573,9 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * Follows the path along the DECLARED types of its segments, threading the inherited
-   * mode exactly the way {@link #valuesOf} and {@link #convert} thread it: a nested
-   * type's own mode overrides what the attribute holding it passed down.
+   * Follows the path along the DECLARED types of its segments. It passes the inherited mode
+   * down exactly the way {@link #valuesOf} and {@link #convert} do. The own mode of a nested
+   * type overrides what the attribute which holds it passed down.
    *
    * @param workflowAggregateClass The type the first segment is read against
    * @param path The segments
@@ -599,26 +595,26 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
     for (var index = 0; index < path.size(); ++index) {
       final var segment = path.get(index);
       if (index >= MAX_DEPTH) {
-        // the values themselves are cut here (see convert), so whatever the declared
-        // types say about this segment says nothing about what the BPMS holds
+        // the values themselves are cut here (see convert). So whatever the declared types
+        // say about this segment says nothing about what the BPMS holds
         return WalkResult.stoppedShort(PathVerdict.undecidable());
       }
       if (holdsWhateverItWasGiven(owner)) {
         return WalkResult.stoppedShort(PathVerdict.undecidable());
       }
       if (travelsAsASingleValue(owner)) {
-        // asked BEFORE the abstract types are refused: 'Number' and 'CharSequence' are
-        // abstract and still say everything about what reaches the BPMS
+        // asked BEFORE the abstract types are refused. 'Number' and 'CharSequence' are
+        // abstract, but they still say everything about what reaches the BPMS
         return WalkResult.stoppedShort(PathVerdict.nothingBelow(segment, index, owner.getSimpleName()));
       }
       if (owner.isInterface() || Modifier.isAbstract(owner.getModifiers())) {
-        // whichever implementation the application assigned decides, and it may well
-        // carry the attribute this one has not got
+        // the implementation which the application assigned decides, and it may well have
+        // the attribute which this type does not have
         return WalkResult.stoppedShort(PathVerdict.undecidable());
       }
       final var properties = propertiesOf(owner);
       if (properties.isEmpty()) {
-        // no readable attribute at all: convert shares the value's text
+        // no readable attribute at all, so convert shares the text of the value
         return WalkResult.stoppedShort(PathVerdict.nothingBelow(segment, index, owner.getSimpleName()));
       }
       final var property = properties
@@ -626,9 +622,9 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
           .filter(candidate -> candidate.name().equals(segment))
           .findFirst();
       if (property.isEmpty()) {
-        // what VanillaBP 1 resolved and the sync model does not IS an attribute, and
-        // one which can never be shared - a field without a getter, and an isX()
-        // returning something other than boolean (see isAggregateProperty)
+        // what VanillaBP 1 resolved and the sync model does not IS an attribute, and one
+        // which can never be shared: a field without a getter, and an isX() which returns
+        // something other than boolean (see isAggregateProperty)
         return WalkResult
             .stoppedShort(
                 (findField(owner, segment) != null) || (version1OnlyGetter(owner, segment) != null)
@@ -642,8 +638,8 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
         return WalkResult.stoppedShort(PathVerdict.notShared(segment, index, owner.getSimpleName()));
       }
       if (index == (path.size() - 1)) {
-        // the type the attribute DECLARES, not the element type a further segment would
-        // be read against: a model reading this path reads the attribute itself
+        // the type the attribute DECLARES, not the element type for a further segment. A
+        // model which reads this path reads the attribute itself
         return new WalkResult(PathVerdict.aSharedValue(), property.get().getter().getReturnType());
       }
       final var next = typeBehind(property.get().getter().getGenericReturnType());
@@ -662,10 +658,9 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * Whether the declared type is a container of whatever it was given: an
-   * {@link Object}, a {@link Map} answering whatever key it happens to hold, or a
-   * collection whose elements the walk could not resolve. None of them can rule an
-   * attribute out.
+   * Whether the declared type holds whatever it was given: an {@link Object}, a
+   * {@link Map} which answers whatever key it happens to hold, or a collection whose
+   * elements the walk could not resolve. None of them can rule out an attribute.
    *
    * @param owner The declared type
    * @return Whether the walk has to stay silent
@@ -679,11 +674,11 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * Whether a value of that declared type reaches the BPMS as ONE value rather than as
-   * a structure of its own - the numbers, texts, booleans and characters
-   * {@link #convert} passes through, the enums it turns into their name and the JDK
-   * value types it turns into their text. Nothing below such a value exists in the
-   * BPMS, which is what makes <code>order.dueDate.year</code> read nothing where
+   * Whether a value of that declared type reaches the BPMS as ONE value and not as a
+   * structure of its own. Those are the numbers, texts, booleans and characters which
+   * {@link #convert} passes through, the enums which it turns into their name, and the JDK
+   * value types which it turns into their text. Nothing below such a value exists in the
+   * BPMS. That is why <code>order.dueDate.year</code> reads nothing where
    * <code>dueDate</code> is a {@code LocalDate}.
    *
    * @param owner The declared type
@@ -700,10 +695,10 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * The declared type the NEXT segment is read against: the attribute's own type, or
-   * the element type of a collection or an array, because a model navigating into one
-   * reads an element. <code>null</code> wherever the type arguments do not say what the
-   * elements are.
+   * The declared type against which the NEXT segment is read. That is the attribute's own
+   * type, or the element type of a collection or an array, because a model which navigates
+   * into one reads an element. It is <code>null</code> wherever the type arguments do not
+   * say what the elements are.
    *
    * @param type The attribute's generic type
    * @return The type to continue with, or <code>null</code>
@@ -715,7 +710,7 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
       if (clazz.isArray()) {
         return typeBehind(clazz.getComponentType());
       }
-      // a raw collection: what its elements are is not written down anywhere
+      // a raw collection: nothing says what its elements are
       return Collection.class.isAssignableFrom(clazz)
           ? null
           : clazz;
@@ -745,10 +740,10 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
     if (workflowAggregateClass == null) {
       return;
     }
-    // a set, because a type reachable over more than one path is looked at once per
-    // path and the same defect must not be said twice
+    // a set, because a type which is reachable over more than one path is looked at once
+    // per path, and the same defect must not be said twice
     final var defects = new java.util.LinkedHashSet<String>();
-    // the walk starts out sharing: FULL is the default of every adapter, so an aggregate
+    // the walk starts out sharing. FULL is the default of every adapter, so an aggregate
     // which annotates nothing is shared as a whole (see AggregateSyncMode)
     validateType(workflowAggregateClass, true, 0, new java.util.HashMap<>(), defects);
     if (defects.isEmpty()) {
@@ -759,18 +754,18 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * Derives the mode of one type and of every type reachable from its attributes,
-   * collecting the defects instead of throwing on the first one (one boot reports
-   * every gap it can detect).
+   * Derives the mode of one type and of every type reachable from its attributes. It
+   * collects the defects instead of throwing on the first one, so that one boot reports
+   * every gap it can find.
    *
    * @param clazz The type to validate
    * @param sharedUnlessAnnotated Whether the attributes of this type reach the BPMS as
-   *          long as they carry no annotation of their own
+   *          long as they have no annotation of their own
    * @param depth The current nesting depth
-   * @param visited The types already validated, each with whether that happened on a
-   *          path sharing them (cyclic type graphs). A type first reached through an
-   *          attribute nobody shares is looked at again once a shared path leads to it,
-   *          because what is refused depends on whether the attribute travels
+   * @param visited The types already validated, each with whether that happened on a path
+   *          which shares them (cyclic type graphs). A type first reached through an
+   *          attribute which nobody shares is looked at again once a shared path leads to
+   *          it. What is refused depends on whether the attribute travels
    * @param defects Collects the guiding messages
    */
   private void validateType(
@@ -787,8 +782,8 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
     } catch (final IllegalStateException e) {
       modeCannotBeDerived = e;
     }
-    // a type states its own mode where it has one and inherits from the attribute
-    // holding it where it has none - the chain a sync point walks in valuesOf
+    // a type states its own mode where it has one. Where it has none, it inherits from
+    // the attribute which holds it. valuesOf walks the same chain at a sync point
     final var shared = ownMode != null
         ? ownMode
         : sharedUnlessAnnotated;
@@ -799,17 +794,17 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
       }
       reportAttributesNothingReadsBack(clazz);
     } else if (validatedBefore || !shared) {
-      // a second look adds nothing: either the shared path is walked already, or this
-      // path shares no more than the path which was
+      // a second look adds nothing. Either the shared path was walked already, or this
+      // path shares no more than the path which was walked
       return;
     }
     visited.put(clazz, shared);
     refuseAttributesWhoseTextIsNoValue(clazz, shared, defects);
     if (depth >= MAX_DEPTH) {
-      // the documented limit: nested types are followed at most MAX_DEPTH levels
-      // deep. A type reached only deeper (or only at runtime, e.g. a subclass
-      // assigned to a supertype attribute) still fails loudly and understandably
-      // at the first sync point - with the very same message.
+      // the documented limit: nested types are followed at most MAX_DEPTH levels deep. A
+      // type which is only reached deeper, or only at runtime (for example a subclass
+      // assigned to an attribute of a supertype), still fails loudly and clearly at the
+      // first sync point, with the very same message.
       log.debug(
           "Stopped validating the sync model at depth {} (class '{}') - nested types are followed "
               + "at most {} levels deep",
@@ -819,7 +814,7 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
       return;
     }
     for (final var property : propertiesOf(clazz)) {
-      // a nested type inherits from the attribute holding it, so the walk carries down
+      // a nested type inherits from the attribute which holds it. So the walk carries down
       // what that attribute says about sharing
       final var sharedBelow = property.synced() != null
           ? property.synced()
@@ -833,22 +828,22 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
 
   /**
    * Refuses an attribute which is shared with the BPMS although its text is no value at
-   * all: a {@link java.util.Calendar} travels as the debug form of its implementation,
-   * several hundred characters naming every field of it.
+   * all. A {@link java.util.Calendar} travels as the debug form of its implementation,
+   * several hundred characters which name every field.
    * <p>
-   * The boot fails here instead of the attribute being left out quietly. An attribute
-   * which stopped being a process variable would make a model read null and take a
-   * branch nobody chose, so the application either declares a type which travels or says
-   * that this attribute does not.
+   * The boot fails here. The attribute is not left out quietly. An attribute which stopped
+   * being a process variable would make a model read null and take a branch which nobody
+   * chose. So the application either declares a type which travels, or says that this
+   * attribute does not travel.
    * <p>
-   * Unlike the warning of {@link #reportAttributesNothingReadsBack(Class)} this asks
-   * whether the attribute really is shared, along the chain a sync point walks. A boot
-   * which fails may not rest on a guess, and the one thing left to guess is the
+   * Unlike the warning of {@link #reportAttributesNothingReadsBack(Class)}, this asks
+   * whether the attribute really is shared, along the chain which a sync point walks. A
+   * boot which fails must not rest on a guess. The only thing left to guess is the
    * adapter's default, which is FULL for every adapter there is.
    *
    * @param clazz The type whose attributes are looked at
-   * @param sharedUnlessAnnotated Whether its attributes reach the BPMS as long as they
-   *          carry no annotation of their own
+   * @param sharedUnlessAnnotated Whether its attributes reach the BPMS as long as they have
+   *          no annotation of their own
    * @param defects Collects the guiding messages
    */
   private void refuseAttributesWhoseTextIsNoValue(
@@ -883,19 +878,19 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * Names the attributes whose type reaches the BPMS as text nothing reads back, while
-   * the application boots. Such an attribute works on the way out and fails on the way
-   * in, and the way in is a task handler, so without this the application learns about
-   * it when a model first maps the value into one.
+   * Names the attributes whose type reaches the BPMS as a text which nothing reads back,
+   * while the application boots. Such an attribute works on the way out and fails on the
+   * way in. The way in is a task handler. So without this, the application learns about it
+   * when a model first maps the value into a handler.
    * <p>
-   * A warning, not a defect: the attribute may never be shared at all (the adapter's
-   * default decides that, and it is not known here), and an aggregate whose values only
-   * ever travel outwards is a normal application. An attribute the application marked
-   * {@code @NoSyncWithBPMS} is left out, because that one is certain never to travel.
+   * This is a warning, not a defect. The attribute may never be shared at all. The
+   * adapter's default decides that, and it is not known here. And an aggregate whose values
+   * only ever travel outwards is a normal application. An attribute which the application
+   * marked {@code @NoSyncWithBPMS} is left out, because it will certainly never travel.
    * <p>
-   * A type refused on the way out is not named here.
-   * {@link #refuseAttributesWhoseTextIsNoValue(Class, boolean, java.util.Set)} says that
-   * case, and it says it as a failed boot.
+   * A type which is refused on the way out is not named here.
+   * {@link #refuseAttributesWhoseTextIsNoValue(Class, boolean, java.util.Set)} covers that
+   * case, and it does so with a failed boot.
    *
    * @param clazz The type whose attributes are looked at
    */
@@ -924,11 +919,11 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * Whether values of that declared type travel as text and no type of
-   * {@link TextValueTypes} reads that text back. The plain values are no such case (a
-   * number, a text, a boolean, a character and an enum travel as themselves), nor is a
-   * collection or a map (their elements are asked separately), nor a type of the
-   * application's own (it travels as a structure and is walked into).
+   * Whether values of that declared type travel as text, and no type of
+   * {@link TextValueTypes} reads that text back. The plain values are not such a case,
+   * because a number, a text, a boolean, a character and an enum travel as themselves. Nor
+   * is a collection or a map, because their elements are asked about separately. Nor is a
+   * type of the application's own, because it travels as a structure and is walked into.
    *
    * @param type The declared type of an attribute, or of an element of one
    * @return Whether an attribute of that type is worth a word at startup
@@ -951,9 +946,9 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * Every type an attribute names: the declared type itself, the component type of an
-   * array and the type arguments of a generic type. Unlike {@link #attributeTypes} this
-   * keeps the types travelling as text, because those are the ones asked about here.
+   * Every type which an attribute names: the declared type itself, the component type of
+   * an array, and the type arguments of a generic type. Unlike {@link #attributeTypes} this
+   * keeps the types which travel as text, because those are the ones asked about here.
    *
    * @param type The attribute's generic type
    * @return The types named
@@ -983,10 +978,9 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * The types an attribute may hold values of - the declared type itself plus the
-   * type arguments of a generic type (a {@code List<Item>} holds {@code Item}s).
-   * Types whose values are never followed (JDK value types, primitives, enums) are
-   * left out.
+   * The types of which an attribute may hold values: the declared type itself, plus the
+   * type arguments of a generic type (a {@code List<Item>} holds {@code Item}s). Types whose
+   * values are never followed (JDK value types, primitives, enums) are left out.
    *
    * @param type The attribute's generic type
    * @return The types to validate
@@ -1013,20 +1007,21 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
     if (type instanceof java.lang.reflect.GenericArrayType genericArray) {
       return attributeTypes(genericArray.getGenericComponentType());
     }
-    // wildcards and type variables carry no annotations of their own - the type
-    // actually used at runtime is validated at the first sync point
+    // wildcards and type variables have no annotations of their own. The type which is
+    // really used at runtime is validated at the first sync point
     return java.util.stream.Stream.empty();
 
   }
 
   /**
-   * The base mode of a type: its own annotation, else the mode DERIVED from its
-   * attributes (see the class comment), else <code>null</code> - "inherits".
+   * The base mode of a type: its own annotation, or else the mode DERIVED from its
+   * attributes (see the class comment), or else <code>null</code>, which means
+   * "inherits".
    *
    * @param clazz The type
    * @return {@code true}/{@code false} or <code>null</code> if it inherits
-   * @throws IllegalStateException If the type's attributes are annotated both ways
-   *           without the class stating its own mode (guiding message)
+   * @throws IllegalStateException If the type's attributes are annotated both ways and the
+   *           class does not state its own mode (with a guiding message)
    */
   private Boolean baseModeOf(
       final Class<?> clazz) {
@@ -1068,8 +1063,8 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
       // opt-out: naming what is NOT shared means the rest is
       return Optional.of(Boolean.TRUE);
     }
-    // no annotation anywhere: the adapter decides (root) / the holding attribute
-    // decides (nested type)
+    // no annotation anywhere: the adapter decides for the root, and the attribute which
+    // holds a nested type decides for that type
     return Optional.empty();
 
   }
@@ -1113,8 +1108,8 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
         values.put(property.name(), convert(property.read(owner), synced, depth + 1, ancestors));
       }
     } finally {
-      // the set holds the objects of the CURRENT path only: the same object
-      // appearing in two sibling branches is shared twice, a cycle is cut
+      // the set holds the objects of the CURRENT path only. The same object in two sibling
+      // branches is shared twice, and a cycle is cut
       ancestors.remove(owner);
     }
     return values;
@@ -1122,8 +1117,7 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * Converts one value into a BPMS-compatible representation (see the class
-   * comment).
+   * Converts one value into a form which a BPMS can take (see the class comment).
    *
    * @param value The value
    * @param inherited What nested attributes inherit
@@ -1166,25 +1160,24 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
 
     final var howItTravels = TextValueTypes.ofValue(value.getClass());
     if (howItTravels != null) {
-      // a type carried both ways: the text is the one the way back reads, and it is
-      // found by what the value IS, not by the package its class sits in - a zone is a
-      // java.time.ZoneRegion and a time zone a sun.util.calendar.ZoneInfo
+      // a type carried both ways. The text is the one the way back reads. It is found by
+      // what the value IS, not by the package of its class: a zone is a
+      // java.time.ZoneRegion, and a time zone is a sun.util.calendar.ZoneInfo
       return howItTravels.write().apply(value);
     }
 
     if (travelsAsText(value.getClass())) {
-      // every other type of the JDK (java.net.URI, java.util.Locale, ...): it does have
-      // readable getters, but those are implementation detail, and following them into a
-      // package the runtime exports to nobody ends the sync point. The text is what a
-      // BPMS - and a BPMN expression - can work with anyway
+      // every other type of the JDK (java.net.URI, java.util.Locale, ...). It does have
+      // readable getters, but those are implementation details. Following them into a
+      // package which the runtime exports to nobody ends the sync point. A BPMS, and a BPMN
+      // expression, can work with the text anyway
       return String.valueOf(value);
     }
 
     if (ancestors.contains(value)) {
-      // a CYCLE - the bidirectional relations of ordinary entities (order -> item
-      // -> order) are the normal case, not an exotic one. Following it would
-      // duplicate the whole subtree once per level until MAX_DEPTH, so it is cut
-      // right here.
+      // a CYCLE. The relations of ordinary entities in both directions (order -> item ->
+      // order) are the normal case, not an exotic one. Following them would copy the whole
+      // subtree once per level until MAX_DEPTH, so the cycle is cut right here.
       log.debug(
           "Cut a cycle while collecting the values shared with the BPMS: '{}' is already part of "
               + "the current path (depth {})",
@@ -1196,8 +1189,8 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
     }
 
     if (depth >= MAX_DEPTH) {
-      // absurdly deep object graph: stop following and share a representation
-      // instead of descending forever
+      // a very deep object graph: stop following it, and share a stand-in instead of
+      // going down forever
       log.debug(
           "Stopped collecting values shared with the BPMS at depth {} (class '{}') - "
               + "nested objects are followed at most {} levels deep",
@@ -1211,13 +1204,13 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
 
     final var properties = propertiesOf(value.getClass());
     if (properties.isEmpty()) {
-      // no readable attributes (e.g. java.time types, UUID, BigDecimal-likes):
-      // every BPMS understands the string form
+      // no readable attributes (for example java.time types, UUID, types like BigDecimal).
+      // Every BPMS understands the string form
       return String.valueOf(value);
     }
-    // a nested TYPE's own mode (its annotation or the one derived from its
-    // attributes) overrides what its members inherited through the attribute
-    // holding it
+    // the own mode of a nested TYPE (its annotation, or the one derived from its
+    // attributes) overrides what its members inherited through the attribute which holds
+    // it
     final var ofType = baseModeOf(value.getClass());
     return valuesOf(value, ofType != null
         ? ofType
@@ -1226,11 +1219,12 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * The stand-in for an object which is NOT followed (a cycle was cut, or the
-   * nesting limit was reached): its type and identity. Deliberately not
-   * {@code toString()} - the very object graphs this guards against are the ones
-   * whose generated {@code toString()} recurses (Lombok on bidirectional
-   * relations), and a task completion must not fail over a log-grade value.
+   * The stand-in for an object which is NOT followed, because a cycle was cut or the
+   * nesting limit was reached. It is the type and identity of the object. It is deliberately
+   * not {@code toString()}. The object graphs which this guards against are exactly the
+   * ones whose generated {@code toString()} recurses (Lombok on relations in both
+   * directions). A task completion must not fail because of a value which is only good for
+   * a log.
    *
    * @param value The object not followed
    * @return A stable, harmless representation
@@ -1247,18 +1241,18 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * Whether values of the given type reach the BPMS as ONE text rather than as a
-   * structure of their own (see {@link #convert}). Collections, maps and arrays are
-   * handled before this check.
+   * Whether values of the given type reach the BPMS as ONE text and not as a structure of
+   * their own (see {@link #convert}). Collections, maps and arrays are handled before this
+   * check.
    * <p>
-   * Two questions, because a class can fail either of them. A type
-   * {@link TextValueTypes} carries is one whatever its name, which is how a subclass the
-   * runtime hands out is recognised. Everything else the JDK itself wrote is text too:
-   * its getters are implementation detail, and a package like
-   * <code>sun.util.calendar</code> is exported to nobody, so reading them ended the sync
-   * point with an <code>InaccessibleObjectException</code>. A type named
-   * <code>java.*</code> or <code>javax.*</code> counts as well, which keeps a
-   * <code>javax</code> type of a library on the class path behaving as it did.
+   * There are two questions, because a class can fail either of them. A type which
+   * {@link TextValueTypes} carries counts, whatever its name. That is how a subclass which
+   * the runtime hands out is recognised. Everything else which the JDK itself wrote is text
+   * too. Its getters are implementation details. And a package like
+   * <code>sun.util.calendar</code> is exported to nobody, so reading the getters ended the
+   * sync point with an <code>InaccessibleObjectException</code>. A type named
+   * <code>java.*</code> or <code>javax.*</code> counts as well. That keeps a
+   * <code>javax</code> type of a library on the class path behaving as before.
    */
   private static boolean travelsAsText(
       final Class<?> clazz) {
@@ -1305,7 +1299,7 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * The readable properties of a class incl. their annotations, cached.
+   * The readable properties of a class including their annotations, cached.
    */
   private List<Property> propertiesOf(
       final Class<?> clazz) {
@@ -1332,9 +1326,9 @@ public class AggregateSyncSupport implements WorkflowAggregateSync {
   }
 
   /**
-   * The element carrying the application's annotation: the GETTER wins (an
-   * intention-revealing getter is annotated there), otherwise the field of the
-   * same name if there is one.
+   * The element with the application's annotation. The GETTER wins, because a getter with a
+   * telling name is annotated there. Otherwise it is the field of the same name, if there
+   * is one.
    */
   private static java.lang.reflect.AnnotatedElement fieldOrGetter(
       final Class<?> clazz,
