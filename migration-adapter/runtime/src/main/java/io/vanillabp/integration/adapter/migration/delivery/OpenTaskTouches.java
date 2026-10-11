@@ -10,30 +10,32 @@ import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The delivery keys of the open tasks a BPMS redelivered since the last refresh, kept
- * until the store writes them in one go. Shared by every
- * {@link io.vanillabp.integration.spi.TaskDeliveryLog} implementation of both platforms,
- * because they differ in HOW a record is refreshed, not in when and in which portions.
+ * The delivery keys of the open tasks which a BPMS redelivered since the last refresh. They
+ * are kept until the store writes them in one go. Every
+ * {@link io.vanillabp.integration.spi.TaskDeliveryLog} implementation of both platforms
+ * shares this class. They differ in HOW a record is refreshed, not in when and in which
+ * portions.
  * <p>
- * A task left open by a <code>&#64;TaskId</code> handler is redelivered as often as the
- * BPMS renews its lock, and every redelivery is answered from the record written when the
- * handler ran. The record therefore has to outlive the retention as long as redeliveries
- * keep coming, which is what the second timestamp of a record is for. Writing it per
- * redelivery would put an UPDATE into the transaction of every renewal of every open
- * task, so the key is remembered here instead and the timer which already runs the
- * retention cleanup writes what accumulated.
+ * A <code>&#64;TaskId</code> handler may leave a task open. Then the BPMS redelivers it as
+ * often as it renews its lock. The record written when the handler ran answers every
+ * redelivery. So the record has to outlive the retention as long as redeliveries keep
+ * coming. The second timestamp of a record is for that. Writing it on every redelivery would
+ * put an UPDATE into the transaction of every lock renewal of every open task. So the key
+ * is remembered here instead. The timer which already runs the retention cleanup writes
+ * what has accumulated.
  * <p>
- * Refreshing happens in blocks of {@value #BLOCK_SIZE} keys, one statement per block
- * rather than one <code>IN</code> list: the length of such a list is capped differently
- * by every database (Oracle at 1000 expressions, SQL Server at about 2100 parameters), and
- * a batch of the same statement has no such limit.
+ * Refreshing happens in blocks of {@value #BLOCK_SIZE} keys, with one statement per block and
+ * not one <code>IN</code> list. Every database limits the length of such a list differently
+ * (Oracle at 1000 expressions, SQL Server at about 2100 parameters). A batch of the same
+ * statement has no such limit.
  * <p>
- * Losing the memory to a crash costs one interval of refreshments, because a record only
- * expires when a whole retention passes without a single one. That is also why the memory
- * is bounded at {@value #MAX_REMEMBERED} keys: it is a hint, not a fact to be kept safe.
+ * If a crash loses the memory, that costs one interval of refreshes. A record only expires
+ * when a whole retention period passes without a single refresh. That is also why the memory
+ * is limited to {@value #MAX_REMEMBERED} keys. It is a hint, not a fact which must be kept
+ * safe.
  * <p>
- * Why a redelivery refreshes a record instead of writing one, and why that second timestamp exists
- * at all, is decision 6 in the repository's DECISIONS.md.
+ * Decision 6 in the repository's DECISIONS.md says why a redelivery refreshes a record
+ * instead of writing one, and why that second timestamp exists at all.
  */
 @Slf4j
 public class OpenTaskTouches {
@@ -59,10 +61,10 @@ public class OpenTaskTouches {
   /**
    * Built by the store whose records are refreshed, once per application.
    * <p>
-   * Writing is handed in rather than done here, because the two platforms differ in how a
-   * record is refreshed and in nothing else.
+   * The writing is handed in and not done here, because the two platforms differ in how a
+   * record is refreshed, and in nothing else.
    *
-   * @param name Names the store refreshed (log messages)
+   * @param name Names the refreshed store (log messages)
    * @param refresh Writes the second timestamp of the records of one block of keys
    */
   public OpenTaskTouches(
@@ -75,7 +77,7 @@ public class OpenTaskTouches {
   }
 
   /**
-   * Remembers that the record of this delivery is still answering redeliveries.
+   * Remembers that the record of this delivery still answers redeliveries.
    *
    * @param deliveryKey The delivery's identity
    */
@@ -119,13 +121,13 @@ public class OpenTaskTouches {
   }
 
   /**
-   * Writes what accumulated, in blocks. Keys are taken out of the memory as they are
-   * collected, so a redelivery arriving while this runs is remembered for the next
-   * round rather than lost.
+   * Writes what has accumulated, in blocks. Keys are taken out of the memory as they are
+   * collected. So a redelivery which arrives while this runs is remembered for the next round
+   * and not lost.
    * <p>
-   * A failing block is logged and its keys are gone: the next redelivery of that task
-   * remembers it again, and the record survives as long as one refresh per retention
-   * period gets through.
+   * A failing block is logged, and its keys are gone. The next redelivery of that task
+   * remembers it again. The record survives as long as one refresh per retention period gets
+   * through.
    *
    * @return The number of records refreshed
    */

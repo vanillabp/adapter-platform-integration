@@ -11,22 +11,22 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Deletes the records of processed task deliveries once
- * <code>vanillabp.delivery.retention</code> passed - shared by every
- * {@link io.vanillabp.integration.spi.TaskDeliveryLog} implementation of both platforms,
- * since a store differs in HOW it deletes, not in WHEN.
+ * <code>vanillabp.delivery.retention</code> has passed. Every
+ * {@link io.vanillabp.integration.spi.TaskDeliveryLog} implementation of both platforms
+ * shares this class, because a store differs in HOW it deletes, not in WHEN.
  * <p>
- * The cleanup runs on a private daemon thread, so neither Spring's
- * {@code TaskScheduler} nor the <code>quarkus-scheduler</code> extension is required.
- * It runs once at startup and then {@value #INTERVAL_HOURS}-hourly: records are kept
- * for days, so nothing is gained by looking more often. Deleting is idempotent - the
- * instances of a cluster may run it concurrently.
+ * The cleanup runs on a private daemon thread. So neither the {@code TaskScheduler} of
+ * Spring nor the <code>quarkus-scheduler</code> extension is needed. It runs once at startup
+ * and then every {@value #INTERVAL_HOURS} hours. Records are kept for days, so looking more
+ * often gains nothing. Deleting can be repeated safely, so the instances of a cluster may
+ * run it at the same time.
  * <p>
- * An hour which recorded no delivery deletes nothing and therefore asks nothing: the
- * records of this store only come into being when the application does work, so an
- * application waiting in a timer grows no garbage and its database sees no statement from
- * here. What that leaves behind is the last batch before an application went quiet, kept
- * until it is used again or until it restarts, and keeping a record LONGER is the safe
- * side of the window it guards (decision 43 in the repository's DECISIONS.md).
+ * An hour in which no delivery was recorded deletes nothing, and so it asks nothing. The
+ * records of this store only come into being when the application does work. So an
+ * application which waits in a timer grows no garbage, and its database sees no statement
+ * from here. What remains is the last batch before an application went quiet. It is kept
+ * until the application works again or restarts. Keeping a record LONGER is the safe side
+ * of the window it guards (decision 43 in the repository's DECISIONS.md).
  */
 @Slf4j
 public class TaskDeliveryRetentionCleanup {
@@ -45,8 +45,8 @@ public class TaskDeliveryRetentionCleanup {
   private final Runnable cleanup;
 
   /**
-   * Whether anything was written to this store since the last run. A run without it would
-   * delete what a run before it already deleted.
+   * Whether anything was written to this store since the last run. A run without that would
+   * delete what an earlier run already deleted.
    */
   private final AtomicBoolean recordedSinceTheLastRun = new AtomicBoolean(true);
 
@@ -55,14 +55,15 @@ public class TaskDeliveryRetentionCleanup {
   /**
    * Built by the platform's delivery log, which starts it from its own lifecycle hook.
    * <p>
-   * Nothing runs yet. The first run happens when {@link #start()} is called, and the store
-   * counts as written to until then, so the records of a previous run of the application are
-   * cleaned up even where this one records nothing.
+   * Nothing runs yet. The first run happens when {@link #start()} is called. Until then the
+   * store counts as written to. So the records of an earlier run of the application are
+   * cleaned up, even where this run records nothing.
    *
    * @param name Names the store cleaned up (thread name and log messages)
    * @param retention How long a record is kept
-   * @param workflowStartRetention How long the row about a started workflow is kept, which is a
-   *          period of its own and is said at startup for the same reason the first one is
+   * @param workflowStartRetention How long the row about a started workflow is kept. This is
+   *          a period of its own, and it is logged at startup for the same reason as the
+   *          first one
    * @param cleanup Deletes the expired rows of one store, both kinds
    */
   public TaskDeliveryRetentionCleanup(
@@ -79,7 +80,7 @@ public class TaskDeliveryRetentionCleanup {
   }
 
   /**
-   * Starts the cleanup. Calling it twice is a no-op - the platforms start it from
+   * Starts the cleanup. A second call does nothing, because the platforms start it from
    * their own lifecycle hooks.
    */
   public synchronized void start() {
@@ -87,8 +88,8 @@ public class TaskDeliveryRetentionCleanup {
     if (executor != null) {
       return;
     }
-    // said once and at INFO, because which of the two retentions this store runs with is
-    // the first question a support case about a handler running twice asks
+    // said once and at INFO. Which of the two retentions this store runs with is the first
+    // question in a support case about a handler which ran twice
     log
         .info(
             "Records of processed task deliveries in '{}' are kept for {} ('{}'), and what a "
@@ -126,8 +127,8 @@ public class TaskDeliveryRetentionCleanup {
   }
 
   /**
-   * Says that a delivery was written down, which is what gives the next hourly run
-   * something to do. Called by the store on every record it writes.
+   * Says that a delivery was written down. That gives the next hourly run something to do.
+   * The store calls it for every record it writes.
    */
   public void aDeliveryWasRecorded() {
 
@@ -136,9 +137,9 @@ public class TaskDeliveryRetentionCleanup {
   }
 
   /**
-   * One run of the cleanup, which deletes nothing and asks nothing where no delivery was
-   * recorded since the previous one. It is what the scheduled thread calls, and it is public
-   * so a test can drive it without waiting out an hour.
+   * One run of the cleanup. Where no delivery was recorded since the previous run, it
+   * deletes nothing and asks nothing. The scheduled thread calls it. It is public so that a
+   * test can drive it without waiting for an hour.
    */
   public void cleanUpWhereSomethingWasRecorded() {
 
@@ -148,9 +149,9 @@ public class TaskDeliveryRetentionCleanup {
     try {
       cleanup.run();
     } catch (final RuntimeException e) {
-      // a failing cleanup costs disk space, nothing else - it must not kill the
-      // scheduled task (a scheduleWithFixedDelay stops on an escaping exception). What it
-      // deleted nothing of is tried again in an hour rather than at the next record
+      // a failing cleanup costs disk space, nothing else. It must not kill the scheduled
+      // task, because scheduleWithFixedDelay stops on an escaping exception. What it did not
+      // delete is tried again in an hour, not only at the next record
       recordedSinceTheLastRun.set(true);
       log.warn("Could not clean up expired task-delivery records of '{}'", name, e);
     }
