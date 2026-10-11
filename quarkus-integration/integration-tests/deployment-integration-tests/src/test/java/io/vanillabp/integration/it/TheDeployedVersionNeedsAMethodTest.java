@@ -43,7 +43,8 @@ public class TheDeployedVersionNeedsAMethodTest {
           if ((message != null) && message.startsWith("Version '5' of BPMN process 'VersionedProcess'")) {
             assertTrue(message.contains("(workflow module 'test-module')"), message);
             assertTrue(message.contains("deployed during this start"), message);
-            assertTrue(message.contains(DeployedProcessVersionsCheck.SERVED_BY_NO_METHOD), message);
+            assertTrue(message.contains(DeployedProcessVersionsCheck.ELEMENTS_SERVED_BY_NO_METHOD_IN_THIS_VERSION),
+                message);
             assertTrue(message.contains("task 'Activity_Versioned' (task definition 'versionedTask')"), message);
             assertTrue(message.contains("(version '1-2')"), message);
             assertTrue(message.contains("(version 'release-2026')"), message);

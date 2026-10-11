@@ -156,6 +156,44 @@ public interface ExtensionHandlers {
   }
 
   /**
+   * Names the elements of a model the adapter just wired which a method of this contract may
+   * serve. Call it from your <code>wireBpmn</code>, once per BPMN process, for a contract which
+   * says {@link HandlerContract.Builder#theDeployedVersionNeedsAMethod()}. Once the BPMS has
+   * given the model its version, VanillaBP holds the methods of every element against it, and
+   * the start ends where an element has methods but none of them covers that version.
+   * <p>
+   * Each element is the list of keys you would hand to {@link HandlerCall.Builder#lookupKeys}
+   * for it, in the same order, so the check picks the methods a call would pick. An empty list
+   * stands for the BPMN process itself, which only a method serving every key
+   * ({@link HandlerContract#EVERY_KEY}) serves. An element no method serves at all is not
+   * asked about.
+   * <p>
+   * The elements are kept per workflow module and BPMN process, not per adapter. Every adapter
+   * holds them against the version its own BPMS gave the model. Where two adapters deploy
+   * different models of one process, they share what was reported for it.
+   * <p>
+   * Calling it again adds to what was reported. For a contract which does not ask for a
+   * method for the deployed version, the elements are kept and never asked about. The
+   * default does nothing. Only the core implements this interface, so the default serves
+   * test doubles, not applications.
+   *
+   * @param annotationType The annotation of your contract
+   * @param workflowModuleId The workflow module
+   * @param bpmnProcessId The BPMN process the elements belong to - for an element of a called
+   *          process the called process, not the one at the top
+   * @param lookupKeysOfEachElement The lookup keys of each element, most wanted first
+   */
+  default void elementsOfTheDeployedModel(
+      final Class<? extends Annotation> annotationType,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final List<List<String>> lookupKeysOfEachElement) {
+
+    // a test double has no start to end
+
+  }
+
+  /**
    * Runs the method the call addresses: load the workflow aggregate (or take the one
    * handed in), bind the parameters, invoke, save - in one transaction of the platform.
    *

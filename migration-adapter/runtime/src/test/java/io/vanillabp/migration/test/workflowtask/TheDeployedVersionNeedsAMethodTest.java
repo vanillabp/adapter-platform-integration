@@ -1,6 +1,7 @@
 package io.vanillabp.migration.test.workflowtask;
 
-import static io.vanillabp.integration.adapter.migration.workflowtask.DeployedProcessVersionsCheck.SERVED_BY_NO_METHOD;
+import static io.vanillabp.integration.adapter.migration.workflowtask.DeployedProcessVersionsCheck.A_TASK_WITHOUT_A_METHOD_STOPS_EVERY_WORKFLOW;
+import static io.vanillabp.integration.adapter.migration.workflowtask.DeployedProcessVersionsCheck.ELEMENTS_SERVED_BY_NO_METHOD_IN_THIS_VERSION;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -95,6 +96,101 @@ public class TheDeployedVersionNeedsAMethodTest {
   }
 
   /**
+   * The annotation of a test extension whose contract asks for a method for the deployed
+   * version.
+   */
+  @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+  @java.lang.annotation.Target(java.lang.annotation.ElementType.METHOD)
+  public @interface Note {
+
+    String element() default "";
+
+    String version() default "";
+
+  }
+
+  /**
+   * The same, for a contract which does not ask for it.
+   */
+  @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
+  @java.lang.annotation.Target(java.lang.annotation.ElementType.METHOD)
+  public @interface Remark {
+
+    String element() default "";
+
+    String version() default "";
+
+  }
+
+  /**
+   * Every task is served in every version, and the notes of the extension serve only the
+   * versions after 1: one for the task, one for the process itself.
+   */
+  public static class NotesOfLaterVersions {
+
+    @WorkflowTask(taskDefinition = "assessRisk")
+    public void assessRisk(
+        final Aggregate aggregate) {
+    }
+
+    @Note(element = "ServiceTask_AssessRisk", version = ">1")
+    public void noteAboutTheRisk(
+        final Aggregate aggregate) {
+    }
+
+    @Note(element = io.vanillabp.integration.extension.spi.handler.HandlerContract.EVERY_KEY, version = ">1")
+    public void noteAboutTheWorkflow(
+        final Aggregate aggregate) {
+    }
+
+    @Remark(element = "ServiceTask_AssessRisk", version = ">1")
+    public void remarkAboutTheRisk(
+        final Aggregate aggregate) {
+    }
+
+  }
+
+  /**
+   * The note for the task covers every version, and nothing serves the process itself.
+   */
+  public static class NotesOfEveryVersion {
+
+    @WorkflowTask(taskDefinition = "assessRisk")
+    public void assessRisk(
+        final Aggregate aggregate) {
+    }
+
+    @Note(element = "ServiceTask_AssessRisk", version = "1")
+    public void noteOfTheFirstVersion(
+        final Aggregate aggregate) {
+    }
+
+    @Note(element = "ServiceTask_AssessRisk", version = ">1")
+    public void noteOfLaterVersions(
+        final Aggregate aggregate) {
+    }
+
+  }
+
+  /**
+   * Notes of the versions after 1 next to a task whose method misses version 1 as well, so one
+   * message names both.
+   */
+  public static class TaskAndNoteOfLaterVersions {
+
+    @WorkflowTask(taskDefinition = "assessRisk", version = ">1")
+    public void assessRisk(
+        final Aggregate aggregate) {
+    }
+
+    @Note(element = "ServiceTask_AssessRisk", version = ">1")
+    public void noteAboutTheRisk(
+        final Aggregate aggregate) {
+    }
+
+  }
+
+  /**
    * A user task whose only method serves the versions after 1.
    */
   public static class UserTaskOfLaterVersions {
@@ -144,7 +240,9 @@ public class TheDeployedVersionNeedsAMethodTest {
         message.startsWith("Version '1' of BPMN process 'loan_approval' (workflow module 'loan-approval') is the "
             + "version adapter 'camunda7' deployed during this start."),
         message);
-    assertTrue(message.contains(SERVED_BY_NO_METHOD), message);
+    assertTrue(message.contains(ELEMENTS_SERVED_BY_NO_METHOD_IN_THIS_VERSION), message);
+    assertTrue(message.contains(A_TASK_WITHOUT_A_METHOD_STOPS_EVERY_WORKFLOW), "a task keeps its incident sentence: "
+        + message);
     assertTrue(
         message.contains("task 'ServiceTask_AssessRisk' (task definition 'assessRisk')"),
         "the task is named: "
@@ -156,7 +254,7 @@ public class TheDeployedVersionNeedsAMethodTest {
             + message);
     assertTrue(message.contains("version = \">=1\""), "the wider range is shown: "
         + message);
-    assertTrue(message.contains("add a @WorkflowTask method for version '1'"), message);
+    assertTrue(message.contains("add a method with the same annotation for version '1'"), message);
     assertTrue(message.contains("deploy the model the method serves"), message);
 
   }
@@ -299,6 +397,263 @@ public class TheDeployedVersionNeedsAMethodTest {
     registry.validateTaskWiring(ADAPTER, MODULE, PROCESS, List.of(ASSESS_RISK));
 
     assertDoesNotThrow(() -> registry.resolveProcessVersions(MODULE));
+
+  }
+
+  @Test
+  @DisplayName("An element of an extension whose methods all miss the deployed version ends the start")
+  public void anElementOfAnExtensionWhoseMethodsMissTheVersionEndsTheStart() {
+
+    registerNoteContract(null);
+    register(PROCESS, NotesOfLaterVersions.class);
+    reportElements(List.of(List.of("ServiceTask_AssessRisk", "assessRisk")));
+
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> deploy(ADAPTER, PROCESS, "1", List.of(ASSESS_RISK)));
+
+    final var message = failure.getMessage();
+    assertTrue(
+        message.startsWith("Version '1' of BPMN process 'loan_approval' (workflow module 'loan-approval') is the "
+            + "version adapter 'camunda7' deployed during this start."),
+        message);
+    assertTrue(message.contains(ELEMENTS_SERVED_BY_NO_METHOD_IN_THIS_VERSION), message);
+    assertTrue(
+        message.contains(
+            "element 'ServiceTask_AssessRisk' (also matched by 'assessRisk'): @Note method '%s#noteAboutTheRisk' "
+                .formatted(NotesOfLaterVersions.class.getName())
+                + "of extension 'test-extension' (version '>1')"),
+        "annotation, method, extension and range are named: "
+            + message);
+    assertTrue(
+        message.contains("@Note method '%s#noteAboutTheWorkflow' of extension 'test-extension' (version '>1'), which "
+            .formatted(NotesOfLaterVersions.class.getName())
+            + "does not cover version '1'."),
+        "the method serving every key may run for the element as well: "
+            + message);
+    assertTrue(
+        message.contains("For @Note of extension 'test-extension': It finds no method to call for such an element "
+            + "and goes on without one."),
+        "the neutral sentence stands in for the extension's: "
+            + message);
+    assertFalse(message.contains("task 'ServiceTask_AssessRisk'"), "the task itself is served: "
+        + message);
+    assertFalse(message.contains(A_TASK_WITHOUT_A_METHOD_STOPS_EVERY_WORKFLOW), "no task stops: "
+        + message);
+    assertFalse(message.contains("@Remark"), "a contract which does not ask is not asked: "
+        + message);
+    assertTrue(message.contains("version = \">=1\""), message);
+
+  }
+
+  @Test
+  @DisplayName("The extension says what an element without a method means")
+  public void theExtensionSaysWhatTheMissingMethodMeans() {
+
+    registerNoteContract("The note of such a task stays empty.");
+    register(PROCESS, NotesOfLaterVersions.class);
+    reportElements(List.of(List.of("ServiceTask_AssessRisk")));
+
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> deploy(ADAPTER, PROCESS, "1", List.of(ASSESS_RISK)));
+
+    assertTrue(
+        failure.getMessage().contains("For @Note of extension 'test-extension': The note of such a task stays empty."),
+        failure.getMessage());
+    assertTrue(failure.getMessage().contains("element 'ServiceTask_AssessRisk': @Note method"), failure.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("An element of an extension with a method covering the deployed version is served")
+  public void anElementOfAnExtensionCoveredByOneMethodIsServed() {
+
+    registerNoteContract(null);
+    register(PROCESS, NotesOfEveryVersion.class);
+    reportElements(List.of(List.of("ServiceTask_AssessRisk", "assessRisk")));
+
+    assertDoesNotThrow(() -> deploy(ADAPTER, PROCESS, "1", List.of(ASSESS_RISK)));
+
+  }
+
+  @Test
+  @DisplayName("An element no method of the extension serves at all is not asked about")
+  public void anElementWithoutMethodsIsNotAsked() {
+
+    registerNoteContract(null);
+    register(PROCESS, NotesOfEveryVersion.class);
+    // nothing serves the process itself, and no method is a legal answer
+    reportElements(List.of(List.of("Activity_NobodyNotes"), List.of()));
+
+    assertDoesNotThrow(() -> deploy(ADAPTER, PROCESS, "1", List.of(ASSESS_RISK)));
+
+  }
+
+  @Test
+  @DisplayName("The process itself is served only by a method serving every key")
+  public void theProcessItselfIsServedByEveryKeyMethodsOnly() {
+
+    registerNoteContract(null);
+    register(PROCESS, NotesOfLaterVersions.class);
+    reportElements(List.of(List.of()));
+
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> deploy(ADAPTER, PROCESS, "1", List.of(ASSESS_RISK)));
+
+    final var message = failure.getMessage();
+    assertTrue(
+        message.contains("the process itself: @Note method '%s#noteAboutTheWorkflow'"
+            .formatted(NotesOfLaterVersions.class.getName())),
+        message);
+    assertFalse(message.contains("noteAboutTheRisk"), "a method of one element is no method of the process: "
+        + message);
+
+  }
+
+  @Test
+  @DisplayName("Each adapter holds the reported elements against the version its own BPMS gave the model")
+  public void eachAdapterHoldsTheElementsAgainstItsOwnVersion() {
+
+    registerNoteContract(null);
+    register(PROCESS, NotesOfLaterVersions.class);
+    reportElements(List.of(List.of("ServiceTask_AssessRisk")));
+    registry.validateTaskWiring(ADAPTER, MODULE, PROCESS, List.of(ASSESS_RISK));
+    registry.validateTaskWiring(OTHER_ADAPTER, MODULE, PROCESS, List.of(ASSESS_RISK));
+    registry.registerDeployedVersion(ADAPTER, MODULE, PROCESS, "2");
+    registry.registerDeployedVersion(OTHER_ADAPTER, MODULE, PROCESS, "1");
+    registry.registerProcessVersions(ADAPTER, MODULE, PROCESS, new CatalogStub("2"));
+    registry.registerProcessVersions(OTHER_ADAPTER, MODULE, PROCESS, new CatalogStub("1"));
+
+    final var failure = assertThrows(IllegalStateException.class, () -> registry.resolveProcessVersions(MODULE));
+
+    assertTrue(failure.getMessage().contains("adapter 'camunda8'"), failure.getMessage());
+    assertFalse(failure.getMessage().contains("adapter 'camunda7'"), failure.getMessage());
+
+  }
+
+  @Test
+  @DisplayName("A task and an element of an extension end the start in one message, each with its sentence")
+  public void aTaskAndAnElementShareOneMessage() {
+
+    registerNoteContract(null);
+    register(PROCESS, TaskAndNoteOfLaterVersions.class);
+    reportElements(List.of(List.of("ServiceTask_AssessRisk")));
+
+    final var failure = assertThrows(
+        IllegalStateException.class,
+        () -> deploy(ADAPTER, PROCESS, "1", List.of(ASSESS_RISK)));
+
+    final var message = failure.getMessage();
+    assertTrue(message.contains("task 'ServiceTask_AssessRisk' (task definition 'assessRisk')"), message);
+    assertTrue(message.contains("element 'ServiceTask_AssessRisk': @Note method"), message);
+    assertTrue(message.contains(A_TASK_WITHOUT_A_METHOD_STOPS_EVERY_WORKFLOW), message);
+    assertTrue(message.contains("For @Note of extension 'test-extension'"), message);
+
+  }
+
+  @Test
+  @DisplayName("Without the flag the elements of a contract are not asked about")
+  public void withoutTheFlagNothingIsAsked() {
+
+    registry
+        .getExtensionHandlers()
+        .register(io.vanillabp.integration.extension.spi.handler.HandlerContract
+            .of("test-extension", Note.class)
+            .lookupKeys(annotation -> keysOf(((Note) annotation).element()))
+            .versions(annotation -> versionsOf(((Note) annotation).version()))
+            .callsCarryTheProcessVersion()
+            .coreParameters(io.vanillabp.integration.extension.spi.handler.CoreHandlerParameter.WORKFLOW_AGGREGATE)
+            .build());
+    register(PROCESS, NotesOfLaterVersions.class);
+    reportElements(List.of(List.of("ServiceTask_AssessRisk"), List.of()));
+
+    assertDoesNotThrow(() -> deploy(ADAPTER, PROCESS, "1", List.of(ASSESS_RISK)));
+
+  }
+
+  @Test
+  @DisplayName("A contract asking for a method for the deployed version has to name the version on its calls")
+  public void theFlagNeedsCallsCarryingTheVersion() {
+
+    final var builder = io.vanillabp.integration.extension.spi.handler.HandlerContract
+        .of("test-extension", Note.class)
+        .theDeployedVersionNeedsAMethod();
+
+    final var failure = assertThrows(IllegalArgumentException.class, builder::build);
+
+    assertTrue(failure.getMessage().contains("theDeployedVersionNeedsAMethod()"), failure.getMessage());
+    assertTrue(failure.getMessage().contains("callsCarryTheProcessVersion()"), failure.getMessage());
+    assertTrue(failure.getMessage().contains("extension 'test-extension'"), failure.getMessage());
+    assertTrue(failure.getMessage().contains("'@Note'"), failure.getMessage());
+
+  }
+
+  /**
+   * Registers the contract of {@link Note}, which asks for a method for the deployed version,
+   * and the one of {@link Remark}, which does not.
+   *
+   * @param consequence What the extension says an element without a method means, or
+   *          <code>null</code> for the neutral sentence
+   */
+  private void registerNoteContract(
+      final String consequence) {
+
+    final var note = io.vanillabp.integration.extension.spi.handler.HandlerContract
+        .of("test-extension", Note.class)
+        .lookupKeys(annotation -> keysOf(((Note) annotation).element()))
+        .versions(annotation -> versionsOf(((Note) annotation).version()))
+        .callsCarryTheProcessVersion()
+        .coreParameters(io.vanillabp.integration.extension.spi.handler.CoreHandlerParameter.WORKFLOW_AGGREGATE);
+    registry
+        .getExtensionHandlers()
+        .register((consequence == null
+            ? note.theDeployedVersionNeedsAMethod()
+            : note.theDeployedVersionNeedsAMethod(consequence)).build());
+    registry
+        .getExtensionHandlers()
+        .register(io.vanillabp.integration.extension.spi.handler.HandlerContract
+            .of("other-extension", Remark.class)
+            .lookupKeys(annotation -> keysOf(((Remark) annotation).element()))
+            .versions(annotation -> versionsOf(((Remark) annotation).version()))
+            .callsCarryTheProcessVersion()
+            .coreParameters(io.vanillabp.integration.extension.spi.handler.CoreHandlerParameter.WORKFLOW_AGGREGATE)
+            .build());
+    // the other extension reports the same element, and is not asked about it
+    registry
+        .getExtensionHandlers()
+        .elementsOfTheDeployedModel(Remark.class, MODULE, PROCESS, List.of(List.of("ServiceTask_AssessRisk")));
+
+  }
+
+  /**
+   * What the extension does in its <code>wireBpmn</code>.
+   */
+  private void reportElements(
+      final List<List<String>> lookupKeysOfEachElement) {
+
+    registry
+        .getExtensionHandlers()
+        .elementsOfTheDeployedModel(Note.class, MODULE, PROCESS, lookupKeysOfEachElement);
+
+  }
+
+  private static List<String> keysOf(
+      final String element) {
+
+    return element.isEmpty()
+        ? List.of()
+        : List.of(element);
+
+  }
+
+  private static List<String> versionsOf(
+      final String version) {
+
+    return version.isEmpty()
+        ? List.of()
+        : List.of(version);
 
   }
 

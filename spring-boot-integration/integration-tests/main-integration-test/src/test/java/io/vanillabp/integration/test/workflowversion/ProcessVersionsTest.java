@@ -360,7 +360,8 @@ public class ProcessVersionsTest {
               "Version '5' of BPMN process 'VersionedProcess' (workflow module 'test-module') is the version "
                   + "adapter 'test' deployed during this start."),
           message);
-      Assertions.assertTrue(message.contains(DeployedProcessVersionsCheck.SERVED_BY_NO_METHOD), message);
+      Assertions.assertTrue(message.contains(DeployedProcessVersionsCheck.ELEMENTS_SERVED_BY_NO_METHOD_IN_THIS_VERSION),
+          message);
       Assertions.assertTrue(message.contains("task 'Activity_Versioned' (task definition 'versionedTask')"), message);
       Assertions.assertTrue(message.contains("(version '1-2')"), message);
       Assertions.assertTrue(message.contains("(version 'release-2026')"), message);

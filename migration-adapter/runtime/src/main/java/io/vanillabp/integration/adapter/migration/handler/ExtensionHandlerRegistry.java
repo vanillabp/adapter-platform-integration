@@ -142,6 +142,14 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
   private final Map<BpmnElement, String> bpmnTaskNames = new ConcurrentHashMap<>();
 
   /**
+   * The elements the extensions reported for the models the adapters wired, each as the
+   * lookup keys a call would offer for it. They are held against the deployed version once the
+   * BPMS has reported it. Kept per BPMN process and not per adapter, because the extension
+   * reports them from a callback which names no adapter.
+   */
+  private final Map<RegistryKey, Set<List<String>>> elementsOfDeployedModels = new ConcurrentHashMap<>();
+
+  /**
    * Built by the {@link io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry},
    * which hands over what an extension's handler needs to be treated like one of its own.
    * <p>
@@ -549,13 +557,155 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
         })
         .flatMap(entry -> List.copyOf(entry.getValue()).stream())
         .map(method -> new HandlerVersions(
-            method.describe(), "%s method '%s' of extension '%s' (version %s)"
-                .formatted(
-                    method.describeAnnotation(),
-                    method.describe(),
-                    method.getExtensionId(),
-                    method.describeVersions()), serves.test(method.servedVersions())))
+            method.describe(), describeWithVersions(method), serves.test(method.servedVersions())))
         .toList();
+
+  }
+
+  /**
+   * A method of an extension as a message names it: annotation, method, extension and the
+   * versions it serves.
+   */
+  private static String describeWithVersions(
+      final ExtensionHandlerMethod method) {
+
+    return "%s method '%s' of extension '%s' (version %s)"
+        .formatted(
+            method.describeAnnotation(),
+            method.describe(),
+            method.getExtensionId(),
+            method.describeVersions());
+
+  }
+
+  @Override
+  public void elementsOfTheDeployedModel(
+      final Class<? extends Annotation> annotationType,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final List<List<String>> lookupKeysOfEachElement) {
+
+    if ((annotationType == null) || (workflowModuleId == null) || (bpmnProcessId == null)) {
+      throw new IllegalArgumentException(
+          """
+              An extension reported elements of a deployed model without naming the annotation, the \
+              workflow module or the BPMN process (got '%s', '%s', '%s')! Pass all three to \
+              ExtensionHandlers#elementsOfTheDeployedModel."""
+              .formatted(annotationType, workflowModuleId, bpmnProcessId));
+    }
+    if (lookupKeysOfEachElement == null) {
+      return;
+    }
+    final var reported = elementsOfDeployedModels
+        .computeIfAbsent(
+            new RegistryKey(workflowModuleId, bpmnProcessId, annotationType),
+            key -> java.util.Collections.synchronizedSet(new java.util.LinkedHashSet<>()));
+    lookupKeysOfEachElement
+        .stream()
+        .filter(java.util.Objects::nonNull)
+        .map(keys -> keys
+            .stream()
+            .filter(key -> (key != null) && !key.isBlank())
+            .toList())
+        .forEach(reported::add);
+
+  }
+
+  /**
+   * Which elements the extensions reported for one BPMN process no method serves in the
+   * version the BPMS gave the deployed model. Only a contract which asks for it is asked
+   * ({@link HandlerContract#deployedVersionNeedsAMethod()}), see
+   * decision 127 in the repository's {@code DECISIONS.md}.
+   * <p>
+   * The methods of an element are the ones a call offering its keys may reach in some version,
+   * picked like {@link #taskParameterNames(Class, String, String, List)} picks them. An element
+   * none of them serves is not asked about, because no method is a legal answer for an
+   * extension. Of the others, one method covering the version is enough.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param version The version the BPMS gave the model this start deployed
+   * @param resolver Resolves version tags of that process
+   * @return Each element no method serves in that version, empty where all are served
+   */
+  public List<io.vanillabp.integration.adapter.migration.workflowtask.DeployedProcessVersionsCheck.UnservedElement> elementsTheDeployedVersionLeavesUnserved(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String version,
+      final VersionRange.ProcessVersionResolver resolver) {
+
+    final var unserved = new LinkedList<io.vanillabp.integration.adapter.migration.workflowtask.DeployedProcessVersionsCheck.UnservedElement>();
+    elementsOfDeployedModels
+        .entrySet()
+        .stream()
+        .filter(entry -> entry.getKey().workflowModuleId().equals(workflowModuleId))
+        .filter(entry -> entry.getKey().bpmnProcessId().equals(bpmnProcessId))
+        // the same order on every start, so the message reads the same
+        .sorted(java.util.Comparator.comparing(entry -> entry.getKey().annotationType().getName()))
+        .forEach(entry -> {
+          final var contract = contracts.get(entry.getKey().annotationType());
+          if ((contract == null) || !contract.deployedVersionNeedsAMethod()) {
+            return;
+          }
+          final List<List<String>> elements;
+          synchronized (entry.getValue()) {
+            elements = List.copyOf(entry.getValue());
+          }
+          elements
+              .forEach(lookupKeys -> {
+                final var mayRun = methodsWhichMayRun(
+                    contract.getAnnotationType(), workflowModuleId, bpmnProcessId, lookupKeys);
+                if (mayRun.isEmpty() || mayRun.stream().anyMatch(method -> method.matchesVersion(version, resolver))) {
+                  return;
+                }
+                unserved
+                    .add(
+                        new io.vanillabp.integration.adapter.migration.workflowtask.DeployedProcessVersionsCheck.UnservedElement(
+                            describeElement(lookupKeys), mayRun.stream()
+                                .map(ExtensionHandlerRegistry::describeWithVersions).distinct()
+                                .toList(), consequenceOf(contract)));
+              });
+        });
+    return unserved;
+
+  }
+
+  /**
+   * An element as the message which ends the start names it: by its first key, which is the
+   * one an extension prefers, and by the others where there are any.
+   */
+  private static String describeElement(
+      final List<String> lookupKeys) {
+
+    if (lookupKeys.isEmpty()) {
+      return "the process itself";
+    }
+    if (lookupKeys.size() == 1) {
+      return "element '%s'".formatted(lookupKeys.getFirst());
+    }
+    return "element '%s' (also matched by %s)"
+        .formatted(
+            lookupKeys.getFirst(),
+            lookupKeys
+                .subList(1, lookupKeys.size())
+                .stream()
+                .map("'%s'"::formatted)
+                .collect(java.util.stream.Collectors.joining(", ")));
+
+  }
+
+  /**
+   * What an element without a method means for the extension, in its own words where it gave
+   * some.
+   */
+  private static String consequenceOf(
+      final HandlerContract contract) {
+
+    final var consequence = contract.getConsequenceOfAnElementWithoutAMethod() == null
+        ? "It finds no method to call for such an element and goes on without one."
+        : contract.getConsequenceOfAnElementWithoutAMethod();
+    return "For @%s of extension '%s': %s"
+        .formatted(contract.getAnnotationType().getSimpleName(), contract.getExtensionId(), consequence);
 
   }
 

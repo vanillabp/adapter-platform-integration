@@ -333,7 +333,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     this.deployedVersionsCheck = new DeployedProcessVersionsCheck(
         processVersions, outfadedVersions, this::tasksNotServedInVersion, this::handlersNotServingAnyVersion, this, this::reportConcurrentTokenElementsOfHeldVersions, scoping == null
             ? null
-            : scoping::reportIdentifiersOfHeldVersion, this::itemsAHeldVersionNeverNames, this::tasksTheDeployedVersionLeavesUnserved, properties == null
+            : scoping::reportIdentifiersOfHeldVersion, this::itemsAHeldVersionNeverNames, this::elementsTheDeployedVersionLeavesUnserved, properties == null
                 // a registry built without a configuration is a test fixture, and it has no
                 // start to close either
                 ? new io.vanillabp.integration.adapter.migration.startup.StartupFindings()
@@ -2298,6 +2298,46 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
                   .distinct()
                   .toList());
     }
+    return unserved;
+
+  }
+
+  /**
+   * Which elements of the model this start deployed no method serves in the version the BPMS
+   * gave that model: the tasks of {@link #tasksTheDeployedVersionLeavesUnserved}, then the
+   * elements the extensions reported for a contract which asks for it (see
+   * decision 127 in the repository's {@code DECISIONS.md}).
+   * <p>
+   * The tasks are kept per adapter, the elements of an extension per BPMN process. Each adapter
+   * holds both against the version its own BPMS gave the model.
+   *
+   * @param adapterId The adapter which deployed the model
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The plain BPMN process ID
+   * @param version The version the BPMS gave the model this start deployed
+   * @return Every element no method serves in that version, empty where every one is served
+   */
+  public List<DeployedProcessVersionsCheck.UnservedElement> elementsTheDeployedVersionLeavesUnserved(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String version) {
+
+    final var unserved = new java.util.LinkedList<DeployedProcessVersionsCheck.UnservedElement>();
+    tasksTheDeployedVersionLeavesUnserved(adapterId, workflowModuleId, bpmnProcessId, version)
+        .forEach((
+            task,
+            methods) -> unserved
+                .add(new DeployedProcessVersionsCheck.UnservedElement(
+                    "task '%s' (task definition '%s')".formatted(task.activityId(), task
+                        .taskDefinition()), methods, DeployedProcessVersionsCheck.A_TASK_WITHOUT_A_METHOD_STOPS_EVERY_WORKFLOW)));
+    unserved
+        .addAll(extensionHandlers
+            .elementsTheDeployedVersionLeavesUnserved(
+                workflowModuleId,
+                bpmnProcessId,
+                version,
+                processVersions.resolverFor(workflowModuleId, bpmnProcessId)));
     return unserved;
 
   }

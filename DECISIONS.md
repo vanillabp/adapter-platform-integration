@@ -4844,3 +4844,43 @@ BPMS gave the model.
 **No exception for a rolling deployment.** While another node deploys a newer model, this node may start on the
 older one. The version this node deployed is the one it starts on, and the workflows it starts run on that version.
 So the rule holds there too.
+
+*Story 954 adds the elements an extension reports, where its contract asks for it, see decision 127.*
+
+### 127. The version a start deployed needs a method for every element an extension reports, where the extension asks for it
+
+Proposed by story 954 for the Business Cockpit, whose details providers carry a `version` attribute. It adds to decision 126 and builds on decisions 56 and 121.
+
+Decision 126 ends the start where a task of the deployed model has `@WorkflowTask` methods, but none for the version
+the BPMS gave the model. The methods of an extension have the same gap. A details provider whose range misses the
+deployed version passes the start, and then no call of that version finds it. Nobody sees an error. The cockpit just
+shows the task without the provider's details.
+
+**An extension asks for it.** A contract says `theDeployedVersionNeedsAMethod()`. No method is a legal answer for an
+extension (decision 36), so the core cannot decide for every extension that a missed version is a defect. Only the
+extension knows whether it is. The flag needs `callsCarryTheProcessVersion()` as well, because a call without a
+version never picks a method by version. A contract with the flag and without the other ends the boot, and the
+message names both.
+
+**The extension names the elements.** The core knows the methods but not the model. A `BpmnTaskSpec` does not say
+whether a task is a user task, and a workflow details provider belongs to the process and not to a task. So the
+extension calls `ExtensionHandlers#elementsOfTheDeployedModel` in its `wireBpmn`. Each element is the list of lookup
+keys a call would offer for it, in the same order. An empty list is the process itself, which only a method serving
+every key serves.
+
+**The check is the one of decision 126.** It runs in the same place, right after the version is known, and throws
+the same exception. For every reported element of a contract with the flag, the core takes the methods a call may
+reach in some version, picked the way decision 121 picks them. Where there are none, the element is not asked about.
+Where one of them covers the deployed version, the element is served. Otherwise the start ends.
+
+**One message for both.** The message says "Some of its elements are served by NO method of this application in this
+version". Each line names the element and the methods with their ranges; a method of an extension is named with its
+annotation and its extension. Below the lines stands what a missing method means. A task keeps its sentence about the
+incident. A contract may give its own sentence, `theDeployedVersionNeedsAMethod(String)`; without one the core writes a
+neutral sentence.
+
+**Kept per process, checked per adapter.** `wireBpmn` names no adapter, so the elements are kept per workflow module
+and BPMN process. Each adapter holds them against the version its own BPMS gave the model, as decision 126 does for
+the tasks. Where two adapters deploy different models of one process, they share the reported elements. That is a
+known limit. Two different models of one process are rare, and the elements an extension reports for one of them are
+usually in the other one too.
