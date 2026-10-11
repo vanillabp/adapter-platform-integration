@@ -5,10 +5,9 @@ import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
 import io.vanillabp.integration.extension.spi.service.AggregateServiceContext;
 
 /**
- * What an extension's {@code AggregateServiceFactory} is handed for one
- * workflow-aggregate class: the process service of that aggregate's primary BPMN process
- * answers everything about the aggregate, and the handler methods and the election come
- * from the platform's own beans.
+ * What an extension's {@code AggregateServiceFactory} gets for one workflow-aggregate class.
+ * The process service of that aggregate's primary BPMN process answers everything about the
+ * aggregate. The handler methods and the election come from the platform's own beans.
  *
  * @param <A> The workflow-aggregate type
  */
@@ -22,9 +21,9 @@ public final class ExtensionAggregateServiceContext<A> implements AggregateServi
 
   /**
    * Built by the platform integration while an extension's service bean is created, one for
-   * each pair of extension service and workflow-aggregate class. Nothing is copied out of
-   * the three parts here: an extension may hold this context for as long as the application
-   * runs.
+   * each pair of extension service and workflow-aggregate class. Nothing is copied from the
+   * three parts here, because an extension may hold this context for as long as the
+   * application runs.
    *
    * @param processService The process service of the aggregate's primary BPMN process
    * @param handlers The handler methods of the extensions

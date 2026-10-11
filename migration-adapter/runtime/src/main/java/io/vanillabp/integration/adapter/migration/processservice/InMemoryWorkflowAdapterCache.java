@@ -9,34 +9,33 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterCachePro
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
 
 /**
- * The default {@link WorkflowAdapterCache}: a bounded, expiring in-memory
- * LRU-cache. Both bounds are configurable
+ * The default {@link WorkflowAdapterCache}: a limited in-memory LRU cache whose entries
+ * expire. Both limits can be configured
  * (<code>vanillabp.workflow-adapter-cache.max-entries</code> and
- * <code>.time-to-live</code>, see {@link WorkflowAdapterCacheProperties}) and both
- * are HARD - entries are hints, so an eviction or expiry only costs an extra probe,
- * never correctness, which is why the bound is a number and not a soft reference
- * (the reasoning is written down in <code>migration-adapter/README.md</code>).
- * Cluster setups share their elections instead: VanillaBP ships an implementation
- * for Hazelcast, and any other cache infrastructure is a bean implementing
- * {@link WorkflowAdapterCache}.
+ * <code>.time-to-live</code>, see {@link WorkflowAdapterCacheProperties}), and both are
+ * HARD. Entries are hints. So an eviction or an expiry only costs an extra probe, never
+ * correctness. That is why the limit is a number and not a soft reference (the reasons are
+ * in <code>migration-adapter/README.md</code>). In a cluster the nodes share their
+ * elections instead. VanillaBP ships an implementation for Hazelcast. Any other cache
+ * infrastructure is a bean which implements {@link WorkflowAdapterCache}.
  * <p>
- * One instance is shared by all process services of the application (the key
- * includes workflow module and BPMN process, the size bound applies globally).
+ * All process services of the application share one instance. The key includes the
+ * workflow module and the BPMN process, and the size limit applies to all of them
+ * together.
  * <p>
- * The hint of a workflow which ENDED is kept as well, and much shorter
- * (<code>.ended-time-to-live</code>, five minutes): it still answers the operation
- * which arrives after the end - which is what keeps such an operation a warned no-op -
- * but it can never become useful again, so it leaves early instead of occupying a place
- * for an hour.
+ * The hint of a workflow which ENDED is kept as well, but much shorter
+ * (<code>.ended-time-to-live</code>, five minutes). It still answers the operation which
+ * arrives after the end, and that keeps such an operation a warned no-op. But it can never
+ * become useful again. So it leaves early, instead of taking up a place for an hour.
  * <p>
- * The cache owns the statistics of what only it can know - its size, its evictions
- * and whether an evicted entry had ever been read, which is what the
- * eviction-pressure warning is made of. They are published under a prefix of this
- * implementation ({@link InMemoryWorkflowAdapterCacheStatistics}); what the election
- * asks of ANY cache is counted elsewhere, by the decorator around it.
+ * The cache owns the statistics of what only it can know: its size, its evictions, and
+ * whether an evicted entry had ever been read. The warning about eviction pressure is made
+ * of that. They are published under a prefix of this implementation
+ * ({@link InMemoryWorkflowAdapterCacheStatistics}). What the election asks of ANY cache is
+ * counted elsewhere, by the decorator around it.
  * <p>
- * Why a stale entry repairs itself instead of being prevented is decision 5 in the repository's
- * DECISIONS.md.
+ * Decision 5 in the repository's DECISIONS.md says why a stale entry repairs itself instead
+ * of being prevented.
  */
 public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
 
@@ -47,31 +46,31 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
   }
 
   /**
-   * Not a record: whether the entry was ever read decides whether its eviction is
-   * counted as pressure.
+   * Not a record, because whether the entry was ever read decides whether its eviction
+   * counts as pressure.
    * <p>
-   * Named <code>CacheEntry</code> and not <code>Entry</code> on purpose: the map below is
-   * an anonymous subclass of {@link LinkedHashMap}, and inside such a subclass the plain
-   * name <code>Entry</code> is {@link Map.Entry}, inherited from the map, not a class of
-   * this file. The compiler of Java 21 still picked this class, the compiler of Java 25
-   * picks the inherited one, and the file stopped compiling. A name of its own says which
-   * type is meant without anybody having to know that rule.
+   * It is named <code>CacheEntry</code> and not <code>Entry</code> on purpose. The map below
+   * is an anonymous subclass of {@link LinkedHashMap}. Inside such a subclass the plain name
+   * <code>Entry</code> is {@link Map.Entry}, inherited from the map, and not a class of this
+   * file. The compiler of Java 21 still picked this class. The compiler of Java 25 picks the
+   * inherited one, and the file stopped compiling. A name of its own says which type is
+   * meant, and nobody has to know that rule.
    */
   private static final class CacheEntry {
 
     private final String adapterId;
 
     /**
-     * The BPMS' own id of the workflow, where VanillaBP learned one - a hint like the
-     * adapter id and possibly absent.
+     * The BPMS' own id of the workflow, where VanillaBP learned one. It is a hint like the
+     * adapter id, and it may be missing.
      */
     private final String workflowId;
 
     private final long expiresAtMillis;
 
     /**
-     * Whether this is the hint of a workflow which ENDED - kept for a much shorter
-     * time, and counted separately so an operator can see the release working.
+     * Whether this is the hint of a workflow which ENDED. It is kept for a much shorter time,
+     * and counted separately, so that an operator can see the release working.
      */
     private final boolean ended;
 
@@ -103,16 +102,16 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
   private final Map<Key, CacheEntry> entries;
 
   /**
-   * How many of the entries held are marks of ended workflows, counted along instead of
-   * being recounted: a gauge is read on every scrape and must not walk the map the
-   * election needs (see decision 18 in the repository's DECISIONS.md). Guarded by the
-   * monitor of {@link #entries}.
+   * How many of the entries held are marks of ended workflows. The number is kept up to date
+   * and not counted again, because a gauge is read on every scrape and must not walk the map
+   * which the election needs (see decision 18 in the repository's DECISIONS.md). The
+   * monitor of {@link #entries} guards it.
    */
   private int endedEntries;
 
   /**
-   * Builds the cache with the defaults of {@link WorkflowAdapterCacheProperties} - what an
-   * application which configured nothing gets.
+   * Builds the cache with the defaults of {@link WorkflowAdapterCacheProperties}. That is
+   * what an application gets which configured nothing.
    */
   public InMemoryWorkflowAdapterCache() {
 
@@ -124,8 +123,8 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
    * Built by the platform integration as the default cache bean, once per application, and
    * only where the application brought no {@link WorkflowAdapterCache} of its own.
    *
-   * @param properties The configured bounds. The cache reads them while it is built, so
-   *          they cannot be changed while the application runs
+   * @param properties The configured limits. The cache reads them while it is built, so they
+   *          cannot be changed while the application runs
    */
   public InMemoryWorkflowAdapterCache(
       final WorkflowAdapterCacheProperties properties) {
@@ -133,11 +132,11 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
     this.maxEntries = properties.getMaxEntries();
     this.timeToLiveMillis = properties.getTimeToLive().toMillis();
     this.endedTimeToLiveMillis = properties.getEndedTimeToLive().toMillis();
-    // the cache creates its own statistics and is the only thing writing to them: a
-    // size nobody but this class can report is not a number the platform can be handed
+    // the cache creates its own statistics, and it is the only thing which writes to them.
+    // Only this class can report the size, so the platform cannot be handed that number
     this.statistics = new InMemoryWorkflowAdapterCacheStatistics(
         properties, this::size, this::endedSize);
-    // access-ordered LinkedHashMap = LRU; all access synchronized on it
+    // a LinkedHashMap in access order is an LRU cache. All access is synchronized on it
     this.entries = new LinkedHashMap<>(16, 0.75f, true) {
       @Override
       protected boolean removeEldestEntry(
@@ -153,7 +152,7 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
   }
 
   /**
-   * Visible for tests - production code passes the configured
+   * Visible for tests. Production code passes the configured
    * {@link WorkflowAdapterCacheProperties}.
    *
    * @param maxEntries How many hints are held before the least recently used one is dropped
@@ -168,12 +167,12 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
   }
 
   /**
-   * Visible for tests - production code passes the configured
+   * Visible for tests. Production code passes the configured
    * {@link WorkflowAdapterCacheProperties}.
    *
    * @param maxEntries How many hints are held before the least recently used one is dropped
    * @param timeToLive How long the hint of a running workflow is kept
-   * @param endedTimeToLive How long the hint of an ended workflow is kept, which is shorter
+   * @param endedTimeToLive How long the hint of an ended workflow is kept. It is shorter,
    *          because it can only ever answer a late operation with a warned no-op
    */
   public InMemoryWorkflowAdapterCache(
@@ -202,7 +201,7 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
   }
 
   /**
-   * The number of entries currently held - reported as a metric.
+   * The number of entries held right now, reported as a metric.
    *
    * @return The number of entries
    */
@@ -215,10 +214,10 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
   }
 
   /**
-   * How many of the entries held are hints of workflows which ended - reported as a
-   * metric of its own, because that number is what tells an operator whether the
-   * release is working: it rises while workflows end and falls again as the shorter
-   * lifetime takes those entries away.
+   * How many of the entries held are hints of workflows which ended. It is reported as a
+   * metric of its own, because that number tells an operator whether the release works. It
+   * rises while workflows end, and falls again as the shorter lifetime takes those entries
+   * away.
    *
    * @return The number of entries marked as ended
    */
@@ -268,7 +267,7 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
       final var entry = entries.get(key);
       if ((entry == null) || (entry.expiresAtMillis < System.currentTimeMillis())) {
         if (entry != null) {
-          // expiry is not eviction pressure: the entry lived its full time-to-live
+          // expiry is not eviction pressure. The entry lived its full time-to-live
           entries.remove(key);
           if (entry.ended) {
             --endedEntries;
@@ -282,8 +281,8 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
     }
 
     if (hint == null) {
-      // outside the lock: judging a miss takes a lock of its own and may log, and the
-      // election is waiting for this map
+      // outside the lock. Judging a miss takes a lock of its own and may log, and the
+      // election waits for this map
       statistics.recordLookupMiss(workflowModuleId, bpmnProcessId, workflowAggregateId);
       return Optional.empty();
     }
@@ -332,19 +331,19 @@ public class InMemoryWorkflowAdapterCache implements WorkflowAdapterCache {
     final var key = new Key(workflowModuleId, bpmnProcessId, workflowAggregateId);
     synchronized (entries) {
       final var current = entries.get(key);
-      // the mark keeps what the entry knew about the workflow: the end says the workflow
-      // is over, not that its id was wrong
+      // the mark keeps what the entry knew about the workflow. The end says that the
+      // workflow is over, not that its id was wrong
       final var entry = new CacheEntry(
           adapterId, current == null
               ? null
               : current.workflowId, System.currentTimeMillis() + endedTimeToLiveMillis, true);
-      // an entry which is only waiting to be dropped on the next read says nothing
-      // about anybody
+      // an entry which only waits to be dropped at the next read says nothing about
+      // anybody
       final var currentIsAlive = (current != null) && (current.expiresAtMillis >= System.currentTimeMillis());
       if (currentIsAlive && !current.adapterId.equals(adapterId)) {
-        // the key names the aggregate and not the instance, so an entry naming another
-        // adapter belongs to a second workflow on the same aggregate, elected after the
-        // one which just ended - the newer knowledge stays
+        // the key names the aggregate and not the instance. So an entry which names another
+        // adapter belongs to a second workflow on the same aggregate, elected after the one
+        // which just ended. The newer knowledge stays
         return;
       }
       final var replaced = entries.put(key, entry);

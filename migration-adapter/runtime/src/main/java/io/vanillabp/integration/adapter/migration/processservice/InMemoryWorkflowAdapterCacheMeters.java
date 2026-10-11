@@ -7,25 +7,24 @@ import io.micrometer.core.instrument.binder.MeterBinder;
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
 
 /**
- * Publishes what the in-memory election cache knows about itself, under the prefix of
- * that implementation ({@value InMemoryWorkflowAdapterCacheStatistics#METER_PREFIX}).
- * Both platforms apply {@link MeterBinder} beans to their registries by themselves,
- * so the binding is the same class on both.
+ * Publishes what the in-memory election cache knows about itself, under the prefix of that
+ * implementation ({@value InMemoryWorkflowAdapterCacheStatistics#METER_PREFIX}). Both
+ * platforms apply {@link MeterBinder} beans to their registries themselves. So the binding
+ * is the same class on both.
  * <p>
- * It takes the cache the application ended up with rather than the statistics,
- * because whether these meters exist at all depends on which cache that is: with a
- * shared cache in use there is no size and there are no evictions to report, and this
- * binder then registers nothing. That is the point of the split - a meter which
- * cannot mean anything is not published, instead of publishing NaN forever.
+ * It takes the cache which the application ended up with, and not the statistics. Whether
+ * these meters exist at all depends on which cache that is. With a shared cache there is no
+ * size and there are no evictions to report, and then this binder registers nothing. That is
+ * the point of the split. A meter which cannot mean anything is not published, instead of
+ * publishing NaN forever.
  * <p>
- * A cache which lives somewhere else reports what IT knows the same way, under a
- * prefix which says which implementation it is (the cache VanillaBP ships for
- * Hazelcast knows the size of its map across the cluster and whether this node is
- * alone in it).
+ * A cache which lives somewhere else reports what IT knows the same way, under a prefix
+ * which says which implementation it is. The cache which VanillaBP ships for Hazelcast knows
+ * the size of its map across the cluster, and whether this node is alone in it.
  * <p>
- * Micrometer is OPTIONAL: this class is loaded only where the platform integration
- * found Micrometer in the classpath - an application without it runs unchanged and
- * simply reports no metrics.
+ * Micrometer is OPTIONAL. This class is loaded only where the platform integration found
+ * Micrometer in the classpath. An application without it runs unchanged and simply reports
+ * no metrics.
  */
 public class InMemoryWorkflowAdapterCacheMeters implements MeterBinder {
 
@@ -33,13 +32,13 @@ public class InMemoryWorkflowAdapterCacheMeters implements MeterBinder {
 
   /**
    * Built by the platform integration where Micrometer is present, once per application.
-   * Which meters this ends up registering is decided in
-   * {@link #bindTo(MeterRegistry)}, not here, because the cache is a bean and asking it
-   * what it is while the beans are still being built would be too early.
+   * {@link #bindTo(MeterRegistry)} decides which meters this registers, not this
+   * constructor. The cache is a bean, and asking it what it is while the beans are still
+   * being built would be too early.
    *
    * @param cacheInUse The cache of this application, whichever implementation it is, or
-   *          <code>null</code> where the application has none at all (its elections
-   *          then probe every time and there is nothing to report)
+   *          <code>null</code> where the application has none at all. Then its elections
+   *          probe every time, and there is nothing to report
    */
   public InMemoryWorkflowAdapterCacheMeters(
       final WorkflowAdapterCache cacheInUse) {

@@ -9,25 +9,24 @@ import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Round-trip handling of workflow-aggregate IDs crossing the phase-two outbox: the ID
- * is serialized as a String by
- * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementations and
- * converted back to the aggregate's ID type at dispatch time. The ID type comes from
- * {@link io.vanillabp.integration.spi.AggregatePersistenceAware#getAggregateIdType()}
- * - if it is <code>null</code> (custom persistence owning the serialized form),
- * nothing is validated and the String is passed through unchanged.
+ * Handles workflow-aggregate IDs on their way through the phase-two outbox and back. The
+ * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementations serialize the ID as a
+ * String. At dispatch time it is converted back to the aggregate's ID type. The ID type comes
+ * from {@link io.vanillabp.integration.spi.AggregatePersistenceAware#getAggregateIdType()}.
+ * If that is <code>null</code> (a custom persistence which owns the serialized form),
+ * nothing is checked, and the String is passed through unchanged.
  * <p>
- * The supported ID types are an explicit, platform-independent allow-list: every
- * listed type converts String → ID → String losslessly. This single definition
- * replaces the former platform-specific pair (a Spring
- * <code>ConversionService</code>-based check and a Quarkus allow-list).
+ * The supported ID types are an explicit list which does not depend on the platform. Every
+ * listed type converts String to ID to String without loss. This one definition replaces
+ * the former pair for each platform (a check based on Spring's
+ * <code>ConversionService</code>, and a list for Quarkus).
  */
 @Slf4j
 public final class AggregateIdRoundTrip {
 
   /**
-   * ID types which round-trip losslessly through the phase-two outbox's String
-   * serialization (see {@link #convert(String, Class)}).
+   * ID types which survive the String serialization of the phase-two outbox without loss
+   * (see {@link #convert(String, Class)}).
    */
   public static final Set<String> SUPPORTED_ID_TYPES = Set.of(
       "java.lang.String",
@@ -47,16 +46,16 @@ public final class AggregateIdRoundTrip {
   }
 
   /**
-   * Validates AT STARTUP that the aggregate's ID type converts String → ID → String
-   * losslessly: the ID crosses the phase-two outbox serialized as a String, so an
-   * unconvertible type would corrupt the dispatch silently. A <code>null</code> ID
-   * type is fine (custom persistence - the serialized form is the custom layer's
-   * responsibility, nothing is validated).
+   * Checks AT STARTUP that the aggregate's ID type converts String to ID to String without
+   * loss. The ID crosses the phase-two outbox as a String. So a type which cannot be
+   * converted would silently break the dispatch. A <code>null</code> ID type is fine (a
+   * custom persistence, whose own layer is responsible for the serialized form, and nothing
+   * is checked).
    *
    * @param workflowAggregateClass The aggregate's class (used in the message)
    * @param aggregateIdType The aggregate's ID type or <code>null</code>
-   * @throws IllegalStateException If the ID type is known but not convertible,
-   *           naming the aggregate class and the supported ID types
+   * @throws IllegalStateException If the ID type is known but cannot be converted. The
+   *           message names the aggregate class and the supported ID types
    */
   public static void validateIdTypeConvertible(
       final Class<?> workflowAggregateClass,
@@ -78,8 +77,8 @@ public final class AggregateIdRoundTrip {
   }
 
   /**
-   * Converts the serialized aggregate ID to the given target type. Unsupported types
-   * and a <code>null</code> target type are passed through as strings.
+   * Converts the serialized aggregate ID to the given target type. Unsupported types and a
+   * <code>null</code> target type are passed through as strings.
    *
    * @param serializedAggregateId The aggregate ID in serialized form
    * @param aggregateIdType The type the aggregate ID should be converted to
@@ -111,14 +110,14 @@ public final class AggregateIdRoundTrip {
   }
 
   /**
-   * Converts the serialized aggregate ID to the given target type, and answers EMPTY
-   * where the value does not fit that type - a text where a number or a UUID is
-   * expected, or a type this class does not know.
+   * Converts the serialized aggregate ID to the given target type. It answers EMPTY where the
+   * value does not fit that type: a text where a number or a UUID is expected, or a type
+   * which this class does not know.
    * <p>
-   * This is the answer a caller needs which has a string and a question rather than a
-   * string it already knows to be an ID: a business key somebody else chose is looked up
-   * as an aggregate's ID, and where it cannot be one, the lookup has to end with "there
-   * is none" instead of a failing query or an invented ID.
+   * A caller needs this answer when it has a string and a question, and not a string which it
+   * already knows to be an ID. An example is a business key which somebody else chose, looked
+   * up as an aggregate's ID. Where it cannot be one, the lookup has to end with "there is
+   * none", not with a failing query or an invented ID.
    *
    * @param serializedAggregateId The aggregate ID in serialized form
    * @param aggregateIdType The type the aggregate ID should be converted to, or

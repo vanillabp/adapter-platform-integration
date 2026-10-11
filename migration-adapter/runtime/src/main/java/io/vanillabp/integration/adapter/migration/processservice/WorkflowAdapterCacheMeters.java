@@ -5,20 +5,20 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.binder.MeterBinder;
 
 /**
- * Publishes the {@link WorkflowAdapterCacheStatistics} as Micrometer meters. Both
- * platforms apply {@link MeterBinder} beans to their registries by themselves
- * (Spring Boot through the Actuator's metrics auto-configuration, Quarkus through
- * the Micrometer extension), so the binding is the same class on both.
+ * Publishes the {@link WorkflowAdapterCacheStatistics} as Micrometer meters. Both platforms
+ * apply {@link MeterBinder} beans to their registries themselves (Spring Boot through the
+ * metrics auto-configuration of the Actuator, Quarkus through the Micrometer extension). So
+ * the binding is the same class on both.
  * <p>
- * Micrometer is OPTIONAL: this class is loaded only where the platform integration
- * found Micrometer in the classpath - an application without it runs unchanged and
- * simply reports no metrics.
+ * Micrometer is OPTIONAL. This class is loaded only where the platform integration found
+ * Micrometer in the classpath. An application without it runs unchanged and simply reports
+ * no metrics.
  * <p>
  * Every meter here holds for every implementation, because the numbers come from the
- * decorator around the cache rather than from the cache. What an implementation knows
- * about itself is published under a prefix of its own, so that no meter of this class
- * can ever report a NaN or a zero which cannot become anything else (the in-memory
- * default: {@link InMemoryWorkflowAdapterCacheMeters}).
+ * decorator around the cache and not from the cache. What an implementation knows about
+ * itself is published under a prefix of its own. So no meter of this class can ever report
+ * a NaN, or a zero which can never become anything else (for the in-memory default:
+ * {@link InMemoryWorkflowAdapterCacheMeters}).
  */
 public class WorkflowAdapterCacheMeters implements MeterBinder {
 
@@ -27,8 +27,8 @@ public class WorkflowAdapterCacheMeters implements MeterBinder {
   /**
    * Built by the platform integration where Micrometer is present, once per application.
    *
-   * @param statistics The one instance every process service counts into. The meters read
-   *          it while the backend collects them, so it is kept rather than copied
+   * @param statistics The one instance into which every process service counts. The meters
+   *          read it while the backend collects them, so it is kept and not copied
    */
   public WorkflowAdapterCacheMeters(
       final WorkflowAdapterCacheStatistics statistics) {

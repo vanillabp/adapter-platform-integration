@@ -16,22 +16,23 @@ import io.vanillabp.spi.process.WorkflowNotFoundException;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The READING half of a process service: what a viewer shows about a workflow - the process
- * definitions it uses, their BPMN XML, and its execution history.
+ * The READING half of a process service: what a viewer shows about a workflow. That is the
+ * process definitions it uses, their BPMN XML, and its execution history.
  * <p>
- * A read is unlike every operation which advances a workflow, in three ways which is why it
- * has a place of its own. Nothing is saved: the aggregate is not written back, and no outbox
- * entry is planned. A workflow which has ENDED is a perfectly valid subject, since a viewer
- * shows ended workflows, so {@link WorkflowAwareness#COMPLETED} elects the adapter answering
- * it instead of becoming the warned no-op it is elsewhere. And a read is the one caller
- * which really waits: an operation is planned in phase one and asks again at dispatch time,
- * while nothing repeats a read later - it answers the caller or it fails.
+ * A read is unlike every operation which moves a workflow forward, in three ways. That is why
+ * it has a place of its own. Nothing is saved: the aggregate is not written back, and no
+ * outbox entry is planned. A workflow which has ENDED is a perfectly valid subject, because
+ * a viewer shows ended workflows. So {@link WorkflowAwareness#COMPLETED} elects the adapter
+ * which answers it, instead of becoming the warned no-op it is elsewhere. And a read is the
+ * one caller which really waits. An operation is planned in phase one and asks again at
+ * dispatch time. But nothing repeats a read later. It answers the caller, or it fails.
  * <p>
- * The definition ids handed out are namespaced with the answering adapter's id (see
- * {@link ProcessDefinitionIds}), because {@link #getBpmnXml(String)} has no aggregate to
- * elect by and the id is what has to say who can resolve it.
+ * The definition ids handed out get the id of the answering adapter in front (see
+ * {@link ProcessDefinitionIds}). {@link #getBpmnXml(String)} has no aggregate by which to
+ * elect, so the id has to say who can resolve it.
  *
- * @param <A> The workflow-aggregate type of the process service this viewer belongs to
+ * @param <A> The workflow-aggregate type of the process service to which this viewer
+ *          belongs
  */
 @Slf4j
 public final class WorkflowViewer<A> {
@@ -41,8 +42,8 @@ public final class WorkflowViewer<A> {
   private final String bpmnProcessId;
 
   /**
-   * The adapter ids in priority order - named by every message about a workflow no BPMS
-   * knows.
+   * The adapter ids in order of priority. Every message about a workflow which no BPMS knows
+   * names them.
    */
   private final List<String> prioritizedAdapters;
 
@@ -53,22 +54,22 @@ public final class WorkflowViewer<A> {
   private final WorkflowLocator workflowLocator;
 
   /**
-   * What a probe is asked about. A supplier because the platform integration sets the
+   * What a probe is asked about. It is a supplier, because the platform integration sets the
    * served BPMN processes after the process service was built.
    */
   private final Supplier<WorkflowScope> scope;
 
   /**
-   * Reads what VanillaBP wrote down about a workflow: the start row and the BPMS' own id. A
-   * function because the process service owns the rows, and the operations read them the same
-   * way.
+   * Reads what VanillaBP wrote down about a workflow: the start row and the BPMS' own id. It
+   * is a function, because the process service owns the rows, and the operations read them
+   * the same way.
    */
   private final Function<Object, WorkflowLocator.WrittenDown> writtenDownAbout;
 
   /**
    * Built by the {@link MigrationProcessService} of this BPMN process, in its constructor,
-   * and used by nobody else. It is handed the parts it reads from rather than the process
-   * service itself, which keeps the reading half away from everything that changes a
+   * and used by nobody else. It gets the parts from which it reads, and not the process
+   * service itself. That keeps the reading half away from everything which changes a
    * workflow.
    *
    * @param workflowModuleId The workflow module of this process service
@@ -77,12 +78,12 @@ public final class WorkflowViewer<A> {
    * @param adapterProcessServices The adapters' process services, in the same order as
    *          <code>prioritizedAdapters</code>
    * @param aggregatePersistenceSupport How the id of a workflow aggregate is read
-   * @param workflowLocator The election, shared with the process service so that a read
-   *          profits from what an operation learned and the other way round
-   * @param scope Reports what this process service serves right now, asked at every probe
-   *          because the platform fills it in after the process service was built
+   * @param workflowLocator The election, shared with the process service. So a read profits
+   *          from what an operation learned, and the other way round
+   * @param scope Reports what this process service serves right now. It is asked at every
+   *          probe, because the platform fills it in after the process service was built
    * @param writtenDownAbout Reads the start row and the BPMS' own id of the workflow of an
-   *          aggregate, the same way the election of an operation reads them
+   *          aggregate, the same way as the election of an operation
    */
   public WorkflowViewer(
       final String workflowModuleId,
@@ -109,7 +110,7 @@ public final class WorkflowViewer<A> {
    * The process definitions used by the workflow of the given aggregate.
    *
    * @param workflowAggregate The workflow aggregate
-   * @param historyContext <code>null</code> for the primary process or a secondary history
+   * @param historyContext <code>null</code> for the primary process, or a secondary history
    *          context of a call activity
    * @return The process definitions
    */
@@ -139,9 +140,9 @@ public final class WorkflowViewer<A> {
   }
 
   /**
-   * The BPMN XML of a process definition previously reported by
-   * {@link #getProcessDefinitions(Object, String)}. The composite definition id names the
-   * adapter which can resolve it - there is no aggregate to elect by.
+   * The BPMN XML of a process definition which {@link #getProcessDefinitions(Object, String)}
+   * reported before. The composite definition id names the adapter which can resolve it,
+   * because there is no aggregate by which to elect.
    *
    * @param processDefinitionId The composite process definition id
    * @return The BPMN XML
@@ -197,11 +198,11 @@ public final class WorkflowViewer<A> {
   }
 
   /**
-   * The execution history of the workflow of the given aggregate - same election and
-   * read-only semantics as {@link #getProcessDefinitions(Object, String)}.
+   * The execution history of the workflow of the given aggregate. Election and read-only
+   * behavior are the same as in {@link #getProcessDefinitions(Object, String)}.
    *
    * @param workflowAggregate The workflow aggregate
-   * @param historyContext <code>null</code> for the primary process or a secondary history
+   * @param historyContext <code>null</code> for the primary process, or a secondary history
    *          context of a call activity
    * @return The workflow history
    */
@@ -228,29 +229,29 @@ public final class WorkflowViewer<A> {
   }
 
   /**
-   * Elects the adapter answering a READ. Unlike operations advancing a workflow,
-   * {@link WorkflowAwareness#COMPLETED} is a regular result here (an ended workflow still
-   * has definitions and a history); only a subject unknown to EVERY adapter raises the
-   * SPI's {@code WorkflowNotFoundException}.
+   * Elects the adapter which answers a READ. Unlike for operations which move a workflow
+   * forward, {@link WorkflowAwareness#COMPLETED} is a regular result here, because an ended
+   * workflow still has definitions and a history. Only a subject which EVERY adapter does not
+   * know raises the SPI's {@code WorkflowNotFoundException}.
    * <p>
-   * A read is the caller which has to do its own waiting. An operation advancing a
-   * workflow is planned in phase one and waits for an eventually consistent read model
-   * in the dispatch, where no transaction is open (decision 27 in the repository's
-   * DECISIONS.md); a read has no second place to wait in - it answers the caller or it
-   * fails, and a failure is not repeated by anybody. So where a hint says which adapter
-   * holds the workflow, the read waits out that adapter's
-   * {@code workflowVisibilityDelay}: asking for the history of a workflow the same
-   * application started seconds ago is the ordinary case, and the one to three seconds
-   * Camunda 8's exporter lags behind must not turn it into an error. Without a hint
-   * nothing is waited for - a workflow nobody has ever seen fails at once.
+   * A read is the caller which has to do its own waiting. An operation which moves a workflow
+   * forward is planned in phase one. It waits for an eventually consistent read model in the
+   * dispatch, where no transaction is open (decision 27 in the repository's DECISIONS.md). A
+   * read has no second place to wait. It answers the caller or it fails, and nobody repeats a
+   * failure. So where a hint says which adapter holds the workflow, the read waits out that
+   * adapter's {@code workflowVisibilityDelay}. Asking for the history of a workflow which the
+   * same application started seconds ago is the ordinary case. The one to three seconds by
+   * which the exporter of Camunda 8 lags behind must not turn it into an error. Without a
+   * hint nothing is waited for. A workflow which nobody has ever seen fails at once.
    * <p>
-   * The cache is not the only hint. It lives in the memory of one node, so on a second node,
-   * after a restart and once it forgot, it knows nothing about a workflow started a moment ago.
-   * So the read first looks at what VanillaBP wrote down, the same way an operation does: the
-   * row written when the workflow started names the adapter and the id. Where there is no such
-   * row, the rows of open tasks may still give the id. A start row counts as a hint, so the read
-   * waits for that adapter just as it does with a cached hint (decision 112 in the repository's
-   * DECISIONS.md). Without a row and without a cached hint it fails at once, as before.
+   * The cache is not the only hint. It lives in the memory of one node. So on a second node,
+   * after a restart, and once it forgot, it knows nothing about a workflow started a moment
+   * ago. So the read first looks at what VanillaBP wrote down, the same way as an operation.
+   * The row written when the workflow started names the adapter and the id. Where there is no
+   * such row, the rows of open tasks may still give the id. A start row counts as a hint. So
+   * the read waits for that adapter, just like with a cached hint (decision 112 in the
+   * repository's DECISIONS.md). Without a row and without a cached hint it fails at once, as
+   * before.
    */
   private WorkflowLocator.Location<A> locateForReading(
       final Object aggregateId,
@@ -259,17 +260,17 @@ public final class WorkflowViewer<A> {
     final var subject = "workflow of aggregate '%s' (BPMN process '%s' of workflow module '%s')"
         .formatted(aggregateId, bpmnProcessId, workflowModuleId);
 
-    // the hint is what buys the waiting: it says the workflow exists, so an adapter not
-    // reporting it yet is asked again until its visibility window is used up. Nothing
-    // repeats a read later, so this is the only place it can happen. The start row is a
-    // hint too, and the one a node gets which never saw the workflow
+    // the hint is what allows the waiting. It says that the workflow exists. So an adapter
+    // which does not report it yet is asked again, until its visibility window is used up.
+    // Nothing repeats a read later, so this is the only place where that can happen. The
+    // start row is a hint too, and it is the one a node gets which never saw the workflow
     final var writtenDown = writtenDownAbout.apply(aggregateId);
     final var workflowId = writtenDown.workflowId();
     final var location = workflowLocator.locate(
         adapterProcessServices,
-        // the id VanillaBP holds rides along: this read waits out the visibility window of
-        // an eventually consistent BPMS, and an adapter which can ask its engine by key
-        // answers before its read model does
+        // the id which VanillaBP holds goes along. This read waits out the visibility window
+        // of an eventually consistent BPMS. An adapter which can ask its engine by key answers
+        // before its read model does
         adapter -> adapter
             .awarenessOfWorkflow(scope.get(), aggregatePersistenceSupport, aggregateId, workflowId),
         aggregateId,
@@ -300,7 +301,7 @@ public final class WorkflowViewer<A> {
   }
 
   /**
-   * What a BPMS which reports the workflow but has no data for it is answered with.
+   * What a BPMS which reports the workflow but has no data for it gets as the answer.
    */
   private String workflowUnknownMessage(
       final Object aggregateId,

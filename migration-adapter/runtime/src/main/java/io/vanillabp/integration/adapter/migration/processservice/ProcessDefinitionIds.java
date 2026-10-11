@@ -3,22 +3,21 @@ package io.vanillabp.integration.adapter.migration.processservice;
 /**
  * The composite process-definition id of VanillaBP's viewer API.
  * <p>
- * <b>Scheme:</b> <code>&lt;adapter id&gt;#&lt;adapter-native definition
- * id&gt;</code> - the adapter id up to the FIRST <code>#</code>, everything
- * behind it belongs to the adapter (adapter-native ids may contain any
- * character, e.g. Camunda 7's <code>Demo:1:8a9c...</code>; adapter ids are
- * configuration keys and never contain a <code>#</code>).
+ * <b>Scheme:</b> <code>&lt;adapter id&gt;#&lt;adapter-native definition id&gt;</code>. The
+ * adapter id goes up to the FIRST <code>#</code>, and everything behind it belongs to the
+ * adapter. The adapter's own ids may contain any character, for example Camunda 7's
+ * <code>Demo:1:8a9c...</code>. Adapter ids are configuration keys and never contain a
+ * <code>#</code>.
  * <p>
- * <b>Why:</b> {@code ProcessService#getBpmnXml(String)} addresses a process
- * DEFINITION, not a workflow - there is no aggregate to elect the BPMS by. In a
- * BPMS migration (several adapters serving the same BPMN process) the id alone
- * therefore has to name the adapter which can resolve it. Ids handed to the
- * application are namespaced (also the one inside
- * {@code WorkflowHistory#processDefinitionId()}); the adapters only ever see
- * their native ids.
+ * <b>Why:</b> {@code ProcessService#getBpmnXml(String)} addresses a process DEFINITION, not a
+ * workflow. So there is no aggregate by which to elect the BPMS. In a BPMS migration several
+ * adapters serve the same BPMN process. So the id alone has to name the adapter which can
+ * resolve it. Ids handed to the application get the adapter id in front (also the one
+ * inside {@code WorkflowHistory#processDefinitionId()}). The adapters only ever see their own
+ * ids.
  * <p>
- * The scheme is a PERSISTED-LIKE CONTRACT in the sense that applications may
- * store definition ids (e.g. in a viewer's URL): keep it stable.
+ * Applications may store definition ids, for example in the URL of a viewer. So treat the
+ * scheme like a persisted contract and keep it stable.
  */
 public final class ProcessDefinitionIds {
 
@@ -31,7 +30,7 @@ public final class ProcessDefinitionIds {
   }
 
   /**
-   * Namespaces an adapter-native definition id with its adapter id.
+   * Puts the adapter id in front of a definition id of that adapter.
    *
    * @param adapterId The adapter's id
    * @param nativeProcessDefinitionId The adapter-native definition id
@@ -71,7 +70,7 @@ public final class ProcessDefinitionIds {
 
   /**
    * The two halves of a composite id, as {@link #parse(String)} read them. Both are always
-   * there: an id whose halves would be empty is not parsed at all.
+   * there, because an id whose halves would be empty is not parsed at all.
    *
    * @param adapterId The adapter id addressed by the composite id
    * @param nativeProcessDefinitionId The adapter-native definition id

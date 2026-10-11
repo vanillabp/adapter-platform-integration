@@ -3,25 +3,26 @@ package io.vanillabp.integration.adapter.migration.processservice;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Platform-neutral base of the platform integrations' {@link ProcessService} beans:
- * the messages both platforms would otherwise word twice.
+ * The base of the {@link ProcessService} beans of the platform integrations, which does not
+ * depend on the platform. It holds the messages which both platforms would otherwise word
+ * twice.
  * <p>
- * It carried stubs for the operations VanillaBP 2 did not implement yet, which threw
- * an {@link UnsupportedOperationException} saying so rather than being a silent
- * no-op. There are none left, and the stubs are gone with them: every operation of
- * {@link ProcessService} is now abstract here as well, so a platform bean which
- * forgets one does not compile - which is a better guard than a message promising the
- * operation for later. What a single BPMS cannot do is answered by its adapter, naming
- * that adapter (see {@code MigratableProcessService}).
+ * It used to have stubs for the operations which VanillaBP 2 did not implement yet. They
+ * threw an {@link UnsupportedOperationException} which said so, and were not a silent
+ * no-op. There are none left, and the stubs are gone with them. Every operation of
+ * {@link ProcessService} is now abstract here as well. So a platform bean which forgets one
+ * does not compile. That is a better guard than a message which promises the operation for
+ * later. Where a single BPMS cannot do something, its adapter answers, and names itself
+ * (see {@code MigratableProcessService}).
  *
  * @param <A> The workflow-aggregate-class
  */
 public abstract class ProcessServiceBase<A> implements ProcessService<A> {
 
   /**
-   * Called by the platform bean which extends this class, one per workflow aggregate
-   * class the application declares. There is no state here to hand over: what a process
-   * service needs to know sits in the {@link MigrationProcessService} the platform bean
+   * Called by the platform bean which extends this class, one for each workflow aggregate
+   * class which the application declares. There is no state to hand over here. What a process
+   * service needs to know is in the {@link MigrationProcessService} which the platform bean
    * holds.
    */
   protected ProcessServiceBase() {
@@ -29,9 +30,9 @@ public abstract class ProcessServiceBase<A> implements ProcessService<A> {
   }
 
   /**
-   * Builds the exception thrown when {@link #startWorkflow(Object)} is called
-   * without an active transaction although the elected adapter requires one. The
-   * message guides the developer to the fix.
+   * Builds the exception which is thrown when {@link #startWorkflow(Object)} is called
+   * without an active transaction, although the elected adapter requires one. The message
+   * guides the developer to the fix.
    *
    * @return The exception to be thrown by the platform bean
    */
@@ -48,9 +49,9 @@ public abstract class ProcessServiceBase<A> implements ProcessService<A> {
   }
 
   /**
-   * Builds the exception thrown when {@link #sendSignal(String)} is called without
-   * an active transaction. A broadcast needs one for a different reason than a
-   * workflow start does, so it says so itself.
+   * Builds the exception which is thrown when {@link #sendSignal(String)} is called without
+   * an active transaction. A broadcast needs one for a different reason than a workflow start.
+   * So it says so itself.
    *
    * @return The exception to be thrown by the platform bean
    */

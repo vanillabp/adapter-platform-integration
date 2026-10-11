@@ -11,93 +11,91 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterCachePro
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * What only the in-memory election cache can know about itself: how much it holds and
- * what it had to drop for lack of space. Owned by
- * {@link InMemoryWorkflowAdapterCache}, which creates one in its constructor and is
- * the only thing writing to it.
+ * What only the in-memory election cache can know about itself: how much it holds, and what
+ * it had to drop for lack of space. {@link InMemoryWorkflowAdapterCache} owns it. It creates
+ * one in its constructor, and it is the only thing which writes to it.
  * <p>
- * These numbers are deliberately NOT part of
- * {@link WorkflowAdapterCacheStatistics}, which counts what holds for every
- * implementation. A size is a property of an implementation, and so is an eviction:
- * the cache VanillaBP ships for Hazelcast has no size bound at all, so a shared
- * <code>evictions</code> counter would report a zero which can never become anything
- * else, and a shared <code>size</code> gauge would report NaN for the rest of the
- * application's life. Hence a prefix of its own,
- * {@value #METER_PREFIX}, and hence every implementation publishes what it knows
- * under a name which says which implementation that is.
+ * These numbers are deliberately NOT part of {@link WorkflowAdapterCacheStatistics}, which
+ * counts what holds for every implementation. A size is a property of an implementation, and
+ * so is an eviction. The cache which VanillaBP ships for Hazelcast has no size limit at all.
+ * So a shared <code>evictions</code> counter would report a zero which can never become
+ * anything else. And a shared <code>size</code> gauge would report NaN for the rest of the
+ * application's life. That is why there is a prefix of its own, {@value #METER_PREFIX}. And
+ * that is why every implementation publishes what it knows under a name which says which
+ * implementation it is.
  * <p>
- * <b>Lost hints.</b> An entry evicted before it was ever read is not by itself a
- * defect: a workflow which is started and never operated on afterwards leaves exactly
- * such an entry behind. It becomes one when that same workflow IS looked up later,
- * because then the bound - not the workflow - decided the outcome. The keys of unused
- * evictions are therefore remembered (their hash codes, bounded like the cache
- * itself) and a later miss on such a key is counted as a LOST HINT: a lookup which
- * would have been a hit with a bigger cache. That is the signal the eviction-pressure
- * warning is based on, so a healthy application never sees it.
+ * <b>Lost hints.</b> An entry evicted before it was ever read is not a defect by itself. A
+ * workflow which is started and never touched afterwards leaves exactly such an entry
+ * behind. It becomes a defect when that same workflow IS looked up later. Then the limit,
+ * and not the workflow, decided the outcome. So the keys of unused evictions are remembered
+ * (their hash codes, limited like the cache itself). A later miss on such a key is counted
+ * as a LOST HINT: a lookup which would have been a hit with a bigger cache. The warning
+ * about eviction pressure is based on that signal. So a healthy application never sees
+ * it.
  */
 @Slf4j
 public class InMemoryWorkflowAdapterCacheStatistics {
 
   /**
-   * What every meter of this class is named under. It names the implementation, because an
-   * application which plugs in a cache of its own has no meter starting like this - and
-   * that is the intended way to notice.
+   * The prefix of every meter of this class. It names the implementation. An application
+   * which plugs in a cache of its own has no meter which starts like this. That is the
+   * intended way to notice.
    */
   public static final String METER_PREFIX = "vanillabp.inmemory.election.cache";
 
   /**
-   * How many hints the cache holds right now. Read against the configured bound: a size
-   * which sits at the bound is where evictions start.
+   * How many hints the cache holds right now. Read it against the configured limit. A size
+   * which stays at the limit is where evictions start.
    */
   public static final String METER_SIZE = METER_PREFIX
       + ".size";
 
   /**
-   * How many of the held hints belong to workflows which ended. Those are kept for a short
-   * while only, so a big share of them means the cache is mostly holding leftovers.
+   * How many of the held hints belong to workflows which ended. Those are kept only for a
+   * short while. So a big share of them means that the cache mostly holds leftovers.
    */
   public static final String METER_SIZE_ENDED = METER_PREFIX
       + ".size.ended";
 
   /**
-   * Hints dropped because the cache was full. An expired hint is not counted here - it did
-   * its job for a whole time-to-live.
+   * Hints dropped because the cache was full. An expired hint is not counted here, because it
+   * did its job for a whole time-to-live.
    */
   public static final String METER_EVICTIONS = METER_PREFIX
       + ".evictions";
 
   /**
-   * Hints dropped before anybody read them. On its own this is no defect, see the note
-   * about lost hints on this class.
+   * Hints dropped before anybody read them. On its own this is no defect, see the note about
+   * lost hints on this class.
    */
   public static final String METER_EVICTIONS_UNUSED = METER_PREFIX
       + ".evictions.unused";
 
   /**
-   * Lookups which would have been a hit if the cache had been bigger. This is the number
-   * which says the bound is too low, and it is what the eviction-pressure warning counts.
+   * Lookups which would have been a hit if the cache had been bigger. This number says that
+   * the limit is too low, and the warning about eviction pressure counts it.
    */
   public static final String METER_LOST_HINTS = METER_PREFIX
       + ".lost.hints";
 
   /**
-   * How many lost hints have to pile up before the eviction-pressure warning is
-   * logged. A single lost hint is a real loss but a poor reason to shout - it may be
-   * the tail of a load peak.
+   * How many lost hints have to pile up before the warning about eviction pressure is
+   * logged. A single lost hint is a real loss, but a poor reason to shout. It may be the tail
+   * of a load peak.
    */
   public static final int LOST_HINTS_WARNING_THRESHOLD = 10;
 
   /**
-   * How often the eviction-pressure warning is logged at most.
+   * How often the warning about eviction pressure is logged at most.
    */
   public static final Duration WARNING_INTERVAL = Duration.ofHours(1);
 
   private final WorkflowAdapterCacheProperties properties;
 
   /**
-   * Where the current number of entries is read from - the cache which owns these
+   * Where the current number of entries is read from: the cache which owns these
    * statistics, handed over when it creates them. Unlike the numbers of the shared
-   * statistics this one is never absent, which is the whole point of the split.
+   * statistics, this one is never missing. That is the whole point of the split.
    */
   private final IntSupplier sizeSupplier;
 
@@ -113,11 +111,10 @@ public class InMemoryWorkflowAdapterCacheStatistics {
   private final LongAdder lostHints = new LongAdder();
 
   /**
-   * The key hashes of entries evicted before they were ever read, bounded exactly
-   * like the cache itself: an eviction older than a full turn of the cache says
-   * nothing about the current load. Hash collisions are possible and acceptable -
-   * they can only add to a warning which is about an order of magnitude, never to a
-   * decision.
+   * The key hashes of entries evicted before they were ever read. They are limited exactly
+   * like the cache itself, because an eviction older than a full turn of the cache says
+   * nothing about the current load. Hash collisions are possible and acceptable. They can
+   * only add to a warning which is about an order of magnitude, never to a decision.
    */
   private final Map<Integer, Boolean> evictedUnused;
 
@@ -128,13 +125,12 @@ public class InMemoryWorkflowAdapterCacheStatistics {
   private boolean warned;
 
   /**
-   * Created by {@link InMemoryWorkflowAdapterCache} in its own constructor, so the two
-   * always belong together. The suppliers read the live cache instead of the cache pushing
-   * its size here on every change.
+   * Created by {@link InMemoryWorkflowAdapterCache} in its own constructor, so the two always
+   * belong together. The suppliers read the live cache, instead of the cache pushing its
+   * size here on every change.
    *
-   * @param properties The cache's configuration - its bound is what the
-   *          eviction-pressure warning names, and it bounds the memory of unused
-   *          evictions as well
+   * @param properties The cache's configuration. The warning about eviction pressure names
+   *          its limit, and the limit also bounds the memory of unused evictions
    * @param sizeSupplier Reports the current number of entries
    * @param endedSizeSupplier Reports how many of them are hints of ended workflows
    */
@@ -180,8 +176,8 @@ public class InMemoryWorkflowAdapterCacheStatistics {
   }
 
   /**
-   * Evictions by themselves are not a defect - a cache with a bound evicts. What they say
-   * is that the bound is in play at all.
+   * Evictions alone are not a defect, because a cache with a limit evicts. They say that the
+   * limit is in play at all.
    *
    * @return How many hints were dropped for lack of space since this application started
    */
@@ -192,11 +188,11 @@ public class InMemoryWorkflowAdapterCacheStatistics {
   }
 
   /**
-   * The upper bound of what the evictions may have cost: only a hint nobody read can still
-   * turn into a lost one.
+   * The upper limit of what the evictions may have cost. Only a hint which nobody read can
+   * still turn into a lost one.
    *
-   * @return How many of the dropped hints had never been read. A hint of a workflow nobody
-   *         operates on again ends up here without anything being wrong
+   * @return How many of the dropped hints had never been read. A hint of a workflow which
+   *         nobody touches again ends up here, and nothing is wrong
    */
   public long getEvictionsBeforeFirstUse() {
 
@@ -205,11 +201,11 @@ public class InMemoryWorkflowAdapterCacheStatistics {
   }
 
   /**
-   * The number to alert on, because every one of these lookups paid for the bound with an
+   * The number to alert on, because every one of these lookups paid for the limit with an
    * extra walk over the adapters.
    *
    * @return How many lookups missed although the hint had been there and was dropped for
-   *         lack of space. This is the number the bound has to answer for
+   *         lack of space. The limit has to answer for this number
    */
   public long getLostHints() {
 
@@ -218,10 +214,10 @@ public class InMemoryWorkflowAdapterCacheStatistics {
   }
 
   /**
-   * Judges a lookup which found nothing: it is a lost hint where the entry had been
-   * dropped for lack of space before it was ever read. The miss ITSELF is counted by
-   * the shared statistics, which counts it for every implementation - what happens
-   * here is the part only this cache can answer.
+   * Judges a lookup which found nothing. It is a lost hint where the entry had been dropped
+   * for lack of space before it was ever read. The shared statistics count the miss ITSELF,
+   * for every implementation. What happens here is the part which only this cache can
+   * answer.
    *
    * @param workflowModuleId The ID of the workflow module
    * @param bpmnProcessId The BPMN process ID of the workflow
@@ -245,8 +241,8 @@ public class InMemoryWorkflowAdapterCacheStatistics {
   }
 
   /**
-   * Counts an entry dropped because the size bound was reached (expiry is NOT an
-   * eviction: the entry did its job for a full time-to-live).
+   * Counts an entry dropped because the size limit was reached. Expiry is NOT an eviction,
+   * because the entry did its job for a full time-to-live.
    *
    * @param workflowModuleId The ID of the workflow module
    * @param bpmnProcessId The BPMN process ID of the workflow
@@ -282,9 +278,9 @@ public class InMemoryWorkflowAdapterCacheStatistics {
   }
 
   /**
-   * Logs at most one warning per {@link #WARNING_INTERVAL}, and only once enough
-   * hints were lost to make the load - not a single unlucky workflow - the reason.
-   * The observation period is reported with the number, so the rate is readable.
+   * Logs at most one warning per {@link #WARNING_INTERVAL}, and only once enough hints were
+   * lost to make the load the reason, and not a single unlucky workflow. The message names
+   * the observation period with the number, so that the rate can be read.
    */
   private void warnAboutEvictionPressure() {
 
