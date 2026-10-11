@@ -837,10 +837,10 @@ public class DeploymentService {
                               + "Mark the process executable in the model, or take the file out of "
                               + "the workflow module.")));
     } finally {
-    // the platform's resources loader opens the streams, and this pipeline owns them. So
-    // close ALL of them whatever the outcome, also the ones never processed because an
-    // earlier file failed. Adapters must not close them, see
-    // AdapterDeploymentService#readBpmn
+      // the platform's resources loader opens the streams, and this pipeline owns them. So
+      // close ALL of them whatever the outcome, also the ones never processed because an
+      // earlier file failed. Adapters must not close them, see
+      // AdapterDeploymentService#readBpmn
       bpmnFiles.forEach((
           filename,
           bpmn) -> {

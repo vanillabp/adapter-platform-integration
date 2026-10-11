@@ -107,8 +107,8 @@ final class ExtensionHandlerScanner {
       }
     }
     if (lookupKeys.isEmpty()) {
-    // the convention of every VanillaBP annotation: an attribute which names nothing means
-    // that the method's own name is the key
+      // the convention of every VanillaBP annotation: an attribute which names nothing means
+      // that the method's own name is the key
       lookupKeys.add(method.getName());
     }
 
