@@ -7,39 +7,38 @@ import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
  * <code>&#64;WorkflowTask</code>, <code>&#64;WorkflowStartedByBpms</code> or
  * <code>&#64;WorkflowEnded</code>.
  * <p>
- * A boundary is either a version as the BPMS counts it (a number for Camunda 7 and
- * Camunda 8) or a version TAG the modeller gave a version
- * (<code>camunda:versionTag</code>, <code>zeebe:versionTag</code>):
+ * A limit is either a version as the BPMS counts it (a number for Camunda 7 and Camunda 8),
+ * or a version TAG which the modeller gave a version (<code>camunda:versionTag</code>,
+ * <code>zeebe:versionTag</code>):
  * <ul>
- * <li><code>*</code> - every version (the default);</li>
- * <li><code>3</code> or <code>release-2024</code> - exactly that version
- * respectively every version carrying that tag;</li>
- * <li><code>1-3</code> or <code>v1.0..v2.0</code> - a range, both boundaries
- * included;</li>
+ * <li><code>*</code>: every version (the default);</li>
+ * <li><code>3</code> or <code>release-2024</code>: exactly that version, or every version
+ * with that tag;</li>
+ * <li><code>1-3</code> or <code>v1.0..v2.0</code>: a range, both limits included;</li>
  * <li><code>&gt;3</code>, <code>&gt;=3</code>, <code>&lt;v2.0</code>,
- * <code>&lt;=v2.0</code> - open ended.</li>
+ * <code>&lt;=v2.0</code>: open ended.</li>
  * </ul>
- * Ranges accept <code>..</code> as well as <code>-</code> as their separator, and a
- * boundary naming a tag which contains a <code>-</code> HAS to use <code>..</code> -
- * otherwise there is no telling a range from a tag.
+ * Ranges accept <code>..</code> as well as <code>-</code> as their separator. A limit which
+ * names a tag with a <code>-</code> in it HAS to use <code>..</code>. Otherwise nobody can
+ * tell a range from a tag.
  * <p>
- * <b>What "greater" and "less" mean:</b> the deployment order. For a BPMS counting
- * versions upwards that IS the numeric order, which is why a specification made of
- * numbers is compared to the reported version straight away. As soon as a tag is
+ * <b>What "greater" and "less" mean:</b> the order of the deployments. For a BPMS which
+ * counts versions upwards, that IS the numeric order. That is why a specification made of
+ * numbers is compared with the reported version straight away. As soon as a tag is
  * involved, both sides are resolved through the
- * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog} of the
- * BPMS (see {@link ProcessVersionResolver}) - a tag says nothing about its position
- * on its own. Without a resolver, or if the BPMS does not know a tag, such a
- * specification matches nothing.
+ * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog} of the BPMS
+ * (see {@link ProcessVersionResolver}). A tag alone says nothing about its position.
+ * Without a resolver, or if the BPMS does not know a tag, such a specification matches
+ * nothing.
  * <p>
- * Why a delivery without a reported version is served only by a method without a version range is
- * decision 20 in the repository's DECISIONS.md.
+ * Decision 20 in the repository's DECISIONS.md says why a delivery without a reported
+ * version is served only by a method without a version range.
  */
 public class VersionRange {
 
   private enum Kind {
     /**
-     * <code>*</code> - every version.
+     * <code>*</code>: every version.
      */
     ALL,
     /**
@@ -51,28 +50,27 @@ public class VersionRange {
      */
     RANGE,
     /**
-     * <code>&gt;x</code> respectively <code>&gt;=x</code>.
+     * <code>&gt;x</code> or <code>&gt;=x</code>.
      */
     GREATER,
     /**
-     * <code>&lt;x</code> respectively <code>&lt;=x</code>.
+     * <code>&lt;x</code> or <code>&lt;=x</code>.
      */
     LESS
   }
 
   /**
-   * Resolves a version identifier or a version tag to the deployed version of ONE
-   * BPMN process - see
-   * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog}.
+   * Resolves a version identifier or a version tag to the deployed version of ONE BPMN
+   * process (see {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog}).
    */
   public interface ProcessVersionResolver {
 
     /**
      * Asks the BPMS what it holds under that version or tag.
      * <p>
-     * An unknown tag is not an error here: the application may name a tag nobody deployed
-     * yet, and a specification which cannot be placed simply matches nothing. Whoever wires
-     * the handlers reports such a tag once, naming the method.
+     * An unknown tag is not an error here. The application may name a tag which nobody has
+     * deployed yet, and a specification which cannot be placed simply matches nothing. The
+     * code which wires the handlers reports such a tag once, and names the method.
      *
      * @param versionOrVersionTag A version identifier or a version tag
      * @return The deployed version or <code>null</code> if the BPMS does not know it
@@ -83,8 +81,8 @@ public class VersionRange {
   }
 
   /**
-   * Used wherever no BPMS can be asked (a version specification made of numbers
-   * never needs one).
+   * Used wherever no BPMS can be asked. A version specification made of numbers never
+   * needs one.
    */
   public static final ProcessVersionResolver NO_RESOLVER = versionOrVersionTag -> null;
 
@@ -95,20 +93,20 @@ public class VersionRange {
   private final Kind kind;
 
   /**
-   * The lower boundary of a {@link Kind#RANGE}, the single value of
-   * {@link Kind#EXACT} and the excluded boundary of {@link Kind#GREATER}.
+   * The lower limit of a {@link Kind#RANGE}, the single value of {@link Kind#EXACT}, and the
+   * excluded limit of {@link Kind#GREATER}.
    */
   private final String lower;
 
   /**
-   * The upper boundary of a {@link Kind#RANGE} and the excluded boundary of
+   * The upper limit of a {@link Kind#RANGE}, and the excluded limit of
    * {@link Kind#LESS}.
    */
   private final String upper;
 
   /**
-   * Whether the boundary of a {@link Kind#GREATER} or {@link Kind#LESS} belongs to the
-   * range - <code>&gt;=3</code> and <code>&lt;=3</code> say it does.
+   * Whether the limit of a {@link Kind#GREATER} or {@link Kind#LESS} belongs to the range.
+   * <code>&gt;=3</code> and <code>&lt;=3</code> say it does.
    */
   private final boolean boundaryIncluded;
 
@@ -140,15 +138,15 @@ public class VersionRange {
   /**
    * Reads one written specification, while the application boots.
    * <p>
-   * Nothing is asked of a BPMS here. A boundary which is not a number is kept as written and
+   * Nothing is asked of a BPMS here. A limit which is not a number is kept as written and
    * resolved later, because the deployment has not happened yet at this point.
    * <p>
-   * A specification which cannot be read ends the boot with an {@link IllegalStateException}
-   * naming the location and every supported format. That is on purpose: a version attribute
-   * with a typo would otherwise match nothing and the task would stay untouched until
-   * somebody looks for it.
+   * A specification which cannot be read ends the boot with an
+   * {@link IllegalStateException}, which names the location and every supported format. That
+   * is on purpose. Otherwise a version attribute with a typo would match nothing, and the
+   * task would stay untouched until somebody looks for it.
    *
-   * @param spec What the <code>version</code> attribute says - <code>null</code> and an
+   * @param spec What the <code>version</code> attribute says. <code>null</code> and an
    *          empty text both mean every version
    * @param describedLocation Where that text was written, for the message about a
    *          specification which cannot be read
@@ -196,8 +194,8 @@ public class VersionRange {
       final var boundaries = trimmed.split("-");
       return new VersionRange(trimmed, Kind.RANGE, boundaries[0], boundaries[1]);
     }
-    // anything else is a single version respectively a version tag - a tag may
-    // contain a '-', which is why a RANGE of tags is written with '..'
+    // anything else is a single version or a version tag. A tag may contain a '-'. That is
+    // why a RANGE of tags is written with '..'
     return new VersionRange(trimmed, Kind.EXACT, trimmed, null);
 
   }
@@ -219,11 +217,11 @@ public class VersionRange {
   }
 
   /**
-   * A BPMS which reports NO version (<code>null</code>) is served by <code>*</code>
-   * only: whether a version lies within <code>1-3</code> cannot be answered without
-   * knowing the version, and answering it with "yes" would run a method for a version
-   * its author excluded. Which is why the choice is not left to the order the methods
-   * happen to be reflected in either.
+   * A BPMS which reports NO version (<code>null</code>) is served by <code>*</code> only.
+   * Whether a version lies within <code>1-3</code> cannot be answered without knowing the
+   * version. Answering it with "yes" would run a method for a version which its author
+   * excluded. That is also why the choice is not left to the order in which reflection
+   * happens to return the methods.
    *
    * @param processVersion The version the BPMS reported
    * @param resolver Resolves version tags of the BPMN process the version belongs to
@@ -249,17 +247,17 @@ public class VersionRange {
       if (isNumeric(lower)) {
         return false;
       }
-      // a tag: it matches the version carrying it - which only the BPMS knows, and
-      // which may have changed since this application booted (another cluster node
-      // deploying a new version tagged the same way)
+      // a tag. It matches the version which has it. Only the BPMS knows that, and it may have
+      // changed since this application booted (another cluster node deploying a new version
+      // with the same tag)
       final var reported = resolve(processVersion, resolver);
       return (reported != null) && lower.equals(reported.versionTag());
     }
     if (!versionTags().isEmpty()) {
-      // the reported version first, as for a single tag above: the tag may have been
-      // unknown when this node booted, and the BPMS is then not asked about it again
-      // for a while. A version this node has not seen yet makes the BPMS be asked
-      // once, and that answer teaches the tag as well
+      // the reported version first, as for a single tag above. The tag may have been unknown
+      // when this node booted, and then the BPMS is not asked about it again for a while. A
+      // version which this node has not seen yet makes it ask the BPMS once, and that answer
+      // teaches the tag as well
       resolve(processVersion, resolver);
     }
     final var version = ordinalOf(processVersion, resolver);
@@ -268,21 +266,21 @@ public class VersionRange {
         boundaries[1])) {
       return false;
     }
-    // the boundaries are closed - '>' and '<' moved theirs by one when they were built
+    // the limits are closed. '>' and '<' moved theirs by one when they were built
     return ((boundaries[0] == null) || (version.value() >= boundaries[0]
         .value())) && ((boundaries[1] == null) || (version.value() <= boundaries[1].value()));
 
   }
 
   /**
-   * Whether this specification can be met at all on a BPMS which keeps no catalog of
-   * its deployed versions (see
+   * Whether this specification can be met at all on a BPMS which keeps no list of its
+   * deployed versions (see
    * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#reportNoProcessVersionCatalog}).
    * <p>
-   * Without a catalog nothing can be placed in the order the versions were deployed
-   * in, so a range is never met. What is left is a plain comparison against the value
-   * the delivery carries: <code>*</code> takes any of them, and a single version tag is
-   * met by a delivery carrying that tag.
+   * Without a list, nothing can be placed in the order in which the versions were deployed.
+   * So a range is never met. What is left is a plain comparison with the value which the
+   * delivery carries. <code>*</code> takes any value, and a single version tag is met by a
+   * delivery which carries that tag.
    *
    * @param reported What a delivery of that BPMS carries as its process version
    * @return Whether a delivery can meet this specification there
@@ -303,12 +301,12 @@ public class VersionRange {
   /**
    * Whether this specification restricts anything at all.
    * <p>
-   * A method whose attribute nobody wrote and a method naming <code>*</code> are the same
-   * thing, so both of them inherit the range of their class.
+   * A method whose attribute nobody wrote and a method which names <code>*</code> are the
+   * same thing. So both of them inherit the range of their class.
    *
-   * @return Whether this specification covers every version - what a
-   *         <code>version</code> attribute nobody wrote parses to, and what makes a
-   *         handler method inherit the range of its class
+   * @return Whether this specification covers every version. A <code>version</code> attribute
+   *         which nobody wrote parses to that, and it makes a handler method inherit the
+   *         range of its class
    */
   public boolean everyVersion() {
 
@@ -317,14 +315,14 @@ public class VersionRange {
   }
 
   /**
-   * The reason a delivery of a BPMS which reports no version found no method, ready to
-   * be appended to a message - empty for a reported version, where the version itself
-   * is the reason.
+   * The reason why a delivery of a BPMS which reports no version found no method, ready to
+   * be added to a message. It is empty for a reported version, where the version itself is
+   * the reason.
    *
    * @param processVersion The version the BPMS reported
-   * @param someRangeIsInherited Whether one of the methods which were passed over
-   *          serves a range coming from the <code>&#64;BpmnProcess</code> of its class
-   *          rather than from its own attribute
+   * @param someRangeIsInherited Whether one of the methods which were skipped serves a range
+   *          which comes from the <code>&#64;BpmnProcess</code> of its class, not from its own
+   *          attribute
    * @return The sentence to append, or an empty string
    */
   public static String noVersionReportedHint(
@@ -337,8 +335,8 @@ public class VersionRange {
     final var hint = " This BPMS reports no process version, so only a method whose version is '*' "
         + "(the default) can serve the delivery - whether a version lies within a range nobody "
         + "reported is not something VanillaBP guesses.";
-    // the surprise this exists for: the method carries no attribute, so its author
-    // reads a complaint about a range which is nowhere near it
+    // the surprise this is for: the method has no attribute, so its author reads a
+    // complaint about a range which is nowhere near it
     return someRangeIsInherited
         ? hint
             + " A method which inherits its range from the @BpmnProcess of its class is as "
@@ -349,16 +347,15 @@ public class VersionRange {
   }
 
   /**
-   * Whether two specifications cover at least one common version - what makes two
-   * methods wired to the same BPMN element ambiguous. Disjoint ranges are a
-   * legitimate way of serving several versions of a process, which is why
-   * <code>1-2</code> next to <code>&gt;2</code> is fine and <code>1-3</code> next to
-   * <code>2</code> is not.
+   * Whether two specifications cover at least one common version. That makes two methods
+   * wired to the same BPMN element ambiguous. Ranges which do not overlap are a valid way to
+   * serve several versions of a process. That is why <code>1-2</code> next to
+   * <code>&gt;2</code> is fine, and <code>1-3</code> next to <code>2</code> is not.
    * <p>
-   * A specification naming a version tag can only be placed once the BPMS resolved
-   * it, so without a resolver two of them are reported as NOT overlapping unless
-   * they are written identically. The check runs a second time when the tags are
-   * resolved after the deployment (see
+   * A specification which names a version tag can only be placed once the BPMS has resolved
+   * it. So without a resolver, two of them count as NOT overlapping unless they are written
+   * the same. The check runs a second time when the tags are resolved after the deployment
+   * (see
    * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#resolveProcessVersions}).
    *
    * @param other The other specification
@@ -372,7 +369,7 @@ public class VersionRange {
     if ((kind == Kind.ALL) || (other.kind == Kind.ALL)) {
       return true;
     }
-    // identically written specifications overlap by definition - no BPMS needed
+    // specifications which are written the same overlap by definition. No BPMS is needed
     if (spec.equals(other.spec)) {
       return true;
     }
@@ -391,8 +388,8 @@ public class VersionRange {
   }
 
   /**
-   * The version tags this specification names - the boundaries which are not numbers.
-   * Empty for a specification a BPMS never has to be asked about.
+   * The version tags which this specification names: the limits which are not numbers. It is
+   * empty for a specification about which a BPMS never has to be asked.
    *
    * @return The version tags named
    */
@@ -408,9 +405,9 @@ public class VersionRange {
   }
 
   /**
-   * A position in the deployment order and how it was determined - the version number
-   * of a BPMS counting upwards, or a deployment timestamp. Positions of different
-   * scales are not comparable.
+   * A position in the order of the deployments, and how it was found: the version number of
+   * a BPMS which counts upwards, or a deployment timestamp. Positions of different scales
+   * cannot be compared.
    */
   private record Ordinal(
                          long value,
@@ -418,9 +415,9 @@ public class VersionRange {
   }
 
   /**
-   * The closed interval this specification covers, <code>null</code> for an
-   * unbounded end - or <code>null</code> altogether if a boundary names a version tag
-   * the resolver does not know.
+   * The closed interval which this specification covers. An end without a limit is
+   * <code>null</code>. The whole answer is <code>null</code> if a limit names a version tag
+   * which the resolver does not know.
    */
   private Ordinal[] boundaries(
       final ProcessVersionResolver resolver) {
@@ -468,8 +465,8 @@ public class VersionRange {
   }
 
   /**
-   * Where a version or a version tag sits in the deployment order: the number itself
-   * for a BPMS counting versions upwards, the deployment timestamp otherwise.
+   * Where a version or a version tag sits in the order of the deployments: the number itself
+   * for a BPMS which counts versions upwards, otherwise the deployment timestamp.
    */
   private static Ordinal ordinalOf(
       final String versionOrVersionTag,
@@ -492,8 +489,8 @@ public class VersionRange {
   }
 
   /**
-   * Whether two positions were determined the same way - a version number and a
-   * deployment timestamp say nothing about each other.
+   * Whether two positions were found the same way. A version number and a deployment
+   * timestamp say nothing about each other.
    */
   private static boolean sameScale(
       final Ordinal one,
