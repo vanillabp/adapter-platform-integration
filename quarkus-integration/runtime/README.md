@@ -2,215 +2,210 @@
 
 # VanillaBP Quarkus extension - runtime module
 
-The VanillaBP Quarkus extension's runtime module. It is responsible for bridging to the
-[VanillaBP migration adapter](../../migration-adapter) at runtime.
+This is the runtime module of the VanillaBP Quarkus extension. At runtime, it connects to the
+[VanillaBP migration adapter](../../migration-adapter).
 
 ## The transaction VanillaBP writes in
 
-`TransactionRunnerProducer` builds both halves of it, once for the application, and produces them
-as CDI beans: the platform's own `QuarkusTransactionRunner` (JTA plus the CDI request context
-Panache and Hibernate need on the threads an adapter delivers on) and the
-`TransactionRunnerResolver` saying which runner a given workflow aggregate is written through. The
-process services, `QuarkusPreCommitRegistrar`, the phase-two router and the workflow-task registry
-use those beans rather than building runners of their own, so there is one answer instead of four
-which drift.
+`TransactionRunnerProducer` builds both parts of it, once for the application, and produces them
+as CDI beans. One is the platform's own `QuarkusTransactionRunner`. It brings JTA, and the CDI
+request context which Panache and Hibernate need on the threads an adapter delivers on. The other
+is the `TransactionRunnerResolver`. It says through which runner a given workflow aggregate is
+written. The process services, `QuarkusPreCommitRegistrar`, the phase-two router and the
+workflow-task registry use those beans and do not build runners of their own. So there is one
+answer, not four answers which drift apart.
 
-What an extension injects is the **resolver**, never a runner. Something writing next to a
-workflow aggregate asks `resolveFor(aggregateClass)` and writes through what comes back: the
-application may have contributed a `TransactionRunnerAware` bean for that aggregate or a runner
-serving every aggregate, and a runner of the extension's own would commit its entry separately
-from the workflow it belongs to. Where the application contributed nothing, the answer is the
-platform's runner, so the resolver is the entry point in every case. The contract is the same on
-Spring Boot, where the resolver is `vanillaBpTransactionRunnerResolver`. An extension in miniature
-asking it, and the guiding refusal of `inCurrent` outside a transaction, is
-`ExtensionEnablementTest`; an application which brought a runner of its own next to that extension
-is `ExtensionNextToApplicationTransactionTest`.
+An extension injects the **resolver**, never a runner. Code which writes next to a workflow
+aggregate asks `resolveFor(aggregateClass)` and writes through the runner it gets back. The
+application may have added a `TransactionRunnerAware` bean for that aggregate, or a runner for
+every aggregate. A runner of the extension's own would commit its entry separately from the
+workflow it belongs to. If the application added nothing, the answer is the platform's runner. So
+the resolver is the entry point in every case. The contract is the same on Spring Boot, where the
+resolver is `vanillaBpTransactionRunnerResolver`. `ExtensionEnablementTest` is a small extension
+which asks it, and it also tests the refusal of `inCurrent` outside a transaction, with its
+message which guides the user. `ExtensionNextToApplicationTransactionTest` is an application which
+brought a runner of its own next to that extension.
 
-The platform's runner carries `@Typed(QuarkusTransactionRunner.class)`, and that is not
-cosmetic. CDI derives the types of a bean from every supertype of what a producer returns, so
-without it the bean would carry `TransactionRunner` among its types and an application with a
-runner of its own would make every `@Inject TransactionRunner` ambiguous, inside the platform and
-in an extension alike. Cut down to the concrete class, the platform injects it by that class, an
-application's runner stays the only bean of the SPI type, and nobody is tempted to inject the bare
-type. The resolver still takes the platform's runner out of its own second step by identity, so a
-coverage verdict is not silenced by it should the restriction ever be dropped.
+The platform's runner has `@Typed(QuarkusTransactionRunner.class)`, and this matters. CDI takes the
+types of a bean from every supertype of what a producer returns. Without the annotation, the bean
+would have `TransactionRunner` among its types. Then an application with a runner of its own would
+make every `@Inject TransactionRunner` ambiguous, in the platform and in an extension. Limited to
+the concrete class, the platform injects it by that class. The runner of the application stays the
+only bean of the SPI type, and nobody is tempted to inject the bare type. The resolver still takes
+the platform's runner out of its own second step by identity. So if the restriction is ever
+dropped, it still does not silence a coverage verdict.
 
 ## Running a check right before the commit
 
-A phase-one check of a remote BPMS must not advance the process, but it may ASK - whether the
-task still exists, whether the model declares a message - and the answer can go stale between
-the question and the phase-two dispatch. The later the check runs, the smaller that window, so
-adapters hand their checks to the `PreCommitRegistrar` of the adapter SPI and
-`QuarkusPreCommitRegistrar` implements it here.
+In phase one, a check of a remote BPMS (business process management system) must not move the
+process forward. But it may ASK, for example if the task still exists or if the model declares a
+message. The answer can get old between the question and the phase-two dispatch. The later the
+check runs, the smaller that window. So adapters hand their checks to the `PreCommitRegistrar` of
+the adapter SPI (service provider interface), and `QuarkusPreCommitRegistrar` implements it here.
 
-It resolves the transaction runner of the workflow aggregate first
-(`QuarkusTransactionRunnerResolver`), then calls `TransactionRunner#beforeCommit`.
-That indirection is the point: since an application may bring its own unit of work, the check
-has to be hooked into the unit of work VanillaBP actually uses, not into the platform's JTA
-transaction. `QuarkusTransactionRunner` implements the hook with an interposed JTA
-`Synchronization` whose `beforeCompletion()` runs the check - throwing there aborts the commit,
-which is what a failing phase-one check has to do. A runner of an application which does not
-implement the hook runs the check immediately, the behaviour of every adapter before the hook existed.
+It first finds the transaction runner of the workflow aggregate
+(`QuarkusTransactionRunnerResolver`). Then it calls `TransactionRunner#beforeCommit`. This detour
+is the whole point. An application may bring its own unit of work. So the check has to hook into
+the unit of work which VanillaBP really uses, not into the platform's JTA transaction.
+`QuarkusTransactionRunner` implements the hook with an interposed JTA `Synchronization`. Its
+`beforeCompletion()` runs the check. An exception there aborts the commit, and that is what a
+failing phase-one check has to do. If the runner of an application does not implement the hook, it
+runs the check at once. Every adapter behaved like that before the hook existed.
 
-An earlier, wider mechanism (`EventualConsistencyTransactionSupport`: probes before the commit
-plus actions after it, per transaction) was removed with the hook. It existed before the
-phase-two outbox took over the after-commit half, had no caller left, and existed on this
-platform only.
+An earlier, wider mechanism was removed together with the introduction of the hook
+(`EventualConsistencyTransactionSupport`: checks before the commit and actions after it, for each
+transaction). It existed before the phase-two outbox took over the part after the commit. Nothing
+called it any more, and it existed only on this platform.
 
 ## Phase-two outbox
 
-Everything an application sends to its BPMS leaves after the caller's transaction
-committed, so every application needs a transaction outbox (`PhaseTwoOutbox` SPI of the
-[migration adapter](../../migration-adapter)): it schedules phase two within the local
-transaction and dispatches it reliably after the commit (also after a crash/restart,
-retrying with a backoff).
+Everything which an application sends to its BPMS leaves after the caller's transaction committed.
+So every application needs a transaction outbox (`PhaseTwoOutbox` SPI of the
+[migration adapter](../../migration-adapter)). The outbox schedules phase two inside the local
+transaction. After the commit, it sends it reliably, also after a crash or restart, and retries
+with a backoff.
 
-The store is not this module's own any more: `JdbcPhaseTwoOutboxStore` and
-`JdbcPhaseTwoOutboxDispatcher` live in the core and a Spring Boot application runs the same
-two classes (decision 75 in `DECISIONS.md`). What this module brings is the bean
-`JdbcPhaseTwoOutbox` and the halves which really are Quarkus': a connection of the Agroal
-datasource, enlisted in the running JTA transaction, and the JTA answers to "is a
-transaction running" and "tell me when it committed" (`PhaseTwoOutboxTransaction`).
+The store does not belong to this module any more. `JdbcPhaseTwoOutboxStore` and
+`JdbcPhaseTwoOutboxDispatcher` live in the core, and a Spring Boot application runs the same two
+classes (decision 75 in `DECISIONS.md`). This module brings the bean `JdbcPhaseTwoOutbox`, and
+the parts which really belong to Quarkus: a connection of the Agroal datasource, which takes part
+in the running JTA transaction, and the JTA answers to "is a transaction running" and "tell me
+when it committed" (`PhaseTwoOutboxTransaction`).
 
-Entries go into the table
-`VANILLABP_PHASE_TWO_OUTBOX`. The entry persists all fields of the
-`PhaseTwoCall` (operation discriminator, elected adapter ID, serialized aggregate
-ID) plus the idempotency key, enforced unique by a constraint of the table —
-duplicate schedules are a no-op. The dispatcher claims due OPEN
-entries atomically (optimistic update with attempts/backoff) and dispatches them
-through the core-owned `PhaseTwoRouter` — right after the commit and by a
-fixed-delay poller (crash recovery and retries). It dispatches
-`vanillabp.outbox.dispatch-threads` entries at the same time, four by default, and the
-workflow aggregate decides which of the threads takes an entry, so two operations of one
-workflow keep the order they were written in. Successful dispatches mark the
-entry DONE (deleted asynchronously once `vanillabp.outbox.retention` passed — the
-entry stays readable for support, while its `DEDUP_KEY` is replaced by its own ID so
-a repetition of the same operation can be planned again); repeatedly failing entries are marked
-BLOCKED. The generated process-service beans register themselves with the router
-(produced by `PhaseTwoRouterProducer`) at bean creation, including a converter
-turning the serialized aggregate ID back into the aggregate's ID type (determined
-by reflection over the aggregate class, see `AggregateIdConversion`; if
-undeterminable, the String is passed through). The poller uses a plain scheduled
-executor started on `StartupEvent`, so the `quarkus-scheduler` extension is not
-required. The outbox beans are only registered if the Agroal capability is present
-(see `VanillaBpBuildStepProcessor#buildPhaseTwoOutbox`); applications may define
-their own `PhaseTwoOutbox` beans in addition.
+Entries go into the table `VANILLABP_PHASE_TWO_OUTBOX`. The entry stores all fields of the
+`PhaseTwoCall` (operation discriminator, elected adapter ID, serialized aggregate ID) and the
+idempotency key. A constraint of the table keeps the key unique, so scheduling the same thing twice
+does nothing. The dispatcher claims due OPEN entries atomically (optimistic update with
+attempts/backoff). It sends them through the `PhaseTwoRouter`, which the core owns. It does that
+right after the commit, and also from a poller with a fixed delay (for crash recovery and
+retries). It sends `vanillabp.outbox.dispatch-threads` entries at the same time, four by default.
+The workflow aggregate decides which thread takes an entry. So two operations of one workflow keep
+the order in which they were written. A successful dispatch marks the entry DONE. It is deleted in
+the background once `vanillabp.outbox.retention` has passed. Until then, support can still read
+the entry. Its `DEDUP_KEY` is replaced by its own ID, so the same operation can be planned again.
+Entries which fail again and again are marked BLOCKED. The generated process-service beans
+register themselves with the router (produced by `PhaseTwoRouterProducer`) when they are created.
+They bring a converter which turns the serialized aggregate ID back into the aggregate's ID type.
+The type is found by reflection over the aggregate class (see `AggregateIdConversion`). If it
+cannot be found, the String is passed on. The poller uses a plain scheduled executor which starts
+on `StartupEvent`. So the `quarkus-scheduler` extension is not needed. The outbox beans are only
+registered if the Agroal capability is there (see
+`VanillaBpBuildStepProcessor#buildPhaseTwoOutbox`). Applications may define their own
+`PhaseTwoOutbox` beans in addition.
 
-BOTH defaults (JDBC + MongoDB) may coexist and the outbox is
-selected **per workflow aggregate** (`QuarkusPhaseTwoOutboxResolver`): the most
-specific `PhaseTwoOutboxAware` bean wins; without one, the single active outbox is
-used (deactivated - `vanillabp.outbox.jdbc.enabled`/`vanillabp.outbox.mongo.enabled`
-- or unusable defaults are not considered), and with several active outboxes the
-platform default matching the technology which manages the aggregate is used, read
-off the persistence VanillaBP resolved for it (`QuarkusPersistenceTechnology`). Only
-where that cannot be told - the application brought the persistence itself - does the
-startup end guiding towards `PhaseTwoOutboxAware`. Resolution happens AT STARTUP
-via an inherited `StartupEvent` observer on `ProcessServiceBaseCdiBean` - a missing
-outbox fails the boot naming the remedies (`QuarkusStoreAttributionTest` for the
-resolution, `OutboxStartupValidationTest` for the boot which ends).
+BOTH defaults (JDBC + MongoDB) may exist side by side. The outbox is chosen **for each workflow
+aggregate** (`QuarkusPhaseTwoOutboxResolver`):
+
+- The most specific `PhaseTwoOutboxAware` bean wins.
+- Without one, the single active outbox is used. Defaults which are switched off
+  (`vanillabp.outbox.jdbc.enabled`/`vanillabp.outbox.mongo.enabled`) or cannot be used do not
+  count.
+- With several active outboxes, the platform default for the technology which manages the
+  aggregate is used. It is read from the persistence which VanillaBP resolved for the aggregate
+  (`QuarkusPersistenceTechnology`).
+
+Only if that cannot be found out, because the application brought the persistence itself, the
+start ends and points to `PhaseTwoOutboxAware`. The resolution happens AT STARTUP, through an
+inherited `StartupEvent` observer on `ProcessServiceBaseCdiBean`. If an outbox is missing, the
+start fails and names the ways to fix it (`QuarkusStoreAttributionTest` for the resolution,
+`OutboxStartupValidationTest` for the start which ends).
 
 The resolver is a CDI bean of the neutral type
 `io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver`
-(`PhaseTwoOutboxResolverProducer`, `@Unremovable`), and the process services use that
-bean rather than one of their own: an extension writing phase-two entries of its own
-into the transaction of a workflow aggregate has to reach the same store, and it
-cannot work that out itself - which default serves which technology, and whether it
-is usable, is `PlatformDefaultStore`, an interface of this module and of no SPI. The
-Spring Boot integration offers `SpringPhaseTwoOutboxResolver` as a bean for the same
-reason. An extension injecting it and getting the store of each aggregate of a
-two-persistence application is `MixedPersistenceStoreAttributionTest`.
+(`PhaseTwoOutboxResolverProducer`, `@Unremovable`). The process services use that bean and not
+one of their own. An extension which writes its own phase-two entries into the transaction of a
+workflow aggregate has to reach the same store, and it cannot work that out by itself. Which
+default serves which technology, and whether it can be used, is answered by `PlatformDefaultStore`.
+That is an interface of this module, not of an SPI. The Spring Boot integration offers
+`SpringPhaseTwoOutboxResolver` as a bean for the same reason.
+`MixedPersistenceStoreAttributionTest` is an extension which injects it and gets the store of each
+aggregate of an application with two kinds of persistence.
 
-Store names are configurable
-(`vanillabp.outbox.jdbc.table`, `vanillabp.outbox.mongo.collection`); every outbox
-instance needs its OWN store (two dispatchers polling the same store would compete
-and double-dispatch).
+Store names can be configured (`vanillabp.outbox.jdbc.table`, `vanillabp.outbox.mongo.collection`).
+Every outbox instance needs its OWN store. Two dispatchers which poll the same store would compete
+and send entries twice.
 
-For applications using MongoDB (`quarkus-mongodb-client`) instead of a JDBC
-datasource, a MongoDB-based default is provided: `MongoPhaseTwoOutbox` writes into
-the collection `vanillabp-phase-two-outbox` (same layout as the Spring Boot MongoDB
-outbox) of the database configured by `quarkus.mongodb.database`, and
-`MongoPhaseTwoOutboxDispatcher` claims/dispatches/blocks and cleans up analogously
-(atomic `findOneAndUpdate` claims, cluster-safe without a lock). Since MongoDB is
-no JTA resource, the outbox operates **best-effort**: the entry is written before
-the commit; on rollback it is deleted best-effort (a crash in between leaves an
-orphan which ends up BLOCKED with a monitorable ERROR). Deduplication is
-enforced by a unique index over `dedupKey`, created automatically unless
-`vanillabp.outbox.create-schema` is disabled - then the startup names it, with the other
-indexes of `MongoSchema`, as something the application has to create itself. If both Agroal and the MongoDB client
-are present, the JDBC outbox wins deterministically (consistent with Spring Boot
-where the JPA outbox is ordered first).
+Some applications use MongoDB (`quarkus-mongodb-client`) instead of a JDBC datasource. For them,
+there is a default based on MongoDB. `MongoPhaseTwoOutbox` writes into the collection
+`vanillabp-phase-two-outbox` (same layout as the Spring Boot MongoDB outbox) of the database which
+`quarkus.mongodb.database` configures. `MongoPhaseTwoOutboxDispatcher` claims, sends, blocks and
+cleans up in the same way (atomic `findOneAndUpdate` claims, safe in a cluster without a lock).
+MongoDB is not a JTA resource. So the outbox works on a **best-effort** basis. The entry is written
+before the commit. On rollback, it is deleted on a best-effort basis. A crash in between leaves an
+orphan entry. It ends up BLOCKED, with an ERROR which monitoring can see. A unique index over
+`dedupKey` prevents duplicates. It is created automatically unless `vanillabp.outbox.create-schema`
+is disabled. In that case, the startup names it, with the other indexes of `MongoSchema`, as
+something the application has to create itself. If both Agroal and the MongoDB client are there,
+the JDBC outbox always wins (as on Spring Boot, where the JPA outbox comes first).
 
 ### A call which carries a payload
 
-A phase-two call carries identifiers, and an extension which wants to hand over the state
-it saw at its sync point passes bytes as well:
-`PhaseTwoCall.of(operation, module, process, aggregateId, adapterId, args, payload)`. The
-bytes do not travel in the outbox entry. They are written into a store of their own, in the
-same transaction, and the entry names them by a reference in its arguments - the reasoning
-is decision 62 in `DECISIONS.md`.
+A phase-two call carries identifiers. An extension may want to hand over the state it saw at its
+sync point. Then it passes bytes as well:
+`PhaseTwoCall.of(operation, module, process, aggregateId, adapterId, args, payload)`. The bytes are
+not stored in the outbox entry. They are written into a store of their own, in the same
+transaction. The entry names them by a reference in its arguments. Decision 62 in `DECISIONS.md`
+gives the reasons.
 
-The store is a table `VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD` for the JDBC-backed outboxes
-(`vanillabp.outbox.jdbc.payload-table`) and a collection `vanillabp-phase-two-outbox-payloads`
-for the MongoDB ones (`vanillabp.outbox.mongo.payload-collection`). It is created together with
-the other tables unless `vanillabp.outbox.create-schema` is disabled, and
+For the outboxes which use JDBC, the store is a table `VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD`
+(`vanillabp.outbox.jdbc.payload-table`). For the MongoDB ones, it is a collection
+`vanillabp-phase-two-outbox-payloads` (`vanillabp.outbox.mongo.payload-collection`). It is created
+together with the other tables unless `vanillabp.outbox.create-schema` is disabled.
 `io.vanillabp:vanillabp-schema` describes it for Liquibase and Flyway.
 
-Both names follow the outbox they belong to. Where neither key is set, VanillaBP appends
-`_PAYLOAD` to the name of the outbox table and `-payloads` to the name of the outbox collection. So
-an application which renames its outbox to keep two deployments apart on one schema keeps the
-payloads apart too. A name written into one of the two keys is used as it stands.
+Both names follow the outbox they belong to. If neither key is set, VanillaBP adds `_PAYLOAD` to
+the name of the outbox table and `-payloads` to the name of the outbox collection. Some
+applications rename their outbox to keep two deployments apart on one schema. Such an application
+keeps the payloads apart too. A name written into one of the two keys is used as it is.
 
-The form costs one read by primary key per dispatch attempt of a call which carries a
-payload, and nothing at all for a call which carries none - such a call writes no row
-either. A payload is at most `PhaseTwoCall.MAX_PAYLOAD_SIZE` bytes, one mebibyte, and that
-limit holds for every store, so an application meets the same one whichever store it runs.
-On MongoDB the bytes are a field of the payload document, which is why MongoDB's own limit
-of 16 MB per document is never reached.
+This costs one read by primary key for each attempt to send a call which carries a payload. A call
+which carries none costs nothing, and it writes no row either. A payload is at most
+`PhaseTwoCall.MAX_PAYLOAD_SIZE` bytes, one mebibyte. That limit holds for every store, so an
+application meets the same limit whichever store it runs. On MongoDB, the bytes are a field of the
+payload document. So MongoDB's own limit of 16 MB per document is never reached.
 
-The payload is removed when its entry is marked dispatched, and again with that entry
-itself once `vanillabp.outbox.retention` passed. The retention counts at the entry, so an
-entry which still waits, or which is blocked until somebody repairs it, keeps its payload
-for as long as it is in the store. What the housekeeping removes by age is a payload no
-entry names any more, which is what a crash between the two writes leaves behind: it asks
-the entries of its outbox first, and only where a payload outlived the retention. A
-payload is removed earlier in one case: where a younger call replaced the entry which
-named it, see below.
+The payload is removed when its entry is marked dispatched. It is also removed together with that
+entry once `vanillabp.outbox.retention` has passed. The retention counts from the entry. So an
+entry which still waits, or which is blocked until somebody repairs it, keeps its payload as long
+as it is in the store. The housekeeping removes by age only a payload which no entry names any
+more. A crash between the two writes leaves such a payload behind. The housekeeping asks the
+entries of its outbox first, and only for a payload which outlived the retention. In one case, a
+payload is removed earlier: when a younger call replaced the entry which named it, see below.
 
 ### A younger call which takes the waiting entry's place
 
-A call carrying a payload carries a state, and a state goes stale. So such a call may ask
-to take the place of the entry of its key which is still waiting, instead of being dropped
-against it: `outbox.scheduleReplacingWhatIsStillWaiting(call.replacingWhatIsStillWaiting())`.
-The entry keeps its id and its key, gets everything the dispatch reads, and the payload it
-named before is removed in the same transaction. Decision 68 in `DECISIONS.md` says why the
-direction turned and why the mark hangs on the call.
+A call with a payload carries a state, and a state gets old. So such a call may ask to take the
+place of the entry of its key which is still waiting, instead of being dropped because of it:
+`outbox.scheduleReplacingWhatIsStillWaiting(call.replacingWhatIsStillWaiting())`. The entry keeps
+its id and its key, and gets everything which the dispatch reads. The payload it named before is
+removed in the same transaction. Decision 68 in `DECISIONS.md` says why the direction changed and
+why the mark is on the call.
 
-Both stores of this module refuse to replace an entry a dispatch has already taken; the
-younger call becomes an entry of its own then, with its `DEDUP_KEY` respectively `dedupKey`
-set to its own id, because the key belongs to the entry on its way. What says whether a
-dispatch has taken an entry is the pair of the attempts and the lease: no attempt of it has
-ended and nobody holds it right now. The update which replaces carries both conditions, which
-makes it the same optimistic lock the claim is, so the two can never both win. Both halves are
-needed, because the attempts are written when an attempt ends - a dispatch which is on its way
-still shows zero of them and is named by the lease alone.
+Neither store of this module replaces an entry which a dispatch has already taken. In that case,
+the younger call becomes an entry of its own. Its `DEDUP_KEY` (or `dedupKey` on MongoDB) is set to
+its own id, because the key belongs to the entry which is being sent. Two things together say
+whether a dispatch has taken an entry: the attempts and the lease. If no attempt has ended and
+nobody holds the entry right now, it is not taken. The update which replaces the entry checks both
+conditions. So it is the same optimistic lock as the claim, and the two can never both win. Both
+conditions are needed, because the attempts are written when an attempt ends. A dispatch which is
+still running shows zero attempts, and only the lease shows it.
 
-Both stores name the holder of the lease in every write which says how an attempt ended, next
-to the id: `LEASED_BY` on the JDBC store and `leasedBy` on the MongoDB one. A node whose entry
-was taken over while it dispatched therefore writes no result over the one of the node holding
-it. `MongoADispatchWhichLostItsLeaseTest` holds the MongoDB half.
+In every write which says how an attempt ended, both stores name the holder of the lease next to
+the id: `LEASED_BY` on the JDBC store and `leasedBy` on the MongoDB one. So when another node took
+over an entry while a node sent it, that node writes no result over the result of the node which
+holds the entry now. `MongoADispatchWhichLostItsLeaseTest` tests the MongoDB half.
 
-Both stores dispatch on `vanillabp.outbox.dispatch-threads` lanes, and which lane takes an
-entry follows from its workflow aggregate, so two operations of one workflow keep their order
-while operations of different workflows travel at the same time. The MongoDB claim sorts by
-the moment an entry was written, because the lanes keep the order they are handed the entries
-in and a collection answers in an order of its own.
-`MongoEntriesOfOneAggregateKeepTheirOrderTest` holds both halves, and decision 77 in
-`DECISIONS.md` carries the measurement behind it.
+Both stores send on `vanillabp.outbox.dispatch-threads` lanes. The workflow aggregate of an entry
+decides which lane takes it. So two operations of one workflow keep their order, and operations of
+different workflows are sent at the same time. The MongoDB claim sorts by the time an entry was
+written. The lanes keep the order in which they get the entries, but a collection answers in an
+order of its own. `MongoEntriesOfOneAggregateKeepTheirOrderTest` tests both halves, and decision 77
+in `DECISIONS.md` has the measurement behind it.
 
-On the JDBC store the claim reads its row once more after it won it. The select of the due
-entries happens before the claim, and between the two the row may have been replaced, so the
-entry read then would send the dispatch to a payload reference which is gone. MongoDB needs
-no such read: its claim is one `findOneAndUpdate` and answers with the document as of that
+On the JDBC store, the claim reads its row once more after it won it. The select of the due entries
+happens before the claim. Between the two, the row may have been replaced. Then the entry read
+before would send the dispatch to a payload reference which no longer exists. MongoDB needs no
+such read. Its claim is one `findOneAndUpdate`, and it answers with the document as it is at that
 moment.
 
 |                  |                 JDBC outbox (Agroal)                  |       MongoDB outbox (`quarkus-mongodb-client`)       |
@@ -229,42 +224,41 @@ Configuration (`QuarkusMigrationAdapterProperties`): `vanillabp.outbox.poll-inte
 `vanillabp.outbox.wait-for-visibility-at-most`,
 `vanillabp.outbox.dispatch-threads`,
 `vanillabp.outbox.retention` and
-`vanillabp.outbox.create-schema` (disable the `CREATE TABLE IF NOT EXISTS` DDL /
-index creation to manage the schema manually, e.g. by Flyway or Liquibase — then
-also create the unique constraint on `DEDUP_KEY` / the unique index on `dedupKey`
-yourself — that column respectively field carries the idempotency key while the entry
-waits for its dispatch and the entry's own ID afterwards, which is what keeps the
-deduplication window to the operations still planned). On MongoDB there is nothing else to
-create: a collection appears with its first document, so the startup reads what each of the
-three collections carries and warns with the `createIndex` statement of every index which is
-missing.
+`vanillabp.outbox.create-schema`. Disable the last one to switch off the
+`CREATE TABLE IF NOT EXISTS` DDL and the index creation, if you manage the schema yourself, for
+example with Flyway or Liquibase. Then also create the unique constraint on `DEDUP_KEY` or the
+unique index on `dedupKey` yourself. That column or field holds the idempotency key while the entry
+waits for its dispatch, and the entry's own ID after that. This way, deduplication only covers the
+operations which are still planned. On MongoDB, there is nothing else to create. A collection
+appears with its first document. So at startup, VanillaBP reads what each of the three collections
+has, and warns with the `createIndex` statement of every index which is missing.
 
 ## Optional extensions and the native image
 
-`quarkus-mongodb-client` and `quarkus-mongodb-panache` are optional dependencies of this
-module, so every class naming one of their types has to stay unreachable in an application
-which brought neither. On the JVM that takes care of itself, because a class is loaded when
-it is first used. A native image is stricter: GraalVM links the whole reachable graph while
-it builds and stops at the first method it cannot resolve. Three such methods were found,
-each of them called from a resolver every application runs.
+`quarkus-mongodb-client` and `quarkus-mongodb-panache` are optional dependencies of this module. So
+in an application which brought neither, no class which names one of their types may be reachable.
+On the JVM, this takes care of itself, because a class is loaded when it is first used. A native
+image is stricter. GraalVM links the whole reachable graph while it builds, and stops at the first
+method it cannot resolve. We found three such methods. Each of them was called from a resolver which
+every application runs.
 
 Two rules keep them out of that graph.
 
-- Whatever names a MongoDB type is a bean the extension registers only under
+- Whatever names a MongoDB type is a bean which the extension registers only under
   `Capability.MONGODB_CLIENT`: `MongoPhaseTwoOutbox`, `MongoTaskDeliveryLog` and
   `MongoClientDeploymentProbe`.
-- The resolvers ask an interface instead of naming those classes. `PlatformDefaultStore`
-  answers which persistence technology a store of the platform serves and whether it is
-  usable at all, `MongoDeploymentProbe` answers whether the MongoDB deployment is a replica
-  set. Without the extension the injection point is simply unsatisfied, and that is the
-  answer the resolver needs anyway.
+- The resolvers ask an interface instead of naming those classes. `PlatformDefaultStore` answers
+  which persistence technology a store of the platform serves, and whether it can be used at all.
+  `MongoDeploymentProbe` answers whether the MongoDB deployment is a replica set. Without the
+  extension, the injection point is simply unsatisfied, and that is the answer which the resolver
+  needs anyway.
 
-The persistence detection has followed the rule from the start: `QuarkusPersistenceTechnology`
+The persistence detection has followed the rule from the start. `QuarkusPersistenceTechnology`
 matches VanillaBP's own persistence implementations by their class NAME.
 
-What keeps all of this honest is the module
-[native-image-tests](../integration-tests/native-image-tests): an application with H2 and no
-MongoDB anywhere, whose native build is the assertion. Locally:
+The module [native-image-tests](../integration-tests/native-image-tests) makes sure that all of
+this stays true. It is an application with H2 and no MongoDB anywhere, and the test is that its
+native build works. Locally:
 
 ```shell
 ./mvnw install -DskipTests -am -pl quarkus-integration/deployment,\
@@ -274,15 +268,15 @@ MongoDB anywhere, whose native build is the assertion. Locally:
 ./quarkus-integration/integration-tests/native-image-tests/target/*-runner
 ```
 
-The deployment modules of both extensions are named explicitly, because an extension's
-augmentation part is no dependency of the application: `-am` alone would leave them to the
-local repository, where a stale copy hides whatever the build step was just changed to do.
+The deployment modules of both extensions are named explicitly. The augmentation part of an
+extension is not a dependency of the application. With `-am` alone, they would come from the local
+repository. There, an old copy hides whatever the build step was just changed to do.
 
-Docker pulls the Mandrel builder image, so no GraalVM has to be installed. The last line
-is there because a binary which cannot start proves nothing: the application's main boots
-it, starts a workflow and reads the aggregate back, and its exit code says whether that
-worked. It found the second half of the problem, the BPMN resources missing from the image. In
-CI the job `native-build` runs the same three commands.
+Docker pulls the Mandrel builder image, so you do not have to install GraalVM. The last line is
+there because a binary which cannot start proves nothing. The application's main method starts it,
+starts a workflow and reads the aggregate back. Its exit code says whether that worked. This found
+the second half of the problem: the BPMN resources were missing from the image. In CI, the job
+`native-build` runs the same three commands.
 
 ## Noteworthy & Contributors
 

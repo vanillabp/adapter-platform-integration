@@ -2,38 +2,39 @@
 
 # VanillaBP Quarkus extension - integration tests.
 
-A collection of integration tests to guarantee desired functionality.
+Integration tests which make sure that things work as they should.
 
 ## Modules
 
 1. **[native-image-tests](./native-image-tests):**<br>
-   An application with a relational database and no MongoDB anywhere. It has no test class:
-   building it is the assertion, in JVM mode on every build and as a native image where the
-   profile `native-image` is active (`-Dnative`). Its main starts a workflow and reads the
-   aggregate back, so running the binary checks the boot as well. See the section about
-   optional extensions in the [runtime module's README](../runtime/README.md).
+   An application with a relational database and no MongoDB anywhere. It has no test class.
+   The test is that it builds: in JVM mode on every build, and as a native image when the
+   profile `native-image` is active (`-Dnative`). Its main method starts a workflow and reads the
+   aggregate back. So running the binary also checks that the application starts. See the section
+   about optional extensions in the [runtime module's README](../runtime/README.md).
 2. **[sample-extension](./sample-extension):**<br>
-   An extension built like the VanillaBP Business Cockpit, in miniature - the Quarkus half
-   of the extension the Spring Boot integration tests also build. It depends on the two SPI
-   artifacts and the platform-neutral core and on no platform integration, which is what it
-   exists to prove; `ExtensionEnablementTest` in
-   [deployment-integration-tests](./deployment-integration-tests) exercises it.
+   A small extension, built like the VanillaBP Business Cockpit. It is the Quarkus half of the
+   extension which the Spring Boot integration tests also build. It depends on the two SPI
+   artifacts and on the core, which does not depend on a platform. It depends on no platform
+   integration. Proving that this works is why it exists. `ExtensionEnablementTest` in
+   [deployment-integration-tests](./deployment-integration-tests) tests it.
 
-The BPMS these tests run against is the published [BPMS double](../../bpms-double), which used to
-live here as a sibling module.
+These tests run against the published [BPMS double](../../bpms-double), a stand-in for a real BPMS
+(business process management system). It used to be a module here, next to the others.
 
 ## Why these applications allow the full sync
 
-Their workflow aggregates carry no `@NoSyncWithBPMS`, so every attribute of them travels to the
-BPMS, and VanillaBP does not start such a workflow without a word (see decision 66 in the
-repository's DECISIONS.md). These are test aggregates holding test data, and the tests are about
-other things, so the configurations say
-`vanillabp.workflow-modules.<module>.workflows.<process>.allow-full-sync-with-bpms: true` rather
-than pretending to protect something. Where one aggregate serves many scenario configurations,
-the aggregate keeps back the attribute no model ever reads instead, which is the same answer an
-application would give.
+Their workflow aggregates have no `@NoSyncWithBPMS`. So every attribute of them goes to the BPMS,
+and VanillaBP does not start such a workflow without saying something about it (see decision 66 in
+the repository's DECISIONS.md). These aggregates are test aggregates with test data, and the tests
+are about other things. So the configurations say
+`vanillabp.workflow-modules.<module>.workflows.<process>.allow-full-sync-with-bpms: true`. They do
+not pretend to protect something. Where one aggregate serves many scenario configurations, the
+aggregate instead keeps back the attribute which no model ever reads. An application would give the
+same answer.
 
-The comment belongs here because the YAML formatter drops comments inside a mapping.
+This explanation is here and not in the YAML file, because the YAML formatter drops comments inside
+a mapping.
 
 ## Noteworthy & Contributors
 

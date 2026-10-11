@@ -2,8 +2,9 @@
 
 # VanillaBP Quarkus extension - deployment module
 
-The VanillaBP Quarkus extension's deployment module. It is responsible for building all beans necessary
-based on code analysis and configuration of the given Quarkus application and its workflow modules.
+This is the deployment module of the VanillaBP Quarkus extension. It builds all the beans which are
+needed. To do so, it analyzes the code and reads the configuration of the Quarkus application and
+its workflow modules.
 
 ## Noteworthy & Contributors
 

@@ -1,21 +1,21 @@
 # Diagrams
 
-One VanillaBP picture is a drawing, and it lives here. All the others are Mermaid blocks sitting
-inside the document which explains their subject, because Mermaid renders on GitHub without an
-export step and a reviewer can read what changed in a diff.
+One VanillaBP picture is a drawing, and it lives here. All the others are Mermaid blocks. Each one
+sits inside the document which explains its subject. GitHub renders Mermaid without an export step,
+and a reviewer can read in a diff what changed.
 
 ## The architecture overview
 
-`overview.excalidraw` is the source, `overview.png` the export. The wiki's Home page embeds the PNG
-and links back to the source from there, so re-export the PNG whenever you touch the drawing.
-Otherwise the wiki keeps showing yesterday's picture while the source says something else.
+`overview.excalidraw` is the source, and `overview.png` is the export. The Home page of the wiki
+shows the PNG and links back to the source. So export the PNG again whenever you change the
+drawing. Otherwise the wiki keeps showing the old picture while the source says something else.
 
-Why this one is not Mermaid: the placement of its boxes is the content. Layers run top down, each
-engine sits under its adapter, and the database stands beside everything which writes to it.
-Mermaid's automatic layout put the database wherever it liked, which is no help to a reader trying
+This one is not Mermaid because the place of each box is the content. Layers go from top to bottom.
+Each engine sits under its adapter. The database stands next to everything which writes to it.
+Mermaid's automatic layout put the database anywhere it liked. That does not help a reader who wants
 to see who writes where.
 
-Here is the same overview as Mermaid, for a page which cannot host an image:
+Here is the same overview as Mermaid, for a page which cannot show an image:
 
 ```mermaid
 flowchart TB
@@ -41,10 +41,10 @@ flowchart TB
 
 ## Where the other pictures are
 
-Every one of them is in `migration-adapter/README.md`, in the section which already describes what
-it shows. Change a picture where you change the prose around it. There is no second copy of the
-diagram source anywhere, and that is deliberate: two copies drift apart, and the reader has no way
-of telling which one is current.
+All of them are in `migration-adapter/README.md`, each in the section which describes what it shows.
+Change a picture in the same place where you change the text around it. There is no second copy of
+the diagram source anywhere, and that is on purpose. Two copies drift apart, and the reader cannot
+tell which one is current.
 
 |                                              Picture                                              |                                              Section of `migration-adapter/README.md`                                               |
 |---------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------|
@@ -65,18 +65,19 @@ of telling which one is current.
 
 ## Two traps worth knowing before you edit one
 
-A semicolon separates statements in Mermaid. One inside a message, inside a note or inside a
-`participant … as …` alias therefore ends the statement early, and the diagram does not parse at
-all: no picture in IntelliJ and none on GitHub, just an error message. Six of the pictures above were
-unreadable for that reason until it was found. Write a comma, a `·` or a second sentence instead.
+In Mermaid, a semicolon separates statements. So a semicolon inside a message, a note or a
+`participant … as …` alias ends the statement too early. Then the diagram does not parse at all.
+You get no picture in IntelliJ and none on GitHub, only an error message. Six of the pictures above
+could not be read for this reason, until somebody found it. Write a comma, a `·` or a second
+sentence instead.
 
-Angle brackets and round brackets are safe. Mermaid escapes `<` and `>` itself, so
+Angle brackets and round brackets are safe. Mermaid escapes `<` and `>` itself. So
 `AdapterDeploymentService<BPMN,PC>` renders as written, and a `participant P as Platform (Spring /
-Quarkus)` needs no quoting. The one place a semicolon belongs is at the end of a `classDef` or
-`class` statement, where it terminates rather than interrupts.
+Quarkus)` needs no quotes. A semicolon belongs in one place only: at the end of a `classDef` or
+`class` statement. There it ends a statement instead of cutting one off.
 
 Before you commit a changed diagram, render it once. `../bin/render-diagrams.sh` draws every
-Mermaid block of every Markdown file of the repository, and a single file is
+Mermaid block of every Markdown file in the repository. For a single file, run
 `../bin/render-diagrams.sh migration-adapter/README.md`. It runs `npx -p @mermaid-js/mermaid-cli
-mmdc`, the same renderer GitHub and the IntelliJ plugin use, so it fails loudly on anything they
-would fail on quietly. A pull request which touches a Markdown file runs it too.
+mmdc`, the same renderer which GitHub and the IntelliJ plugin use. Where they fail quietly, it fails
+with a clear error. Every pull request which changes a Markdown file runs it too.
