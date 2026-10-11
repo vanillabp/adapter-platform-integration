@@ -5,8 +5,8 @@ import io.vanillabp.spi.service.WorkflowService;
 import jakarta.inject.Singleton;
 
 /**
- * A declaration on a class which is a bean itself, so it serves the process next to its
- * subclass rather than only declaring it.
+ * A declaration on a class which is a bean itself. So it does not only declare the process.
+ * It also serves it, next to its subclass.
  */
 @Singleton
 @WorkflowService(

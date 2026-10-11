@@ -20,17 +20,17 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Spring's <code>&#64;Transactional</code> only creates a transaction boundary on Quarkus
- * when the extension {@code quarkus-spring-tx} is part of the application, which maps it
- * onto the JTA annotation at build time. This module does not depend on that extension, so
- * the annotation is inert here and the application HAS to boot with it on a
- * <code>&#64;WorkflowTask</code> method: failing the boot over an annotation
- * that does nothing would hit exactly the applications sharing modules with a Spring code
- * base, i.e. VanillaBP's migration audience. The developer gets a warning instead, whose
- * wording is asserted by the core's unit tests.
+ * On Quarkus, Spring's <code>&#64;Transactional</code> only creates a transaction boundary
+ * if the extension {@code quarkus-spring-tx} is part of the application. That extension maps
+ * it onto the JTA annotation at build time. This module does not depend on the extension. So
+ * the annotation does nothing here, and the application HAS to boot with it on a
+ * <code>&#64;WorkflowTask</code> method. Failing the boot because of an annotation without
+ * effect would hit exactly the applications which share modules with a Spring code base.
+ * Those are VanillaBP's migration audience. The developer gets a warning instead. The core's
+ * unit tests check its wording.
  * <p>
- * With the extension present the same annotation IS a defect, which is what the
- * build-time detection in {@code TransactionAnnotationsBuildStepProcessor} decides.
+ * With the extension present, the same annotation IS a defect. The build-time detection in
+ * {@code TransactionAnnotationsBuildStepProcessor} decides this.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SpringTransactionAnnotationOnQuarkusTest {

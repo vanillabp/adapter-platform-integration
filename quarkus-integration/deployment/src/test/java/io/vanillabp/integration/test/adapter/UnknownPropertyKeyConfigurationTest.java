@@ -12,19 +12,18 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * With the blanket {@code withMappingIgnore("vanillabp.**")} gone, a typo inside the
- * {@code vanillabp.*} tree is detected again: every legitimate dynamic key is covered
- * by a registered {@code @ConfigMapping} (the platform's mapping plus the adapters'
- * overlay mappings - see the dummy adapter's {@code DummyAdapterOverlayProperties}),
- * so a key no mapping knows fails the startup instead of being silently ignored.
+ * The general {@code withMappingIgnore("vanillabp.**")} is gone. So a typo inside the
+ * {@code vanillabp.*} tree is detected again. A registered {@code @ConfigMapping} covers
+ * every valid dynamic key. These are the platform's mapping plus the adapters' overlay
+ * mappings (see the dummy adapter's {@code DummyAdapterOverlayProperties}). So a key which
+ * no mapping knows fails the startup. It is not silently ignored.
  * <p>
- * (Quarkus is deliberately stricter than Spring Boot here - the JavaBean binding on
- * Spring has no unknown-key detection; the asymmetry is accepted.)
+ * (Quarkus is stricter than Spring Boot here on purpose. The JavaBean binding on Spring has
+ * no detection of unknown keys. We accept this difference.)
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class UnknownPropertyKeyConfigurationTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap

@@ -16,15 +16,14 @@ import io.vanillabp.integration.test.adapter.TestMigratableProcessService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Startup check on Quarkus: a <code>&#64;WorkflowTask</code> handler
- * covered by a transaction annotation of the application would lose every change made
- * to the workflow aggregate as soon as a {@code TaskException} passes the annotation's
- * interceptor, and the rollback-only mark it sets cannot be cleared. So the boot fails,
- * naming the class, the method and both remedies.
+ * Startup check on Quarkus. A <code>&#64;WorkflowTask</code> handler may be covered by a
+ * transaction annotation of the application. Then every change to the workflow aggregate is
+ * lost as soon as a {@code TaskException} passes the annotation's interceptor. The
+ * interceptor marks the transaction as rollback-only, and that mark cannot be cleared. So the
+ * boot fails. The message names the class, the method and both remedies.
  * <p>
- * The accepted counterpart is {@link AcceptedTransactionAnnotationStartupTest}; the
- * matrix of annotations, propagations and rollback rules is covered by the core's unit
- * tests.
+ * The accepted counterpart is {@link AcceptedTransactionAnnotationStartupTest}. The core's
+ * unit tests cover all combinations of annotations, propagations and rollback rules.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TransactionAnnotationStartupTest {
@@ -74,7 +73,7 @@ public class TransactionAnnotationStartupTest {
       });
 
   /**
-   * The startup has to fail - the assertion happens on the boot failure above.
+   * The startup has to fail. The assertions check the boot failure above.
    */
   @Test
   public void bootFails() {

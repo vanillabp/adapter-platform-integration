@@ -7,15 +7,14 @@ import io.vanillabp.integration.runtime.processservice.WorkflowAdapterCacheMetri
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Publishes the election cache's numbers as Micrometer meters - but only for an
- * application which uses Micrometer. VanillaBP does not bring it: metrics are the
+ * Publishes the numbers of the election cache as Micrometer meters, but only for an
+ * application which uses Micrometer. VanillaBP does not bring Micrometer. Metrics are the
  * application's decision, and an application without them has to boot unchanged.
  * <p>
- * The signal is the Micrometer extension's build-step class on the DEPLOYMENT
- * classpath, present exactly when the application depends on the extension. The
- * presence of Micrometer's own classes would not do - they can be dragged in
- * transitively without the extension, and then nothing produces the
- * {@code MeterRegistry} bean our producer needs.
+ * The signal is the Micrometer extension's build-step class on the DEPLOYMENT classpath.
+ * It is there exactly when the application depends on the extension. Micrometer's own
+ * classes are not enough as a signal. Another dependency can pull them in without the
+ * extension. Then nothing produces the {@code MeterRegistry} bean which our producer needs.
  */
 @Slf4j
 public class WorkflowAdapterCacheMetricsBuildStepProcessor {

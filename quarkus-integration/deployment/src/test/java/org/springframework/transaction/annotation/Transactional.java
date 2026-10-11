@@ -6,13 +6,13 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Stand-in for Spring's transaction annotation, used to prove what Quarkus does with it
- * when the extension {@code quarkus-spring-tx} is NOT part of the application: nothing.
- * An application sharing modules with a Spring code base can carry the annotation
- * (through a plain {@code spring-tx} dependency) without that extension, and VanillaBP
- * must not fail its boot over an annotation that has no effect.
+ * Stand-in for Spring's transaction annotation. It proves what Quarkus does with it when the
+ * extension {@code quarkus-spring-tx} is NOT part of the application: nothing. An application
+ * which shares modules with a Spring code base can carry the annotation without that
+ * extension, through a plain {@code spring-tx} dependency. VanillaBP must not fail its boot
+ * because of an annotation which has no effect.
  * <p>
- * Members mirror {@code spring-tx} as far as the core's check reads them.
+ * The members copy those of {@code spring-tx}, as far as the core's check reads them.
  */
 @Target({
     ElementType.METHOD, ElementType.TYPE

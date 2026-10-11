@@ -12,17 +12,17 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Environment variables cannot INTRODUCE a new adapter id (only override entries
- * declared in a configuration file) - the binder cannot reconstruct a dashed/dotted
- * id from the variable's name. Instead of silently ignoring such a variable, the
- * startup fails with a guiding message (core validation
- * {@code MigrationAdapterProperties.validateEnvironmentVariableUsage}, fed with the
- * raw property names which include unconverted environment-variable-shaped keys).
+ * Environment variables cannot INTRODUCE a new adapter id. They can only override entries
+ * declared in a configuration file. The binder cannot rebuild an id with dashes or dots
+ * from the variable's name. So the startup does not silently ignore such a variable. It
+ * fails with a guiding message. This is the core validation
+ * {@code MigrationAdapterProperties.validateEnvironmentVariableUsage}. It gets the raw
+ * property names, and these include keys in the shape of environment variables which were
+ * not converted.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class EnvironmentVariableMisbindingTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
@@ -34,9 +34,9 @@ public class EnvironmentVariableMisbindingTest {
           .addClass(DummyAdapters.class)                              // necessary due to anonymous class in DummyAdapters
           .addClass(TestMigratableProcessService.class))            // process service of the mocked adapter
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())     // add mocked adapter
-      // an environment-variable shaped key addressing an id which is NOT declared
-      // in any configuration file (surfaces in the raw property names exactly like
-      // a real environment variable does)
+      // a key in the shape of an environment variable. It names an id which is NOT
+      // declared in any configuration file. It shows up in the raw property names just
+      // like a real environment variable
       .overrideConfigKey("VANILLABP_ADAPTERS_PHANTOM_ID_TYPE", "dummy")
       .assertException(throwable -> {
         var message = "";

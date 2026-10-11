@@ -11,7 +11,7 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
 @Singleton
-// a process of its own: the sample of the other package is named after the same class, and a
+// a process of its own. The sample of the other package is named after the same class, and a
 // BPMN process belongs to one workflow aggregate
 @WorkflowService(workflowAggregateClass = Aggregate.class,
     bpmnProcess = @BpmnProcess(bpmnProcessId = "SampleWorkflow2"))

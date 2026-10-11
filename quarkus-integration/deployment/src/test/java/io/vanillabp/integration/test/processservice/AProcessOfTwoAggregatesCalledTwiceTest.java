@@ -16,7 +16,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * Classes of two workflow aggregates both list one BPMN process in their
  * {@code secondaryBpmnProcesses}. The build ends.
  * <p>
- * The text is the one Spring Boot says while it starts, see {@link TwoAggregates}.
+ * The text is the same which Spring Boot reports while it starts, see {@link TwoAggregates}.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AProcessOfTwoAggregatesCalledTwiceTest {

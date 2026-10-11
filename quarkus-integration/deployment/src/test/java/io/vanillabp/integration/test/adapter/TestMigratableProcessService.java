@@ -21,8 +21,8 @@ public class TestMigratableProcessService implements MigratableProcessService<Ob
   }
 
   /**
-   * Serves every operation and does nothing: this double is here for the election
-   * and the deployment, not for what an operation sends to a BPMS.
+   * Serves every operation and does nothing. This test double exists for the election and
+   * the deployment, not for what an operation sends to a BPMS.
    */
   @Override
   public java.util.Map<io.vanillabp.integration.spi.PhaseOperation, io.vanillabp.integration.adapter.spi.PhaseOperationHandler<Object>> phaseOperations() {
@@ -40,9 +40,10 @@ public class TestMigratableProcessService implements MigratableProcessService<Ob
   }
 
   /**
-   * Whether this double can ask its BPMS whether it holds a workflow. Steered by
-   * <code>test-adapter.can-locate-workflows</code>, so a test can play a BPMS which
-   * cannot - a Camunda 8 cluster without secondary storage, or the Process-Engine-API.
+   * Whether this double can ask its BPMS whether it holds a workflow.
+   * <code>test-adapter.can-locate-workflows</code> controls it. So a test can play a BPMS
+   * which cannot do that, like a Camunda 8 cluster without secondary storage, or the
+   * Process-Engine-API.
    */
   @Override
   public boolean canLocateWorkflows() {

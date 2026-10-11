@@ -4,8 +4,8 @@ import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 
 /**
- * Names the BPMN process itself, so every subclass serves THAT process instead of one
- * named after itself. This is what several subclasses of one base need.
+ * Names the BPMN process itself. So every subclass serves THAT process, and not one named
+ * after itself. Several subclasses of one base need this.
  */
 @WorkflowService(
     workflowAggregateClass = SharedAggregate.class,

@@ -8,12 +8,11 @@ import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.BpmnParseException;
 
 /**
- * Minimal adapter deployment service for the platform's own Quarkus tests: the
- * runtime deployment pipeline requires one deployment service per prioritized
- * adapter id (like on Spring Boot). It does not parse BPMN and deploys nowhere;
- * {@code stopWorkflowProcessing} records the workflow module ids in a system
- * property so shutdown tests can verify the reverse pass across the test's
- * classloaders.
+ * A minimal adapter deployment service for the platform's own Quarkus tests. The runtime
+ * deployment pipeline needs one deployment service for each prioritized adapter id (like on
+ * Spring Boot). It does not parse BPMN, and it deploys nowhere.
+ * {@code stopWorkflowProcessing} records the workflow module ids in a system property. So
+ * shutdown tests can check the reverse pass across the class loaders of the test.
  */
 public class TestAdapterDeploymentService implements AdapterDeploymentService<Object, Object> {
 
@@ -21,8 +20,8 @@ public class TestAdapterDeploymentService implements AdapterDeploymentService<Ob
    * The system property receiving the workflow module IDs passed to
    * {@link #stopWorkflowProcessing(String, Object)}.
    */
-  // deliberately OUTSIDE the vanillabp.* tree: with the blanket withMappingIgnore
-  // gone, unknown keys under vanillabp.* fail the startup (typo detection)
+  // on purpose OUTSIDE the vanillabp.* tree. The general withMappingIgnore is gone, so
+  // unknown keys under vanillabp.* fail the startup (typo detection)
   public static final String PROPERTY_STOPPED_MODULES = "vanillabp-test.stopped-modules";
 
   private final String adapterId;
@@ -108,7 +107,7 @@ public class TestAdapterDeploymentService implements AdapterDeploymentService<Ob
       final String workflowModuleId,
       final Object bpmsProcessingContext) throws IllegalStateException {
 
-    // deploys nowhere - the platform tests only need the pipeline mechanics
+    // deploys nowhere. The platform tests only need the mechanics of the pipeline
 
   }
 

@@ -8,9 +8,9 @@ import jakarta.inject.Singleton;
 import jakarta.transaction.Transactional;
 
 /**
- * The counterpart of {@code samples.transactional}: the annotation a VanillaBP 1
- * application carries. Excluding the {@link TaskException} from the rollback rules keeps
- * the contract intact, so the startup check accepts it and the application boots.
+ * The counterpart of {@code samples.transactional}, with the annotation which a VanillaBP 1
+ * application carries. If the rollback rules exclude the {@link TaskException}, the
+ * contract stays intact. So the startup check accepts it, and the application boots.
  */
 @Singleton
 @WorkflowService(workflowAggregateClass = Aggregate.class)

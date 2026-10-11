@@ -13,9 +13,9 @@ import io.vanillabp.spi.service.WorkflowService;
 import jakarta.inject.Singleton;
 
 /**
- * Workflow services of two aggregates, for the tests which hold the rule that a BPMN process
+ * Workflow services of two aggregates. They are for the tests of the rule that a BPMN process
  * belongs to exactly one workflow aggregate. Each test hands the classes of its case to its own
- * application, in the order it wants them found.
+ * application, in the order in which it wants them found.
  */
 public final class TwoAggregates {
 
@@ -64,7 +64,7 @@ public final class TwoAggregates {
 
   /**
    * Shares its process and its called step with {@link AlsoCallsTheProcess}, on the same
-   * aggregate, which stays allowed.
+   * aggregate. That is still allowed.
    */
   @Singleton
   @WorkflowService(
@@ -113,8 +113,8 @@ public final class TwoAggregates {
   }
 
   /**
-   * Holds the exception which ended the build against the text the core builds for the
-   * declarations given, which is the text Spring Boot says as well.
+   * Compares the exception which ended the build with the text which the core builds for the
+   * given declarations. Spring Boot reports the same text.
    *
    * @param throwable What ended the build
    * @param declarations The declarations the message has to report

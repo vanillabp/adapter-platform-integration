@@ -6,10 +6,9 @@ import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Process service for the adapter id DERIVED from the classpath: with a
- * single adapter type in the classpath and no adapter section, the adapter id is
- * the adapter type itself - here {@code dummy} (the type produced by
- * {@link DummyAdapters}).
+ * Process service for the adapter id which is DERIVED from the classpath. With a single
+ * adapter type in the classpath and no adapter section, the adapter id is the adapter type
+ * itself. Here that is {@code dummy}, the type which {@link DummyAdapters} produces.
  */
 @ApplicationScoped
 @Unremovable
@@ -23,8 +22,8 @@ public class DerivedAdapterIdProcessService implements MigratableProcessService<
   }
 
   /**
-   * Serves every operation and does nothing: this double is here for the election
-   * and the deployment, not for what an operation sends to a BPMS.
+   * Serves every operation and does nothing. This test double exists for the election and
+   * the deployment, not for what an operation sends to a BPMS.
    */
   @Override
   public java.util.Map<io.vanillabp.integration.spi.PhaseOperation, io.vanillabp.integration.adapter.spi.PhaseOperationHandler<Object>> phaseOperations() {

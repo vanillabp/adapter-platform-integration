@@ -10,10 +10,10 @@ import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 
 /**
- * This test is mainly to ensure {@link WorkflowService} annotations processed by
- * {@link ProcessServiceBuildStepProcessor} have the
- * attributes expected since accessing attribute values using Quarkus framework
- * is done by name and therefor does not show up if the annotation changed.
+ * This test makes sure that the {@link WorkflowService} annotations which
+ * {@link ProcessServiceBuildStepProcessor} processes have the expected attributes. The
+ * Quarkus framework reads attribute values by name. So the compiler does not notice it
+ * when the annotation changes.
  */
 @WorkflowService(workflowAggregateClass = WorkflowServiceAnnotationTest.class)
 @ExtendWith(SuppressOutputExtension.class)

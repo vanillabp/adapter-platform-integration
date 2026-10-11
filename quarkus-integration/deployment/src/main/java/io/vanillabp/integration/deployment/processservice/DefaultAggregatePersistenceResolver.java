@@ -17,21 +17,21 @@ import org.jboss.jandex.Type;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 
 /**
- * Picks the persistence VanillaBP provides for an aggregate the application did not
- * write an {@link AggregatePersistenceAware} for. Quarkus has no single persistence
- * idiom, so the aggregate itself is asked what it is:
+ * Picks the persistence which VanillaBP provides for an aggregate, if the application did
+ * not write an {@link AggregatePersistenceAware} for it. Quarkus has no single persistence
+ * idiom. So the aggregate itself is asked what it is:
  * <ol>
  * <li>a Panache repository for the aggregate (Hibernate ORM or MongoDB) wins,</li>
  * <li>otherwise the aggregate being a Panache active record (Hibernate ORM or
  * MongoDB),</li>
  * <li>otherwise a Spring Data repository for the aggregate.</li>
  * </ol>
- * Nothing is guessed from the extensions present: an application has one of these
- * artifacts for the aggregate or it has none, in which case the build fails with the
+ * Nothing is guessed from the extensions present. An application either has one of these
+ * artifacts for the aggregate, or it has none. If it has none, the build fails with the
  * message of {@code ProcessServiceBuildStepProcessor}.
  * <p>
- * Everything is decided on the Jandex index, so a wrong or ambiguous setup is
- * reported at build time rather than at the first workflow.
+ * Everything is decided on the Jandex index. So a wrong or unclear setup is reported at
+ * build time and not at the first workflow.
  */
 public final class DefaultAggregatePersistenceResolver {
 
@@ -52,11 +52,11 @@ public final class DefaultAggregatePersistenceResolver {
       DotName.createSimple("io.quarkus.mongodb.panache.PanacheMongoRepositoryBase"));
 
   /*
-   * Spring Data: the repository interfaces an application extends. CrudRepository is
-   * the one VanillaBP calls; the others are listed because they extend it, and the
-   * artifact declaring them is not necessarily part of the index (only classes of the
-   * application and of extensions shipping a Jandex index are), so the hierarchy
-   * cannot always be walked up to CrudRepository.
+   * Spring Data: the repository interfaces an application extends. VanillaBP calls
+   * CrudRepository. The others are listed because they extend it. The artifact which
+   * declares them is not always part of the index. Only classes of the application and of
+   * extensions which ship a Jandex index are. So the hierarchy cannot always be followed up
+   * to CrudRepository.
    */
   static final Set<DotName> SPRING_DATA_REPOSITORIES = Set.of(
       DotName.createSimple("org.springframework.data.repository.CrudRepository"),
@@ -65,14 +65,14 @@ public final class DefaultAggregatePersistenceResolver {
       DotName.createSimple("org.springframework.data.jpa.repository.JpaRepository"));
 
   /**
-   * The implementation for an aggregate managed by a Hibernate ORM Panache repository, one
-   * of those {@code vanillabp-quarkus-integration} ships.
+   * The implementation for an aggregate managed by a Hibernate ORM Panache repository. It is
+   * one of those which {@code vanillabp-quarkus-integration} ships.
    * <p>
-   * The implementations are named as strings and not as classes because this resolver runs
-   * while the application is built: each of them extends a type of the persistence
-   * framework it serves, and loading it in an application which does not use that framework
-   * would fail right here. The name is all the generated bean needs, too - Gizmo writes the
-   * superclass into bytecode and loads nothing either.
+   * The implementations are named as strings and not as classes, because this resolver runs
+   * while the application is built. Each of them extends a type of the persistence framework
+   * it serves. Loading it in an application which does not use that framework would fail
+   * right here. And the generated bean only needs the name. Gizmo writes the superclass into
+   * bytecode and does not load anything either.
    */
   public static final String PANACHE_REPOSITORY_PERSISTENCE = "io.vanillabp.integration.runtime.persistence.PanacheRepositoryAggregatePersistence";
 
@@ -106,10 +106,10 @@ public final class DefaultAggregatePersistenceResolver {
   }
 
   /**
-   * The persistence for the given aggregate, picked in the order the class describes. An
-   * aggregate claimed twice within one of those steps - two repositories of one kind, or a
-   * Hibernate ORM and a MongoDB artifact of the same shape - ends the build here, with a
-   * message naming both.
+   * The persistence for the given aggregate, picked in the order which the class describes.
+   * An aggregate may be claimed twice within one of those steps. That is two repositories of
+   * one kind, or a Hibernate ORM and a MongoDB artifact of the same shape. Then the build
+   * ends here, with a message which names both.
    *
    * @param index The index to look up classes in (the combined index, so classes of
    *        extensions shipping a Jandex index are visible, too)
@@ -209,10 +209,10 @@ public final class DefaultAggregatePersistenceResolver {
   }
 
   /**
-   * The entity type a class or interface names when extending one of the given
+   * The entity type which a class or interface names when it extends one of the given
    * repository interfaces, e.g. {@code Foo} for
    * {@code class FooRepository implements PanacheRepository<Foo>}. Superclasses and
-   * super-interfaces are walked as far as the index knows them.
+   * super-interfaces are followed as far as the index knows them.
    */
   private static Optional<DotName> firstTypeArgumentOf(
       final IndexView index,
@@ -253,8 +253,8 @@ public final class DefaultAggregatePersistenceResolver {
   }
 
   /**
-   * Whether the aggregate extends the given base class, walking the superclass chain
-   * as far as the index knows it.
+   * Whether the aggregate extends the given base class. The superclass chain is followed as
+   * far as the index knows it.
    */
   private static boolean isSubclassOf(
       final IndexView index,

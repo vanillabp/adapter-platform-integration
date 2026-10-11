@@ -47,13 +47,13 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * VanillaBP extension build step processor, responsible for processing workflow modules.
+ * Build step processor of the VanillaBP extension. It processes the workflow modules.
  * <p>
- * A workflow module is a Maven or Gradle module carrying its BPMN files, its workflow
- * services and configuration files of its own. Finding the modules and generating the
- * classes which read those files happens while the application is built: Quarkus takes the
- * config sources of an application from what the build registered, and a native image
- * carries only the files it was told about. What a build does not see is not read later.
+ * A workflow module is a Maven or Gradle module. It carries its BPMN files, its workflow
+ * services and its own configuration files. The modules are found while the application is
+ * built, and the classes which read those files are generated then as well. Quarkus takes
+ * the config sources of an application from what the build registered. And a native image
+ * only carries the files it was told about. What a build does not see is not read later.
  */
 @Slf4j
 public class WorkflowModuleBuildStepProcessor {
@@ -66,23 +66,24 @@ public class WorkflowModuleBuildStepProcessor {
   }
 
   /**
-   * Priority of workflow-module-specific YAML config files. Below the classpath "application.yaml" (255),
-   * because a workflow module ships defaults and the application always wins.
+   * Priority of the YAML config files of a workflow module. It is below the classpath
+   * "application.yaml" (255), because a workflow module ships defaults and the application
+   * always wins.
    * <p>
-   * The distance to {@link #PROPERTIES_CONFIGFILE_ORDINAL} is the same 5 SmallRye keeps between
-   * "application.yaml" and "application.properties", so YAML beats properties among a module's own
-   * files just like it does among the application's. The distance to the application's weakest file
-   * (250) leaves room for the bump SmallRye adds per active profile: a profile-specific file is
-   * loaded at the ordinal of its base file plus one per profile
-   * ({@code AbstractLocationConfigSourceLoader.ConfigurableProfileConfigSourceFactory}), so even a
-   * dozen active profiles cannot lift a module file above "application.properties".
+   * The distance to {@link #PROPERTIES_CONFIGFILE_ORDINAL} is 5. SmallRye keeps the same
+   * distance between "application.yaml" and "application.properties". So YAML beats
+   * properties among a module's own files, just like among the application's files. The
+   * distance to the application's weakest file (250) leaves room for the profiles. SmallRye
+   * loads a profile-specific file at the ordinal of its base file plus one for each active
+   * profile ({@code AbstractLocationConfigSourceLoader.ConfigurableProfileConfigSourceFactory}).
+   * So even a dozen active profiles cannot lift a module file above "application.properties".
    *
    * @see WorkflowModuleBuildStepProcessor#buildWorkflowModuleSpecificConfigFilesConfigBuilder(List, VanillaBpWorkflowModulesBuildItem, BuildProducer)
    */
   public static final int YAML_CONFIGFILE_ORDINAL = 235;
 
   /**
-   * Priority of workflow-module-specific Properties config files. Below the classpath
+   * Priority of the properties config files of a workflow module. It is below the classpath
    * "application.properties" (250) and below {@link #YAML_CONFIGFILE_ORDINAL}, see there.
    *
    * @see WorkflowModuleBuildStepProcessor#buildWorkflowModuleSpecificConfigFilesConfigBuilder(List, VanillaBpWorkflowModulesBuildItem, BuildProducer)
@@ -90,10 +91,10 @@ public class WorkflowModuleBuildStepProcessor {
   public static final int PROPERTIES_CONFIGFILE_ORDINAL = 230;
 
   /**
-   * Finds all workflow modules specified by <code>META-INF/workflow-module</code> files in their
-   * Maven/Gradle module. The result is keyed by the archive holding the descriptor since the
-   * same workflow module may be provided by more than one archive (workflow module equality
-   * is based on the module's ID).
+   * Finds all workflow modules. Each one has a <code>META-INF/workflow-module</code> file in its
+   * Maven or Gradle module. The result is keyed by the archive which holds this descriptor.
+   * More than one archive may provide the same workflow module, because two modules with the
+   * same ID are equal.
    *
    * @param applicationArchivesBuildItem The archives part of this Quarkus build
    * @return A build item holding meta-information of all workflow modules
@@ -103,24 +104,20 @@ public class WorkflowModuleBuildStepProcessor {
       final ApplicationArchivesBuildItem applicationArchivesBuildItem) {
 
     final var workflowModules = applicationArchivesBuildItem
-        // search all archives of the project
         .getAllArchives()
         .stream()
         .flatMap(archive -> Optional
-            // for META-INF/workflow-module files
             .ofNullable(archive.getChildPath(WorkflowModule.METAINF_WORKFLOWMODULE))
             .map(Path::toUri)
             .flatMap(sourceUri -> WorkflowModuleBuildStepProcessor
-                // and read them
                 .readWorkflowModuleDescriptor(sourceUri)
-                // to build a WorkflowModule object
                 .map(id -> Map.entry(archive, WorkflowModule
                     .builder()
                     .id(id)
-                    // NOTE: sourceUri is resolvable on the BUILD machine / in dev
-                    // mode only (it points into the augmentation classpath) -
-                    // prod-mode code paths must never dereference it; it is kept
-                    // to locate the workflow module (e.g. resources) at build time
+                    // NOTE: sourceUri only works on the BUILD machine and in dev mode.
+                    // It points into the augmentation classpath. Code which runs in
+                    // prod mode must never open it. It is kept to find the workflow
+                    // module (e.g. its resources) at build time
                     .sourceUri(sourceUri)
                     .global(archive.equals(applicationArchivesBuildItem.getRootArchive()))
                     .build())))
@@ -132,10 +129,11 @@ public class WorkflowModuleBuildStepProcessor {
   }
 
   /**
-   * Builds {@link ConfigBuilder} classes responsible for loading properties from files specific to a workflow
-   * module by using the workflow module's ID as a filename instead of <code>application.properties</code>.
-   * Those files support modularization of workflow modules because next to code and BPMS resources (e.g.
-   * BPMN files) also configuration can be placed in the same Maven/Gradle module.
+   * Builds the {@link ConfigBuilder} classes which load the properties files of a workflow
+   * module. Such a file is named after the workflow module's ID instead of
+   * <code>application.properties</code>. These files help to keep workflow modules apart. The
+   * configuration can live in the same Maven or Gradle module as the code and the BPMS
+   * resources (e.g. BPMN files).
    *
    * <table>
    *   <caption>Default ConfigSource ordinals (Quarkus / SmallRye) and ordinals of workflow module config sources</caption>
@@ -203,17 +201,18 @@ public class WorkflowModuleBuildStepProcessor {
    *   </tbody>
    * </table>
    *
-   * <p>Profiles are not in the table because they are not separate rows: SmallRye loads
-   * <code>name-{profile}.ext</code> at the ordinal of <code>name.ext</code> raised by one per active
-   * profile, so <code>XXX-prod.yaml</code> beats <code>XXX.yaml</code> and
-   * <code>application-prod.yaml</code> beats <code>application.yaml</code>, each within its own band.
-   * The 15 between 235 and 250 is what keeps the two bands apart.
+   * <p>Profiles are not in the table, because they are no separate rows. SmallRye loads
+   * <code>name-{profile}.ext</code> at the ordinal of <code>name.ext</code>, plus one for each
+   * active profile. So <code>XXX-prod.yaml</code> beats <code>XXX.yaml</code>, and
+   * <code>application-prod.yaml</code> beats <code>application.yaml</code>, each within its own
+   * band. The 15 between 235 and 250 keeps the two bands apart.
    *
-   * <p>The two module ordinals used to be 256 and 251, one tick ABOVE the application's
-   * classpath files. A workflow module could therefore not be reconfigured from
-   * <code>application.yaml</code>, which is the normal place to do it, and Spring Boot answered the
-   * same question differently. Both platforms now agree: system properties, environment variables,
-   * the application's configuration wherever it lives, <code>XXX-{profile}</code>, <code>XXX</code>.
+   * <p>The two module ordinals used to be 256 and 251, one step ABOVE the application's
+   * classpath files. So <code>application.yaml</code> could not change the configuration of a
+   * workflow module, although that is the normal place to do it. And Spring Boot answered the
+   * same question differently. Now both platforms agree on the order: system properties,
+   * environment variables, the application's configuration wherever it lives,
+   * <code>XXX-{profile}</code>, <code>XXX</code>.
    *
    * @param features All features provided by extensions
    * @param workflowModules All workflow modules found
@@ -261,19 +260,19 @@ public class WorkflowModuleBuildStepProcessor {
   }
 
   /**
-   * Activate {@link ConfigBuilder} classes generated for workflow module specific files. This is
-   * only done for custom workflow module properties because VanillaBP properties are needed already
-   * during augmentation.
+   * Activates the {@link ConfigBuilder} classes generated for the files of the workflow
+   * modules. This is only done for the custom properties of workflow modules, because the
+   * VanillaBP properties are already needed during augmentation.
    * <p>
-   * This is done in a separate step to ensure generated classes are available. If this had been done in
-   * one build step, then there would have been no guarantees that the classes are available
-   * when building the configuration. based on the {@link ConfigBuilder}.
+   * This is a separate step, so the generated classes are sure to exist. In one build step
+   * there would be no guarantee that the classes exist when the configuration is built from
+   * the {@link ConfigBuilder}.
    *
    * @param generatedConfigLoaders The build item holding the names of all {@link ConfigBuilder} classes
    * @param configFilesReported The report about the configuration files of the workflow
-   *          modules which this application does not read, asked for here because a build step
-   *          whose items nobody consumes is dropped, and the report has to be written in every
-   *          build
+   *          modules which this application does not read. It is asked for here, because
+   *          Quarkus drops a build step whose items nobody consumes. The report has to be
+   *          written in every build
    * @param staticInitConfigProducer Producer for static initialization config builders
    * @param runTimeConfigProducer Producer for static runtime config builders
    */
@@ -296,8 +295,8 @@ public class WorkflowModuleBuildStepProcessor {
   }
 
   /**
-   * Adds a {@link ConfigBuilder} class holding the workflow module IDs used to load files
-   * next to the ordinal used to prioritize the builder next to other builders.
+   * Adds a {@link ConfigBuilder} class which holds two things: the workflow module IDs, which
+   * name the files to load, and the ordinal, which ranks this builder among the others.
    * <pre>
    * package of.abstract.config.builder.class;
    * import java.util.List;
@@ -395,22 +394,21 @@ public class WorkflowModuleBuildStepProcessor {
   }
 
   /**
-   * Tells dev mode and the native image about the module-specific configuration files
-   * (properties or YAML) of all workflow modules found. One rule says which names count, and
-   * that is what keeps the two from drifting apart, but each of them needs it in a shape of
-   * its own: dev mode gets the rule, the native image gets the files which match it in this
-   * build.
+   * Tells dev mode and the native image about the configuration files (properties or YAML)
+   * of all workflow modules found. One rule says which names count, so the two cannot drift
+   * apart. But each of them needs the rule in its own shape. Dev mode gets the rule itself.
+   * The native image gets the files which match it in this build.
    * <p>
-   * Dev mode is asked with a predicate and not with a list of names, because a build writes
-   * such a list once. A configuration file which a developer adds afterwards is in no list a
-   * build produced, so watching the names of the last build would leave that file out of the
-   * restart, and the application would go on running against the configuration of that build.
-   * The predicate is as narrow as the names the config source providers read, so a YAML file
-   * which has nothing to do with a workflow module restarts nothing.
+   * Dev mode gets a predicate and not a list of names, because a build writes such a list
+   * once. A configuration file which a developer adds later is in no list a build produced. If
+   * dev mode watched the names of the last build, that file would not trigger a restart. The
+   * application would keep running with the configuration of that build. The predicate is as
+   * narrow as the names which the config source providers read. So a YAML file which has
+   * nothing to do with a workflow module restarts nothing.
    * <p>
-   * A native image carries only the resources it was told about, and a file which is watched
-   * in dev mode but missing from the image is the difference between a workflow module whose
-   * settings apply and one whose settings are silently the defaults.
+   * A native image only carries the resources it was told about. If a file is watched in dev
+   * mode but missing from the image, the workflow module silently runs with its defaults
+   * instead of its settings.
    *
    * @param allWorkflowModules A {@link VanillaBpWorkflowModulesBuildItem} containing information about all workflow modules.
    * @param applicationArchives An {@link ApplicationArchivesBuildItem} containing the archives to be scanned for configuration files.
@@ -443,18 +441,17 @@ public class WorkflowModuleBuildStepProcessor {
    * Reports the profile-specific configuration files of workflow modules which this
    * application does not read, and names the file each of them is missing.
    * <p>
-   * SmallRye loads <code>id-{profile}.yaml</code> only where <code>id.yaml</code> lies in the
-   * same place. It pairs the two so that the order the files are loaded in does not depend on
-   * which resource a class loader answers with first
-   * ({@code AbstractLocationConfigSourceLoader}). A workflow module which ships a file for one
-   * profile and nothing else therefore ships settings nobody reads. Nothing said so until this
-   * report: the application starts, and the first sign is a value which is not what the file
-   * says. Spring Boot reads such a file, which is why a module author can build one
-   * without ever meeting the rule (see decision 61 in the repository's DECISIONS.md).
+   * SmallRye only loads <code>id-{profile}.yaml</code> where <code>id.yaml</code> lies in the
+   * same place. It pairs the two, so the load order does not depend on which resource a class
+   * loader returns first ({@code AbstractLocationConfigSourceLoader}). So a workflow module
+   * which ships only a file for one profile ships settings nobody reads. Before this report,
+   * nothing said so. The application starts, and the first sign is a value which differs from
+   * the file. Spring Boot reads such a file. So a module author can build one without ever
+   * meeting the rule (see decision 61 in the repository's DECISIONS.md).
    * <p>
-   * The files are known while the application is built, the report is written when it starts:
-   * a developer reads the log of a start far more often than the log of a build, and a native
-   * binary says it as the JVM does.
+   * The files are known while the application is built, but the report is written when it
+   * starts. A developer reads the log of a start far more often than the log of a build. And
+   * a native binary reports it the same way as the JVM.
    *
    * @param allWorkflowModules All workflow modules found
    * @param applicationArchives The archives of this Quarkus build
@@ -499,9 +496,9 @@ public class WorkflowModuleBuildStepProcessor {
   }
 
   /**
-   * Sorts the configuration files found into the places they were found at, so that a file
-   * shipped twice can be seen. The files of the other workflow modules fall out here: a path
-   * belongs to this module only where one of its places plus the file's name builds that
+   * Sorts the configuration files found by the places they were found at. So a file shipped
+   * twice becomes visible. The files of the other workflow modules are dropped here. A path
+   * only belongs to this module if one of the module's places plus the file's name gives that
    * path again.
    *
    * @param workflowModuleId The ID of the workflow module
@@ -530,9 +527,9 @@ public class WorkflowModuleBuildStepProcessor {
   }
 
   /**
-   * Builds the report about the profile-specific files which stay unread. Every archive is
-   * asked on its own, because the file without the profile has to lie in the same archive and
-   * the same directory to be found.
+   * Builds the report about the profile-specific files which stay unread. Each archive is
+   * checked on its own. The file without the profile is only found if it lies in the same
+   * archive and the same directory.
    *
    * @param configFilesPerArchive The configuration files of the workflow modules, per archive
    * @param workflowModuleIds The IDs of all workflow modules found
@@ -572,9 +569,9 @@ public class WorkflowModuleBuildStepProcessor {
 
   /**
    * Says which file a profile-specific configuration file of a workflow module is missing.
-   * A file the extension of which belongs to the other provider is no help: the properties
-   * provider and the YAML provider each pair a profile-specific file with a plain file of
-   * their own extensions.
+   * A file with an extension of the other provider does not help. The properties provider and
+   * the YAML provider each pair a profile-specific file only with a plain file of their own
+   * extensions.
    *
    * @param configFile The path of the file, relative to the root of the archive holding it
    * @param configFilesOfTheSameArchive The paths of all workflow module configuration files of that archive
@@ -595,8 +592,8 @@ public class WorkflowModuleBuildStepProcessor {
     final var extension = filename.substring(lastDot + 1);
 
     if (workflowModuleIds.contains(filenameWithoutExtension)) {
-      // a file named after a workflow module and nothing else is a plain file itself,
-      // also where the ID of another module starts its name
+      // a file named after a workflow module and nothing else is a plain file itself.
+      // This holds even where the ID of another module is the start of its name
       return Optional.empty();
     }
     // the longest ID wins: for the modules "loan" and "loan-approval" the file
@@ -677,7 +674,7 @@ public class WorkflowModuleBuildStepProcessor {
       final VanillaBpWorkflowModulesBuildItem allWorkflowModules) {
 
     final var extensionPattern = Stream
-        // combine each file extension possible for later use as or-expression
+        // join all possible file extensions into one "or" expression
         .concat(
             Arrays.stream(propertiesFileExtensions()),
             Arrays.stream(yamlFileExtensions()))
@@ -686,8 +683,8 @@ public class WorkflowModuleBuildStepProcessor {
         .getWorkflowModules()
         .stream()
         .map(WorkflowModule::getId)
-        // to build one regex per workflow module matching "id[-profile].(extension1|extension2)"
-        // in each of the places that module may put a file
+        // one regex for each workflow module. It matches "id[-profile].(extension1|extension2)"
+        // in each of the places where that module may put a file
         .map(id -> "(?:%s)%s(?:-[^/]*)?\\.(?:%s)".formatted(
             WorkflowModuleConfigFiles
                 .directoriesOf(id)
@@ -729,8 +726,8 @@ public class WorkflowModuleBuildStepProcessor {
 
   /**
    * The same search as {@link #workflowModuleSpecificConfigFiles(ApplicationArchivesBuildItem, Predicate)},
-   * but keeping the files of each archive apart. Whether a profile-specific file is read
-   * depends on the archive it sits in, so that question cannot be answered on the merged list.
+   * but it keeps the files of each archive apart. Whether a profile-specific file is read
+   * depends on the archive it is in. The merged list cannot answer that question.
    *
    * @param applicationArchives The archives of this Quarkus build
    * @param isWorkflowModuleConfigFile Whether a relative path is a configuration file of a workflow module
@@ -743,12 +740,10 @@ public class WorkflowModuleBuildStepProcessor {
     final var configFilesPerArchive = new LinkedList<SortedSet<String>>();
     applicationArchives
         .getAllArchives()
-        // traverse all archives
         .forEach(archive -> {
           final var configFiles = new TreeSet<String>();
           archive
               .accept(openPathTree -> openPathTree
-                  // and check each file's relative path against the rule
                   .walk(visit -> Optional
                       .ofNullable(visit.getRelativePath("/"))
                       .filter(isWorkflowModuleConfigFile)
@@ -763,12 +758,12 @@ public class WorkflowModuleBuildStepProcessor {
    * Reads the ID of a workflow module out of its descriptor. The descriptor is the file
    * <code>META-INF/workflow-module</code> of an archive, and its whole content is the ID.
    * <p>
-   * A descriptor which cannot be read ends the build. An archive carrying one is a workflow
-   * module, and passing over it silently would move its workflow services into another
-   * module or leave them without one.
+   * A descriptor which cannot be read ends the build. An archive which carries one is a
+   * workflow module. If the build silently skipped it, its workflow services would move into
+   * another module or end up without one.
    *
-   * @param descriptorInJar Where the descriptor lies, resolvable on the machine running the
-   *          build only
+   * @param descriptorInJar Where the descriptor lies. It only works on the machine which runs
+   *          the build
    * @return The ID, with the whitespace around it removed, or nothing where the file says
    *         nothing at all
    */

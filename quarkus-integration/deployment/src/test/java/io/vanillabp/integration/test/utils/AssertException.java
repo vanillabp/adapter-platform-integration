@@ -32,9 +32,9 @@ public class AssertException {
   }
 
   /**
-   * Asserts an exception of the given type whose message CONTAINS every fragment given -
-   * for messages which guide a developer and therefore grow a sentence now and then, while
-   * the parts a test cares about (the defect named, the remedy named) have to stay.
+   * Asserts an exception of the given type whose message CONTAINS every given fragment. It
+   * is for messages which guide a developer. Such a message gets a new sentence now and then.
+   * But the parts a test cares about (the named defect, the named remedy) have to stay.
    *
    * @param expected The exception type expected somewhere in the chain of causes
    * @param fragments The fragments the message has to contain

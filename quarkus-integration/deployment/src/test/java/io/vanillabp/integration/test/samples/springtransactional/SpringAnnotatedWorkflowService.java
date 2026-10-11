@@ -8,9 +8,9 @@ import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.inject.Singleton;
 
 /**
- * A handler carrying SPRING's transaction annotation on Quarkus. Without the extension
- * {@code quarkus-spring-tx} Quarkus starts no transaction for it, so the annotation
- * cannot break the {@code TaskException} contract and the application has to boot.
+ * A handler with SPRING's transaction annotation on Quarkus. Without the extension
+ * {@code quarkus-spring-tx}, Quarkus starts no transaction for it. So the annotation cannot
+ * break the {@code TaskException} contract, and the application has to boot.
  */
 @Singleton
 @WorkflowService(workflowAggregateClass = Aggregate.class)

@@ -19,19 +19,17 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of the per-adapter-id bean convention on Quarkus
- * (the adapter config model) - the structural foundation of the migration
- * scenario: TWO adapter ids of ONE type boot together. Id 'test' is served by an
- * <i>element</i> bean ({@link TestMigratableProcessService}), id 'test2' by a bean of
- * type <code>List&lt;MigratableProcessService&gt;</code>
- * ({@link Test2ListProcessServiceProducer}) - the platform's collection point
- * flattens List beans alongside element beans, and the election's fail-fast would
- * abort the boot if any prioritized id were unserved.
+ * Acceptance test of the bean convention "one instance per adapter id" on Quarkus (the
+ * adapter config model). The migration scenario is built on it: TWO adapter ids of ONE
+ * type boot together. An <i>element</i> bean ({@link TestMigratableProcessService}) serves
+ * id 'test'. A bean of type <code>List&lt;MigratableProcessService&gt;</code>
+ * ({@link Test2ListProcessServiceProducer}) serves id 'test2'. The platform collects the
+ * List beans and flattens them alongside the element beans. If nobody served a prioritized
+ * id, the election would fail fast and stop the boot.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TwoAdapterIdsOfOneTypeTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
@@ -60,14 +58,14 @@ public class TwoAdapterIdsOfOneTypeTest {
     final var migrationProcessService = ((ProcessServiceBaseCdiBean<Aggregate>) processService)
         .getMigrationProcessService();
 
-    // both configured ids of the dummy type are known and served (the election's
-    // fail-fast in MigrationProcessService did not fire although 'test2' is only
-    // provided via a flattened List bean)
+    // both configured ids of the dummy type are known and served. The election in
+    // MigrationProcessService did not fail fast, although only a flattened List bean
+    // provides 'test2'
     Assertions.assertEquals(
         Set.of("test", "test2"),
         migrationProcessService.getAdapters().keySet());
 
-    // the workflow module prioritizes id 'test2' - new workflows start there
+    // the workflow module prioritizes id 'test2', so new workflows start there
     Assertions.assertEquals(
         List.of("test2", "test"),
         migrationProcessService.getPrioritizedAdapters());

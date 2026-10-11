@@ -14,9 +14,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * A section for a workflow module which is NOT in the classpath stays a WARN (the
- * module may arrive later), while the module actually found in the classpath needs
- * no section at all - its own one is derived.
+ * A section for a workflow module which is NOT in the classpath only causes a WARN, because
+ * the module may arrive later. The module which is found in the classpath needs no section
+ * at all. Its section is derived.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class UnconfiguredWorkflowModuleConfigurationTest {
@@ -26,7 +26,6 @@ public class UnconfiguredWorkflowModuleConfigurationTest {
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
-          // load sample application properties
           .addAsResource("unconfigured-workflow-module/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class)

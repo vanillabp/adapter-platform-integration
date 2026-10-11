@@ -18,16 +18,15 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of workflow-level properties (formerly rejected as "not
- * yet supported"): the workflow module prioritizes adapter id 'test' while the
- * workflow 'SampleWorkflowService' overrides to 'test2' - the resolution is performed
- * ONCE, by the core on the bound tree, so this CDI-level test proves the Quarkus
- * binding feeds the workflow level into the election.
+ * Acceptance test of workflow-level properties, which were once rejected as "not yet
+ * supported". The workflow module prioritizes adapter id 'test', and the workflow
+ * 'SampleWorkflowService' overrides it with 'test2'. The core resolves this ONCE, on the
+ * bound tree. So this test on the CDI level proves that the Quarkus binding passes the
+ * workflow level on to the election.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowLevelConfigurationTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap

@@ -19,12 +19,12 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * A base class carrying the declaration lives in a library of its own, which is a workflow
- * module of its own too. The workflow module of a workflow service comes from the archive its
- * class sits in, and the class is the SUBCLASS - so the workflow service belongs to the
- * application's module, not to the library's. Reading it off the declaring class moved every
- * application using such a library into the library's module, or ended its build with "no
- * workflow module descriptor" where the library had none.
+ * A base class which carries the declaration lives in a library of its own. That library is
+ * a workflow module of its own too. The workflow module of a workflow service comes from the
+ * archive which holds its class. The class is the SUBCLASS. So the workflow service belongs
+ * to the application's module, not to the library's. Reading the module from the declaring
+ * class moved every application which used such a library into the library's module. Or it
+ * ended the build with "no workflow module descriptor" where the library had none.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class InheritedWorkflowServiceOfAnotherArchiveTest {
@@ -46,8 +46,8 @@ public class InheritedWorkflowServiceOfAnotherArchiveTest {
           .addClass(AnnotatedWorkflowServiceBase.class)
           .addClass(InheritedAggregate.class)
           .addAsResource(new StringAsset("library-module"), WorkflowModule.METAINF_WORKFLOWMODULE))
-      // the classes of the additional dependency are on the test classpath as well;
-      // without a flat class path they would be loaded twice
+      // the classes of the additional dependency are on the test classpath as well.
+      // Without a flat class path they would be loaded twice
       .setFlatClassPath(true)
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter());
 

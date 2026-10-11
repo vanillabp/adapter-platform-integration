@@ -25,8 +25,9 @@ import jakarta.transaction.UserTransaction;
 import lombok.Getter;
 
 /**
- * Tests that Arc transactional observers work with Narayana-provided Synchronization registry.
- * All observers also make use of Request scoped bean so that we verify that the context is automatically activated.
+ * Tests that the transactional observers of ArC work with the Synchronization registry which
+ * Narayana provides. All observers also use a request-scoped bean. So we check that the
+ * context is activated automatically.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TransactionalObserversTest {
@@ -163,7 +164,7 @@ public class TransactionalObserversTest {
 
   @RequestScoped
   static class ReqScopedBean {
-    // just to verify that the context gets activated for OMs
+    // only checks that the context is activated for observer methods
     public void ping() {
     }
   }
@@ -188,7 +189,7 @@ public class TransactionalObserversTest {
       return objectsToStrings(seq).equals(actions);
     }
 
-    // true iff obj exists and all otherObjects exist and indexOf(obj) < indexOf(x) for each x from otherObjects
+    // true if obj and all otherObjects exist, and obj comes before each of otherObjects
     public static boolean precedes(
         Object obj,
         Object... otherObjects) {

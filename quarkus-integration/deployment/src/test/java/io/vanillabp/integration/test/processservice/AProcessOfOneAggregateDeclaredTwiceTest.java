@@ -17,7 +17,7 @@ import jakarta.inject.Inject;
 
 /**
  * Two classes of ONE workflow aggregate declare the same process and the same called step.
- * That stays allowed: the classes are merged, and the application starts.
+ * That is still allowed. The classes are merged, and the application starts.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AProcessOfOneAggregateDeclaredTwiceTest {

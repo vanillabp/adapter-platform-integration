@@ -7,10 +7,10 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * A build item collecting a class which is required to be a CDI bean at runtime. All
- * collected classes are checked during ArC's validation phase by
- * {@link EnsureCollectedClassesAreBeansBuildStepProcessor} and a build error is raised
- * for classes not backed by any bean.
+ * A build item which collects a class that has to be a CDI bean at runtime.
+ * {@link EnsureCollectedClassesAreBeansBuildStepProcessor} checks all collected classes
+ * during the validation phase of ArC, the CDI container of Quarkus. A class which no bean
+ * backs fails the build.
  */
 @Builder
 @Getter
@@ -22,33 +22,33 @@ public final class EnsureClassIsBeanValidationBuildItem extends MultiBuildItem {
   private final DotName className;
 
   /**
-   * A description of how the class is used by the VanillaBP extension, shown as part of
-   * the build error if the class is not backed by any bean.
+   * Describes how the VanillaBP extension uses the class. The build error shows it if no
+   * bean backs the class.
    */
   private final String usageDescription;
 
   /**
-   * Whether a bean of a SUBCLASS satisfies the requirement. It does wherever VanillaBP
-   * only needs an instance it can call the class' methods on - the aggregate persistence
-   * of a workflow aggregate is that shape, and an application is free to provide it as a
-   * subclass or through a producer.
+   * Whether a bean of a SUBCLASS satisfies the requirement. It does wherever VanillaBP only
+   * needs an instance to call the class' methods on. The aggregate persistence of a workflow
+   * aggregate is such a case. An application may provide it as a subclass or through a
+   * producer.
    * <p>
-   * A workflow service is the other shape: VanillaBP registers the class ITSELF as the one
-   * serving a BPMN process, so a class which is no bean of its own serves nothing, however
-   * many of its subclasses are beans.
+   * A workflow service is the other case. VanillaBP registers the class ITSELF as the one
+   * which serves a BPMN process. So a class which is no bean of its own serves nothing, even
+   * if many of its subclasses are beans.
    */
   @Builder.Default
   private final boolean aBeanOfASubclassCounts = true;
 
   /**
-   * What to do about it, appended to the build error. Says nothing where the
-   * bean-defining annotation the default message names is the whole answer.
+   * What to do about it. It is appended to the build error. It is <code>null</code> where the
+   * default message already says it all: add a bean-defining annotation.
    */
   private final String remedy;
 
   /**
-   * Built through the builder by every step which finds a class VanillaBP will look up by
-   * its name at runtime - the workflow services and their aggregate persistence
+   * Built through the builder by every step which finds a class that VanillaBP looks up by
+   * its name at runtime. These are the workflow services and their aggregate persistence
    * ({@code ProcessServiceBuildStepProcessor}), and the resolvers of multi-instance elements
    * ({@code MultiInstanceResolverBuildStepProcessor}). Both steps of
    * {@link EnsureCollectedClassesAreBeansBuildStepProcessor} read the collected items.

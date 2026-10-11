@@ -9,12 +9,12 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.inject.Produces;
 
 /**
- * Produces a process service for adapter id 'test2' via a bean of type
- * <code>List&lt;MigratableProcessService&gt;</code>, which is the shape an adapter uses
- * for ids it only learns at runtime: a CDI producer cannot yield N element beans for N
- * configured ids, so an adapter produces ONE List bean which the platform's collection
- * point flattens ALONGSIDE element beans (here: {@link TestMigratableProcessService}
- * serving id 'test' as an element bean).
+ * Produces a process service for adapter id 'test2' through a bean of type
+ * <code>List&lt;MigratableProcessService&gt;</code>. An adapter uses this shape for ids which
+ * it only learns at runtime. A CDI producer cannot return N element beans for N configured
+ * ids. So an adapter produces ONE List bean. The platform collects it and flattens it
+ * ALONGSIDE the element beans. Here {@link TestMigratableProcessService} is the element
+ * bean, and it serves id 'test'.
  */
 @ApplicationScoped
 @Unremovable
@@ -32,7 +32,7 @@ public class Test2ListProcessServiceProducer {
       }
 
       /**
-       * Serves every operation and does nothing: this double is here for the election
+       * Serves every operation and does nothing. This test double exists for the election
        * and the deployment, not for what an operation sends to a BPMS.
        */
       @Override

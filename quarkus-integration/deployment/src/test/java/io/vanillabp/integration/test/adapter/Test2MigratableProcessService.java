@@ -22,8 +22,8 @@ public class Test2MigratableProcessService implements MigratableProcessService<O
   }
 
   /**
-   * Serves every operation and does nothing: this double is here for the election
-   * and the deployment, not for what an operation sends to a BPMS.
+   * Serves every operation and does nothing. This test double exists for the election and
+   * the deployment, not for what an operation sends to a BPMS.
    */
   @Override
   public java.util.Map<io.vanillabp.integration.spi.PhaseOperation, io.vanillabp.integration.adapter.spi.PhaseOperationHandler<Object>> phaseOperations() {

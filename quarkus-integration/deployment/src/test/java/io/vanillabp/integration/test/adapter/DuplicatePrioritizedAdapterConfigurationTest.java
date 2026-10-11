@@ -13,19 +13,18 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Same-config-same-outcome matrix (core validation on all platforms): duplicates
- * in 'vanillabp.prioritized-adapters' are rejected with a guiding message.
+ * Part of the matrix "same configuration, same outcome" (core validation on all
+ * platforms). Duplicates in 'vanillabp.prioritized-adapters' are rejected with a guiding
+ * message.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DuplicatePrioritizedAdapterConfigurationTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
-          // load sample application properties
           .addAsResource("duplicate-prioritized/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class))                              // necessary due to anonymous class in DummyAdapters

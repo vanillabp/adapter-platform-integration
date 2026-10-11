@@ -19,9 +19,9 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * The counterpart of {@link TransactionAnnotationStartupTest}: excluding VanillaBP's
- * {@code TaskException} from the rollback rules keeps the contract intact, so the
- * application boots with the annotation a VanillaBP 1 application carries.
+ * The counterpart of {@link TransactionAnnotationStartupTest}. If the rollback rules exclude
+ * VanillaBP's {@code TaskException}, the contract stays intact. So the application boots
+ * with the annotation which a VanillaBP 1 application carries.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AcceptedTransactionAnnotationStartupTest {

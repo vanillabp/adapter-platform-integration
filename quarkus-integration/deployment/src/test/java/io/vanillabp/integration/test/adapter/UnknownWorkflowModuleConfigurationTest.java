@@ -16,22 +16,20 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Configuration for a workflow module NOT available in the classpath only yields a
- * WARNING (the core validation is authoritative on all platforms): the properties
- * are never used, but the application still boots - e.g. the module might be added
- * in a later deployment. Formerly the Quarkus transformer failed the build here
- * while Spring Boot warned - the platforms now behave identically.
+ * Configuration for a workflow module which is NOT in the classpath only causes a WARNING.
+ * The core validation decides this on all platforms. The properties are never used, but the
+ * application still boots. The module might be added in a later deployment, for example.
+ * Before, the Quarkus transformer failed the build here, while Spring Boot warned. Now both
+ * platforms behave the same.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class UnknownWorkflowModuleConfigurationTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
-          // load sample application properties
           .addAsResource("unknown-workflow-module/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class)

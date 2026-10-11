@@ -8,8 +8,8 @@ import jakarta.transaction.Transactional;
 
 /**
  * A workflow service whose handler is annotated like an ordinary transactional service
- * method. The annotation joins the transaction VanillaBP runs the handler in, so a
- * {@code TaskException} would discard every change made to the workflow aggregate: the
+ * method. The annotation joins the transaction which VanillaBP runs the handler in. So a
+ * {@code TaskException} would throw away every change to the workflow aggregate. The
  * application must not boot with it.
  */
 @Singleton

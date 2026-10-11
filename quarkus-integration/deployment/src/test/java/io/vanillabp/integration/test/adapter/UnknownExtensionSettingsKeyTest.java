@@ -12,18 +12,18 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What a plug-in setting written at a position nothing binds does on Quarkus: it ends the
- * startup naming the key, rather than being read by nobody.
+ * What happens on Quarkus to a plug-in setting at a position which nothing binds. It ends
+ * the startup and names the key. Otherwise nobody would read it.
  * <p>
- * The section here is <code>extension</code> where the binding declares
- * <code>extensions</code>, below an adapter - which is one of the eight positions
- * VanillaBP resolves (decision 53 in the repository's DECISIONS.md). So this test says
- * two things at once: a typo in a plug-in's settings is reported, and every position the
- * resolution offers has to be part of a registered mapping, because on Quarkus a position
- * which is not bound is not a position an application can write.
+ * The section here is <code>extension</code>, where the binding declares
+ * <code>extensions</code>, below an adapter. That is one of the eight positions which
+ * VanillaBP resolves (decision 53 in the repository's DECISIONS.md). So this test says two
+ * things. A typo in a plug-in's settings is reported. And every position which the
+ * resolution offers has to be part of a registered mapping. On Quarkus, an application
+ * cannot write to a position which is not bound.
  * <p>
- * Spring Boot has no unknown-key detection, so there is no counterpart there; the
- * asymmetry is accepted (see {@code UnknownPropertyKeyConfigurationTest}).
+ * Spring Boot has no detection of unknown keys, so there is no counterpart there. We
+ * accept this difference (see {@code UnknownPropertyKeyConfigurationTest}).
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class UnknownExtensionSettingsKeyTest {

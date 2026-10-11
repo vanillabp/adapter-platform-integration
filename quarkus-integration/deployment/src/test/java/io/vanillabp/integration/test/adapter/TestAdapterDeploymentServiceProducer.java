@@ -11,10 +11,10 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 
 /**
- * Produces one {@link TestAdapterDeploymentService} per configured adapter id (of
- * ANY type - a test fixture shortcut; real adapters filter by their type): the
- * runtime deployment pipeline requires one deployment service per prioritized
- * adapter id, like on Spring Boot.
+ * Produces one {@link TestAdapterDeploymentService} for each configured adapter id, of ANY
+ * type. This is a shortcut for the test. Real adapters filter by their type. The runtime
+ * deployment pipeline needs one deployment service for each prioritized adapter id, like
+ * on Spring Boot.
  */
 @ApplicationScoped
 public class TestAdapterDeploymentServiceProducer {

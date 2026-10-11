@@ -16,11 +16,11 @@ import io.vanillabp.integration.test.samples.nosubclass.LonelyAggregate;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An abstract class carrying <code>&#64;WorkflowService</code> declares a workflow service
- * without being one: VanillaBP asks CDI for an instance of the workflow service class, and
- * nobody can hand out an instance of an abstract class. Where no subclass exists either, the
- * declaration reaches no BPMN process at all, and the build says so instead of leaving the
- * developer with a bean question about a class they made abstract on purpose.
+ * An abstract class with <code>&#64;WorkflowService</code> declares a workflow service, but
+ * it is not one. VanillaBP asks CDI for an instance of the workflow service class, and
+ * nobody can create an instance of an abstract class. If no subclass exists either, the
+ * declaration reaches no BPMN process at all. The build says so. It does not leave the
+ * developer with a question about beans for a class they made abstract on purpose.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DeclarationWithoutAWorkflowServiceTest {

@@ -14,13 +14,11 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * A CUSTOM adapter id can never be derived from the classpath (it carries no
- * information about its type), so the Quarkus binding limitation stays real for
- * it: a section consisting of nothing but <code>my-c7:</code> contributes no
- * property name and is dropped silently. With SEVERAL adapter types in the
- * classpath nothing can be derived either, so the boot fails - and the guiding
- * message names both the remedy and the Quarkus behavior which made the section
- * disappear.
+ * A CUSTOM adapter id can never be derived from the classpath, because it says nothing
+ * about its type. So the Quarkus binding limitation is real for it. A section with nothing
+ * but <code>my-c7:</code> adds no property name, and it is silently dropped. With SEVERAL
+ * adapter types in the classpath, nothing can be derived either. So the boot fails. The
+ * message names the remedy, and the Quarkus behavior which made the section disappear.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class BareCustomAdapterIdConfigurationTest {

@@ -24,9 +24,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * The election cache's bounds are configurable and reach the in-memory
- * default. This application does NOT use the Micrometer extension, which is the other
- * half of the case: it boots exactly as it would without the cache and publishes no meters.
+ * The bounds of the election cache are configurable, and they reach the in-memory default.
+ * This application does NOT use the Micrometer extension. That is the other half of the
+ * case. It boots exactly as it would without the cache, and it publishes no meters.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowAdapterCacheConfigurationTest {
@@ -74,7 +74,7 @@ public class WorkflowAdapterCacheConfigurationTest {
         "an application asking for the release has the end of every workflow reported");
 
     final var inMemoryCache = Assertions.assertInstanceOf(InMemoryWorkflowAdapterCache.class, cache);
-    // what the cache knows about itself is the cache's, not the election's
+    // what the cache knows about itself belongs to the cache, not to the election
     final var ownStatistics = inMemoryCache.getStatistics();
 
     cache.put(MODULE, PROCESS, "1", "test");
@@ -105,8 +105,8 @@ public class WorkflowAdapterCacheConfigurationTest {
   @DisplayName("Without the Micrometer extension no meters are published")
   public void noMetersWithoutMicrometer() {
 
-    // the meters themselves cannot even be NAMED here: their class implements
-    // Micrometer's MeterBinder, which this application does not have
+    // the meters cannot even be NAMED here. Their class implements Micrometer's
+    // MeterBinder, and this application does not have it
     final var beansPublishingMeters = io.quarkus.arc.Arc
         .container()
         .beanManager()

@@ -7,12 +7,12 @@ import org.jboss.jandex.DotName;
 import io.quarkus.builder.item.SimpleBuildItem;
 
 /**
- * The workflow-aggregate classes of this application - the same universe
- * {@code ProcessService} beans are built for, published so that a second build step can
- * build one bean per aggregate as well without scanning the archives again.
+ * The workflow-aggregate classes of this application. These are the same classes which
+ * {@code ProcessService} beans are built for. They are published, so a second build step
+ * can also build one bean for each aggregate without scanning the archives again.
  * <p>
- * That second build step is the one giving an extension its own per-aggregate service
- * (see {@code ExtensionServiceBuildStepProcessor}).
+ * That second build step gives an extension its own service for each aggregate (see
+ * {@code ExtensionServiceBuildStepProcessor}).
  */
 public final class VanillaBpWorkflowAggregatesBuildItem extends SimpleBuildItem {
 
@@ -23,7 +23,7 @@ public final class VanillaBpWorkflowAggregatesBuildItem extends SimpleBuildItem 
    * a {@code ProcessService} for, and read by {@code ExtensionServiceBuildStepProcessor}.
    *
    * @param workflowAggregateClasses The aggregate classes, each of them once. The item keeps
-   *          a copy, so the producing step may go on working with its own list
+   *          a copy, so the producing step may keep working with its own list
    */
   public VanillaBpWorkflowAggregatesBuildItem(
       final List<DotName> workflowAggregateClasses) {
@@ -36,7 +36,7 @@ public final class VanillaBpWorkflowAggregatesBuildItem extends SimpleBuildItem 
    * The aggregates an extension's build step builds its own beans for.
    *
    * @return The workflow-aggregate classes, in the order the archives were scanned. The list
-   *         is immutable, so a reader may pass it on as it is
+   *         cannot be changed, so a reader may pass it on as it is
    */
   public List<DotName> getWorkflowAggregateClasses() {
 

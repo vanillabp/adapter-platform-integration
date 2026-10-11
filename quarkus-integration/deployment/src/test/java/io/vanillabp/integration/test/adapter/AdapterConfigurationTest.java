@@ -20,13 +20,12 @@ import jakarta.inject.Inject;
 public class AdapterConfigurationTest {
 
   /**
-   * What a probe is asked about. Any scope does here: the adapters of this
-   * test answer from what the test told them, not from a deployment.
+   * What a probe is asked about. Any scope works here. The adapters of this test answer
+   * from what the test told them, not from a deployment.
    */
   private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
       .of("test-module", "TestProcess");
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
@@ -40,9 +39,9 @@ public class AdapterConfigurationTest {
           .addClass(TestAdapterDeploymentServiceProducer.class)
           .addClass(TestMigratableProcessService.class))            // process service of the mocked adapter
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter())  // add mocked adapter
-      // an environment-variable shaped OVERRIDE of the configured adapter id 'test':
-      // accepted by the misbinding validation (only variables introducing UNKNOWN
-      // ids fail the startup - see EnvironmentVariableMisbindingTest)
+      // an OVERRIDE of the configured adapter id 'test', in the shape of an environment
+      // variable. The misbinding validation accepts it. Only variables which introduce
+      // UNKNOWN ids fail the startup, see EnvironmentVariableMisbindingTest
       .overrideConfigKey("VANILLABP_ADAPTERS_TEST_TYPE", "dummy");
 
   @Inject
@@ -53,8 +52,8 @@ public class AdapterConfigurationTest {
   TestMigratableProcessService migratableProcessService;
 
   /**
-   * {@code ProcessService<Aggregate>} should be created using dummy adapter configured in
-   * application.yaml
+   * {@code ProcessService<Aggregate>} is created with the dummy adapter configured in
+   * application.yaml.
    */
   @Test
   public void testAdapterConfiguration() throws Exception {

@@ -18,11 +18,10 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * One workflow aggregate has one {@code ProcessService}, so one of the
- * classes declaring the aggregate names the process {@code startWorkflow} starts.
- * That used to be whichever class was found first - an order coming from the file
- * system. Two classes naming DIFFERENT processes now end the build with a message
- * naming both.
+ * One workflow aggregate has one {@code ProcessService}. So one of the classes which
+ * declare the aggregate names the process which {@code startWorkflow} starts. That used to
+ * be whichever class was found first, in an order which came from the file system. Now two
+ * classes which name DIFFERENT processes end the build, with a message which names both.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AmbiguousPrimaryProcessTest {

@@ -13,10 +13,10 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * A CUSTOM adapter id (an id which is not an adapter type) can never be derived:
- * it carries no information about the adapter type it belongs to. Naming it in
- * <code>prioritized-adapters</code> without a section therefore still fails the
- * boot - with a message naming the property to add.
+ * A CUSTOM adapter id (an id which is not an adapter type) can never be derived. It says
+ * nothing about the adapter type it belongs to. So naming it in
+ * <code>prioritized-adapters</code> without a section still fails the boot. The message
+ * names the property to add.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class NoAdapterConfigurationTest {
@@ -26,7 +26,6 @@ public class NoAdapterConfigurationTest {
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
-          // load sample application properties
           .addAsResource("no-adapter/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class))                              // necessary due to anonymous class in DummyAdapters

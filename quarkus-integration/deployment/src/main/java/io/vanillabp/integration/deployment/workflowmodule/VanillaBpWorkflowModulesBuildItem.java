@@ -14,31 +14,31 @@ import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 
 /**
- * A build item holding all workflow modules found during augmentation. It also carries
- * the assignment of {@link io.vanillabp.spi.service.WorkflowService} classes to workflow
- * modules, computed on demand and cached per build invocation (build items do not
- * survive dev-mode reloads, so no stale {@link ClassInfo} instances are leaked).
+ * A build item which holds all workflow modules found during augmentation. It also says
+ * which workflow module each {@link io.vanillabp.spi.service.WorkflowService} class
+ * belongs to. That is computed when asked and cached for one build. Build items do not
+ * survive dev-mode reloads, so no outdated {@link ClassInfo} instances are kept.
  */
 public final class VanillaBpWorkflowModulesBuildItem extends SimpleBuildItem {
 
   /**
-   * All workflow modules found during augmentation, keyed by the archive holding the
-   * workflow-module descriptor. The same workflow module (equality is based on the
-   * module's ID) may be provided by more than one archive (e.g. in tests where the
-   * descriptor is part of the test archive and of the module's classpath directory).
+   * All workflow modules found during augmentation, keyed by the archive which holds the
+   * workflow-module descriptor. Two modules are equal if their IDs are equal. More than one
+   * archive may provide the same workflow module. This happens e.g. in tests, where the
+   * descriptor is part of the test archive and of the module's classpath directory.
    */
   private final Map<ApplicationArchive, WorkflowModule> workflowModulesByArchive;
 
   /**
-   * Cache of service classes resolved to their workflow modules. Local to this build
-   * item and therefore local to a single build invocation.
+   * Caches the workflow module of each service class. It belongs to this build item, so it
+   * lives for one build only.
    */
   private final Map<DotName, WorkflowModule> resolvedWorkflowModules = new HashMap<>();
 
   /**
    * Built by {@link WorkflowModuleBuildStepProcessor#findAllWorkflowModules} once every
-   * archive of the build was searched for a descriptor, and read by every step which has to
-   * know the workflow modules of this application.
+   * archive of the build was searched for a descriptor. Every step which needs to know the
+   * workflow modules of this application reads it.
    *
    * @param workflowModulesByArchive The modules found, keyed by the archive their descriptor
    *          was found in. The item works on the map it is given and never changes it
@@ -51,11 +51,11 @@ public final class VanillaBpWorkflowModulesBuildItem extends SimpleBuildItem {
   }
 
   /**
-   * The workflow modules of this application. A set of its own is built on every call, so a
-   * caller may sort or filter the one it gets.
+   * The workflow modules of this application. Every call builds a new set, so a caller may
+   * sort or filter the one it gets.
    *
-   * @return All workflow modules found (workflow modules found in more than one archive
-   *         are reported once since equality of workflow modules is based on their IDs)
+   * @return All workflow modules found. A module found in more than one archive is in the set
+   *         once, because two modules with the same ID are equal
    */
   public Set<WorkflowModule> getWorkflowModules() {
 
