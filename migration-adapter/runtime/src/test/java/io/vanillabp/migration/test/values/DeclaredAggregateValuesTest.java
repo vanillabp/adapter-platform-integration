@@ -17,17 +17,17 @@ import io.vanillabp.integration.adapter.migration.values.DeclaredAggregateValues
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The path into a section which has not run yet. A workflow aggregate holds one
- * sub-object per section of a larger process, and until the section runs that object is
- * <code>null</code>, so a declared value below it resolves to nothing.
+ * The path into a section which has not run yet. A workflow aggregate holds one sub-object
+ * per section of a larger process. Until the section runs, that object is <code>null</code>.
+ * So a declared value below it resolves to nothing.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @DisplayName("A declared value of an aggregate")
 public class DeclaredAggregateValuesTest {
 
   /**
-   * Stands for the aggregate the declarations belong to. Nothing is read off it here: the
-   * class is the key the declarations are kept under.
+   * Stands for the aggregate to which the declarations belong. Nothing is read off it here.
+   * The class is the key under which the declarations are kept.
    */
   private static class Order {
   }

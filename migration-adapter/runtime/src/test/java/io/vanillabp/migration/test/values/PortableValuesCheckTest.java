@@ -32,9 +32,9 @@ import io.vanillabp.spi.service.WorkflowTask;
  * What the application is told when a value travels which the BPMS may not give back the
  * way it was given.
  * <p>
- * The message IS the feature of this check, so the assertions read it rather than only
- * counting that something was thrown: it has to name the value, its type, the direction,
- * why it does not travel, and the two ways on.
+ * The message IS the feature of this check. So the assertions read it, and do not only count
+ * that something was thrown. It has to name the value, its type and the direction, say why
+ * it does not travel, and name the two ways on.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @DisplayName("Only portable values reach the BPMS")
@@ -45,8 +45,8 @@ public class PortableValuesCheckTest {
   private static final String PROCESS = "LoanApproval";
 
   /**
-   * An aggregate which shares a decision as a boolean and the rest as texts, which is
-   * what the rule asks for.
+   * An aggregate which shares a decision as a boolean and the rest as texts. The rule asks
+   * for this.
    */
   @NoSyncWithBPMS
   public static class PortableAggregate {
@@ -74,8 +74,8 @@ public class PortableValuesCheckTest {
   }
 
   /**
-   * An aggregate sharing a decimal and a date, neither of which every expression language
-   * reads the same way.
+   * An aggregate which shares a decimal and a date. Not every expression language reads
+   * them the same way.
    */
   @NoSyncWithBPMS
   public static class UnportableAggregate {
@@ -97,8 +97,8 @@ public class PortableValuesCheckTest {
   }
 
   /**
-   * An aggregate sharing the WRAPPER of a boolean, which is the case the message has to
-   * explain rather than just refuse.
+   * An aggregate which shares the WRAPPER of a boolean. The message has to explain this case,
+   * not just refuse it.
    */
   @NoSyncWithBPMS
   public static class WrappedBooleanAggregate {
@@ -113,8 +113,8 @@ public class PortableValuesCheckTest {
   }
 
   /**
-   * An aggregate sharing a number and a list, which a reader of the message tends to judge
-   * differently although the check does not.
+   * An aggregate which shares a number and a list. A reader of the message tends to judge
+   * them differently, although the check does not.
    */
   @NoSyncWithBPMS
   public static class NumberAndListAggregate {
@@ -136,7 +136,7 @@ public class PortableValuesCheckTest {
   }
 
   /**
-   * A workflow service whose handler asks for a decimal and for a value of no type at
+   * A workflow service whose handler asks for a decimal, and for a value of no type at
    * all.
    */
   public static class ServiceWithTaskParams {
