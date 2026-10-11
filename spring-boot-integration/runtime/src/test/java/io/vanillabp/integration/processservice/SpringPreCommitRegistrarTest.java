@@ -113,7 +113,6 @@ public class SpringPreCommitRegistrarTest {
           });
 
       // the check did NOT run when it was handed over. It ran at the end
-
       assertEquals(List.of("still inside the transaction", "check"), events);
     }
 

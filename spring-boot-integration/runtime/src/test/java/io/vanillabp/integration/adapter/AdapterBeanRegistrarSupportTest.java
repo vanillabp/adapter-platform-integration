@@ -109,7 +109,6 @@ public class AdapterBeanRegistrarSupportTest {
     // Both adapters have to get their beans. The example was broken before this test
     // existed. The custom id's 'type' made the core model bind, and the other section had
     // nothing the core knows
-
     final var properties = Map.<String, Object>of(
         "vanillabp.prioritized-adapters[0]", "camunda8",
         "vanillabp.prioritized-adapters[1]", "legacy",

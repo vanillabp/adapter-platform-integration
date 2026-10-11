@@ -280,7 +280,6 @@ public class SpringTransactionRunnerResolverTest {
 
     // the replica-set probe finds no MongoTemplate in this context. So it does not make up
     // a verdict it cannot back
-
     assertEquals(
         TransactionCoverage.Verdict.COVERED,
         testee.coverageOf(OrderAggregate.class).verdict());

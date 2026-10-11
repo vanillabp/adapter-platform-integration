@@ -18,7 +18,6 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * <p>
  * It has to be the same collection the checks of the core report into. Otherwise the
  * application would write two blocks. This test holds the promise of one block per start.
-
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheStartupReportOfAnAdapterTest {

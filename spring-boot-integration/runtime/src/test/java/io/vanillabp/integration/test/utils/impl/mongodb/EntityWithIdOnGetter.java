@@ -8,7 +8,6 @@ import lombok.Setter;
 /**
  * The MongoDB twin of the JPA entity of the same name. The ID annotation sits at the getter,
  * and both persistence technologies have to answer the same name for it.
-
  */
 @Document(collection = "test4_entity")
 @Setter

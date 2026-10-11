@@ -302,7 +302,6 @@ public class AMongoBlockedEntryKeepsItsReasonTest {
     }), collection), collection, id).getString("lastFailure");
 
     // the update which the wiki page "Blocked outbox entries" gives to an operator
-
     final var opened = mongoTemplate
         .getCollection(collection)
         .updateOne(

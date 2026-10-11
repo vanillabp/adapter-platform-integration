@@ -118,7 +118,6 @@ public class TheRunnerJoinsARunningTransactionTest {
     // the counterpart of the first test, and the reason why the two forms differ. VanillaBP
     // may run a handler in a transaction of its own. That handler keeps what it wrote, even
     // where everything around it is rolled back
-
     assertThrows(
         IllegalStateException.class,
         () -> callersTransaction

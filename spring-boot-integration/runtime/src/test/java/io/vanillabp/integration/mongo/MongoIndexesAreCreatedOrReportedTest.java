@@ -261,7 +261,6 @@ public class MongoIndexesAreCreatedOrReportedTest {
   /**
    * No router. The sieve of the workflow-start rows is off unless an application asks for it.
    * So nothing here ever looks for a router.
-
    *
    * @return A provider which has nothing
    */

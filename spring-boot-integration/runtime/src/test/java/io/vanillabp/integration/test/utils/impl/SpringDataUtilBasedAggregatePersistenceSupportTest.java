@@ -127,7 +127,6 @@ public class SpringDataUtilBasedAggregatePersistenceSupportTest {
    * ID type is, the answer stays <code>null</code>. That is an answer of the contract, not a
    * defect. It is the case of a custom {@link SpringDataUtil} implementation which owns the
    * serialized form.
-
    */
   @Test
   @DisplayName("An undeterminable ID type stays the contract's null")

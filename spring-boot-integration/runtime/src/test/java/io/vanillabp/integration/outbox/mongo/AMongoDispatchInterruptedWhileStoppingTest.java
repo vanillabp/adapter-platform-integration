@@ -202,7 +202,6 @@ public class AMongoDispatchInterruptedWhileStoppingTest {
 
     final var line = lineAbout(entry, "because this node is stopping");
     // a stop is the normal case, so the line reads like a stop reads elsewhere
-
     assertEquals(Level.INFO, line.getLevel());
     assertTrue(line.getFormattedMessage().contains("was interrupted"), line.getFormattedMessage());
     assertTrue(

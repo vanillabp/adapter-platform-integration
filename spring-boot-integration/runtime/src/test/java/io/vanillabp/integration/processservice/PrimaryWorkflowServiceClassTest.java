@@ -61,7 +61,6 @@ public class PrimaryWorkflowServiceClassTest {
     assertTrue(message.contains("RiskAssessment"), message);
     // the message also names the way out: one class declares the process to be started,
     // and the others move under its secondaryBpmnProcesses
-
     assertTrue(message.contains("secondaryBpmnProcesses"), message);
 
   }

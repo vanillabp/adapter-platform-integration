@@ -24,7 +24,6 @@ final class SpringConfigurationMetadata {
    * What the annotation processor writes while the main sources are compiled. It holds the
    * fields the processor found plus everything the hand-written file adds. So a development
    * environment reads this file.
-
    */
   static final String GENERATED = "META-INF/spring-configuration-metadata.json";
 

@@ -322,7 +322,6 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
   /**
    * Two aggregates on different lanes. The test reads them from the rule the dispatcher uses,
    * and does not guess them.
-
    *
    * @return The ids of two aggregates served by different lanes
    */

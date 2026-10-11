@@ -192,7 +192,6 @@ public class EveryPropertyIsOfferedByTheIdeTest {
    * Whether a getter returns something derived, and not something bound. The binder writes
    * through a SETTER. So a getter without a setter is something the configuration computes,
    * not one of its keys.
-
    */
   private static boolean isDerived(
       final Method getter) {

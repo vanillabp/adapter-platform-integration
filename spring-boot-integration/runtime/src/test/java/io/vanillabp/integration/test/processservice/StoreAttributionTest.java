@@ -317,7 +317,6 @@ public class StoreAttributionTest {
     // an application may put @Transactional on its own store. The proxy which Spring builds
     // for it overrides EVERY method, including the SPI defaults. So reflection on the proxy
     // would report a release which does not exist
-
     final var proxied = (TaskDeliveryLog) new ProxyFactory(new ApplicationDeliveryLog()).getProxy();
 
     try (var context = new AnnotationConfigApplicationContext()) {

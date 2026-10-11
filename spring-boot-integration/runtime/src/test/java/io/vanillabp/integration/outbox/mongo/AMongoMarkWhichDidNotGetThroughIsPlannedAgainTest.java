@@ -199,7 +199,6 @@ public class AMongoMarkWhichDidNotGetThroughIsPlannedAgainTest {
    * Writes the entry to be dispatched. Next to it, it writes a dispatched entry which already
    * holds that entry's id as its <code>dedupKey</code>. So the mark of the first one cannot be
    * written.
-
    *
    * @return The id of the entry to be dispatched
    */

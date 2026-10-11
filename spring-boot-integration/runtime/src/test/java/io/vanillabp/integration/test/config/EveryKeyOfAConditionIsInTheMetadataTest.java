@@ -221,7 +221,6 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
   /**
    * Writes the keys of one condition the way an application writes them. A prefix goes in
    * front of every name. A complete name comes without a prefix.
-
    *
    * @param prefix The section of the condition, empty where the names are complete
    * @param names The names the condition was given, as 'name' or as 'value'

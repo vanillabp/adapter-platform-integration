@@ -29,7 +29,6 @@ public class SpringConcurrentModificationTest {
 
     assertTrue(runner.isConcurrentModification(new ObjectOptimisticLockingFailureException("Aggregate", 4711L)));
     // MongoDB reports the base type, not the subclass for JPA
-
     assertTrue(runner.isConcurrentModification(new OptimisticLockingFailureException("version 3 expected")));
     assertTrue(
         runner

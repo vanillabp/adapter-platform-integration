@@ -44,7 +44,6 @@ public class OutboxStoresRefuseASharedNameTest {
    * What a scan would find in an application: one workflow module and one adapter. The
    * configuration under test is about neither of them. But without both, the boot ends
    * before it reads the outbox section.
-
    */
   @Configuration
   static class ClasspathFactsConfiguration {

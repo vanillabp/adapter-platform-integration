@@ -42,7 +42,6 @@ public class EveryKeyOfASectionIsDescribedTest {
 
   /**
    * Reads every section of the core model and looks up each of its keys in the metadata.
-
    *
    * @throws IOException If the classpath cannot be read
    */

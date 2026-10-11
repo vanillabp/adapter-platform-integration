@@ -156,7 +156,6 @@ public class PhaseTwoAggregateIdConverterTest {
     buildProcessService();
 
     // the dispatch must NOT fail, because that would block the outbox entry for good
-
     router.dispatch(startWorkflowCall("custom-id-4711"));
 
     org.junit.jupiter.api.Assertions.assertEquals(java.util.List.of("custom-id-4711"), phaseTwoAggregateIds);

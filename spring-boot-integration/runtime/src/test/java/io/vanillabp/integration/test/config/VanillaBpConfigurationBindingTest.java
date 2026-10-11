@@ -566,7 +566,6 @@ public class VanillaBpConfigurationBindingTest {
     // 'withPropertyValues' cannot express a key WITHOUT children. So the test loads the YAML
     // as a property source. A real application uses exactly this shape. Quarkus' binding
     // drops this shape, see QuarkusMigrationAdapterTransformer.QUARKUS_EMPTY_SECTION_NOTE
-
     contextRunner
         .withInitializer(VanillaBpConfigurationBindingTest::loadBareAdapterIdYaml)
         .run(context -> {

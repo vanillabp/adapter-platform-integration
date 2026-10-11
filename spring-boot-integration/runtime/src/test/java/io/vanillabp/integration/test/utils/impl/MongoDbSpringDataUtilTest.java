@@ -233,7 +233,6 @@ class MongoDbSpringDataUtilTest {
   /**
    * What the fallback persistence does with an aggregate without a repository. Here an
    * application used to boot and then fail at its first task.
-
    */
   @Test
   public void aggregateWithoutRepositoryIsReportedWhileStarting() {

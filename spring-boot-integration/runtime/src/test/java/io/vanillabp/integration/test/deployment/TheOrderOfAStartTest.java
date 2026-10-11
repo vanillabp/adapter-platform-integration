@@ -89,7 +89,6 @@ public class TheOrderOfAStartTest {
     // the Spring Boot order. It is the reason why the two platforms do not write the same
     // block. Here, what the start of the workflow processing notices arrives after the block
     // was written. So it is logged where it was found
-
     final InOrder aStart = Mockito.inOrder(deploymentService);
     aStart.verify(deploymentService).endOfStartup();
     aStart.verify(deploymentService).startWorkflowProcessing(eq(List.of("test-module")));

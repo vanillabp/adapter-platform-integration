@@ -55,7 +55,6 @@ public class MarkerFileOfAnExecutableJarTest {
   public void aPathIsComparedAfterItsPercentSignsAreResolved() {
 
     // how the JDK and the loader of Spring Boot spell the directory 'sp ace+ü'
-
     final var module = moduleDeclaredIn("jar:file:/srv/sp%20ace+%c3%bc/loan-approval.jar!/");
 
     assertTrue(module.isDeclaredInTheArtifactOf("jar:nested:/srv/sp%20ace+ü/loan-approval.jar/!BOOT-INF/classes/!/"));

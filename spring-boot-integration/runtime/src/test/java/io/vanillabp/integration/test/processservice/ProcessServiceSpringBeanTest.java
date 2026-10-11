@@ -118,7 +118,6 @@ public class ProcessServiceSpringBeanTest {
     }
 
     // a definition id which does not follow '<adapter id>#<BPMS specific id>'
-
     final var definitionException = assertThrowsExactly(
         io.vanillabp.spi.process.ProcessDefinitionNotFoundException.class,
         () -> testee.getBpmnXml("definition-1"));

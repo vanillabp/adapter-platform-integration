@@ -99,7 +99,6 @@ public class AKeyIsDescribedInOnePlaceTest {
       boundClass = Class.forName(sourceType, false, AKeyIsDescribedInOnePlaceTest.class.getClassLoader());
     } catch (final ClassNotFoundException e) {
       // a key of another artifact of ours. This module does not see its class
-
       return null;
     }
     final var fieldName = camelCase(key.substring(key.lastIndexOf('.') + 1));

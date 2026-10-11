@@ -18,7 +18,6 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * after a crash. So a recovered phase-two operation is never dispatched before the BPMN
  * resources are deployed and workflow processing has started. On Quarkus, the priorities of
  * the {@code StartupEvent} observers ensure the same order.
-
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ApplicationReadyListenerOrderTest {
