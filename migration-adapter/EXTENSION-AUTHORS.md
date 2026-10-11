@@ -1,46 +1,47 @@
 # Writing a VanillaBP extension
 
-This document is for a team building an extension of VanillaBP, from outside this repository. Read
-it from top to bottom once. It describes the interface you implement, when the core calls you, what
-each call may see, where your settings live, what the core promises you and what you must not do.
+This document is for a team outside this repository which builds an extension of VanillaBP. Read it
+once from top to bottom. It describes the interface you implement and when the core calls you. It
+says what each call may see and where your settings live. And it says what the core promises you and
+what you must not do.
 
-Everything stated here is taken from the code of this repository or from a numbered entry of its
-[`DECISIONS.md`](../DECISIONS.md). Where a statement is an assumption rather than something the code
-holds, it says so. Every promise names the test which holds it, so a promise which stops being true
-turns a build red here rather than surfacing in your extension.
+Everything here comes from the code of this repository or from a numbered entry of its
+[`DECISIONS.md`](../DECISIONS.md). Where a statement is only an assumption, it says so. Every promise
+names the test which holds it. So if a promise stops being true, a build turns red here, and you do
+not find out in your extension.
 
-If you are connecting VanillaBP to a business process management system instead, read
-[`ADAPTER-AUTHORS.md`](./ADAPTER-AUTHORS.md). An adapter and an extension are the two kinds of
-plug-in which share one interface, and the two documents describe the two sides of it.
+If you want to connect VanillaBP to a BPMS (business process management system) instead, read
+[`ADAPTER-AUTHORS.md`](./ADAPTER-AUTHORS.md). Adapters and extensions are the two kinds of plug-in
+which share one interface. The two documents describe its two sides.
 
 ## Vocabulary
 
-A *process* is the BPMN model, a *workflow* is one running instance of it. Use the two words
-strictly this way; the SPI does.
+A *process* is the BPMN model. A *workflow* is one running instance of it. Use the two words
+strictly this way, because the SPI (service provider interface) does.
 
-A *workflow module* is one deployable unit of BPMN files plus the code serving them, identified by
-the file `META-INF/workflow-module` whose content is the module id. A *workflow aggregate* is the
-application's own entity holding all state of one workflow.
+A *workflow module* is one deployable unit of BPMN files plus the code which serves them. The file
+`META-INF/workflow-module` marks it, and the content of that file is the module id. A *workflow
+aggregate* is the application's own entity. It holds all state of one workflow.
 
-An *adapter type* is one BPMS implementation as a whole, named by a short constant such as
-`camunda7`. An *adapter id* is one configured instance of that type, and an application may
-configure several ids of one type at once. That multiplicity is the migration feature, and it is the
-reason most rules below are written per id.
+An *adapter type* is one BPMS implementation as a whole. A short constant such as `camunda7` names
+it. An *adapter id* is one configured instance of that type. An application may configure several
+ids of one type at the same time. This is the migration feature, and it is why most rules below are
+written per id.
 
-The *core* below means `migration-adapter`, the platform-neutral part of VanillaBP. The *platform
-integration* is the Spring Boot or Quarkus layer which brings the core to life.
+Below, the *core* means `migration-adapter`, the part of VanillaBP which does not depend on a
+platform. The *platform integration* is the Spring Boot or Quarkus layer which runs the core.
 
-The word *extension* is a word of the contributors. A user of VanillaBP does not know it. They know
-VanillaBP adapters, and if they run the Business Cockpit they know Business Cockpit adapters, and
-the configuration speaks their language: the section your settings live in carries your own name,
-not the word `extensions` (decision 53). Where this document says "extension", say what your users
-call you when you write their documentation.
+The word *extension* belongs to the contributors. A user of VanillaBP does not know it. Users know
+VanillaBP adapters, and if they run the Business Cockpit, they know Business Cockpit adapters. The
+configuration speaks their language: the section of your settings carries your own name, not the
+word `extensions` (decision 53). So when you write documentation for your users, use the name they
+know you by where this document says "extension".
 
 ## 1. What an extension is, and what it is not
 
 An adapter and an extension both implement `ExtensionWiringService<BPMN, PC>`, because both take
-part in deploying a workflow module. Everything else about them differs, and the line between them
-is who owns the model.
+part when a workflow module is deployed. Everything else about them is different. The line between
+them is the question who owns the model.
 
 |                    |                      BPMS adapter                       |                                    Extension                                    |
 |--------------------|---------------------------------------------------------|---------------------------------------------------------------------------------|
@@ -50,44 +51,45 @@ is who owns the model.
 | How many per model | one per configured adapter id                           | any number                                                                      |
 | Examples           | `camunda7`, `camunda8`, `process-engine-api`            | the [VanillaBP Business Cockpit](https://github.com/vanillabp/business-cockpit) |
 
-The Business Cockpit is the extension this SPI was shaped around, and it appears in this document as
-an example. Nothing here needs it. An application running an extension of yours needs VanillaBP, one
-adapter and your artifact.
+The SPI was shaped around the Business Cockpit, and this document uses it as an example. But
+nothing here needs it. An application which runs your extension needs VanillaBP, one adapter and
+your artifact.
 
-Version 1 had no such SPI. What called itself a Business-Cockpit adapter back then was built on
-whatever of the platform integration happened to be public: `AbstractTaskWiring`, `TaskHandlerBase`,
-a second configuration-properties bean of its own. Every change to one of those classes was a change
-to the extension, and an extension for Quarkus could not exist at all. Version 2 hands you a
-described contract instead of a base class, and the shape of everything below follows from that
-(decision 35).
+Version 1 had no such SPI. Back then, the Business Cockpit adapter was built on whatever parts of the
+platform integration happened to be public: `AbstractTaskWiring`, `TaskHandlerBase` and a second
+configuration-properties bean of its own. Every change to one of those classes changed the
+extension. An extension for Quarkus was not possible at all. Version 2 gives you a described contract
+instead of a base class, and everything below follows from that (decision 35).
 
-Four things are worth stating before the interface.
+Four things come before the interface.
 
 You never talk to a BPMS on VanillaBP's behalf. The adapter deploys, starts workflows, completes
-tasks and answers where a workflow lives. Where you do need a BPMS of your own, you connect to it
-yourself, and you ask the core which one holds a workflow before you do (section 3).
+tasks and answers where a workflow lives. If you need a BPMS of your own, you connect to it yourself.
+Before you do, you ask the core which BPMS holds the workflow (section 3).
 
-Your own SPI stays yours. The annotation your users write, the service they inject, the types your
-methods take: none of that belongs in the VanillaBP core. The core knows nothing about user-task
-details, and an application not using your extension must see none of your annotations. What the
-core gives you is a way to describe your annotation so that VanillaBP runs those methods with the
-mechanics of `@WorkflowTask` (section 5).
+Your own SPI stays yours. The annotation your users write, the service they inject and the types your
+methods take do not belong in the VanillaBP core. The core knows nothing about user-task details. An
+application which does not use your extension must not see any of your annotations. The core gives
+you a way to describe your annotation. VanillaBP then runs the annotated methods with the mechanics
+of `@WorkflowTask` (section 5).
 
-You ship both platforms. An extension which exists only on Spring Boot does not exist, because
-VanillaBP promises the same behaviour on Quarkus and on the platform after it. The sample extensions
-of this repository are one per platform for that reason.
+You ship both platforms. An extension which exists only on Spring Boot does not count, because
+VanillaBP promises the same behaviour on Quarkus and on any platform which comes later. That is why
+this repository has one sample extension per platform.
 
-You depend on the two SPI artifacts and on the platform-neutral core, and on no platform
-integration. That is `io.vanillabp:vanillabp-extension-spi`, which has no dependency at all,
-`io.vanillabp:vanillabp-integration-spi` where you touch the outbox or the transaction, and
-`io.vanillabp.adapter:migration-adapter` for `MigrationAdapterProperties`. The sample extension of
-each platform is built exactly that way, and its POM says so: adding a dependency on
-`vanillabp-spring-boot-integration` would make it stop proving anything.
+You depend on the two SPI artifacts and on the core, and on no platform integration. These are:
+
+* `io.vanillabp:vanillabp-extension-spi`, which has no dependencies at all,
+* `io.vanillabp:vanillabp-integration-spi`, if you touch the outbox or the transaction,
+* `io.vanillabp.adapter:migration-adapter`, for `MigrationAdapterProperties`.
+
+The sample extension of each platform is built exactly this way, and its POM says so. With a
+dependency on `vanillabp-spring-boot-integration` it would no longer prove anything.
 
 ## 2. The six calls of the wiring service
 
-`ExtensionWiringService<BPMN, PC>` has six methods. Three of them say who you are, and the core asks
-them to decide whether you take part at all. The other three are the calls you act in.
+`ExtensionWiringService<BPMN, PC>` has six methods. Three of them say who you are. The core uses them
+to decide whether you take part at all. The other three are the calls in which you act.
 
 |                           Method                            |                 When the core calls it                  |                                   What it is for                                   |
 |-------------------------------------------------------------|---------------------------------------------------------|------------------------------------------------------------------------------------|
@@ -98,196 +100,201 @@ them to decide whether you take part at all. The other three are the calls you a
 | `startWorkflowProcessing(module, context)`                  | after every adapter of every module was started         | open what consumes your wiring, a listener or a worker of your own                 |
 | `stopWorkflowProcessing(module, context)`                   | on a graceful shutdown, before any adapter is stopped   | close what you opened; the default does nothing                                    |
 
-`BPMN` and `PC` are the adapter's types, not yours. You declare which ones you can work with, and
-the core asks you only where both of your declared types are assignable from the adapter's types. A
-Camunda 7 extension stays untouched while a Camunda 8 module is deployed. An extension declared
-against `Object` and `Object` sees every BPMS and can read no model, which is the honest shape for
-an extension which only needs to know that a module was deployed. The trade-off is in the second
-type: an extension which wants to contribute something to the adapter's processing context has to
-name that context type and becomes BPMS-specific by doing so.
+`BPMN` and `PC` are the adapter's types, not yours. You declare which types you can work with. The
+core calls you only where both of your declared types are assignable from the adapter's types. So a
+Camunda 7 extension is not touched while a Camunda 8 module is deployed. An extension declared
+against `Object` and `Object` sees every BPMS but can read no model. That is the honest shape for an
+extension which only needs to know that a module was deployed. The price is in the second type. An
+extension which wants to add something to the adapter's processing context has to name that context
+type, and so it becomes specific to one BPMS.
 
-Matching is all-or-nothing on purpose. Both calls in the pipeline use the same rule, so an extension
-is either wired and started, or it is neither. `DeploymentServiceTest#extensionWiringServicesAreFilteredAndCalled`
-and `#subtypeExtensionIsNeitherWiredNorStarted` hold it in the core, and
-`DeploymentPipelineTest#nonMatchingExtensionUntouched` against a booted application.
+Matching is all-or-nothing on purpose. Both calls in the pipeline use the same rule. So an extension
+is either wired and started, or neither. `DeploymentServiceTest#extensionWiringServicesAreFilteredAndCalled`
+and `#subtypeExtensionIsNeitherWiredNorStarted` hold this in the core.
+`DeploymentPipelineTest#nonMatchingExtensionUntouched` holds it against a booted application.
 
 ### The order, up and down
 
 The adapter of the BPMS runs before every extension. It has wired a BPMN process before you see that
-process, and it is processing workflows before you are started. This is the one ordering promise
-VanillaBP makes to you, and it is what lets you place what you add relative to what the adapter put
-there, for example behind the last listener of a kind, instead of at a position you have to guess.
-On the way down the order is mirrored: extensions are stopped first and the adapters last, so
-nothing is stopped while something else still feeds it. Decision 52 carries both halves,
+process. It processes workflows before you are started. This is the only promise about order which
+VanillaBP makes to you. It lets you place what you add relative to what the adapter put there, for
+example behind the last listener of a kind. You do not have to guess a position. On the way down the
+order is mirrored. Extensions are stopped first and the adapters last, so nothing is stopped while
+something else still feeds it. Decision 52 covers both halves.
 `DeploymentServiceTest#theAdapterIsFirstOnTheWayUp` and
-`DeploymentPipelineTest#extensionsWiredInOrder` hold the way up, and
-`DeploymentServiceTest#extensionWiringServicesAreStoppedBeforeAdapters` plus `ShutdownReverseOrderTest`
-the way down.
+`DeploymentPipelineTest#extensionsWiredInOrder` hold the way up.
+`DeploymentServiceTest#extensionWiringServicesAreStoppedBeforeAdapters` and `ShutdownReverseOrderTest`
+hold the way down.
 
-Two details of the shutdown are worth reading off the code rather than assuming. The core walks the
-workflow modules in reverse order, and it walks the extensions in reverse wiring order, so the
-extension which wired last is stopped first. And the pass is complete before the adapters begin:
-every extension of every workflow module has been stopped when the first adapter is asked to stop.
-Starting is the same shape the other way round. Every adapter of every workflow module is started
-before the first extension is, so by the time your `startWorkflowProcessing` runs, workflows may
-already be running.
+Two details of the shutdown come from the code, so do not guess them. The core walks the workflow
+modules in reverse order. It walks the extensions in reverse wiring order, so the extension which was
+wired last is stopped first. And this pass is complete before the adapters begin. When the first
+adapter is asked to stop, every extension of every workflow module is already stopped. Starting
+works the same way in the other direction. Every adapter of every workflow module is started before
+the first extension. So when your `startWorkflowProcessing` runs, workflows may already be running.
 
-What is not promised is the order of two extensions among themselves. They are sorted by `getOrder()`
-ascending, and two extensions which do not know each other cannot agree on a number, so two of the
-same order run in the order the platform happened to collect their beans in. Nothing promises that
-this order stays. VanillaBP deliberately hands out no first and no last position, because the second
-extension wanting to be last is where such a scheme ends (decision 52).
-`DeploymentServiceTest#wiringServicesAreSortedByOrder` holds the sorting, and nothing holds more
-than that, which is the point.
+The order of two extensions among themselves is not promised. They are sorted by `getOrder()`,
+ascending. Two extensions which do not know each other cannot agree on a number. So two extensions
+with the same order run in the order in which the platform happened to collect their beans. Nothing
+promises that this order stays the same. VanillaBP gives out no first and no last position, on
+purpose. Such a scheme breaks as soon as a second extension wants to be last (decision 52).
+`DeploymentServiceTest#wiringServicesAreSortedByOrder` holds the sorting. Nothing holds more than
+that, and that is the point.
 
 ### What `wireBpmn` may do to a model
 
-The adapter owns the model. It parsed it, it rewrote it for its BPMS, and it will deploy it after
-you have seen it. What you add has to survive that, which in practice means you add relative to what
-the adapter left behind and you change nothing it put there. On Camunda 8 the Business Cockpit adds
-its `creating` listener behind the last `creating` one and the rest behind everything; on Camunda 7
-the adapter offers `parseListenersAfter` and `parseListenersBefore` for the rare element which has
-to be seen untouched (decision 52). Something which has to see an element before the adapter touched
-it needs an entry point of its own and has to ask us for one.
+The adapter owns the model. It parsed the model and rewrote it for its BPMS, and it deploys it after
+you have seen it. What you add has to survive that. In practice you add relative to what the adapter
+left behind, and you change nothing it put there. On Camunda 8 the Business Cockpit adds its
+`creating` listener behind the last `creating` listener, and the rest behind everything. On Camunda 7
+the adapter offers `parseListenersAfter` and `parseListenersBefore` for the rare element which has to
+be seen untouched (decision 52). If something has to see an element before the adapter touched it,
+it needs an entry point of its own, and you have to ask us for one.
 
-Two things about the model are the adapter's alone and stay that way. Identifiers are scoped at the
-BPMS boundary and nowhere else (decision 9), so do not prefix, tenant or rename anything on its way
-out. And what a model declares is read by the adapter, which is the only party able to read its own
-BPMN dialect. Where you need something the adapter already read, ask the core for it rather than
-parsing the file a second time: `ExtensionHandlers#bpmnTaskNameOf(module, process, activityId)`
-answers the `name` a modeller wrote on an element, kept from what the adapter handed over while it
-wired.
+Two things about the model belong to the adapter alone. Identifiers are scoped at the BPMS boundary
+and nowhere else (decision 9). So do not prefix, tenant or rename anything on its way out. And the
+adapter reads what a model declares, because only the adapter can read its own BPMN dialect. If you
+need something the adapter already read, ask the core for it. Do not parse the file a second time.
+`ExtensionHandlers#bpmnTaskNameOf(module, process, activityId)` answers the `name` a modeller wrote
+on an element. The core keeps it from what the adapter handed over during wiring.
 
-A process no `@WorkflowService` claims reaches your `wireBpmn` too, because the core hands you every
-process of the file. The adapter leaves such a process as it was modelled (decision 120 in the repository's DECISIONS.md),
-and an extension should do the same: report nothing about it and add nothing to it. Ask
-`WorkflowTaskWiring#isClaimedByAWorkflowService(workflowModuleId, bpmnProcessId)` to tell. Your
-extension gets `WorkflowTaskWiring` the way an adapter does, as a bean on Spring Boot and on
-Quarkus.
+A process which no `@WorkflowService` claims reaches your `wireBpmn` too, because the core hands you
+every process of the file. The adapter leaves such a process as it was modelled (decision 120 in the
+repository's DECISIONS.md). An extension should do the same: report nothing about it and add nothing
+to it. To find out, ask
+`WorkflowTaskWiring#isClaimedByAWorkflowService(workflowModuleId, bpmnProcessId)`. Your extension gets `WorkflowTaskWiring` the way an adapter does, as a bean on
+Spring Boot and on Quarkus.
 
 ## 3. An extension hangs on every configured adapter
 
 The core builds one processing context per workflow module and adapter id. Your three calls are made
-against that context, which means an application with two configured adapters calls you twice for
-each of them: `wireBpmn` once per adapter per BPMN process, `startWorkflowProcessing` and
-`stopWorkflowProcessing` once per adapter per workflow module. This is not an edge case. Two ids of
-one BPMS type side by side is what a migration looks like, and it is the setup VanillaBP exists for.
+against that context. So in an application with two configured adapters, you are called twice, once
+for each adapter. `wireBpmn` runs once per adapter per BPMN process. `startWorkflowProcessing` and
+`stopWorkflowProcessing` run once per adapter per workflow module. This is not an edge case. Two ids
+of one BPMS type side by side is what a migration looks like, and VanillaBP exists for this setup.
 
-What follows for you is the same rule an adapter follows. Prepare per adapter id rather than once.
-Open your workers per adapter id. Keep whatever you remember separated by adapter id, because a
-workflow of the one BPMS must not be answered with what you learned about the other. The Business
-Cockpit is the example: it registers one bridge per configured adapter id, the way an adapter
-registers one set of beans per id.
+So you follow the same rule as an adapter. Prepare per adapter id, not once. Open your workers per
+adapter id. Keep everything you remember separated by adapter id, because you must not answer a
+workflow of one BPMS with what you learned about the other. The Business Cockpit is the example. It
+registers one bridge per configured adapter id, the way an adapter registers one set of beans per
+id.
 
-One thing the SPI does not do for you here, and this is the place to say it plainly. None of the six
-calls names the adapter id. `wireBpmn` and `startWorkflowProcessing` are given the workflow module
-and the adapter's processing context, and that is all. Two ways lead out of it. You can tell the
-adapters apart by the context object itself, since the core holds one per workflow module and
-adapter id, and key your state by it; section 8 says why that is an assumption rather than a
-promise. Or you register one instance of something of your own per adapter id, which is what an
-extension bridging to a BPMS does anyway, and then each instance knows which id it is for. That is
-the safe way, and it is what the Business Cockpit does. The id set for it comes from
-`MigrationAdapterProperties#adapterIdsOfType(adapterType)` and from nowhere else: three rules decide
-which ids one type serves, an id merely named in `prioritized-adapters` and an application
-configuring nothing at all are two of them, and every consumer which reimplemented the list dropped
-one of the three (decision 39). Deriving the ids from the sections you can see is the mistake this
-method exists to prevent.
+There is one thing the SPI does not do for you here: none of the six calls names the adapter id.
+`wireBpmn` and `startWorkflowProcessing` get the workflow module and the adapter's processing
+context, and nothing else. There are two ways around this.
+
+* You tell the adapters apart by the context object itself, because the core holds one per workflow
+  module and adapter id. You key your state by that object. Section 8 says why this is an
+  assumption and not a promise.
+* You register one instance of something of your own per adapter id. An extension which bridges to
+  a BPMS does this anyway. Then each instance knows its id. This is the safe way, and the Business
+  Cockpit uses it.
+
+For the second way, the set of ids comes from
+`MigrationAdapterProperties#adapterIdsOfType(adapterType)` and from nowhere else. Three rules decide which ids one type serves. Two of them cover an id which
+is only named in `prioritized-adapters`, and an application which configures nothing at all. Every
+consumer which built the list again on its own missed one of the three (decision 39). This method
+exists so that nobody derives the ids from the sections they can see.
 
 ### Which BPMS holds this workflow
 
-`WorkflowElection#adapterIdOfWorkflow` is the question to ask before you talk to a BPMS about a
-running workflow. Both platforms provide it as a bean. During a migration the answer changes per
-workflow, so addressing the first-priority adapter instead would be wrong for every workflow which
-has already moved.
+Before you talk to a BPMS about a running workflow, ask `WorkflowElection#adapterIdOfWorkflow`. Both
+platforms provide it as a bean. During a migration the answer differs from workflow to workflow. If
+you asked the first-priority adapter instead, you would be wrong for every workflow which has
+already moved.
 
-It is the election every operation of VanillaBP uses, in its reading shape. A workflow which ended
-is a regular answer here, the way the viewer API reads its history. A workflow no BPMS knows, and a
-BPMN process this application does not serve, are guiding errors naming what was asked.
+This is the election (the choice of the BPMS which holds a workflow) which every operation of
+VanillaBP uses, in its form for reading. A workflow which has ended is a normal answer here, the same
+way the viewer API reads its history. A workflow which no BPMS knows, and a BPMN process this
+application does not serve, lead to errors which name what was asked and guide you on.
 
-What you have to know before you call it is the waiting. Where a hint says an adapter holds the
-workflow and that adapter's read model has not caught up, the election waits that adapter's window
-out rather than answering "unknown", because nobody repeats the question for an extension. On a
-Camunda 8 cluster that window is ten seconds. A read of the viewer API waits on a thread which is
-doing nothing else, while an extension often asks this from inside a transaction of the application:
-reporting a change out of a service task is exactly that case, and the wait then holds that
-transaction open together with its database connection and its locks. The section
+Before you call it, you have to know about the waiting. A hint may say that an adapter holds the
+workflow while that adapter's read model has not caught up yet. Then the election waits out that
+adapter's window and does not answer "unknown", because nobody asks again for an extension. On a
+Camunda 8 cluster that window is ten seconds. A read of the viewer API waits on a thread which does
+nothing else. But an extension often asks from inside a transaction of the application. Reporting a
+change out of a service task is exactly that case. The wait then holds the transaction open, together
+with its database connection and its locks. The section
 [What an election costs a caller which holds a transaction](./README.md#what-an-election-costs-a-caller-which-holds-a-transaction)
 of the core's README has the numbers.
 `ExtensionElectionAndConfigurationTest#theElectionAnswersTheExtension` on Spring Boot and
 `ExtensionEnablementTest` on Quarkus run this against a booted application.
 
-`WorkflowElection#locationOfWorkflow` answers the same election as a `WorkflowLocation`: the
-adapter id and, next to it, the BPMS' own id of the workflow. Both stand in the same row -
-VanillaBP writes a record per task delivery which keeps the workflow id next to the adapter id -
-so you get the whole row instead of half of it. It runs exactly the election above and costs
-exactly the same.
+`WorkflowElection#locationOfWorkflow` gives the answer of the same election as a `WorkflowLocation`.
+That is the adapter id and, next to it, the BPMS' own id of the workflow. VanillaBP writes a record
+per task delivery which keeps the workflow id next to the adapter id. So you get the whole row, not
+half of it. It runs exactly the election above and costs exactly the same.
 
-`null` as the workflow id is a regular answer: nothing VanillaBP holds knew one, because no
-delivery was recorded for that workflow or its record expired.
+`null` as the workflow id is a normal answer. It means nothing VanillaBP holds knew the id, because
+no delivery was recorded for that workflow or its record expired.
 
-What you may do with the id: write it into your own records, print it in a log line beside ours,
-and hand it back to VanillaBP later, which is what lets an adapter ask its engine by key instead
-of waiting for a read model. What you may not do: address the BPMS with it - the shape of that id
-belongs to the adapter, and sending commands to an engine behind the adapter's back is outside
-everything this platform promises - and read a non-null id as "this workflow is still running".
-The record is history, the election is the answer about now.
+You may write the id into your own records and print it in a log line beside ours. You may also hand
+it back to VanillaBP later, so that an adapter can ask its engine by key and does not have to wait
+for a read model. You must not address the BPMS with it. The shape of that id belongs to the
+adapter. Sending commands to an engine behind the adapter's back is outside everything this platform
+promises. And you must not read a non-null id as "this workflow is still running". The record is
+history. The election is the answer about now.
 
-Both methods read the row written when the workflow started first. Where it names an adapter which
-is still configured for the workflow, that adapter and the workflow id of the row are the answer: no
-BPMS is asked and nothing is waited for, so a report out of your application's transaction does not
-hold that transaction open. The adapter of that row started the workflow, and a workflow does not
-change its BPMS. For the same reason the two methods do not throw after the workflow ended, for as
-long as the row lives. Without the row the election runs as described above.
+Both methods first read the row which was written when the workflow started. If that row names an
+adapter which is still configured for the workflow, then that adapter and the workflow id of the row
+are the answer. No BPMS is asked and nothing waits. So a report out of your application's transaction
+does not hold that transaction open. The adapter of that row started the workflow, and a workflow
+does not change its BPMS. For the same reason the two methods do not throw after the workflow ended,
+as long as the row exists. Without the row, the election runs as described above.
 
 `DerivedCancelationTest#theElectionCarriesTheWorkflowId` runs it against a booted application on
 both platforms.
 
-One moment has no row and no hint at all: the `@WorkflowStartedByBpms` method of the application,
-which builds the aggregate of a workflow the BPMS started. The row is written after the method
-returned, and on Camunda 8 the cluster does not show the workflow yet. A report about that
-aggregate made from inside the method finds nobody, and the election throws. Ask
-`WorkflowElection#isInsideTheStartOf(aggregate)` first, and skip the report where it answers
-`true`. Nothing is lost: the start hands the aggregate's values to the BPMS when it is done, and if
-you observe starts, you see this one then. The answer is `true` only for an aggregate the method is
-building, one without an id or with an id its persistence does not know. An aggregate which exists
-already gets `false`, because the method may return one with other workflows and open tasks.
+At one moment there is no row and no hint at all. That is the `@WorkflowStartedByBpms` method of the
+application, which builds the aggregate of a workflow the BPMS started. The row is written after the
+method returned, and on Camunda 8 the cluster does not show the workflow yet. A report about that
+aggregate from inside the method finds nobody, and the election throws. So ask
+`WorkflowElection#isInsideTheStartOf(aggregate)` first, and skip the report if it answers `true`.
+Nothing is lost. When the start is done, it hands the aggregate's values to the BPMS. If you observe
+starts, you see this one then. The answer is `true` only for an aggregate which the method is
+building: one without an id, or with an id its persistence does not know. An aggregate which already
+exists gets `false`, because the method may return one with other workflows and open tasks.
 `ProcessService#aggregateChanged` applies the same rule and does nothing for such an aggregate.
 `AReportInsideTheStartOfAWorkflowTest` holds the rule.
 
-`WorkflowElection#workflowIdOf` answers the id and NOTHING else, and it elects nothing: no BPMS is
-asked and nothing is waited for. Ask it where you want the id for your own
-report rather than because you are about to talk to an engine. It reads what VanillaBP persisted,
-first the row written when the workflow started and then the rows of that workflow's task
-deliveries, so it answers from the moment the workflow came into existence - which is the window in
-which a BPMS answering from a read model reports nothing at all.
+`WorkflowElection#workflowIdOf` answers the id and NOTHING else. It elects nothing: no BPMS is asked
+and nothing waits. Ask it when you want the id for your own report, not when you are about to talk
+to an engine. It reads what VanillaBP stored: first the row written when the workflow started, then
+the rows of that workflow's task deliveries. So it answers from the moment the workflow came into
+existence. In that window a BPMS which answers from a read model reports nothing at all.
 
-`Optional.empty()` covers several situations and tells none of them apart: this application never
-started that workflow, the start happened before the row existed, the adapter names no id, the
-period `vanillabp.delivery.workflow-start-retention` passed, or there is no store for that
-aggregate. So empty means "VanillaBP does not know" and never "there is no such workflow". A BPMN
-process no `@WorkflowService` of this application declares is refused with an
-`IllegalStateException`, the way the election refuses it: VanillaBP writes nothing down for such a
-process, so asking about it is a mistake an empty answer would hide. `workflowStartOf` refuses it the
-same way. Everything the paragraph above says about what you may do with
-the id holds here as well.
+`Optional.empty()` covers several situations and does not tell them apart:
 
-`WorkflowElection#workflowStartOf` reads the same rows and answers the id together with the version
-of the process definition the workflow runs on, as a `WorkflowStart`. Ask it where you pick an
-implementation per version. It also names the adapter which started the workflow. A workflow does
-not change its BPMS, so that adapter holds it until its end, and you learn it without an election.
-The adapter is empty where VanillaBP knows the id from its election cache only. It is empty in exactly the cases `workflowIdOf` is empty. An empty
-version inside a non-empty answer means one of two things, and `versionsAreReported` tells them
-apart. Where it is `true`, the adapter of that workflow reports versions, and the version may still
-come: a later report of the same start brings it, and so does a task of that workflow which waits
-for your application. Where it
-is `false`, the adapter has no versions, or said nothing about them, and waiting means waiting
-forever.
+* this application never started that workflow,
+* the start happened before the row existed,
+* the adapter names no id,
+* the period `vanillabp.delivery.workflow-start-retention` passed,
+* or there is no store for that aggregate.
+
+So empty means "VanillaBP does not know". It never means "there is no such workflow". A BPMN process
+which no `@WorkflowService` of this application declares is refused with an `IllegalStateException`,
+the same way the election refuses it. VanillaBP writes nothing down for such a process, so asking
+about it is a mistake, and an empty answer would hide that mistake. `workflowStartOf` refuses it the
+same way. What the paragraphs above say about what you may do with the id holds here as well.
+
+`WorkflowElection#workflowStartOf` reads the same rows. It answers the id together with the version
+of the process definition the workflow runs on, as a `WorkflowStart`. Ask it when you pick an
+implementation per version. It is empty in exactly the cases in which `workflowIdOf` is empty. It
+also names the adapter which started the workflow. A workflow does not change its BPMS, so that
+adapter holds it until its end, and you learn the adapter without an election. The adapter is empty
+if VanillaBP knows the id only from its election cache.
+
+An empty version inside a non-empty answer means one of two things, and `versionsAreReported` tells
+them apart. If it is `true`, the adapter of that workflow reports versions, and the version may
+still come. A later report of the same start brings it, and so does a task of that workflow which
+waits for your application. If it is `false`, the adapter has no versions or said nothing about
+them, and you would wait forever.
 
 ## 4. Where your settings live
 
-Your settings are written at four levels, and each level has two positions: what the level says, and
-what it says for one adapter. That makes eight, and here they are from the least specific to the
-most specific one.
+Your settings are written at four levels. Each level has two positions: what the level says in
+general, and what it says for one adapter. That makes eight positions. Here they are, from the least
+specific to the most specific one.
 
 ```
 vanillabp.<section>                                                                   (least specific)
@@ -300,37 +307,40 @@ vanillabp.workflow-modules.<module>.workflows.<workflow>.tasks.<task>.<section>
 vanillabp.workflow-modules.<module>.workflows.<workflow>.tasks.<task>.adapters.<adapter>.<section>   (most specific)
 ```
 
-`<section>` is the name your settings live under. Where VanillaBP binds them for you it is
-`extensions.<extension>`, and where you bind a tree of your own it is whatever you called yourself.
-Both cases are below.
+`<section>` is the name your settings live under. If VanillaBP binds them for you, it is
+`extensions.<extension>`. If you bind a tree of your own, it is whatever name you gave yourself. Both
+cases follow below.
 
-Three rules decide what a scope reads. The most specific position which writes a key wins. What one
-adapter is told beats what the same level says in general. And a more specific level beats the
-adapter section of a less specific one, so a value written for the workflow outranks a value written
-for one adapter at the workflow module. The positions are merged key by key rather than as blocks,
-so a workflow may change one value and keep what the application said about the rest. The level is
-called `tasks` and a task is named by its task definition. One key of the core already takes the
-element id there as well, `implemented-externally`, and the element id wins where both are written
-(decision 119 in the repository's DECISIONS.md). Your settings keep the task definition until the general change
-reaches them.
+Three rules decide what a scope reads:
 
-The adapter positions exist for the same reason section 3 does. An application migrating from one
-BPMS to another runs two adapters, you hang on both of them, and a value which has to differ between
-them needs a place to be written (decision 53).
+1. The most specific position which writes a key wins.
+2. What one adapter is told beats what the same level says in general.
+3. A more specific level beats the adapter section of a less specific level. So a value written for
+   the workflow beats a value written for one adapter at the workflow module.
 
-This is the resolution an adapter setting uses, written once in the core (decision 7 and
-`#resolveForAdapter`), so a change to "most specific wins" reaches both or neither. Writing it a
-second time in your own code is what decision 48 forbids, and it forbids it because that had already
-happened: the Business Cockpit read the flat keys, matched the suffixes by hand and decided on its
-own what "most specific" meant, once per platform, and the two spellings were drifting apart before
-anybody noticed.
+The positions are merged key by key, not as whole blocks. So a workflow may change one value and
+keep what the application said about the rest. The level is called `tasks`, and a task is named by
+its task definition. One key of the core, `implemented-externally`, already takes the element id
+there as well. Where both are written, the element id wins (decision 119 in the repository's
+DECISIONS.md). Your settings keep the task definition until this general change reaches them.
+
+The adapter positions exist for the same reason as section 3. An application which migrates from one
+BPMS to another runs two adapters, and you hang on both of them. A value which has to differ between
+them needs a place where it can be written (decision 53).
+
+An adapter setting uses the same resolution. It is written once in the core (decision 7 and
+`#resolveForAdapter`). So a change to "most specific wins" reaches both or neither. Decision 48
+forbids you to write it a second time in your own code. It forbids this because it had already
+happened. The Business Cockpit read the flat keys, matched the suffixes by hand and decided on its
+own what "most specific" meant, once per platform. The two versions drifted apart before anybody
+noticed.
 
 ### Reading them
 
-`MigrationAdapterProperties` is a bean of both platforms and it reads your settings for you. Your
-extension id is a parameter of the call rather than something bound to a view of these properties,
-because the properties are one bean of the platform and your extension is not a bean of the platform
-at all. You ask with your id, the way an adapter asks with its adapter id.
+`MigrationAdapterProperties` is a bean of both platforms, and it reads your settings for you. Your
+extension id is a parameter of the call. It is not bound to a view of these properties, because the
+properties are one bean of the platform, and your extension is not a bean of the platform at all.
+You ask with your id, the way an adapter asks with its adapter id.
 
 |                                 Call                                  |                     What it answers                      |
 |-----------------------------------------------------------------------|----------------------------------------------------------|
@@ -340,72 +350,77 @@ at all. You ask with your id, the way an adapter asks with its adapter id.
 | `extensionProperties(module, process, task, adapter, extension)`      | the whole section, merged key by key                     |
 | `extensionProperties(module, extension)`                              | the whole section, asked about the workflow module alone |
 
-Any id may be `null`, and a level nobody configured is skipped rather than being an error, so the
-same method answers the global, the module, the workflow and the task question.
+Any id may be `null`. A level nobody configured is skipped and is no error. So the same method
+answers the question for the whole application, the module, the workflow and the task.
 
 `SettingsResolutionTest` and `ExtensionSettingsResolutionTest` hold the eight positions and the three
-rules in the core. `ExtensionSettingsPositionsTest` exists once per platform and holds them against a
-booted application which runs two adapters of one BPMS type, each position written once, so every
-assertion says which position won and the second adapter says that a value of one adapter never
+rules in the core. `ExtensionSettingsPositionsTest` exists once per platform. It holds them against a
+booted application which runs two adapters of one BPMS type, with each position written once. So
+every assertion says which position won. The second adapter shows that a value of one adapter never
 reaches the other.
 
 ### Binding your own section
 
-`vanillabp.extensions.<extension>` is the section VanillaBP binds itself, as flat text. It is the
-right place for an extension without a past, and the calls above read it with no work on your side.
+VanillaBP binds the section `vanillabp.extensions.<extension>` itself, as flat text. It is the right
+place for an extension without a past. The calls above read it, and you have no work to do.
 
-The section name is yours, though. The Business Cockpit is configured below `vanillabp.cockpit`,
-which is where version 1 configured it, so an application moving to version 2 swaps a dependency and
-changes no configuration. Flat text also stops being enough as soon as your settings have lists or
-nested groups, which cannot be assembled out of a map of strings.
+But the section name is yours. The Business Cockpit is configured below `vanillabp.cockpit`, where
+version 1 configured it. So an application which moves to version 2 swaps a dependency and changes
+no configuration. Also, flat text is no longer enough as soon as your settings have lists or nested
+groups. You cannot build those out of a map of strings.
 
-So bind your own typed tree and hand the walk over the levels to the core anyway. `SettingsLevel<S>`
-in `io.vanillabp.integration.extension.spi.settings` is one level of your tree, with three methods:
-`settings()` for what the level says, `settingsOfAdapter(adapterId)` for what it says about one
-adapter, and `levelBelow(id)` for the next more specific level. `S` is whatever a section is for you,
-your own type; the core answers with the `Map<String, String>` it binds itself. `SettingsResolution`
-then walks it: `positions(...)` answers the sections which say something, least specific first;
-`resolve(positions, valueExtractor)` reads the value the most specific one writes; and one call does
-both. The extractor form is the same shape `resolveForAdapter` has.
+So bind your own typed tree, and still let the core walk over the levels. `SettingsLevel<S>` in
+`io.vanillabp.integration.extension.spi.settings` is one level of your tree. It has three methods:
 
-The order of the eight positions lives in that one class and nowhere else, which is the whole point
-(decision 53). What your keys MEAN stays your business, and so does binding and validating them,
-typed, the way an adapter binds the keys below its adapter id.
+* `settings()` for what the level says,
+* `settingsOfAdapter(adapterId)` for what it says about one adapter,
+* `levelBelow(id)` for the next, more specific level.
+
+`S` is your own type, whatever a section is for you. The core answers with the
+`Map<String, String>` it binds itself. `SettingsResolution` then walks the tree.
+`positions(...)` answers the sections which say something, least specific first.
+`resolve(positions, valueExtractor)` reads the value which the most specific one writes. And one call
+does both. The extractor form has the same shape as `resolveForAdapter`.
+
+The order of the eight positions lives in that one class and nowhere else, and that is the whole
+point (decision 53). What your keys MEAN is your business. So is binding and validating them as
+typed values, the way an adapter binds the keys below its adapter id.
 
 ### The Quarkus trap
 
-On Quarkus every key below `vanillabp` has to be declared by some registered `@ConfigMapping`.
-There is no blanket ignore of unknown keys any more, so a key nothing binds does not merely go
-unread: it ends the startup, naming the key. A typo in your section is reported that way, which is
-the good half. The other half is a duty: every position you offer your users has to be part of a
-mapping you registered, because a position nothing binds is not a position an application can write.
-`UnknownExtensionSettingsKeyTest` holds both halves with a section spelled `extension` where the
-binding declares `extensions`, below an adapter.
+On Quarkus, some registered `@ConfigMapping` has to declare every key below `vanillabp`. Unknown keys
+are no longer ignored as a whole. So a key which nothing binds is not just left unread. It ends the
+startup, and the message names the key. A typo in your section is reported this way, which is the
+good half. The other half is a duty. Every position you offer your users has to be part of a mapping
+you registered. If nothing binds a position, an application cannot write it.
+`UnknownExtensionSettingsKeyTest` holds both halves. It uses a section spelled `extension` below an
+adapter, where the binding declares `extensions`.
 
-Spring Boot detects no unknown keys, so there is no counterpart there. The asymmetry is accepted,
-and it means a mistake of this kind shows up on Quarkus first.
+Spring Boot does not detect unknown keys, so there is nothing to match this there. We accept the
+difference. It means that a mistake of this kind shows up on Quarkus first.
 
-One more thing about Quarkus will cost you a day if you learn it the hard way. Never `@Inject` a
-`@ConfigMapping` interface. Injecting it turns the mapping into a static-init one, and SmallRye then
-validates the whole `vanillabp.*` tree before any adapter extension registered its runtime overlay,
-so every adapter-specific key fails the startup with a message pointing at that key rather than at
-the injection which caused it. Read the mapping instead, through
+One more thing about Quarkus costs you a day if you learn it the hard way. Never `@Inject` a
+`@ConfigMapping` interface. Injection turns the mapping into a static-init mapping. SmallRye then
+validates the whole `vanillabp.*` tree before any adapter extension registered its runtime overlay.
+So every adapter-specific key fails the startup, and the message points at that key and not at the
+injection which caused it. Read the mapping instead, through
 `ConfigProvider.getConfig().unwrap(SmallRyeConfig.class).getConfigMapping(...)`.
 
 ## 5. What the core offers beyond the pipeline
 
-Decision 35 names four things VanillaBP gives an extension instead of a base class. Two of them have
-been read already: the election of section 3 and the configuration of section 4. Here are the other
-two, plus the outbox and what the boot says about you. Each of them is parameterized by you rather
-than shaped after one extension, which is why nothing in the core knows what a user-task detail is.
+Decision 35 names four things VanillaBP gives an extension instead of a base class. You have read
+about two of them already: the election in section 3 and the configuration in section 4. Here are the
+other two, plus the outbox and what the boot says about you. You set the parameters of each of
+them. None is shaped after one particular extension, and so nothing in the core knows what a
+user-task detail is.
 
 ### Your own annotation
 
-Your users write an annotation of yours on the methods of their `@WorkflowService` classes, and
-VanillaBP runs those methods with the mechanics of `@WorkflowTask`: it finds them, binds their
-parameters, loads the workflow aggregate, invokes, saves, in one transaction. You describe what your
-annotation means with a `HandlerContract` and register it with `ExtensionHandlers#register`, a bean
-of both platforms.
+Your users put an annotation of yours on the methods of their `@WorkflowService` classes. VanillaBP
+runs those methods with the mechanics of `@WorkflowTask`. It finds them, binds their parameters,
+loads the workflow aggregate, calls the method and saves, all in one transaction. You describe what
+your annotation means with a `HandlerContract`. You register it with `ExtensionHandlers#register`,
+which is a bean on both platforms.
 
 ```java
 HandlerContract
@@ -419,29 +434,30 @@ HandlerContract
     .build();
 ```
 
-If your annotation carries a version attribute, name it as well and your methods are chosen by the
-version of the BPMN process an event came from, with the selection `@WorkflowTask` goes through:
+If your annotation has a version attribute, name it as well. Then your methods are chosen by the
+version of the BPMN process an event came from. The selection is the same as for `@WorkflowTask`:
 
 ```java
 .versions(annotation -> List.of(((UserTaskDetailsProvider) annotation).version()))
 .callsCarryTheProcessVersion()
 ```
 
-The specifications are the ones `@WorkflowTask(version = …)` takes, version tags included, and the
-tags are resolved through the BPMS. A method naming no version serves every version, so an
-application which knows one generation of its model writes nothing and nothing changes for it. Two
-methods for one key end the boot only where their versions overlap, which is what lets a user keep
+The version specifications are the same as for `@WorkflowTask(version = …)`, including version
+tags. The tags are resolved through the BPMS. A method which names no version serves every version.
+So an application which knows only one generation of its model writes nothing, and nothing changes
+for it. Two methods for one key end the boot only if their versions overlap. This lets a user keep
 one method per generation. Name the version on every call which has one
-(`HandlerCall.Builder#processVersion`), spelled the way the BPMS reports it, and say
-`callsCarryTheProcessVersion()` once, so a method VanillaBP could never reach is reported while the
-application boots instead of at the first event which does not arrive. Whether a version is there at all is your answer and not the application's:
-a Camunda 8 job carries the version of its process, a Camunda 7 process definition knows it, and an
-engine behind the Process-Engine-API fills a version tag only where it wants to, so an extension
-with halves per BPMS answers for the half in use (decision 56).
+(`HandlerCall.Builder#processVersion`), spelled the way the BPMS reports it. And say
+`callsCarryTheProcessVersion()` once. Then a method which VanillaBP could never reach is reported
+while the application boots, and not only when the first event does not arrive. Whether a version is
+there at all is for you to answer, not the application. A Camunda 8 job carries the version of its
+process. A Camunda 7 process definition knows it. An engine behind the Process-Engine-API fills a
+version tag only where it wants to. So an extension with one half per BPMS answers for the half in
+use (decision 56).
 
 A version attribute has a trap. VanillaBP checks the wiring before the deployment, when nobody knows
-the version yet, and a call picks its method by version. So a method whose range misses the version
-the BPMS gives the deployed model passes the start, and then no call of that version finds it.
+the version yet. But a call picks its method by version. So a method whose range misses the version
+of the deployed model passes the start. After that, no call of that version finds it.
 `@WorkflowTask` ends the start in that case (decision 126). Your contract can ask for the same:
 
 ```java
@@ -449,8 +465,8 @@ the BPMS gives the deployed model passes the start, and then no call of that ver
 .theDeployedVersionNeedsAMethod("The cockpit shows such a task without the details of its provider.")
 ```
 
-The core knows your methods but not which elements of the model they are for, so name the elements
-in your `wireBpmn`, once per BPMN process:
+The core knows your methods, but not the elements of the model they are for. So name the elements in
+your `wireBpmn`, once for each BPMN process:
 
 ```java
 extensionHandlers.elementsOfTheDeployedModel(
@@ -459,11 +475,14 @@ extensionHandlers.elementsOfTheDeployedModel(
             List.of()));                                // the process itself
 ```
 
-Each element is the list of keys you hand to `HandlerCall.Builder#lookupKeys` for it, in the same
-order. An empty list stands for the process, which only a method serving every key serves. Once the
-BPMS has reported the version, the core takes the methods a call for that element may reach. Where
-there are none, the element is left alone, because no method is a legal answer. Where one of them
-covers the version, all is well. Otherwise the start ends, with the message `@WorkflowTask` gets:
+Each element is a list of keys. Use the keys you pass to `HandlerCall.Builder#lookupKeys` for that
+element, in the same order. An empty list stands for the process. Only a method which serves every
+key serves it. When the BPMS has reported the version, the core takes the methods which a call for
+that element may reach:
+
+* If there are none, the core leaves the element alone, because "no method" is a valid answer.
+* If one of them covers the version, all is well.
+* Otherwise the start ends, with the same message as for `@WorkflowTask`:
 
 ```text
 Version '1' of BPMN process 'loan_approval' (workflow module 'loan-approval') is the version adapter 'camunda7'
@@ -480,202 +499,223 @@ Do one of these:
 ```
 
 The sentence in `theDeployedVersionNeedsAMethod(...)` is optional. It tells the developer what the
-gap costs. Without it the message says that the extension goes on without a method. The flag needs
-`callsCarryTheProcessVersion()`: a call without a version never picks a method by version, so a
-contract with the flag and without the other ends the boot.
+gap costs. Without it, the message says that the extension goes on without a method. The flag needs
+`callsCarryTheProcessVersion()`. A call without a version never picks a method by version. So a
+contract which has the flag, but not the other one, ends the boot.
 
-The elements are kept per workflow module and BPMN process, not per adapter, because `wireBpmn`
-names no adapter. Each adapter holds them against the version its own BPMS gave the model. Where two
-adapters deploy different models of one process, they share what you reported. The reason for all of
-this is in decision 127 of the repository's `DECISIONS.md`.
+The elements are kept for each workflow module and BPMN process, not for each adapter, because
+`wireBpmn` names no adapter. Each adapter checks them against the version which its own BPMS gave
+the model. If two adapters deploy different models of one process, they share what you reported.
+Decision 127 in the repository's `DECISIONS.md` gives the reasons.
 
-The contract is described in full under
+The full description of the contract is in the section
 [The extension's own annotation: handler contracts](./README.md#the-extensions-own-annotation-handler-contracts)
-in the core's README. What matters most while you design yours is what an invocation does. You name
-the keys your event is about, in the order you prefer them, and the first key some method serves
-wins; the element id belongs first, because that is the identity everything moves to and the
-`taskDefinition` attribute goes away later (decision 51). Zero matches are legal and answered with an
-empty result, so what to do instead stays your decision. Two methods serving one key of one BPMN
-process end the boot naming both, unless the versions they serve keep them apart.
+of the core's README. While you design yours, the most important thing is what an invocation does.
+You name the keys your event is about, in the order you prefer. The first key which some method
+serves wins. The element id belongs first. It is the identity everything moves to, and the
+`taskDefinition` attribute goes away later (decision 51). Zero matches are allowed and get an empty
+result, so you decide what to do instead. Two methods which serve the same key of one BPMN process
+end the boot, and the message names both. The only exception is when the versions they serve keep
+them apart.
 
-Where you can, say `neverSavesTheWorkflowAggregate()` on a contract whose methods only read. Without
-it every application using your extension reads a warning at every start about a second writer which
-cannot happen, and a warning nobody can act on is one people learn to skip (decision 50).
+If you can, say `neverSavesTheWorkflowAggregate()` on a contract whose methods only read. Without it,
+every application which uses your extension shows a warning at every start. The warning is about a
+second writer which cannot happen. Nobody can act on such a warning, so people learn to skip it
+(decision 50).
 
-Register the contract wherever it is convenient. Whether your bean exists before or after the
-workflow services were scanned depends on what else the application does, and the registry applies a
-contract arriving later to the classes registered so far (decision 36,
+Register the contract wherever it suits you. Your bean may exist before or after the workflow
+services were scanned. That depends on what else the application does. The registry applies a
+contract which arrives later to the classes registered so far (decision 36,
 `ExtensionHandlerRegistryTest#aContractMayArriveAfterTheScan`).
 
-The registry also knows things about the application you would otherwise scan for.
-`workflowAggregateOf(module, process)` answers which aggregate class a BPMN process works on,
-`bpmnProcessesOf(module)` names every process a `@WorkflowService` declares in a workflow module, and
-`bpmnTaskNameOf(module, process, activityId)` answers the name a modeller wrote on an element. Ask
-instead of scanning the beans again: a second scan has to unwrap the proxies of a platform you
-should not have to know about, and it reads a different set of methods than VanillaBP does.
+The registry also knows things about the application which you would otherwise have to scan for:
+
+* `workflowAggregateOf(module, process)` answers which aggregate class a BPMN process works on.
+* `bpmnProcessesOf(module)` names every process which a `@WorkflowService` declares in a workflow
+  module.
+* `bpmnTaskNameOf(module, process, activityId)` answers the name a modeller wrote on an element.
+
+Ask the registry, and do not scan the beans again. A second scan has to unwrap the proxies of a
+platform you should not need to know about. And it reads a different set of methods than VanillaBP
+does.
 
 ### Your own service per workflow aggregate
 
-`ProcessService<A>` is injected with the workflow aggregate as its type argument, and a service of
-yours can be injected the same way. Contribute an `AggregateServiceFactory`, which names the
-interface you offer and builds one instance for an aggregate, and the platform builds one bean per
-workflow aggregate of the application.
+`ProcessService<A>` is injected with the workflow aggregate as its type argument. A service of yours
+can be injected the same way. Contribute an `AggregateServiceFactory`. It names the interface you
+offer and builds one instance for an aggregate. The platform then builds one bean per workflow
+aggregate of the application.
 
-Injecting it is optional, unlike `ProcessService`: the bean is built on first use, so an application
-never asking for your service never runs your factory. The `AggregateServiceContext` a factory is
-handed carries the aggregate class and its persistence, the workflow module and the BPMN process,
-the handler methods of the application and the election.
+Unlike `ProcessService`, injecting your service is optional. The bean is built on first use. So if an
+application never asks for your service, your factory never runs. The `AggregateServiceContext`
+which a factory gets carries:
+
+* the aggregate class and its persistence,
+* the workflow module and the BPMN process,
+* the handler methods of the application,
+* the election.
 
 Your interface has to take exactly one type parameter, the workflow aggregate. On Spring Boot the
-interface is read off the factory's bean definition. On Quarkus it is read off the Jandex index,
-which means your factory has to be indexed: a runtime module with a Jandex index brings that along,
-and one without says which class matters with an `AdditionalIndexedClassesBuildItem`.
+interface is read from the factory's bean definition. On Quarkus it is read from the Jandex index, so
+your factory has to be indexed. A runtime module with a Jandex index brings that along. A module
+without one names the class with an `AdditionalIndexedClassesBuildItem`.
 
 ### Operations of your own in the outbox
 
-Work which has to happen after the application's transaction committed belongs in the outbox, the
-same one VanillaBP uses. Phase one is that transaction and phase two is the moment after its
-commit, so the names say when the work runs and not who runs it: a call to a BPMS is one kind of
-phase-two work and an operation of yours is another, and both are entries of the same store. Build the operation with `PhaseOperation.extensionOperation(name)`, which
-enforces a namespace of the form `my-extension:NOTIFY`, and register it together with your own
-dispatch on the `PhaseOperationRegistry`, a bean of both platforms. Scheduling then works as it does
-for a core operation: build the call with `PhaseTwoCall.of(operation, ...)` and hand it to the
-outbox, inside the business transaction. Dispatch goes straight to your handler, without the
-adapter election the core operations run through.
+Some work has to happen after the application's transaction committed. It belongs in the outbox,
+the same one VanillaBP uses. Phase one is that transaction, and phase two is the moment after its
+commit. So the names say when the work runs, not who runs it. A call to a BPMS is one kind of
+phase-two work, and an operation of yours is another. Both are entries in the same store.
 
-Which store the entry belongs in is not your decision, and picking a `PhaseTwoOutbox` bean yourself
-would be right until the first application with two persistences.
-`PhaseTwoOutboxResolver#resolveFor(workflowAggregateClass)` answers the store the workflow's own
-entries go into, which is the whole point, since only an entry in the transaction of the aggregate is
-committed with it. A `null` answer means the application has no outbox at all, and
-`#remediesDescription()` says what to add for the platform in use, so you can end your own boot with
-a message a developer can act on. The transaction follows the same rule:
-`TransactionRunnerResolver#resolveFor(workflowAggregateClass)` answers the runner the workflow's own
-writes go through, which may well be one the application contributed, and opening a transaction of
-your own loses `beforeCommit`, the rollback-only verdict and the optimistic-locking recognition of
-that runner.
+Build the operation with `PhaseOperation.extensionOperation(name)`. It enforces a namespace of the
+form `my-extension:NOTIFY`. Register the operation together with your own dispatch on the
+`PhaseOperationRegistry`, which is a bean on both platforms. Scheduling then works as it does for an
+operation of the core. Build the call with `PhaseTwoCall.of(operation, ...)` and hand it to the
+outbox, inside the business transaction. Dispatch goes straight to your handler. It skips the
+adapter election which the core's operations run through.
+
+You do not decide which store the entry belongs in. If you picked a `PhaseTwoOutbox` bean yourself,
+it would work until the first application with two persistences.
+`PhaseTwoOutboxResolver#resolveFor(workflowAggregateClass)` answers the store into which the
+workflow's own entries go. That is the whole point, because only an entry in the transaction of the
+aggregate is committed together with it. A `null` answer means the application has no outbox at
+all. `#remediesDescription()` then says what to add for the platform in use. So you can end your own
+boot with a message a developer can act on.
+
+The transaction follows the same rule. `TransactionRunnerResolver#resolveFor(workflowAggregateClass)`
+answers the runner which the workflow's own writes go through. That may well be a runner the
+application contributed. If you open a transaction of your own, you lose three things of that
+runner: `beforeCommit`, the rollback-only verdict, and the detection of optimistic-locking
+failures.
 
 `PhaseOperationRegistryTest` holds what the registry enforces, and `ExtensionOperationDispatchTest`
 runs an extension operation through both platforms.
 
 ### What a workflow is waiting for
 
-VanillaBP writes down every task delivery it processed, in the transaction which saves the workflow
-aggregate, and the store behind that is a `TaskDeliveryLog`. You may READ it.
-`TaskDeliveryLogResolver#resolveFor(workflowAggregateClass)` answers the log that aggregate's
-records were written into, and `TaskDeliveryLog#openTasksOfAggregate(module, process, aggregateId)`
-answers the tasks the application has not finished yet, oldest first. That is the durable answer to
-the question an extension asks before it shows what a case is waiting for, and you get it without
-keeping a memory of your own: the Process-Engine-API half of the Business Cockpit kept one and lost
-it on every restart, and on every task which arrived at another node.
+VanillaBP writes down every task delivery it processed. It does this in the transaction which saves
+the workflow aggregate. The store behind it is a `TaskDeliveryLog`, and you may READ it.
+`TaskDeliveryLogResolver#resolveFor(workflowAggregateClass)` answers the log into which that
+aggregate's records were written. `TaskDeliveryLog#openTasksOfAggregate(module, process, aggregateId)`
+answers the tasks which the application has not finished yet, oldest first. An extension asks this
+before it shows what a case is waiting for. The log gives a durable answer, and you do not need a
+memory of your own. The Process-Engine-API half of the Business Cockpit kept one. It lost it on
+every restart, and on every task which arrived at another node.
 
-Each record names the task by `taskId`, the element of the model by `bpmnElementId`, the BPMS'
-workflow by `workflowId`, and the adapter which delivered it by `adapterId`. `taskDefinition` is a
-different question from `bpmnElementId` - it carries a Camunda 8 job type or a Camunda 7 topic
-wherever the model names one.
+Each record names:
 
-Two limits, and both matter before you build a screen on this. The records are the work the
-APPLICATION was handed: a user task nobody wrote a `@WorkflowTask` method for leaves no record and
-is in no answer here. The delivery is not what is missing - the adapter hands such a task to
-VanillaBP and finishes the notification itself when no method serves it - it is the outcome a
-record carries, and a task the application was never asked about has none (decision 54). And a
-record is deleted once `vanillabp.delivery.retention` passed without the task being handed out
-again, so this says what the store still knows rather than what the BPMS holds. An empty list is
-therefore "nothing recorded", never "nothing open".
+* the task, by `taskId`,
+* the element of the model, by `bpmnElementId`,
+* the BPMS' workflow, by `workflowId`,
+* the adapter which delivered the task, by `adapterId`.
 
-Inject the RESOLVER rather than a `TaskDeliveryLog` bean, for the reason the outbox names above: an
-application may run two persistences, and which store serves an aggregate is not a question you can
-answer from outside. The resolver is a bean on Spring Boot
-(`vanillaBpTaskDeliveryLogResolver`) and on Quarkus (`TaskDeliveryLogResolverProducer`), and a
-`null` answer means the application configured no store at all, which is a state your own boot may
-report. `DeliveryLogUsingExtension` is a miniature of exactly this, injected by
-`ExtensionEnablementTest` on Quarkus and by `ExtensionElectionAndConfigurationTest` on Spring
-Boot.
+`taskDefinition` answers a different question than `bpmnElementId`. It carries a Camunda 8 job type
+or a Camunda 7 topic wherever the model names one.
 
-Do not write into the log. The records are the core's bookkeeping of what really ran, and an entry
-put there by somebody else would answer a redelivery with work which never happened.
+There are two limits. Both matter before you build a screen on this.
+
+First, the records are the work the APPLICATION was handed. A user task for which nobody wrote a
+`@WorkflowTask` method leaves no record, and it is in no answer here. The delivery itself is not
+what is missing. The adapter hands such a task to VanillaBP, and finishes the notification itself
+when no method serves it. What is missing is the outcome which a record carries. A task the
+application was never asked about has no outcome (decision 54).
+
+Second, a record is deleted once `vanillabp.delivery.retention` passed without the task being handed
+out again. So the log says what the store still knows, not what the BPMS holds. An empty list
+therefore means "nothing recorded". It never means "nothing open".
+
+Inject the RESOLVER, not a `TaskDeliveryLog` bean. The reason is the same as for the outbox above. An
+application may run two persistences, and you cannot tell from outside which store serves an
+aggregate. The resolver is a bean on Spring Boot (`vanillaBpTaskDeliveryLogResolver`) and on Quarkus
+(`TaskDeliveryLogResolverProducer`). A `null` answer means the application configured no store at
+all. Your own boot may report that state. `DeliveryLogUsingExtension` is a small model of exactly
+this. `ExtensionEnablementTest` injects it on Quarkus, and `ExtensionElectionAndConfigurationTest`
+on Spring Boot.
+
+Do not write into the log. The records are the core's bookkeeping of what really ran. An entry which
+somebody else put there would answer a redelivery with work which never happened.
 
 ### What the boot says about you
 
 Once a workflow module is deployed, the registry writes one line per extension, workflow module and
-BPMN process naming your methods and the keys each of them serves, with the catch-all marked as the
-one serving every element. It is what a developer reads whose method is never called. A contract
-registered after the module was deployed writes its own line when it arrives, and a BPMN process you
-have no method for is not named at all
+BPMN process. The line names your methods and the keys which each of them serves. The catch-all is
+marked as the method which serves every element. A developer whose method is never called reads
+this line. A contract registered after the module was deployed writes its own line when it arrives.
+A BPMN process for which you have no method is not named at all
 (`ExtensionHandlerRegistryTest#theBootSaysWhatWasWired`, `ExtensionHandlerWiringReportTest` per
 platform).
 
-A method the scan cannot reach is reported too, for your annotation exactly as for `@WorkflowTask`.
-A handler which is not public, and an override which repeated no annotation, are lost the same way,
-and for your extension the consequence is quieter than an unserved task and worse than one: the
-application simply behaves as if the method had never been written
+A method which the scan cannot reach is reported too, for your annotation exactly as for
+`@WorkflowTask`. A handler which is not public is lost this way. So is an override which did not
+repeat the annotation. For your extension the result is quieter than a task nobody serves, and
+worse: the application simply behaves as if the method had never been written
 (`HandlerMethodsNobodySees`, `ExtensionHandlerMethodsNobodySeesTest`).
 
-What your contract cannot describe, check yourself. `validatingAnnotation(check)` runs a check of
-yours once per occurrence, while the scan holds the method, and a check refusing by throwing ends
-the boot with the annotation, the class, the method and your extension in front of what it said.
-Without it you walk the classes of the application a second time, and that walk never sees the same
-methods.
+Check yourself what your contract cannot describe. `validatingAnnotation(check)` runs a check of
+yours once per occurrence, while the scan holds the method. If the check refuses by throwing, the
+boot ends. The message puts the annotation, the class, the method and your extension in front of
+what your check said. Without this you walk the classes of the application a second time, and that
+walk never sees the same methods.
 
 ## 6. What an extension must not do
 
-Every line here is either a mistake which was made once or a promise which does not exist.
+Every rule here is either a mistake which somebody made once, or a promise which does not exist.
 
-Do not put your SPI into the VanillaBP core. A cockpit-shaped SPI in the core, `getUserTaskDetails`
-and friends, would have made the next extension a change to VanillaBP (decision 35). Your annotation
-and your service interface live in your artifact, and the core learns about them through the
-contract and the factory.
+Do not put your SPI into the VanillaBP core. An SPI shaped after the cockpit in the core, with
+`getUserTaskDetails` and similar methods, would have turned the next extension into a change to
+VanillaBP (decision 35). Your annotation and your service interface live in your artifact. The core
+learns about them through the contract and the factory.
 
 Do not change what the adapter owns. You see the model after the adapter prepared and wired it, and
-you add relative to what it left there. Rewriting its listeners or rescoping its identifiers breaks
-a promise the adapter made to its BPMS, and you are not the party which can tell whether it does:
-only the adapter reads its own BPMN dialect.
+you add relative to what it left there. If you rewrite its listeners or rescope its identifiers, you
+break a promise the adapter made to its BPMS. And you cannot even tell whether you do, because only
+the adapter reads its own BPMN dialect.
 
-Do not rely on the order of two extensions. `getOrder()` sorts the extensions of one model type and
-nothing more is promised, so anything you build on running after another extension is built on the
-order a platform happened to collect beans in (decision 52). What you may rely on is the adapter
-being first.
+Do not rely on the order of two extensions. `getOrder()` sorts the extensions of one model type, and
+nothing more is promised. If you build on running after another extension, you build on the order
+in which a platform happened to collect beans (decision 52). You may rely on the adapter being
+first.
 
-Do not address the first-priority adapter. Ask `WorkflowElection#adapterIdOfWorkflow` per workflow.
-During a migration the answer differs per workflow, and a wrong one talks to the BPMS which does not
-hold it.
+Do not address the first-priority adapter. Ask `WorkflowElection#adapterIdOfWorkflow` for each
+workflow. During a migration the answer differs from workflow to workflow. A wrong answer talks to
+a BPMS which does not hold the workflow.
 
 Do not derive the adapter ids yourself. `MigrationAdapterProperties#adapterIdsOfType` is the one
-place the three rules live, and a copy which drops one leaves the adapter registered and your bridge
-missing (decision 39).
+place where the three rules live. A copy which drops one rule leaves the adapter registered and your
+bridge missing (decision 39).
 
-Do not write a second resolution for your settings. The eight positions and "most specific wins" are
-the core's, and an extension parsing the flat keys itself is what decision 48 was written about.
+Do not write a second resolution for your settings. The eight positions and "most specific wins"
+belong to the core. Decision 48 was written about an extension which parsed the flat keys itself.
 
-Do not open a transaction or pick an outbox store of your own where the work belongs to a workflow
+Do not open a transaction or pick an outbox store of your own if the work belongs to a workflow
 aggregate. Use the two resolvers, for the reasons in section 5.
 
-Do not assume you are started before anything runs. Every adapter of every workflow module is
-processing workflows before your `startWorkflowProcessing` is called, so whatever has to be in place
-earlier belongs into `wireBpmn`.
+Do not assume you are started before anything runs. Every adapter of every workflow module processes
+workflows before your `startWorkflowProcessing` is called. So whatever has to be in place earlier
+belongs into `wireBpmn`.
 
 ## 7. Registering per platform
 
-The sample extension of each platform is the template. Both are built like the Business Cockpit in
-miniature, with an annotation of their own, a per-aggregate service, the election, an outbox
-operation and their own settings, and both are exercised by the platform's own tests.
+The sample extension of each platform is the template. Both are small copies of the Business Cockpit.
+Each has an annotation of its own, a service per aggregate, the election, an outbox operation and
+its own settings. The platform's own tests run both of them.
 
 * Spring Boot: `spring-boot-integration/integration-tests/sample-extension`
 * Quarkus: `quarkus-integration/integration-tests/sample-extension`
 
-On Spring Boot you contribute beans, usually from an auto-configuration ordered after
-`io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration`. Order it by
-NAME, as the sample does, so your module needs no dependency on the platform integration. A wiring
-service is a bean of type `ExtensionWiringService`; the adapters' deployment services are wiring
-services too and appear in the same collection, and the platform filters them where only extensions
-are meant.
+On Spring Boot you contribute beans. Usually they come from an auto-configuration which is ordered
+after `io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration`. Order it
+by NAME, as the sample does. Then your module needs no dependency on the platform integration. A
+wiring service is a bean of type `ExtensionWiringService`. The adapters' deployment services are
+wiring services too, and they appear in the same collection. Where only extensions are meant, the
+platform filters them out.
 
 On Quarkus your extension is a Quarkus extension, with a runtime module and a deployment module. The
-runtime module produces the beans, `@Singleton` for anything without a no-arg constructor, since such
-a bean is not client-proxyable. The deployment module registers those producers with an
-`AdditionalBeanBuildItem` marked `setUnremovable()`, because the platform looks the beans up through
-`Instance` and ArC would otherwise remove them. Unlike an adapter, an extension announces no build
-item of its own.
+runtime module produces the beans. Use `@Singleton` for any bean without a no-arg constructor,
+because such a bean cannot get a client proxy. The deployment module registers those producers with
+an `AdditionalBeanBuildItem` marked `setUnremovable()`. The platform looks the beans up through
+`Instance`, and without this mark ArC would remove them. Unlike an adapter, an extension announces no
+build item of its own.
 
 ## 8. What the core promises you
 
@@ -697,49 +737,49 @@ item of its own.
 | An operation of yours reaches your own handler                                                                            | `PhaseOperationRegistryTest`, `ExtensionOperationDispatchTest` per platform                                                                                              |
 | The log of processed task deliveries is resolvable per workflow aggregate, and holds the tasks the application was handed | decision 54, `ExtensionElectionAndConfigurationTest`, `ExtensionEnablementTest`, `OpenTaskRetentionTest` per platform                                                    |
 
-One statement of this document is an assumption rather than something a test holds. Telling two
-adapters apart by the identity of the processing context works because the core builds one context
-per workflow module and adapter id, which is what `DeploymentService` does today. Nothing promises
-that an adapter hands out a distinct object per id, so an extension which needs the id with
-certainty registers per id from `adapterIdsOfType` instead.
+One statement in this document is an assumption, and no test holds it. You can tell two adapters
+apart by the identity of the processing context. This works because the core builds one context per
+workflow module and adapter id, which is what `DeploymentService` does today. But nothing promises
+that an adapter hands out a separate object per id. So if your extension needs the id with
+certainty, register per id from `adapterIdsOfType` instead.
 
 ## 9. The checklist before your first release
 
-1. One instance of whatever you keep per configured adapter id, and state separated by id. Nothing
-   built on the first-priority adapter, and the id set read from `adapterIdsOfType`.
-2. Model type and processing-context type declared as widely as your work allows, so every adapter
-   you can serve matches you and the ones you cannot leave you alone.
-3. Everything you add to a model placed relative to what the adapter left there, and nothing of the
-   adapter's rewritten.
-4. Your settings read through the core's resolution, your section named after you, your keys bound
-   and validated typed, and every position declared in a mapping on Quarkus.
-5. Your annotation described by a handler contract, with a check of your own where the contract
-   cannot describe what an attribute means, and `neverSavesTheWorkflowAggregate()` where your
-   methods only read.
-6. Outbox work scheduled through the resolved store, in the transaction of the aggregate, with a
-   namespaced operation and your own dispatch.
-7. Messages which name the workflow module, the BPMN process and the property key, so an application
-   reaching a broken setup is led out of it by its own log.
-8. Both platforms, each with its own tests, and a dependency list which holds the two SPI artifacts
-   and the core and no platform integration.
+1. You keep one instance per configured adapter id, and your state is separated by id. Nothing is
+   built on the first-priority adapter, and the set of ids comes from `adapterIdsOfType`.
+2. You declare the model type and the processing-context type as widely as your work allows. Then
+   every adapter you can serve matches you, and the ones you cannot serve leave you alone.
+3. Everything you add to a model sits relative to what the adapter left there. You rewrite nothing
+   of the adapter's.
+4. You read your settings through the core's resolution. Your section is named after you. Your keys
+   are bound and validated as typed values. On Quarkus every position is declared in a mapping.
+5. A handler contract describes your annotation. Where the contract cannot describe what an
+   attribute means, you have a check of your own. Where your methods only read, you say
+   `neverSavesTheWorkflowAggregate()`.
+6. You schedule outbox work through the resolved store, in the transaction of the aggregate, with an
+   operation in your namespace and your own dispatch.
+7. Your messages name the workflow module, the BPMN process and the property key. So when an
+   application runs into a broken setup, its own log leads it out.
+8. You ship both platforms, each with its own tests. Your dependency list holds the two SPI
+   artifacts and the core, and no platform integration.
 
 ## Where to look next
 
-The SPI's own javadoc is the reference, and it is more detailed than this document wherever the two
-overlap. Start with `ExtensionWiringService`, whose type javadoc carries the ordering contract, and
-with `SettingsLevel` and `SettingsResolution` for the settings.
+The SPI's own javadoc is the reference. Wherever the two overlap, it has more detail than this
+document. Start with `ExtensionWiringService`, whose type javadoc carries the contract about order.
+For the settings, read `SettingsLevel` and `SettingsResolution`.
 
 [`README.md`](./README.md) of this module is the contributor documentation of the core. Its section
-[Extensions](./README.md#extensions) is this document's subject seen from the inside, and the
+[Extensions](./README.md#extensions) covers the subject of this document from the inside. The
 sections around it explain why the SPI looks the way it does.
 
-[`DECISIONS.md`](../DECISIONS.md) of this repository is where the reasoning lives which several
-places rely on. This document points at entries 7, 9, 35, 36, 39, 48, 50, 51, 52 and 53.
+[`DECISIONS.md`](../DECISIONS.md) of this repository holds the reasoning which several places rely
+on. This document points at entries 7, 9, 35, 36, 39, 48, 50, 51, 52 and 53.
 
 The wiki page
-[Extensions](https://github.com/vanillabp/adapter-platform-integration/wiki/Extensions) is the
-user-facing half of the same subject.
+[Extensions](https://github.com/vanillabp/adapter-platform-integration/wiki/Extensions) is the half
+of the same subject which is written for users.
 
 If something here is wrong, or if you need a promise this SPI does not make, tell us. The shape you
-build against is the one we are willing to live with, and an extension written outside this
-repository is exactly what it was finalised for.
+build against is one we are willing to live with. And the SPI was finished exactly for extensions
+written outside this repository.
