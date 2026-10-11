@@ -20,41 +20,41 @@ import io.vanillabp.integration.extension.spi.settings.SettingsResolution;
 import io.vanillabp.integration.spi.startup.StartupTopic;
 
 /**
- * Everything below {@code vanillabp} after both platforms have bound it: the adapter sections, the
- * workflow-module sections, and the settings an adapter may be given per task, per workflow, per
- * workflow module or for itself.
+ * Everything below {@code vanillabp}, after both platforms have bound it: the adapter
+ * sections, the workflow-module sections, and the settings which an adapter may get per
+ * task, per workflow, per workflow module, or for itself.
  * <p>
- * Two rules of this class are relied on elsewhere. {@link #normalize(ClasspathFacts)} derives what
- * a convention can derive before anything is validated, so an application which configures nothing
- * still boots and is led on by its own log rather than by the documentation (decision 8 in the
- * repository's DECISIONS.md). {@code resolveForAdapter} is the single implementation of the
- * four-level lookup, task before workflow before workflow module before adapter, which is why a
- * new adapter-specific setting costs a key and nothing else
- * (decision 7 in the repository's DECISIONS.md). An EXTENSION setting is resolved by
- * {@code resolveForExtension} over the same levels plus the adapter section of each of them, and it
- * walks them with {@link SettingsResolution}, the one implementation every plug-in uses
- * (decision 53 in the repository's DECISIONS.md).
+ * Other places rely on two rules of this class. {@link #normalize(ClasspathFacts)} derives
+ * what a convention can derive, before anything is checked. So an application which
+ * configures nothing still boots, and its own log leads it on, not the documentation
+ * (decision 8 in the repository's DECISIONS.md). {@code resolveForAdapter} is the only
+ * implementation of the lookup over four levels: task before workflow before workflow
+ * module before adapter. That is why a new adapter-specific setting costs a key and nothing
+ * else (decision 7 in the repository's DECISIONS.md). {@code resolveForExtension} resolves
+ * an EXTENSION setting over the same levels, plus the adapter section of each of them. It
+ * walks them with {@link SettingsResolution}, the one implementation which every plug-in
+ * uses (decision 53 in the repository's DECISIONS.md).
  */
 public class MigrationAdapterProperties extends AdaptersConfigurationProperties {
 
   /**
-   * The root of every property VanillaBP reads: <code>vanillabp</code>. Every message
-   * which names a key builds it from here, so what a developer reads in the log is spelled
+   * The root of every property which VanillaBP reads: <code>vanillabp</code>. Every message
+   * which names a key builds it from here. So what a developer reads in the log is spelled
    * the way it has to be written in the configuration.
    */
   public static final String PREFIX = "vanillabp";
 
   /**
-   * The empty configuration a binder starts from: both platforms create this object and
-   * then write everything below <code>vanillabp</code> into it, one setter per key. An
-   * application which configures nothing keeps what the defaults say and is led on from
-   * there by {@link #normalize(ClasspathFacts)} and the validation.
+   * The empty configuration from which a binder starts. Both platforms create this object
+   * and then write everything below <code>vanillabp</code> into it, one setter per key. An
+   * application which configures nothing keeps the defaults. {@link #normalize(ClasspathFacts)}
+   * and the checks lead it on from there.
    * <p>
-   * It asks the builder for the values, and that is not a detour: every default of this
-   * class stands on the builder as well as on the field, and both ways into an object
-   * end here. A constructor which set the fields itself would have to repeat every
-   * default, and the first one somebody forgets would leave every map of this class
-   * <code>null</code> and every sub-section missing.
+   * It asks the builder for the values, and that is not a detour. Every default of this class
+   * is on the builder as well as on the field, and both ways into an object end here. A
+   * constructor which set the fields itself would have to repeat every default. The first
+   * default somebody forgets would leave every map of this class <code>null</code>, and every
+   * sub-section missing.
    */
   public MigrationAdapterProperties() {
 
@@ -63,8 +63,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The location BPMN resources are loaded from and whether that location contains
-   * VanillaBP BPMN (true) or BPMN specific to the target BPMS (false).
+   * The location from which BPMN resources are loaded, and whether that location has
+   * VanillaBP BPMN (true) or BPMN for the target BPMS (false).
    *
    * @param location The resources location
    * @param vanillaBpBpmn Whether the location contains VanillaBP BPMN
@@ -73,17 +73,17 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The configuration of all adapters known
-   * (properties section <code>vanillabp.adapters.&lt;id&gt;.*</code>). Keys are the
-   * adapter IDs. The key can be an adapter's type or a custom identifier. In case of
-   * a custom identifier the {@link AdapterConfigProperties#getType() type} property
-   * has to point to the adapter type the custom adapter is derived from. In case of
-   * an adapter-type identifier the type property may be undefined.
+   * The configuration of all known adapters (properties section
+   * <code>vanillabp.adapters.&lt;id&gt;.*</code>). The keys are the adapter IDs. A key can be
+   * an adapter's type or a custom identifier. For a custom identifier, the
+   * {@link AdapterConfigProperties#getType() type} property has to name the adapter type from
+   * which the custom adapter is derived. For an identifier which is an adapter type, the type
+   * property may be left out.
    */
   private Map<String, AdapterConfigProperties> adapters = Map.of();
 
   /**
-   * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
+   * Where to load VanillaBP BPMN files from which are NOT specific to any adapter.
    */
   private String resourcesLocation;
 
@@ -94,53 +94,52 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * The settings of the extensions (properties section
-   * <code>vanillabp.extensions.&lt;extension&gt;.*</code>), overridable per workflow
-   * module, per workflow and per task. Keys are the extension ids, values what the
-   * application wrote below them, keyed by the rest of the path - what the keys MEAN is
-   * the extension's own business (see {@link ExtensionProperties}).
+   * <code>vanillabp.extensions.&lt;extension&gt;.*</code>). They can be overridden per
+   * workflow module, per workflow and per task. The keys are the extension ids. The values
+   * are what the application wrote below them, keyed by the rest of the path. What the keys
+   * MEAN is the extension's own business (see {@link ExtensionProperties}).
    */
   private Map<String, Map<String, String>> extensions = Map.of();
 
   /**
-   * Configuration of the default
-   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementations
-   * (properties section <code>vanillabp.outbox</code>).
+   * The configuration of the default {@link io.vanillabp.integration.spi.PhaseTwoOutbox}
+   * implementations (properties section <code>vanillabp.outbox</code>).
    */
   private PhaseTwoOutboxProperties outbox = new PhaseTwoOutboxProperties();
 
   /**
-   * Refused here on purpose: the permission to share a whole workflow aggregate belongs
-   * to the single workflow (see decision 66 in the repository's DECISIONS.md). It is
-   * bound at this level so that a line written here is answered with a message saying
-   * where it belongs, instead of being ignored.
+   * Refused here on purpose. The permission to share a whole workflow aggregate belongs to
+   * the single workflow (see decision 66 in the repository's DECISIONS.md). It is bound at
+   * this level, so that a line written here gets a message which says where it belongs,
+   * instead of being ignored.
    */
   private Boolean allowFullSyncWithBpms;
 
   /**
-   * Whether the expressions of every BPMN model of this application are meant as they
-   * are (<code>vanillabp.accept-expressions-in-the-model</code>) - the least specific of
-   * the three levels, for an application which decided it once.
+   * Whether the expressions of every BPMN model of this application are meant as they are
+   * (<code>vanillabp.accept-expressions-in-the-model</code>). It is the least specific of the
+   * three levels, for an application which decided it once.
    */
   private Boolean acceptExpressionsInTheModel;
 
   /**
    * The <code>&#64;TaskParam</code> parameters of the whole application whose type the
-   * developer declared (<code>vanillabp.declared-task-params</code>). The least specific of
-   * the four levels the declaration may be written at, and the one to reach for where every
-   * task of the application reads the same value.
+   * developer declared (<code>vanillabp.declared-task-params</code>). It is the least specific
+   * of the four levels at which the declaration may be written. Use it where every task of
+   * the application reads the same value.
    */
   private java.util.List<String> declaredTaskParams;
 
   /**
    * Whether something other than this application serves every task which does not say
-   * otherwise (<code>implemented-externally</code>, see {@link #implementedExternally}).
-   * The least specific of the eight positions; <code>null</code> means "not configured
-   * at this level".
+   * otherwise (<code>implemented-externally</code>, see {@link #implementedExternally}). It is
+   * the least specific of the eight positions. <code>null</code> means "not configured at this
+   * level".
    */
   private Boolean implementedExternally;
 
   /**
-   * Configuration of the default election cache
+   * The configuration of the default election cache
    * {@link io.vanillabp.integration.spi.WorkflowAdapterCache} (properties section
    * <code>vanillabp.workflow-adapter-cache</code>).
    */
@@ -148,49 +147,48 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * What VanillaBP does about a workflow aggregate whose store is not covered by the
-   * transaction it opens (properties section <code>vanillabp.transactions</code>,
-   * overridable per workflow module).
+   * transaction which it opens (properties section <code>vanillabp.transactions</code>, which
+   * can be overridden per workflow module).
    */
   private TransactionsProperties transactions = new TransactionsProperties();
 
   /**
-   * What VanillaBP does about a prioritized adapter which cannot locate workflows
-   * (properties section <code>vanillabp.election</code>, overridable per workflow
-   * module).
+   * What VanillaBP does about a prioritized adapter which cannot find workflows (properties
+   * section <code>vanillabp.election</code>, which can be overridden per workflow module).
    */
   private ElectionProperties election = new ElectionProperties();
 
   /**
-   * What VanillaBP does with the records of processed task deliveries (properties
-   * section <code>vanillabp.delivery</code>, overridable per workflow module - except the
+   * What VanillaBP does with the records of processed task deliveries (properties section
+   * <code>vanillabp.delivery</code>, which can be overridden per workflow module, except the
    * retention, see <code>vanillabp.delivery.retention</code>).
    */
   private DeliveryProperties delivery = new DeliveryProperties();
 
   /**
-   * What VanillaBP publishes as metrics (properties section
-   * <code>vanillabp.metrics</code>) - today only how long the measurement of a gauge
-   * which has to ask somebody is reused.
+   * What VanillaBP publishes as metrics (properties section <code>vanillabp.metrics</code>).
+   * Today that is only how long the measurement of a gauge which has to ask somebody is
+   * reused.
    */
   private MetricsProperties metrics = new MetricsProperties();
 
   /**
-   * Where every startup check leaves what it found, so the whole start says it once, at
-   * its end, instead of a line per check (see
+   * Where every startup check puts what it found. So the whole start says it once, at its
+   * end, instead of one line per check (see
    * {@link io.vanillabp.integration.adapter.migration.startup.StartupFindings}).
    * <p>
-   * It sits on the configuration because the configuration is what everything doing a
-   * startup check already holds, and it carries no accessors a binder would take for a
-   * property: nothing below <code>vanillabp</code> configures it.
+   * It sits on the configuration, because everything which does a startup check holds the
+   * configuration already. It has no accessors which a binder would take for a property.
+   * Nothing below <code>vanillabp</code> configures it.
    */
   private io.vanillabp.integration.adapter.migration.startup.StartupFindings startupFindings = new io.vanillabp.integration.adapter.migration.startup.StartupFindings();
 
   /**
    * Where a check reports what it found, also where it runs without a configuration.
    * <p>
-   * A check built in a test has no bound <code>vanillabp.*</code> tree and no start to
-   * close either, so it gets a collection of its own and reports into it. Which keeps
-   * the null check out of every check that has one.
+   * A check built in a test has no bound <code>vanillabp.*</code> tree, and no start to close
+   * either. So it gets a collection of its own and reports into it. That keeps the null check
+   * out of every check which has one.
    *
    * @param properties The bound configuration, or <code>null</code>
    * @return Where to report, never <code>null</code>
@@ -212,8 +210,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   public io.vanillabp.integration.adapter.migration.startup.StartupFindings startupFindings() {
 
     if (startupFindings == null) {
-      // a builder of an older call site, and a binder which maps what it does not know
-      // onto null: neither must cost a check its place to report to
+      // a builder of an older call site, or a binder which maps what it does not know to
+      // null. Neither must cost a check its place to report to
       startupFindings = new io.vanillabp.integration.adapter.migration.startup.StartupFindings();
     }
     return startupFindings;
@@ -221,26 +219,26 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Adapter ids this application USED to have and deliberately does not configure any
-   * more - the last step of a BPMS migration, once nothing runs in the old BPMS any
+   * Adapter ids which this application USED to have, and deliberately does not configure any
+   * more. That is the last step of a BPMS migration, once nothing runs in the old BPMS any
    * more.
    * <p>
    * VanillaBP persists the adapter id of an entry of the phase-two outbox and of every
-   * delivery record, so an id which such an entry still waits for and which nobody
-   * serves is worth a startup message: it means the id was RENAMED, which loses
-   * workflows, or it was removed too early. Naming it here says that it is the second
-   * case and that the leftovers are known, and turns the message into a DEBUG line. The
-   * decision stays visible in the configuration instead of being drowned in a log
-   * filter, exactly like an adapter's <code>accept-unscoped-identifiers</code>.
+   * delivery record. An id for which such an entry still waits, and which nobody serves, is
+   * worth a startup message. It means that the id was RENAMED, which loses workflows, or that
+   * it was removed too early. Naming it here says that it is the second case, and that the
+   * leftovers are known. It turns the message into a DEBUG line. The decision stays visible in
+   * the configuration, instead of being drowned in a log filter, exactly like an adapter's
+   * <code>accept-unscoped-identifiers</code>.
    */
   private List<String> retiredAdapters = List.of();
 
   /**
-   * Derived view of {@code getAdapters()}: adapter ID mapped to the adapter's type.
-   * An adapter entry without an explicit type (<code>AdapterConfigProperties.getType()</code>)
-   * defaults to its ID being the type.
+   * A view derived from {@code getAdapters()}: adapter ID mapped to the adapter's type. An
+   * adapter entry without an explicit type (<code>AdapterConfigProperties.getType()</code>)
+   * has its ID as its type.
    *
-   * @return Map of all adapters available (key = adapter ID, value = adapter type)
+   * @return All available adapters (key = adapter ID, value = adapter type)
    */
   public Map<String, String> adapterTypes() {
 
@@ -256,33 +254,33 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The adapter ids one adapter TYPE serves, in stable (sorted) order - what a platform
-   * has to know to register one set of beans per configured adapter id, and what an
-   * extension bridging to a BPMS has to know to register one bridge per engine of that
-   * BPMS. Several ids of one type are the migration scenario.
+   * The adapter ids which one adapter TYPE serves, in a stable (sorted) order. A platform
+   * needs this to register one set of beans per configured adapter id. An extension which
+   * bridges to a BPMS needs it to register one bridge per engine of that BPMS. Several ids of
+   * one type are the migration case.
    * <p>
    * Three things decide it, and leaving one out loses adapters silently:
    * <ol>
-   * <li>every section of {@code getAdapters()} whose (defaulted) type is this one -
-   * {@link #adapterTypes()};</li>
-   * <li>every id in {@code prioritized-adapters} which IS this type and carries no
-   * section, or a section not contradicting it: convention over configuration says such
-   * an id needs no section of its own, and this method is asked on properties which were
-   * bound but not yet {@link #normalize(ClasspathFacts) normalized} as well;</li>
-   * <li>nothing configured at all: the single adapter dependency IS the configuration,
-   * and the id the core derives is the type.</li>
+   * <li>every section of {@code getAdapters()} whose type (or default type) is this one,
+   * see {@link #adapterTypes()};</li>
+   * <li>every id in {@code prioritized-adapters} which IS this type and has no section, or a
+   * section which does not contradict it. Convention over configuration says that such an id
+   * needs no section of its own. And this method is also asked on properties which were bound
+   * but not yet {@link #normalize(ClasspathFacts) normalized};</li>
+   * <li>nothing configured at all: the single adapter dependency IS the configuration, and
+   * the id which the core derives is the type.</li>
    * </ol>
-   * The second rule is the one which cannot be read off the bound sections: a section may
-   * consist entirely of keys this model does not know - an adapter's own
-   * {@code rest-address} or {@code webapps} - and then no entry binds for it at all. A
-   * derivation running only where NOTHING bound is therefore not enough, which is what a
-   * migration setup showed: the new BPMS configured, the old one merely named in the
-   * order, and the old adapter's beans gone as soon as any section carried one core key.
+   * The second rule is the one which cannot be read from the bound sections. A section may
+   * consist only of keys which this model does not know, for example an adapter's own
+   * {@code rest-address} or {@code webapps}. Then no entry binds for it at all. So a
+   * derivation which only runs where NOTHING bound is not enough. A migration setup showed
+   * that. The new BPMS was configured, the old one only named in the order. And the beans of
+   * the old adapter were gone as soon as any section had one core key.
    * <p>
-   * Why this lives here rather than per platform is decision 39 in the repository's
-   * DECISIONS.md.
+   * Decision 39 in the repository's DECISIONS.md says why this lives here and not per
+   * platform.
    *
-   * @param adapterType The adapter's type, e.g. <code>camunda7</code>
+   * @param adapterType The adapter's type, for example <code>camunda7</code>
    * @return The adapter ids of that type, sorted, possibly none
    */
   public List<String> adapterIdsOfType(
@@ -300,7 +298,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     getPrioritizedAdapters()
         .stream()
         .filter(adapterType::equals)
-        // an id which happens to be named like this type but says it is another one
+        // an id which happens to have the name of this type, but says it is another type,
         // belongs to that other adapter, whatever its name suggests
         .filter(adapterId -> {
           final var section = getAdapters().get(adapterId);
@@ -312,11 +310,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       return List.copyOf(ids);
     }
 
-    // Nothing is configured at all. The caller cannot see the OTHER adapter types on the
-    // classpath, and does not have to: it asks for its own type's ids, and the id the
-    // core would derive IS the type. Where the derivation does not apply - several
-    // adapter types and no order configured - the validation ends the boot anyway and
-    // whatever was registered for this id is never used.
+    // nothing is configured at all. The caller cannot see the OTHER adapter types on the
+    // classpath, and it does not have to. It asks for the ids of its own type, and the id
+    // which the core would derive IS the type. Where the derivation does not apply (several
+    // adapter types and no order configured), the check ends the boot anyway, and whatever
+    // was registered for this id is never used
     if (getAdapters().isEmpty() && getPrioritizedAdapters().isEmpty()) {
       return List.of(adapterType);
     }
@@ -325,32 +323,30 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The base location BPMN resources of a workflow module are read from when
-   * neither an adapter-specific nor the global <code>resources-location</code> is
-   * configured - derived from the classpath facts by
-   * {@link #normalize(ClasspathFacts)}. Key is the
-   * workflow module ID, value the location WITHOUT the adapter ID (which is
-   * appended per adapter, see
-   * {@link #getAdapterResourcesLocationsFor(String, String)}).
+   * The base location from which the BPMN resources of a workflow module are read, when
+   * neither an adapter-specific nor the global <code>resources-location</code> is configured.
+   * {@link #normalize(ClasspathFacts)} derives it from the classpath facts. The key is the
+   * workflow module ID. The value is the location WITHOUT the adapter ID, which is added per
+   * adapter (see {@link #getAdapterResourcesLocationsFor(String, String)}).
    * <p>
-   * Spring Boot binds a map through its getter, so this one is a configuration key
-   * whatever accessors it carries. It is therefore marked unsupported in
+   * Spring Boot binds a map through its getter. So this one is a configuration key, whatever
+   * accessors it has. That is why it is marked as unsupported in
    * <code>META-INF/additional-spring-configuration-metadata.json</code> of the Spring Boot
-   * module, which keeps a development environment from offering a key whose value the next
+   * module. That keeps a development environment from offering a key whose value the next
    * derivation throws away.
    */
   private Map<String, List<String>> conventionalResourcesLocations = Map.of();
 
   /**
-   * Applies convention-over-configuration defaults to the bound properties:
-   * if exactly one adapter is configured, the property
-   * <code>vanillabp.prioritized-adapters</code> may be omitted and defaults to that
-   * adapter. Invoked by {@link #validateProperties(List, List)}; has to be invoked
-   * explicitly if properties objects are used without running validation.
+   * Applies the defaults of convention over configuration to the bound properties. If
+   * exactly one adapter is configured, the property <code>vanillabp.prioritized-adapters</code>
+   * may be left out, and it defaults to that adapter. {@link #validateProperties(List, List)}
+   * calls this. It has to be called explicitly if properties objects are used without
+   * running the checks.
    * <p>
-   * The classpath-based derivations (adapter sections, workflow-module sections,
-   * resources locations) need facts about the application and are therefore
-   * applied by {@link #normalize(ClasspathFacts)} only.
+   * The derivations from the classpath (adapter sections, workflow-module sections, resources
+   * locations) need facts about the application. So only {@link #normalize(ClasspathFacts)}
+   * applies them.
    */
   public void normalize() {
 
@@ -361,27 +357,24 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Convention over configuration: derives everything the platform
-   * already knows from the classpath, so an application only configures what
-   * DEVIATES from the convention. Runs BEFORE the validation - a derived entry is
-   * validated exactly like a hand-written one.
+   * Convention over configuration: derives everything which the platform already knows from
+   * the classpath. So an application only configures what DIFFERS from the convention. It runs
+   * BEFORE the checks, and a derived entry is checked exactly like a hand-written one.
    * <ol>
-   * <li><b>Adapter sections:</b> nothing configured and exactly ONE adapter type in
-   * the classpath &rarr; that type becomes the one adapter (id = type). Several
-   * types are never guessed - the validation asks for
-   * <code>vanillabp.prioritized-adapters</code>. An id listed in
-   * <code>prioritized-adapters</code> without a section is derived if it IS an
-   * adapter type; a CUSTOM id can never be derived (it carries no information
-   * about its type - the developer has to write <code>type</code>).</li>
-   * <li><b>Workflow-module sections:</b> a module found in the classpath without a
-   * section gets an empty one - a module needs no configuration any more.</li>
-   * <li><b>Resources locations:</b> the location BPMN is read from follows the
-   * convention documented at
-   * {@link #getAdapterResourcesLocationsFor(String, String)}.</li>
+   * <li><b>Adapter sections:</b> if nothing is configured and exactly ONE adapter type is in
+   * the classpath, that type becomes the one adapter (id = type). Several types are never
+   * guessed. The check asks for <code>vanillabp.prioritized-adapters</code>. An id listed in
+   * <code>prioritized-adapters</code> without a section is derived, if it IS an adapter type.
+   * A CUSTOM id can never be derived, because it says nothing about its type. The developer
+   * has to write <code>type</code>.</li>
+   * <li><b>Workflow-module sections:</b> a module found in the classpath without a section
+   * gets an empty one. A module needs no configuration any more.</li>
+   * <li><b>Resources locations:</b> the location from which BPMN is read follows the
+   * convention described at {@link #getAdapterResourcesLocationsFor(String, String)}.</li>
    * </ol>
    *
-   * @param facts What the platform knows about the application without any
-   *          property (see {@link ClasspathFacts})
+   * @param facts What the platform knows about the application without any property (see
+   *          {@link ClasspathFacts})
    */
   public void normalize(
       final ClasspathFacts facts) {
@@ -396,8 +389,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Derives the adapter sections which carry no information beyond what the
-   * classpath already tells (see {@link #normalize(ClasspathFacts)}).
+   * Derives the adapter sections which say nothing beyond what the classpath already tells
+   * (see {@link #normalize(ClasspathFacts)}).
    */
   private void deriveAdapterSections(
       final ClasspathFacts facts) {
@@ -428,8 +421,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Derives an empty section for every workflow module found in the classpath
-   * which has none (see {@link #normalize(ClasspathFacts)}).
+   * Derives an empty section for every workflow module found in the classpath which has none
+   * (see {@link #normalize(ClasspathFacts)}).
    */
   private void deriveWorkflowModuleSections(
       final ClasspathFacts facts) {
@@ -450,9 +443,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Derives the conventional resources location of every workflow module found in
-   * the classpath (see {@link #getAdapterResourcesLocationsFor(String, String)} for
-   * the convention itself).
+   * Derives the conventional resources location of every workflow module found in the
+   * classpath (see {@link #getAdapterResourcesLocationsFor(String, String)} for the
+   * convention itself).
    */
   private void deriveConventionalResourcesLocations(
       final ClasspathFacts facts) {
@@ -467,11 +460,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
         module -> locations.put(
             module.id(),
             singleModuleOfMainArtifact
-                // the application IS the workflow module - but a module tested inside
-                // its own Maven module is the main artifact as well, and its files sit
-                // where the packaged application needs them: below the module ID. Both
-                // are searched, the module's own location first (the module's
-                // configuration files are found in both places for the same reason)
+                // the application IS the workflow module. But a module tested inside its own
+                // Maven module is the main artifact as well, and its files are where the
+                // packaged application needs them: below the module ID. Both are searched, the
+                // module's own location first. The module's configuration files are found in
+                // both places for the same reason
                 ? List.of(
                     "classpath*:%s/processes".formatted(module.id()),
                     "classpath*:processes")
@@ -482,9 +475,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * How long the records of processed task deliveries are kept:
-   * <code>vanillabp.delivery.retention</code> where it is set, and
-   * <code>vanillabp.outbox.retention</code> otherwise, which is where the number lived
-   * before the two were told apart.
+   * <code>vanillabp.delivery.retention</code> where it is set, and otherwise
+   * <code>vanillabp.outbox.retention</code>. The number lived there before the two were told
+   * apart.
    *
    * @return The period, never <code>null</code>
    */
@@ -495,12 +488,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * How long the row about a started workflow is kept, counted from the start: what
-   * <code>vanillabp.delivery.workflow-start-retention</code> says, and
-   * {@value DeliveryProperties#DEFAULT_WORKFLOW_START_RETENTION_ISO} where nobody says anything.
+   * How long the row about a started workflow is kept, counted from the start. That is what
+   * <code>vanillabp.delivery.workflow-start-retention</code> says, or
+   * {@value DeliveryProperties#DEFAULT_WORKFLOW_START_RETENTION_ISO} where nobody says
+   * anything.
    * <p>
-   * A period of its own and not the retention of a delivery: changes to a workflow aggregate keep
-   * arriving after its workflow ended, and each of them may want to name the workflow.
+   * It is a period of its own and not the retention of a delivery. Changes to a workflow
+   * aggregate keep arriving after its workflow ended, and each of them may want to name the
+   * workflow.
    *
    * @return The period a workflow-start row is kept
    */
@@ -511,10 +506,10 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Whether the row about a started workflow is kept past its period while the workflow aggregate
-   * it names still exists
-   * (<code>vanillabp.delivery.keep-workflow-start-while-aggregate-exists</code>, off unless the
-   * application asks for it).
+   * Whether the row about a started workflow is kept past its period while the workflow
+   * aggregate which it names still exists
+   * (<code>vanillabp.delivery.keep-workflow-start-while-aggregate-exists</code>, off unless
+   * the application asks for it).
    *
    * @return Whether the cleanup asks the aggregate before it deletes such a row
    */
@@ -533,15 +528,15 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Says which of the two retentions apply, where the application moved exactly one of
-   * them away from the default. Both halves used to be one property and mean different
-   * things now, so an installation which lowered the old number to keep its outbox table
-   * small has to learn that the correctness half followed along.
+   * Says which of the two retentions apply, where the application moved exactly one of them
+   * away from the default. Both used to be one property, and they mean different things now.
+   * An installation which lowered the old number to keep its outbox table small has to learn
+   * that the half which matters for correctness followed along.
    * <p>
-   * The trigger is "differs from the default" rather than "was written down", because a
-   * bound property cannot tell the two apart and because the interesting case is exactly
-   * the one where a number was moved. An application setting both, or setting one of them
-   * to the default it already had, learns nothing and is told nothing.
+   * The trigger is "differs from the default", not "was written down". A bound property cannot
+   * tell the two apart, and the interesting case is exactly the one where a number was moved.
+   * An application which sets both, or which sets one of them to the default it already had,
+   * learns nothing and is told nothing.
    */
   private void reportRetentionSplit() {
 
@@ -582,14 +577,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * Says what still keeps the database awake, for an application which moved
-   * <code>vanillabp.outbox.poll-interval</code> away from its default and therefore asked
-   * the outbox to sleep. Promising silence would be the easy message and the wrong one: a
-   * developer who switches this on watches their database next, and every poller they do
-   * not hear about from here they have to find themselves.
+   * <code>vanillabp.outbox.poll-interval</code> away from its default, and so asked the outbox
+   * to sleep. Promising silence would be the easy message, and the wrong one. A developer who
+   * switches this on watches the database next. Every poller which they do not hear about
+   * from here they have to find themselves.
    * <p>
-   * The trigger is "differs from the default" rather than "was written down", because a
-   * bound property cannot tell those apart and the case worth a message is the one where
-   * somebody moved the number.
+   * The trigger is "differs from the default", not "was written down". A bound property cannot
+   * tell those apart, and the case worth a message is the one where somebody moved the
+   * number.
    */
   private void reportWhatStaysAwake() {
 
@@ -625,14 +620,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The type of the Camunda 7 adapter. Named here because the engine behind that adapter
-   * brings timers of its own which VanillaBP neither starts nor stops, and a message about
-   * a quiet database which leaves them out is worse than no message.
+   * The type of the Camunda 7 adapter. It is named here, because the engine behind that
+   * adapter brings timers of its own, which VanillaBP neither starts nor stops. A message
+   * about a quiet database which leaves them out is worse than no message.
    */
   private static final String CAMUNDA_7_ADAPTER_TYPE = "camunda7";
 
   /**
-   * The pollers which are there whatever BPMS an application runs against.
+   * The pollers which are there, whatever BPMS an application runs against.
    */
   private static final String WHAT_STAYS_AWAKE_ALWAYS = """
 
@@ -645,8 +640,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       and its documentation is where the remaining traffic is explained""";
 
   /**
-   * What an application with a Camunda 7 adapter is told on top, with the numbers the
-   * engine defaults to.
+   * What an application with a Camunda 7 adapter is told in addition, with the numbers which
+   * the engine uses by default.
    */
   private static final String WHAT_STAYS_AWAKE_ON_CAMUNDA_7 = """
 
@@ -655,8 +650,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       documentation says what to set to stop them""";
 
   /**
-   * What an installation which moved the outbox retention and nothing else is told - the
-   * upgrade case, since this number used to govern both windows.
+   * What an installation is told which moved the outbox retention and nothing else. That is
+   * the upgrade case, because this number used to govern both windows.
    */
   private static final String RETENTION_FOLLOWS_THE_OUTBOX = """
       '%s' is set to %s while '%s' is not, so the records of \
@@ -667,7 +662,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       one has to outlive the first.""";
 
   /**
-   * What an installation which set only the new property is told, so nobody assumes the
+   * What an installation is told which set only the new property, so that nobody assumes the
    * outbox followed the other way round.
    */
   private static final String RETENTION_STANDS_ON_ITS_OWN = """
@@ -675,15 +670,15 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       that long, while dispatched outbox entries keep '%s' (%s).""";
 
   /**
-   * Links child properties back to their parents (e.g. the workflow module ID into
-   * the module's properties object). Invoked by {@link #validateProperties(List, List)};
-   * has to be invoked explicitly if properties objects are built without running
-   * validation (e.g. in tests).
+   * Links child properties back to their parents (for example the workflow module ID into
+   * the properties object of the module). {@link #validateProperties(List, List)} calls it.
+   * It has to be called explicitly if properties objects are built without running the checks
+   * (for example in tests).
    * <p>
-   * A binder keys a section by its map key and writes nothing else into it, so a module
-   * section does not know its own id and a workflow section knows neither its BPMN process
-   * id nor the module it belongs to. Everything which builds a message about a workflow
-   * needs both, which is why this runs before the first validation rule.
+   * A binder keys a section by its map key, and writes nothing else into it. So a module
+   * section does not know its own id. And a workflow section knows neither its BPMN process id
+   * nor its module. Everything which builds a message about a workflow needs both. That is why
+   * this runs before the first check.
    */
   public void validateAndLink() {
 
@@ -704,11 +699,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * A workflow module id must not contain the separator VanillaBP uses to scope
-   * identifiers ({@link io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport#SEPARATOR})
-   * - a prefixed identifier could no longer be read back reliably. Only checked
-   * when prefixing is configured ANYWHERE, so existing applications which do not
-   * use it are not affected.
+   * A workflow module id must not contain the separator which VanillaBP uses to scope
+   * identifiers ({@link io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport#SEPARATOR}).
+   * Otherwise a prefixed identifier could no longer be read back reliably. It is only checked
+   * when prefixing is configured ANYWHERE. So existing applications which do not use it are
+   * not affected.
    *
    * @throws IllegalStateException Naming the offending module ids and the separator
    */
@@ -773,12 +768,13 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The adapters serving a whole workflow module, for everything which is about the module
-   * rather than about one of its processes - a deployment, for instance.
+   * The adapters which serve a whole workflow module, for everything which is about the
+   * module and not about one of its processes, for example a deployment.
    *
    * @param workflowModuleId The workflow module, or <code>null</code> to ask what the
    *          application says in general
-   * @return The adapter ids in the order they are asked in, empty where no level names one
+   * @return The adapter ids in the order in which they are asked, empty where no level names
+   *         one
    */
   public List<String> getPrioritizedAdaptersFor(
       final String workflowModuleId) {
@@ -790,22 +786,22 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The adapters serving one BPMN process, in the order they are asked in: the first one
-   * which says it holds the workflow runs the operation, and a workflow which is new
-   * starts in the first one of the list.
+   * The adapters which serve one BPMN process, in the order in which they are asked. The first
+   * one which says it holds the workflow runs the operation. A new workflow starts in the
+   * first one of the list.
    * <p>
-   * Three levels may name adapters - the workflow, its module and the application - and
-   * the most specific level which names ANY wins as a whole. A list is not merged with the
-   * one above it: an empty list is how a level says nothing, so a workflow which names one
-   * adapter has exactly that one, whatever its module says.
+   * Three levels may name adapters: the workflow, its module, and the application. The most
+   * specific level which names ANY wins as a whole. A list is not merged with the one above
+   * it. An empty list is how a level says nothing. So a workflow which names one adapter has
+   * exactly that one, whatever its module says.
    *
    * @param workflowModuleId The workflow module, or <code>null</code> to ask what the
    *          application says in general
    * @param bpmnProcessId The plain BPMN process id, or <code>null</code> to stop at the
    *          workflow module
-   * @return The adapter ids in the order they are asked in, empty where no level names
-   *         one - which the validation of the configuration turns into a message naming
-   *         the keys to write, see {@link #validateProperties(ClasspathFacts, String)}
+   * @return The adapter ids in the order in which they are asked, empty where no level names
+   *         one. The check of the configuration turns that into a message which names the keys
+   *         to write, see {@link #validateProperties(ClasspathFacts, String)}
    */
   public List<String> getPrioritizedAdaptersFor(
       final String workflowModuleId,
@@ -837,8 +833,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Resolves an adapter-scoped property with most-specific-wins semantics across the
-   * four levels an adapter-scoped property may be configured at:
+   * Resolves an adapter-scoped property, where the most specific of the four possible levels
+   * wins:
    *
    * <pre>
    * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.tasks.&lt;task&gt;.adapters.&lt;id&gt;.&lt;key&gt;  (most specific)
@@ -847,24 +843,23 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * vanillabp.adapters.&lt;id&gt;.&lt;key&gt;                                                              (least specific)
    * </pre>
    *
-   * The levels are walked from most to least specific and the first non-null value
-   * the extractor returns wins (same precedent as
+   * The levels are walked from the most to the least specific. The first value which the
+   * extractor returns that is not null wins (the same rule as in
    * {@link #getPrioritizedAdaptersFor(String, String)}). Levels whose scope ID is
-   * <code>null</code> or not configured are skipped, so the resolver may be used
-   * for adapter-, module-, workflow- and task-scoped lookups alike.
+   * <code>null</code> or not configured are skipped. So the resolver can be used for lookups
+   * on adapter, module, workflow and task level alike.
    * <p>
-   * A scope which is "present but empty" is treated exactly like a missing scope
-   * (the extractor returns <code>null</code> for both) - scope materialization
-   * differs per binder and must not influence the resolution.
+   * A scope which is "present but empty" counts exactly like a missing scope (the extractor
+   * returns <code>null</code> for both). Each binder creates scopes differently, and that
+   * must not change the resolution.
    *
    * @param <T> The type of the resolved value
    * @param workflowModuleId The workflow module ID or <code>null</code>
    * @param bpmnProcessId The BPMN process ID or <code>null</code>
    * @param taskId The task ID (task definition) or <code>null</code>
    * @param adapterId The adapter ID
-   * @param valueExtractor Extracts the value from a level's adapter-scoped
-   *          properties; has to return <code>null</code> if the value is not set at
-   *          that level
+   * @param valueExtractor Takes the value from the adapter-scoped properties of a level. It
+   *          has to return <code>null</code> if the value is not set at that level
    * @return The most specific value configured or <code>null</code>
    */
   public <T> T resolveForAdapter(
@@ -907,9 +902,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The settings of an extension as they apply to a workflow module - what
+   * The settings of an extension as they apply to a workflow module. That is what
    * {@link #extensionProperties(String, String, String, String, String)} answers for the
-   * module alone, without a workflow, without a task and without an adapter.
+   * module alone, without a workflow, a task or an adapter.
    *
    * @param workflowModuleId The workflow module, or <code>null</code> for the global
    *          settings alone
@@ -925,8 +920,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The settings of an extension as they apply to one task of one workflow of one
-   * workflow module, read without naming an adapter.
+   * The settings of an extension as they apply to one task of one workflow of one workflow
+   * module, read without naming an adapter.
    *
    * @param workflowModuleId The workflow module, or <code>null</code>
    * @param bpmnProcessId The BPMN process, or <code>null</code>
@@ -945,12 +940,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The settings of an extension as they apply to one task of one workflow of one
-   * workflow module on one adapter: the eight positions
-   * {@link SettingsResolution} walks, merged KEY BY KEY. So a workflow may change one
-   * value without repeating the rest, which is the same rule and the same levels an
-   * adapter setting follows (see decision 7 in the repository's DECISIONS.md and
-   * {@link #resolveForAdapter}).
+   * The settings of an extension as they apply to one task of one workflow of one workflow
+   * module on one adapter: the eight positions which {@link SettingsResolution} walks,
+   * merged KEY BY KEY. So a workflow may change one value without repeating the rest. That is
+   * the same rule and the same levels as for an adapter setting (see decision 7 in the
+   * repository's DECISIONS.md and {@link #resolveForAdapter}).
    *
    * <pre>
    * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.tasks.&lt;task&gt;.adapters.&lt;adapter&gt;.extensions.&lt;extension&gt;.&lt;key&gt;  (most specific)
@@ -963,10 +957,10 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * vanillabp.extensions.&lt;extension&gt;.&lt;key&gt;                                                                                 (least specific)
    * </pre>
    *
-   * A level whose id is <code>null</code> or which is not configured is skipped, so the
-   * same method answers the global, the module, the workflow and the task question, with
-   * an adapter and without one. What the keys below an extension MEAN is the extension's
-   * own business; the core owns the location and this resolution.
+   * A level whose id is <code>null</code>, or which is not configured, is skipped. So the same
+   * method answers the global, the module, the workflow and the task question, with an adapter
+   * and without one. What the keys below an extension MEAN is the extension's own business.
+   * The core owns the location and this resolution.
    *
    * @param workflowModuleId The workflow module, or <code>null</code> for the global
    *          settings alone
@@ -996,12 +990,13 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * One value of an extension's settings, resolved the way
+   * One value of an extension's settings, resolved the same way as
    * {@link #extensionProperties(String, String)} resolves all of them.
    *
    * @param workflowModuleId The workflow module, or <code>null</code>
    * @param extension The extension's id
-   * @param key The key below the extension's section, e.g. <code>rest.base-url</code>
+   * @param key The key below the extension's section, for example
+   *          <code>rest.base-url</code>
    * @return The value, or <code>null</code> where nothing is configured there
    */
   public String extensionProperty(
@@ -1014,15 +1009,16 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * One value of an extension's settings, resolved over the positions which carry no
-   * adapter - the counterpart of {@link #resolveForAdapter} for an extension which asks
-   * about no adapter in particular.
+   * One value of an extension's settings, resolved over the positions without an adapter.
+   * This is the counterpart of {@link #resolveForAdapter}, for an extension which asks about
+   * no adapter in particular.
    *
    * @param workflowModuleId The workflow module, or <code>null</code>
    * @param bpmnProcessId The BPMN process, or <code>null</code>
    * @param taskId The task ID (task definition), or <code>null</code>
    * @param extension The extension's id
-   * @param key The key below the extension's section, e.g. <code>rest.base-url</code>
+   * @param key The key below the extension's section, for example
+   *          <code>rest.base-url</code>
    * @return The most specific value configured, or <code>null</code>
    */
   public String resolveForExtension(
@@ -1037,21 +1033,21 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * One value of an extension's settings, resolved over the eight positions
-   * {@link #extensionProperties(String, String, String, String, String)} describes - the
-   * counterpart of {@link #resolveForAdapter} for an extension.
+   * One value of an extension's settings, resolved over the eight positions which
+   * {@link #extensionProperties(String, String, String, String, String)} describes. This is
+   * the counterpart of {@link #resolveForAdapter} for an extension.
    * <p>
-   * The extension id is a parameter rather than something bound to a view of these
-   * properties, because this object is one bean of the platform while an extension is not
-   * a bean of the platform at all: it asks with its own id, the way an adapter asks with
-   * its adapter id.
+   * The extension id is a parameter, and not bound to a view of these properties. This object
+   * is one bean of the platform, but an extension is not a bean of the platform at all. It
+   * asks with its own id, the same way as an adapter asks with its adapter id.
    *
    * @param workflowModuleId The workflow module, or <code>null</code>
    * @param bpmnProcessId The BPMN process, or <code>null</code>
    * @param taskId The task ID (task definition), or <code>null</code>
    * @param adapterId The adapter, or <code>null</code> to read the general sections alone
    * @param extension The extension's id
-   * @param key The key below the extension's section, e.g. <code>rest.base-url</code>
+   * @param key The key below the extension's section, for example
+   *          <code>rest.base-url</code>
    * @return The most specific value configured, or <code>null</code>
    */
   public String resolveForExtension(
@@ -1075,10 +1071,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * The configuration tree of an extension as VanillaBP binds it: the
-   * <code>extensions</code> maps of the four levels, and the ones below the adapter
-   * sections of those levels. An extension with a section of its own hands in its own
-   * tree instead - the walk is the same either way (see decision 53 in the repository's
-   * DECISIONS.md).
+   * <code>extensions</code> maps of the four levels, and the ones below the adapter sections
+   * of those levels. An extension with a section of its own hands in its own tree instead.
+   * The walk is the same either way (see decision 53 in the repository's DECISIONS.md).
    *
    * @param extension The extension's id
    * @return The most general level of that extension's settings
@@ -1134,8 +1129,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * One level of the extension settings the core itself binds: the section of the level,
-   * the section of one of its adapters, and the way to the level below.
+   * One level of the extension settings which the core itself binds: the section of the
+   * level, the section of one of its adapters, and the way to the level below.
    *
    * @param extension The extension asked about
    * @param extensionsOfLevel What this level says about all extensions
@@ -1189,15 +1184,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Whether the given adapter is the FIRST entry of the prioritized-adapters list at
-   * ANY level (globally, of any workflow module or of any workflow) - i.e. whether
-   * new workflows may be started via this adapter anywhere. Used to decide how
-   * strictly an adapter's own startup validation may treat configuration defects:
-   * an adapter that is nowhere first may honor its
-   * <code>deployment-failure: warn</code> policy and keep the application booting
-   * (migration scenario: the OLD BPMS is intentionally degraded), whereas an
-   * adapter that is first anywhere always fails the boot on a genuine defect -
-   * new workflows could not be started otherwise.
+   * Whether the given adapter is the FIRST entry of the prioritized-adapters list at ANY
+   * level (globally, of any workflow module, or of any workflow). In other words, whether new
+   * workflows may be started through this adapter anywhere. This decides how strictly an
+   * adapter's own startup check may treat configuration defects. An adapter which is nowhere
+   * first may honor its <code>deployment-failure: warn</code> policy and keep the application
+   * booting (migration case: the OLD BPMS is degraded on purpose). An adapter which is first
+   * anywhere always fails the boot on a real defect. Otherwise new workflows could not be
+   * started.
    *
    * @param adapterId The adapter ID
    * @return Whether the adapter is first priority at any level
@@ -1228,13 +1222,12 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Whether the given adapter is the FIRST entry of the prioritized-adapters list
-   * effective for the given workflow module or for ANY workflow of that module -
-   * i.e. whether new workflows of this module may be started via this adapter.
-   * Used by the deployment-failure policy: a deployment failure of an adapter
-   * being first priority for at least one workflow always fails the boot, even if
-   * the adapter is not the module's first-priority adapter (starting that workflow
-   * would fail at runtime otherwise).
+   * Whether the given adapter is the FIRST entry of the prioritized-adapters list which
+   * applies to the given workflow module, or to ANY workflow of that module. In other words,
+   * whether new workflows of this module may be started through this adapter. The policy for
+   * deployment failures uses this. A failed deployment of an adapter which is first priority
+   * for at least one workflow always fails the boot, even if the adapter is not the module's
+   * first-priority adapter. Otherwise starting that workflow would fail at runtime.
    *
    * @param workflowModuleId The workflow module ID
    * @param adapterId The adapter ID
@@ -1263,14 +1256,13 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The adapters which have to receive the given workflow module's deployment: the
-   * union of the module's effective prioritized-adapters list and every adapter
-   * named in a workflow-level <code>prioritized-adapters</code> override of that
-   * module. BPMS election is process-granular while deployment is file-granular -
-   * an adapter prioritized for a single workflow only still needs the module's
-   * resources deployed, otherwise starting that workflow fails at runtime. Order:
-   * the module-level list first, followed by adapters named at the workflow level
-   * only.
+   * The adapters which have to receive the deployment of the given workflow module. That is
+   * the union of the module's effective prioritized-adapters list and every adapter named in
+   * a workflow-level <code>prioritized-adapters</code> override of that module. The BPMS
+   * election works per process, but the deployment works per file. So an adapter which is
+   * prioritized for one single workflow still needs the module's resources deployed.
+   * Otherwise starting that workflow fails at runtime. The order is: the list of the module
+   * first, then the adapters which are only named at the workflow level.
    *
    * @param workflowModuleId The workflow module ID
    * @return The adapter IDs to deploy the module's resources to
@@ -1295,8 +1287,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The configured adapter ids for a message which lists them, sorted: the sections come
-   * from a binder and keep no order, so the same configuration would otherwise name them
+   * The configured adapter ids, sorted, for a message which lists them. The sections come from
+   * a binder and keep no order. So the same configuration would otherwise name them
    * differently from one boot to the next.
    *
    * @param separator What goes between two ids
@@ -1326,8 +1318,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Provides the policy how to treat a failing deployment of BPMS resources for the
-   * given adapter.
+   * The policy for how to treat a failed deployment of BPMS resources for the given
+   * adapter.
    *
    * @param adapterId The adapter ID
    * @return The policy, defaulting to {@link DeploymentFailurePolicy#FAIL}
@@ -1343,12 +1335,13 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Whether the given workflow module accepts writes to a workflow-aggregate store
-   * which VanillaBP's transaction demonstrably does not cover
-   * (<code>vanillabp.transactions.unguarded-aggregate-writes</code>, overridable as
+   * Whether the given workflow module accepts writes to a store of workflow aggregates which
+   * the transaction of VanillaBP does not cover
+   * (<code>vanillabp.transactions.unguarded-aggregate-writes</code>, which can be overridden
+   * as
    * <code>vanillabp.workflow-modules.&lt;id&gt;.transactions.unguarded-aggregate-writes</code>).
-   * The module's setting wins where it is defined, the global one applies otherwise,
-   * and the default is to reject.
+   * The module's setting wins where it is defined. Otherwise the global one applies, and the
+   * default is to reject.
    *
    * @param workflowModuleId The workflow module ID
    * @return Whether unguarded aggregate writes are accepted for this module
@@ -1372,9 +1365,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The property naming the decision of
-   * {@link #acceptsUnguardedAggregateWrites(String)}, for the guiding messages which
-   * have to tell how to accept what they refuse.
+   * The property which names the decision of {@link #acceptsUnguardedAggregateWrites(String)},
+   * for the guiding messages which have to tell how to accept what they refuse.
    *
    * @param workflowModuleId The workflow module ID
    * @return The property key of the module-scoped override
@@ -1391,10 +1383,10 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * Whether that workflow may hand its entire workflow aggregate to the BPMS
    * (<code>vanillabp.workflow-modules.&lt;id&gt;.workflows.&lt;bpmn-process-id&gt;.allow-full-sync-with-bpms</code>).
    * <p>
-   * Read at the workflow and nowhere else. Every other property of a workflow falls back
-   * to the levels above it, this one does not: a permission inherited from a workflow
-   * module would cover the workflow somebody adds next week, and that is the workflow
-   * nobody looked at. See decision 66 in the repository's DECISIONS.md.
+   * It is read at the workflow and nowhere else. Every other property of a workflow falls back
+   * to the levels above it, but this one does not. A permission inherited from a workflow
+   * module would cover the workflow which somebody adds next week, and nobody looked at that
+   * workflow. See decision 66 in the repository's DECISIONS.md.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
