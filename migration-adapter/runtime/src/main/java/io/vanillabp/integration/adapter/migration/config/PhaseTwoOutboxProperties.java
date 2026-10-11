@@ -672,10 +672,9 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The builder of {@link JdbcOutboxProperties}. Its two type parameters carry the
-     * class being built and the builder itself, so a call inherited from a base class
-     * comes back as the builder of the subclass and the next call in the chain sees
-     * every key again.
+     * The builder of {@link JdbcOutboxProperties}. Its two type parameters are the class
+     * being built and the builder itself. So a call inherited from a base class comes back as
+     * the builder of the subclass, and the next call in the chain sees every key again.
      *
      * @param <C> The class this builder builds
      * @param <B> The builder itself, which every method of the chain returns
@@ -683,41 +682,41 @@ public class PhaseTwoOutboxProperties {
     public abstract static class JdbcOutboxPropertiesBuilder<C extends JdbcOutboxProperties, B extends JdbcOutboxProperties.JdbcOutboxPropertiesBuilder<C, B>> {
 
       /**
-       * Whether the JDBC-based default outbox is created when a data source is
-       * available. The builder starts from the same value the field does.
+       * Whether the JDBC-based default outbox is created when a data source is available. The
+       * builder starts from the same value as the field.
        */
       private boolean enabled = true;
 
       /**
-       * The name of the table storing outbox entries. The builder starts from the same
-       * value the field does.
+       * The name of the table storing outbox entries. The builder starts from the same value
+       * as the field.
        */
       private String table = null;
 
       /**
-       * The name of the table storing the payloads of phase-two calls which carry one
-       * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). The builder
-       * starts from the same value the field does.
+       * The name of the table storing the payloads of phase-two calls which carry one (see
+       * {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). The builder starts from
+       * the same value as the field.
        */
       private String payloadTable = null;
 
       /**
        * The name of the table storing the records of processed task deliveries (see
-       * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The builder starts from
-       * the same value the field does.
+       * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The builder starts from the
+       * same value as the field.
        */
       private String deliveryTable = null;
 
       /**
        * The name of the table the nightly housekeeping takes its lease in - one row per
-       * store, holding who is house-keeping it and until when, so only one node of a
-       * cluster measures its own work (see decision 91 in the repository's
-       * DECISIONS.md). The builder starts from the same value the field does.
+       * store, holding who is house-keeping it and until when, so only one node of a cluster
+       * measures its own work (see decision 91 in the repository's DECISIONS.md). The builder
+       * starts from the same value as the field.
        */
       private String housekeepingTable = null;
 
       /**
-       * The builder of a subclass calls this while it is built. Nobody else needs one:
+       * The builder of a subclass calls this while it is built. Nobody else needs one.
        * {@link JdbcOutboxProperties#builder()} hands out the builder of this class.
        */
       public JdbcOutboxPropertiesBuilder() {
@@ -800,9 +799,8 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * The builder itself, typed as the builder of the subclass. Every method of the
-       * chain returns it, which is what keeps a chain started on a subclass builder at
-       * that subclass.
+       * The builder itself, typed as the builder of the subclass. Every method of the chain
+       * returns it. That keeps a chain which started on a subclass builder at that subclass.
        *
        * @return This builder
        */
@@ -845,8 +843,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The builder {@link #builder()} hands out: the one which builds
-     * {@link JdbcOutboxProperties} itself rather than a subclass of it.
+     * The builder which {@link #builder()} hands out: the one which builds
+     * {@link JdbcOutboxProperties} itself, and not a subclass of it.
      */
     private static final class JdbcOutboxPropertiesBuilderImpl extends JdbcOutboxProperties.JdbcOutboxPropertiesBuilder<JdbcOutboxProperties, JdbcOutboxProperties.JdbcOutboxPropertiesBuilderImpl> {
 
@@ -883,8 +881,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * What every builder of this class and of its subclasses builds through. It is the
-     * one place the values of this class move from the builder into the object, so a
+     * Every builder of this class and of its subclasses builds through this. It is the one
+     * place where the values of this class move from the builder into the object. So a
      * subclass builder fills the keys of its base class as well.
      *
      * @param b The builder holding what was written
@@ -901,8 +899,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * A builder of {@link JdbcOutboxProperties}, empty except for the values which have
-     * a default.
+     * A builder of {@link JdbcOutboxProperties}. It is empty, except for the values which
+     * have a default.
      *
      * @return The builder
      */
@@ -1202,10 +1200,9 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The builder of {@link MongoOutboxProperties}. Its two type parameters carry the
-     * class being built and the builder itself, so a call inherited from a base class
-     * comes back as the builder of the subclass and the next call in the chain sees
-     * every key again.
+     * The builder of {@link MongoOutboxProperties}. Its two type parameters are the class
+     * being built and the builder itself. So a call inherited from a base class comes back as
+     * the builder of the subclass, and the next call in the chain sees every key again.
      *
      * @param <C> The class this builder builds
      * @param <B> The builder itself, which every method of the chain returns
@@ -1214,40 +1211,40 @@ public class PhaseTwoOutboxProperties {
 
       /**
        * Whether the MongoDB-based default outbox is created when a MongoDB connection is
-       * available. The builder starts from the same value the field does.
+       * available. The builder starts from the same value as the field.
        */
       private boolean enabled = true;
 
       /**
-       * The name of the collection storing outbox entries. The builder starts from the
-       * same value the field does.
+       * The name of the collection storing outbox entries. The builder starts from the same
+       * value as the field.
        */
       private String collection = DEFAULT_COLLECTION;
 
       /**
-       * The name of the collection storing the payloads of phase-two calls which carry
-       * one (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). The builder
-       * starts from the same value the field does.
+       * The name of the collection storing the payloads of phase-two calls which carry one
+       * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). The builder starts
+       * from the same value as the field.
        */
       private String payloadCollection = null;
 
       /**
        * The name of the collection storing the records of processed task deliveries (see
-       * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The builder starts from
-       * the same value the field does.
+       * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The builder starts from the
+       * same value as the field.
        */
       private String deliveryCollection = DEFAULT_DELIVERY_COLLECTION;
 
       /**
-       * The name of the collection the nightly housekeeping takes its lease in - one
-       * document per store, holding who is house-keeping it and until when, so only one
-       * node of a cluster measures its own work (see decision 91 in the repository's
-       * DECISIONS.md). The builder starts from the same value the field does.
+       * The name of the collection the nightly housekeeping takes its lease in - one document
+       * per store, holding who is house-keeping it and until when, so only one node of a
+       * cluster measures its own work (see decision 91 in the repository's DECISIONS.md). The
+       * builder starts from the same value as the field.
        */
       private String housekeepingCollection = DEFAULT_HOUSEKEEPING_COLLECTION;
 
       /**
-       * The builder of a subclass calls this while it is built. Nobody else needs one:
+       * The builder of a subclass calls this while it is built. Nobody else needs one.
        * {@link MongoOutboxProperties#builder()} hands out the builder of this class.
        */
       public MongoOutboxPropertiesBuilder() {
@@ -1330,9 +1327,8 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * The builder itself, typed as the builder of the subclass. Every method of the
-       * chain returns it, which is what keeps a chain started on a subclass builder at
-       * that subclass.
+       * The builder itself, typed as the builder of the subclass. Every method of the chain
+       * returns it. That keeps a chain which started on a subclass builder at that subclass.
        *
        * @return This builder
        */
@@ -1375,8 +1371,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The builder {@link #builder()} hands out: the one which builds
-     * {@link MongoOutboxProperties} itself rather than a subclass of it.
+     * The builder which {@link #builder()} hands out: the one which builds
+     * {@link MongoOutboxProperties} itself, and not a subclass of it.
      */
     private static final class MongoOutboxPropertiesBuilderImpl extends MongoOutboxProperties.MongoOutboxPropertiesBuilder<MongoOutboxProperties, MongoOutboxProperties.MongoOutboxPropertiesBuilderImpl> {
 
@@ -1413,8 +1409,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * What every builder of this class and of its subclasses builds through. It is the
-     * one place the values of this class move from the builder into the object, so a
+     * Every builder of this class and of its subclasses builds through this. It is the one
+     * place where the values of this class move from the builder into the object. So a
      * subclass builder fills the keys of its base class as well.
      *
      * @param b The builder holding what was written
@@ -1431,8 +1427,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * A builder of {@link MongoOutboxProperties}, empty except for the values which have
-     * a default.
+     * A builder of {@link MongoOutboxProperties}. It is empty, except for the values which
+     * have a default.
      *
      * @return The builder
      */
@@ -1806,10 +1802,9 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The builder of {@link HousekeepingProperties}. Its two type parameters carry the
-     * class being built and the builder itself, so a call inherited from a base class
-     * comes back as the builder of the subclass and the next call in the chain sees
-     * every key again.
+     * The builder of {@link HousekeepingProperties}. Its two type parameters are the class
+     * being built and the builder itself. So a call inherited from a base class comes back as
+     * the builder of the subclass, and the next call in the chain sees every key again.
      *
      * @param <C> The class this builder builds
      * @param <B> The builder itself, which every method of the chain returns
@@ -1817,24 +1812,24 @@ public class PhaseTwoOutboxProperties {
     public abstract static class HousekeepingPropertiesBuilder<C extends HousekeepingProperties, B extends HousekeepingProperties.HousekeepingPropertiesBuilder<C, B>> {
 
       /**
-       * When the window opens, in the zone below. The builder starts from the same value
-       * the field does.
+       * When the window opens, in the zone below. The builder starts from the same value as
+       * the field.
        */
       private LocalTime start = DEFAULT_START;
 
       /**
-       * When the window closes. The builder starts from the same value the field does.
+       * When the window closes. The builder starts from the same value as the field.
        */
       private LocalTime end = DEFAULT_END;
 
       /**
-       * The zone the two times above are read in. The builder starts from the same value
-       * the field does.
+       * The zone the two times above are read in. The builder starts from the same value as
+       * the field.
        */
       private String zone = null;
 
       /**
-       * The builder of a subclass calls this while it is built. Nobody else needs one:
+       * The builder of a subclass calls this while it is built. Nobody else needs one.
        * {@link HousekeepingProperties#builder()} hands out the builder of this class.
        */
       public HousekeepingPropertiesBuilder() {
@@ -1883,9 +1878,8 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * The builder itself, typed as the builder of the subclass. Every method of the
-       * chain returns it, which is what keeps a chain started on a subclass builder at
-       * that subclass.
+       * The builder itself, typed as the builder of the subclass. Every method of the chain
+       * returns it. That keeps a chain which started on a subclass builder at that subclass.
        *
        * @return This builder
        */
@@ -1922,8 +1916,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The builder {@link #builder()} hands out: the one which builds
-     * {@link HousekeepingProperties} itself rather than a subclass of it.
+     * The builder which {@link #builder()} hands out: the one which builds
+     * {@link HousekeepingProperties} itself, and not a subclass of it.
      */
     private static final class HousekeepingPropertiesBuilderImpl extends HousekeepingProperties.HousekeepingPropertiesBuilder<HousekeepingProperties, HousekeepingProperties.HousekeepingPropertiesBuilderImpl> {
 
@@ -1960,8 +1954,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * What every builder of this class and of its subclasses builds through. It is the
-     * one place the values of this class move from the builder into the object, so a
+     * Every builder of this class and of its subclasses builds through this. It is the one
+     * place where the values of this class move from the builder into the object. So a
      * subclass builder fills the keys of its base class as well.
      *
      * @param b The builder holding what was written
@@ -1976,7 +1970,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * A builder of {@link HousekeepingProperties}, empty except for the values which
+     * A builder of {@link HousekeepingProperties}. It is empty, except for the values which
      * have a default.
      *
      * @return The builder
@@ -2059,10 +2053,9 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * The builder of {@link PhaseTwoOutboxProperties}. Its two type parameters carry the
-   * class being built and the builder itself, so a call inherited from a base class
-   * comes back as the builder of the subclass and the next call in the chain sees every
-   * key again.
+   * The builder of {@link PhaseTwoOutboxProperties}. Its two type parameters are the class
+   * being built and the builder itself. So a call inherited from a base class comes back as
+   * the builder of the subclass, and the next call in the chain sees every key again.
    *
    * @param <C> The class this builder builds
    * @param <B> The builder itself, which every method of the chain returns
@@ -2071,25 +2064,25 @@ public class PhaseTwoOutboxProperties {
 
     /**
      * The longest a store's background poller sleeps while it owes nothing. The builder
-     * starts from the same value the field does.
+     * starts from the same value as the field.
      */
     private Duration pollInterval = DEFAULT_POLL_INTERVAL;
 
     /**
-     * The distance to the FIRST retry after a failed dispatch. The builder starts from
-     * the same value the field does.
+     * The distance to the FIRST retry after a failed dispatch. The builder starts from the
+     * same value as the field.
      */
     private Duration attemptFrequency = Duration.ofSeconds(30);
 
     /**
      * The longest distance the growing backoff reaches. The builder starts from the same
-     * value the field does.
+     * value as the field.
      */
     private Duration maxAttemptFrequency = Duration.ofMinutes(5);
 
     /**
      * After how many failed attempts an entry is blocked (not retried any longer). The
-     * builder starts from the same value the field does.
+     * builder starts from the same value as the field.
      */
     private int blockAfterAttempts = 50;
 
@@ -2100,50 +2093,49 @@ public class PhaseTwoOutboxProperties {
     private Duration waitForVisibilityAtMost = null;
 
     /**
-     * How many entries an outbox of VanillaBP's own dispatches at the same time - the
-     * JDBC one and the MongoDB one of each platform. The builder starts from the same
-     * value the field does.
+     * How many entries an outbox of VanillaBP's own dispatches at the same time - the JDBC
+     * one and the MongoDB one of each platform. The builder starts from the same value as the
+     * field.
      */
     private int dispatchThreads = 4;
 
     /**
      * Whether the schema (table/collection) used to store outbox entries is created
-     * automatically. The builder starts from the same value the field does.
+     * automatically. The builder starts from the same value as the field.
      */
     private boolean createSchema = true;
 
     /**
-     * How long successfully dispatched entries (marked as DONE) are retained before they
-     * are deleted asynchronously - what a retained entry buys is a dispatched operation
-     * somebody can still look at during support, not a longer deduplication window: that
-     * one ends with the dispatch (see
-     * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}). The builder starts from the
-     * same value the field does.
+     * How long successfully dispatched entries (marked as DONE) are retained before they are
+     * deleted asynchronously - what a retained entry buys is a dispatched operation somebody
+     * can still look at during support, not a longer deduplication window: that one ends with
+     * the dispatch (see {@link io.vanillabp.integration.spi.PhaseTwoOutbox}). The builder
+     * starts from the same value as the field.
      */
     private Duration retention = DEFAULT_RETENTION;
 
     /**
-     * Configuration of the JDBC default outbox, which both platforms run: Spring Boot on
-     * the connection of its transaction manager, Quarkus on an Agroal connection of the
-     * running JTA transaction. The builder starts from the same value the field does.
+     * Configuration of the JDBC default outbox, which both platforms run: Spring Boot on the
+     * connection of its transaction manager, Quarkus on an Agroal connection of the running
+     * JTA transaction. The builder starts from the same value as the field.
      */
     private JdbcOutboxProperties jdbc = new JdbcOutboxProperties();
 
     /**
-     * Configuration of the MongoDB-based default outbox. The builder starts from the
-     * same value the field does.
+     * Configuration of the MongoDB-based default outbox. The builder starts from the same
+     * value as the field.
      */
     private MongoOutboxProperties mongo = new MongoOutboxProperties();
 
     /**
-     * When the housekeeping of the outbox runs and in which time zone (properties
-     * section <code>vanillabp.outbox.housekeeping.*</code>). The builder starts from the
-     * same value the field does.
+     * When the housekeeping of the outbox runs and in which time zone (properties section
+     * <code>vanillabp.outbox.housekeeping.*</code>). The builder starts from the same value
+     * as the field.
      */
     private HousekeepingProperties housekeeping = new HousekeepingProperties();
 
     /**
-     * The builder of a subclass calls this while it is built. Nobody else needs one:
+     * The builder of a subclass calls this while it is built. Nobody else needs one.
      * {@link PhaseTwoOutboxProperties#builder()} hands out the builder of this class.
      */
     public PhaseTwoOutboxPropertiesBuilder() {
@@ -2313,9 +2305,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The builder itself, typed as the builder of the subclass. Every method of the
-     * chain returns it, which is what keeps a chain started on a subclass builder at
-     * that subclass.
+     * The builder itself, typed as the builder of the subclass. Every method of the chain
+     * returns it. That keeps a chain which started on a subclass builder at that subclass.
      *
      * @return This builder
      */
@@ -2376,8 +2367,8 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * The builder {@link #builder()} hands out: the one which builds
-   * {@link PhaseTwoOutboxProperties} itself rather than a subclass of it.
+   * The builder which {@link #builder()} hands out: the one which builds
+   * {@link PhaseTwoOutboxProperties} itself, and not a subclass of it.
    */
   private static final class PhaseTwoOutboxPropertiesBuilderImpl extends PhaseTwoOutboxProperties.PhaseTwoOutboxPropertiesBuilder<PhaseTwoOutboxProperties, PhaseTwoOutboxProperties.PhaseTwoOutboxPropertiesBuilderImpl> {
 
@@ -2414,8 +2405,8 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * What every builder of this class and of its subclasses builds through. It is the one
-   * place the values of this class move from the builder into the object, so a subclass
+   * Every builder of this class and of its subclasses builds through this. It is the one
+   * place where the values of this class move from the builder into the object. So a subclass
    * builder fills the keys of its base class as well.
    *
    * @param b The builder holding what was written
@@ -2438,7 +2429,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * A builder of {@link PhaseTwoOutboxProperties}, empty except for the values which
+   * A builder of {@link PhaseTwoOutboxProperties}. It is empty, except for the values which
    * have a default.
    *
    * @return The builder

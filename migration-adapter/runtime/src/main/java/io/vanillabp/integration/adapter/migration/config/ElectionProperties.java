@@ -57,9 +57,9 @@ public class ElectionProperties {
   private GuessingAdapters guessingAdapters;
 
   /**
-   * The builder of {@link ElectionProperties}. Its two type parameters carry the class
-   * being built and the builder itself, so a call inherited from a base class comes back
-   * as the builder of the subclass and the next call in the chain sees every key again.
+   * The builder of {@link ElectionProperties}. Its two type parameters are the class being
+   * built and the builder itself. So a call inherited from a base class comes back as the
+   * builder of the subclass, and the next call in the chain sees every key again.
    *
    * @param <C> The class this builder builds
    * @param <B> The builder itself, which every method of the chain returns
@@ -72,7 +72,7 @@ public class ElectionProperties {
     private GuessingAdapters guessingAdapters;
 
     /**
-     * The builder of a subclass calls this while it is built. Nobody else needs one:
+     * The builder of a subclass calls this while it is built. Nobody else needs one.
      * {@link ElectionProperties#builder()} hands out the builder of this class.
      */
     public ElectionPropertiesBuilder() {
@@ -93,9 +93,8 @@ public class ElectionProperties {
     }
 
     /**
-     * The builder itself, typed as the builder of the subclass. Every method of the
-     * chain returns it, which is what keeps a chain started on a subclass builder at
-     * that subclass.
+     * The builder itself, typed as the builder of the subclass. Every method of the chain
+     * returns it. That keeps a chain which started on a subclass builder at that subclass.
      *
      * @return This builder
      */
@@ -126,8 +125,8 @@ public class ElectionProperties {
   }
 
   /**
-   * The builder {@link #builder()} hands out: the one which builds
-   * {@link ElectionProperties} itself rather than a subclass of it.
+   * The builder which {@link #builder()} hands out: the one which builds
+   * {@link ElectionProperties} itself, and not a subclass of it.
    */
   private static final class ElectionPropertiesBuilderImpl extends ElectionProperties.ElectionPropertiesBuilder<ElectionProperties, ElectionProperties.ElectionPropertiesBuilderImpl> {
 
@@ -164,8 +163,8 @@ public class ElectionProperties {
   }
 
   /**
-   * What every builder of this class and of its subclasses builds through. It is the one
-   * place the values of this class move from the builder into the object, so a subclass
+   * Every builder of this class and of its subclasses builds through this. It is the one
+   * place where the values of this class move from the builder into the object. So a subclass
    * builder fills the keys of its base class as well.
    *
    * @param b The builder holding what was written
@@ -178,7 +177,7 @@ public class ElectionProperties {
   }
 
   /**
-   * A builder of {@link ElectionProperties}, empty except for the values which have a
+   * A builder of {@link ElectionProperties}. It is empty, except for the values which have a
    * default.
    *
    * @return The builder

@@ -3214,8 +3214,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     /**
      * The settings of the extensions (properties section
      * <code>vanillabp.extensions.&lt;extension&gt;.*</code>), overridable per workflow
-     * module, per workflow and per task. The builder starts from the same value the
-     * field does.
+     * module, per workflow and per task. The builder starts from the same value as the field.
      */
     private Map<String, Map<String, String>> extensions = Map.of();
 

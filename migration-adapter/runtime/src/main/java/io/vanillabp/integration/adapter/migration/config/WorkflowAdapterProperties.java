@@ -34,11 +34,10 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
    * both platforms create the object and then write the keys the application configured
    * into it, one setter per key.
    * <p>
-   * It asks the builder for the values, and that is not a detour: every default of this
-   * class stands on the builder as well as on the field, and both ways into an object
-   * end here. A constructor which set the fields itself would have to repeat every
-   * default, and the first one somebody forgets would leave the maps below
-   * <code>null</code> instead of empty.
+   * It asks the builder for the values, and that is not a detour. Every default of this class
+   * is on the builder as well as on the field, and both ways into an object end here. A
+   * constructor which set the fields itself would have to repeat every default. The first
+   * default somebody forgets would leave the maps below <code>null</code> instead of empty.
    */
   public WorkflowAdapterProperties() {
 
@@ -122,10 +121,9 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   private DeliveryProperties delivery;
 
   /**
-   * The builder of {@link WorkflowAdapterProperties}. Its two type parameters carry the
-   * class being built and the builder itself, so a call inherited from a base class
-   * comes back as the builder of the subclass and the next call in the chain sees every
-   * key again.
+   * The builder of {@link WorkflowAdapterProperties}. Its two type parameters are the class
+   * being built and the builder itself. So a call inherited from a base class comes back as
+   * the builder of the subclass, and the next call in the chain sees every key again.
    *
    * @param <C> The class this builder builds
    * @param <B> The builder itself, which every method of the chain returns
@@ -145,21 +143,21 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     private WorkflowModuleAdapterProperties workflowModule;
 
     /**
-     * The properties of adapters specific to this workflow. The builder starts from the
-     * same value the field does.
+     * The properties of adapters specific to this workflow. The builder starts from the same
+     * value as the field.
      */
     private Map<String, AdapterProperties> adapters = Map.of();
 
     /**
-     * The properties of the workflow's BPMN tasks. The builder starts from the same
-     * value the field does.
+     * The properties of the workflow's BPMN tasks. The builder starts from the same value as
+     * the field.
      */
     private Map<String, TaskAdapterProperties> tasks = Map.of();
 
     /**
-     * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow
-     * - what an extension is told about ONE BPMN process, which is the level below the
-     * workflow module. The builder starts from the same value the field does.
+     * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow -
+     * what an extension is told about ONE BPMN process, which is the level below the workflow
+     * module. The builder starts from the same value as the field.
      */
     private Map<String, Map<String, String>> extensions = Map.of();
 
@@ -204,7 +202,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     private DeliveryProperties delivery;
 
     /**
-     * The builder of a subclass calls this while it is built. Nobody else needs one:
+     * The builder of a subclass calls this while it is built. Nobody else needs one.
      * {@link WorkflowAdapterProperties#builder()} hands out the builder of this class.
      */
     public WorkflowAdapterPropertiesBuilder() {
@@ -380,9 +378,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     }
 
     /**
-     * The builder itself, typed as the builder of the subclass. Every method of the
-     * chain returns it, which is what keeps a chain started on a subclass builder at
-     * that subclass.
+     * The builder itself, typed as the builder of the subclass. Every method of the chain
+     * returns it. That keeps a chain which started on a subclass builder at that subclass.
      *
      * @return This builder
      */
@@ -448,8 +445,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   }
 
   /**
-   * The builder {@link #builder()} hands out: the one which builds
-   * {@link WorkflowAdapterProperties} itself rather than a subclass of it.
+   * The builder which {@link #builder()} hands out: the one which builds
+   * {@link WorkflowAdapterProperties} itself, and not a subclass of it.
    */
   private static final class WorkflowAdapterPropertiesBuilderImpl extends WorkflowAdapterProperties.WorkflowAdapterPropertiesBuilder<WorkflowAdapterProperties, WorkflowAdapterProperties.WorkflowAdapterPropertiesBuilderImpl> {
 
@@ -486,8 +483,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   }
 
   /**
-   * What every builder of this class and of its subclasses builds through. It is the one
-   * place the values of this class move from the builder into the object, so a subclass
+   * Every builder of this class and of its subclasses builds through this. It is the one
+   * place where the values of this class move from the builder into the object. So a subclass
    * builder fills the keys of its base class as well.
    *
    * @param b The builder holding what was written
@@ -512,7 +509,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   }
 
   /**
-   * A builder of {@link WorkflowAdapterProperties}, empty except for the values which
+   * A builder of {@link WorkflowAdapterProperties}. It is empty, except for the values which
    * have a default.
    *
    * @return The builder

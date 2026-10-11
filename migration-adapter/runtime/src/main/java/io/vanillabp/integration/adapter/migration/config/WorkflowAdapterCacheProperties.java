@@ -124,11 +124,11 @@ public class WorkflowAdapterCacheProperties {
    * The empty section a configuration binder starts from: both platforms create the object
    * and then write the keys the application configured into it, one setter per key.
    * <p>
-   * It asks the builder for the values, and that is not a detour: every default of this
-   * class stands on the builder as well as on the field, and both ways into an object
-   * end here. A constructor which set the fields itself would have to repeat every
-   * default, and the first one somebody forgets would leave an application which
-   * configures no cache with a bound of zero entries and no time to live at all.
+   * It asks the builder for the values, and that is not a detour. Every default of this class
+   * is on the builder as well as on the field, and both ways into an object end here. A
+   * constructor which set the fields itself would have to repeat every default. The first
+   * default somebody forgets would leave an application which configures no cache with a
+   * bound of zero entries and no time to live at all.
    */
   public WorkflowAdapterCacheProperties() {
 
@@ -191,10 +191,9 @@ public class WorkflowAdapterCacheProperties {
   }
 
   /**
-   * The builder of {@link WorkflowAdapterCacheProperties}. Its two type parameters carry
-   * the class being built and the builder itself, so a call inherited from a base class
-   * comes back as the builder of the subclass and the next call in the chain sees every
-   * key again.
+   * The builder of {@link WorkflowAdapterCacheProperties}. Its two type parameters are the
+   * class being built and the builder itself. So a call inherited from a base class comes
+   * back as the builder of the subclass, and the next call in the chain sees every key again.
    *
    * @param <C> The class this builder builds
    * @param <B> The builder itself, which every method of the chain returns
@@ -202,37 +201,35 @@ public class WorkflowAdapterCacheProperties {
   public abstract static class WorkflowAdapterCachePropertiesBuilder<C extends WorkflowAdapterCacheProperties, B extends WorkflowAdapterCacheProperties.WorkflowAdapterCachePropertiesBuilder<C, B>> {
 
     /**
-     * The maximum number of entries the in-memory default cache holds - the least
-     * recently used entry is dropped beyond that. The builder starts from the same value
-     * the field does.
+     * The maximum number of entries the in-memory default cache holds - the least recently
+     * used entry is dropped beyond that. The builder starts from the same value as the field.
      */
     private int maxEntries = DEFAULT_MAX_ENTRIES;
 
     /**
-     * How long an entry of the in-memory default cache is kept (counted from the moment
-     * it was stored). The builder starts from the same value the field does.
+     * How long an entry of the in-memory default cache is kept (counted from the moment it
+     * was stored). The builder starts from the same value as the field.
      */
     private Duration timeToLive = DEFAULT_TIME_TO_LIVE;
 
     /**
      * How long the entry of a workflow which ENDED is kept - much shorter than
      * {@link #timeToLive}, because such an entry cannot become useful again. The builder
-     * starts from the same value the field does.
+     * starts from the same value as the field.
      */
     private Duration endedTimeToLive = DEFAULT_ENDED_TIME_TO_LIVE;
 
     /**
-     * Whether VanillaBP asks the BPMS to report the end of a workflow FOR THE CACHE's
-     * sake, so an ended workflow lets go of its entry after {@link #endedTimeToLive}
-     * instead of keeping it for a full {@link #timeToLive}. The builder starts from the
-     * same value the field does.
+     * Whether VanillaBP asks the BPMS to report the end of a workflow FOR THE CACHE's sake,
+     * so an ended workflow lets go of its entry after {@link #endedTimeToLive} instead of
+     * keeping it for a full {@link #timeToLive}. The builder starts from the same value as
+     * the field.
      */
     private boolean releaseOnWorkflowEnd = false;
 
     /**
-     * The builder of a subclass calls this while it is built. Nobody else needs one:
-     * {@link WorkflowAdapterCacheProperties#builder()} hands out the builder of this
-     * class.
+     * The builder of a subclass calls this while it is built. Nobody else needs one.
+     * {@link WorkflowAdapterCacheProperties#builder()} hands out the builder of this class.
      */
     public WorkflowAdapterCachePropertiesBuilder() {
     }
@@ -299,9 +296,8 @@ public class WorkflowAdapterCacheProperties {
     }
 
     /**
-     * The builder itself, typed as the builder of the subclass. Every method of the
-     * chain returns it, which is what keeps a chain started on a subclass builder at
-     * that subclass.
+     * The builder itself, typed as the builder of the subclass. Every method of the chain
+     * returns it. That keeps a chain which started on a subclass builder at that subclass.
      *
      * @return This builder
      */
@@ -341,8 +337,8 @@ public class WorkflowAdapterCacheProperties {
   }
 
   /**
-   * The builder {@link #builder()} hands out: the one which builds
-   * {@link WorkflowAdapterCacheProperties} itself rather than a subclass of it.
+   * The builder which {@link #builder()} hands out: the one which builds
+   * {@link WorkflowAdapterCacheProperties} itself, and not a subclass of it.
    */
   private static final class WorkflowAdapterCachePropertiesBuilderImpl extends WorkflowAdapterCacheProperties.WorkflowAdapterCachePropertiesBuilder<WorkflowAdapterCacheProperties, WorkflowAdapterCacheProperties.WorkflowAdapterCachePropertiesBuilderImpl> {
 
@@ -379,8 +375,8 @@ public class WorkflowAdapterCacheProperties {
   }
 
   /**
-   * What every builder of this class and of its subclasses builds through. It is the one
-   * place the values of this class move from the builder into the object, so a subclass
+   * Every builder of this class and of its subclasses builds through this. It is the one
+   * place where the values of this class move from the builder into the object. So a subclass
    * builder fills the keys of its base class as well.
    *
    * @param b The builder holding what was written
@@ -396,7 +392,7 @@ public class WorkflowAdapterCacheProperties {
   }
 
   /**
-   * A builder of {@link WorkflowAdapterCacheProperties}, empty except for the values
+   * A builder of {@link WorkflowAdapterCacheProperties}. It is empty, except for the values
    * which have a default.
    *
    * @return The builder

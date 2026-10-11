@@ -33,11 +33,10 @@ public class AdapterProperties {
    * The empty section a configuration binder starts from: both platforms create the object
    * and then write the keys the application configured into it, one setter per key.
    * <p>
-   * It asks the builder for the values, and that is not a detour: every default of this
-   * class stands on the builder as well as on the field, and both ways into an object
-   * end here. A constructor which set the fields itself would have to repeat every
-   * default, and the first one somebody forgets would leave such a field
-   * <code>null</code>.
+   * It asks the builder for the values, and that is not a detour. Every default of this class
+   * is on the builder as well as on the field, and both ways into an object end here. A
+   * constructor which set the fields itself would have to repeat every default. The first
+   * default somebody forgets would leave such a field <code>null</code>.
    */
   public AdapterProperties() {
 
@@ -151,9 +150,9 @@ public class AdapterProperties {
   private Map<String, Map<String, String>> extensions = Map.of();
 
   /**
-   * The builder of {@link AdapterProperties}. Its two type parameters carry the class
-   * being built and the builder itself, so a call inherited from a base class comes back
-   * as the builder of the subclass and the next call in the chain sees every key again.
+   * The builder of {@link AdapterProperties}. Its two type parameters are the class being
+   * built and the builder itself. So a call inherited from a base class comes back as the
+   * builder of the subclass, and the next call in the chain sees every key again.
    *
    * @param <C> The class this builder builds
    * @param <B> The builder itself, which every method of the chain returns
@@ -217,14 +216,14 @@ public class AdapterProperties {
     private OutfadedVersionsInUsePolicy outfadedVersionsInUse;
 
     /**
-     * What an extension is configured with FOR THIS ADAPTER at this level (properties
-     * section <code>...adapters.&lt;id&gt;.extensions.&lt;extension&gt;.*</code>). The
-     * builder starts from the same value the field does.
+     * What an extension is configured with FOR THIS ADAPTER at this level (properties section
+     * <code>...adapters.&lt;id&gt;.extensions.&lt;extension&gt;.*</code>). The builder starts
+     * from the same value as the field.
      */
     private Map<String, Map<String, String>> extensions = Map.of();
 
     /**
-     * The builder of a subclass calls this while it is built. Nobody else needs one:
+     * The builder of a subclass calls this while it is built. Nobody else needs one.
      * {@link AdapterProperties#builder()} hands out the builder of this class.
      */
     public AdapterPropertiesBuilder() {
@@ -374,9 +373,8 @@ public class AdapterProperties {
     }
 
     /**
-     * The builder itself, typed as the builder of the subclass. Every method of the
-     * chain returns it, which is what keeps a chain started on a subclass builder at
-     * that subclass.
+     * The builder itself, typed as the builder of the subclass. Every method of the chain
+     * returns it. That keeps a chain which started on a subclass builder at that subclass.
      *
      * @return This builder
      */
@@ -431,8 +429,8 @@ public class AdapterProperties {
   }
 
   /**
-   * The builder {@link #builder()} hands out: the one which builds
-   * {@link AdapterProperties} itself rather than a subclass of it.
+   * The builder which {@link #builder()} hands out: the one which builds
+   * {@link AdapterProperties} itself, and not a subclass of it.
    */
   private static final class AdapterPropertiesBuilderImpl extends AdapterProperties.AdapterPropertiesBuilder<AdapterProperties, AdapterProperties.AdapterPropertiesBuilderImpl> {
 
@@ -469,8 +467,8 @@ public class AdapterProperties {
   }
 
   /**
-   * What every builder of this class and of its subclasses builds through. It is the one
-   * place the values of this class move from the builder into the object, so a subclass
+   * Every builder of this class and of its subclasses builds through this. It is the one
+   * place where the values of this class move from the builder into the object. So a subclass
    * builder fills the keys of its base class as well.
    *
    * @param b The builder holding what was written
@@ -491,7 +489,7 @@ public class AdapterProperties {
   }
 
   /**
-   * A builder of {@link AdapterProperties}, empty except for the values which have a
+   * A builder of {@link AdapterProperties}. It is empty, except for the values which have a
    * default.
    *
    * @return The builder
