@@ -1412,10 +1412,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The values of its workflow aggregate that workflow declares for the BPMS
+   * The values of its workflow aggregate which that workflow declares for the BPMS
    * (<code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;process&gt;.declared-aggregate-values</code>).
    * <p>
-   * Read at the workflow, because the values belong to the aggregate of one workflow.
+   * It is read at the workflow, because the values belong to the aggregate of one
+   * workflow.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -1444,8 +1445,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The property declaring what {@link #declaredAggregateValues(String, String)} reads, for
-   * the message which has to hand the developer a line to copy.
+   * The property which declares what {@link #declaredAggregateValues(String, String)} reads,
+   * for the message which has to give the developer a line to copy.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -1461,10 +1462,10 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The <code>&#64;TaskParam</code> names the application declared for that task, with the
-   * most specific level winning: the task, then the workflow, then the workflow module,
-   * then the application. A level which says nothing is skipped, so a declaration at the
-   * application covers every task which does not name its own.
+   * The <code>&#64;TaskParam</code> names which the application declared for that task. The
+   * most specific level wins: the task, then the workflow, then the workflow module, then the
+   * application. A level which says nothing is skipped. So a declaration at the application
+   * covers every task which does not name its own.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -1505,8 +1506,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The property declaring what {@link #declaredTaskParams(String, String, String)} reads,
-   * at the level it belongs at: the single task.
+   * The property which declares what {@link #declaredTaskParams(String, String, String)}
+   * reads, at the level where it belongs: the single task.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -1525,8 +1526,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * Whether the application says that something other than itself serves a task
-   * (<code>implemented-externally</code>), over the eight positions every task setting may
-   * be written at:
+   * (<code>implemented-externally</code>), over the eight positions at which every task
+   * setting may be written:
    *
    * <pre>
    * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.tasks.&lt;task&gt;.adapters.&lt;id&gt;.implemented-externally  (most specific)
@@ -1539,20 +1540,20 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * vanillabp.implemented-externally                                                                         (least specific)
    * </pre>
    *
-   * The most specific position which writes the key wins, and what one adapter is told beats
-   * what the same level says in general. A task is named at the task level by more than one
-   * name, its element id and its task definition, and the names are tried in the order given:
-   * the caller passes the element id first, so a line written for the element id wins over a
-   * line written for the task definition. Both task names are tried before the workflow is,
+   * The most specific position which writes the key wins. What one adapter is told wins over
+   * what the same level says in general. At the task level a task has more than one name:
+   * its element id and its task definition. The names are tried in the given order. The
+   * caller passes the element id first. So a line written for the element id wins over a
+   * line written for the task definition. Both task names are tried before the workflow,
    * because a line about the task is more specific than any line about the workflow.
    * <p>
-   * Whether the value came from the task itself is
-   * {@link #implementedExternallyAtTheTask(String, String, List, String)}: a line above the
-   * task covers only the tasks without a method, which the caller decides.
+   * {@link #implementedExternallyAtTheTask(String, String, List, String)} says whether the
+   * value came from the task itself. A line above the task only covers the tasks without a
+   * method, and the caller decides that.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
-   * @param taskNames The names of the task at the task level, most important first;
+   * @param taskNames The names of the task at the task level, most important first.
    *          <code>null</code> entries are skipped
    * @param adapterId The adapter ID, or <code>null</code> to read no adapter position
    * @return The value of the most specific position which writes one, or <code>null</code>
@@ -1599,19 +1600,19 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * What the task itself says about <code>implemented-externally</code>, at the two
-   * positions of the task level and nowhere else: for one adapter, and in general. The names
-   * are tried in the order given, the element id first.
+   * What the task itself says about <code>implemented-externally</code>, at the two positions
+   * of the task level and nowhere else: for one adapter, and in general. The names are tried
+   * in the given order, the element id first.
    * <p>
-   * A line at the task is the one which says something about THIS task, while a line above
-   * it covers whatever task below it has no method. That difference is what ends a start over
-   * a method next to the line: only a line at the task contradicts a method (see
-   * decision 119 in the repository's DECISIONS.md).
+   * A line at the task says something about THIS task. A line above it covers every task
+   * below it which has no method. Because of that difference, a method next to a line ends a
+   * start: only a line at the task contradicts a method (see decision 119 in the
+   * repository's DECISIONS.md).
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
-   * @param taskNames The names of the task, most important first; <code>null</code> entries are
-   *          skipped
+   * @param taskNames The names of the task, most important first. <code>null</code> entries
+   *          are skipped
    * @param adapterId The adapter ID, or <code>null</code> to read no adapter position
    * @return The value written at the task, or <code>null</code> where the task says nothing
    */
@@ -1656,11 +1657,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * What the workflow itself says about <code>implemented-externally</code>, at the two
    * positions of the workflow level and nowhere else: for one adapter, and in general.
    * <p>
-   * For a process no <code>&#64;WorkflowService</code> claims, this is the line which says that
-   * the process belongs to somebody else: it was deployed only because it shares a file with a
-   * claimed one. A line at the workflow module or at the application does not say that, because
-   * it is written for many processes at once and cannot mean this one. See
-   * decision 120 in the repository's DECISIONS.md.
+   * For a process which no <code>&#64;WorkflowService</code> claims, this is the line which
+   * says that the process belongs to somebody else. It was only deployed because it shares a
+   * file with a claimed one. A line at the workflow module or at the application does not say
+   * that. It is written for many processes at once, and cannot mean this one. See decision
+   * 120 in the repository's DECISIONS.md.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -1709,11 +1710,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The first of two values somebody wrote.
+   * The first of two values which somebody wrote.
    *
    * @param moreSpecific The value of the more specific position
    * @param lessSpecific The value of the less specific position
-   * @return The more specific value where it is written, else the other one
+   * @return The more specific value where it is written, otherwise the other one
    */
   private static Boolean firstWritten(
       final Boolean moreSpecific,
@@ -1726,10 +1727,10 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The task names of one workflow which a task-level line of
-   * <code>implemented-externally</code> is written for, at the task itself or for one of its
-   * adapters. What the startup holds against the names the deployed models know, because a
-   * line for a task no model has any more says nothing and should not stay.
+   * The task names of one workflow for which a task-level line of
+   * <code>implemented-externally</code> is written, at the task itself or for one of its
+   * adapters. The startup checks them against the names which the deployed models know. A
+   * line for a task which no model has any more says nothing, and should not stay.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -1767,8 +1768,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The property allowing what {@link #allowsFullSyncWithBpms(String, String)} decides,
-   * for the message which has to hand the developer a line to copy.
+   * The property which allows what {@link #allowsFullSyncWithBpms(String, String)} decides,
+   * for the message which has to give the developer a line to copy.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -1785,12 +1786,12 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * Whether the expressions of that workflow's BPMN model are meant as they are
-   * (<code>accept-expressions-in-the-model</code>), so the startup stops naming them.
+   * (<code>accept-expressions-in-the-model</code>). Then the startup stops naming them.
    * <p>
-   * Read at three levels, the most specific winning: the workflow, the workflow module, the
-   * application. Unlike the permission above this is no permission at all - nothing leaves
-   * the application because of it, and nothing behaves differently. It says that somebody
-   * looked at the expressions of a model and meant them, which is a thing a team decides
+   * It is read at three levels, and the most specific wins: the workflow, the workflow
+   * module, the application. Unlike the permission above, this is no permission at all.
+   * Nothing leaves the application because of it, and nothing behaves differently. It says
+   * that somebody looked at the expressions of a model and meant them. A team decides that
    * for a whole application as easily as for one process.
    *
    * @param workflowModuleId The workflow module ID
@@ -1822,11 +1823,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The property accepting what {@link #acceptsExpressionsInTheModel(String, String)}
-   * decides, for the message which has to hand the developer a line to copy. The key at the
-   * WORKFLOW, the most specific of the three: a line written there is about the model the
-   * message is about, while the same line at the workflow module would cover the process
-   * somebody adds next week as well.
+   * The property which accepts what {@link #acceptsExpressionsInTheModel(String, String)}
+   * decides, for the message which has to give the developer a line to copy. It is the key at
+   * the WORKFLOW, the most specific of the three. A line written there is about the model of
+   * the message. The same line at the workflow module would also cover the process which
+   * somebody adds next week.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -1843,12 +1844,12 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * Refuses the permission of {@link #allowsFullSyncWithBpms(String, String)} wherever it
-   * stands somewhere else than at a workflow. Every level it can be written at is bound,
-   * so the line is answered rather than ignored, and the answer says where it belongs. It
+   * stands somewhere else than at a workflow. Every level at which it can be written is bound.
+   * So the line gets an answer and is not ignored, and the answer says where it belongs. It
    * reads like every other misplaced setting, see {@link MisplacedSettings}.
    *
-   * @throws IllegalStateException Naming the place the permission was written at and the
-   *           key it belongs under
+   * @throws IllegalStateException Naming the place where the permission was written, and the
+   *           key under which it belongs
    */
   private void refuseFullSyncPermissionsOutsideAWorkflow() {
 
@@ -1906,16 +1907,15 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Refuses a resources location written below the workflow module. The key is bound at
-   * all four levels like every other adapter setting, but it is read at the workflow
-   * module and at the adapter only: VanillaBP loads the BPMN files before it knows which
-   * process or which task is in them (see decision 80 in the repository's DECISIONS.md).
-   * A line written at the workflow or at a task would do nothing at all, so it is
-   * answered instead of ignored. It reads like every other misplaced setting, see
-   * {@link MisplacedSettings}.
+   * Refuses a resources location written below the workflow module. The key is bound at all
+   * four levels like every other adapter setting. But it is only read at the workflow module
+   * and at the adapter. VanillaBP loads the BPMN files before it knows which process or which
+   * task is in them (see decision 80 in the repository's DECISIONS.md). A line written at the
+   * workflow or at a task would do nothing at all. So it gets an answer and is not ignored.
+   * It reads like every other misplaced setting, see {@link MisplacedSettings}.
    *
-   * @throws IllegalStateException Naming every place a location was written at and the
-   *           two keys it may be written at
+   * @throws IllegalStateException Naming every place where a location was written, and the
+   *           two keys at which it may be written
    */
   private void refuseResourcesLocationsBelowTheWorkflowModule() {
 
@@ -1967,18 +1967,18 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Refuses the settings about what the housekeeping of the delivery log deletes where they were
-   * written below the application. The delivery section binds at all four levels, and everything
-   * in it but these three keys is read at the level it stands at. They are not: the rows of every
-   * workflow module are removed by one sweep of the housekeeping, so there is one set of settings
-   * and it is read from the application's own section alone (see
-   * {@link #resolvedDeliveryRetention()}, {@link #resolvedWorkflowStartRetention()} and
-   * {@link #keepsWorkflowStartWhileAggregateExists()}). A line at a workflow module, a workflow or
-   * a task would do nothing at all, so it is answered instead of ignored. It reads like every
-   * other misplaced setting, see {@link MisplacedSettings}.
+   * Refuses the settings about what the housekeeping of the delivery log deletes, where they
+   * were written below the application. The delivery section binds at all four levels, and
+   * everything in it except these three keys is read at the level where it stands. These
+   * three are not. One sweep of the housekeeping removes the rows of every workflow module.
+   * So there is one set of settings, and it is read from the application's own section only
+   * (see {@link #resolvedDeliveryRetention()}, {@link #resolvedWorkflowStartRetention()} and
+   * {@link #keepsWorkflowStartWhileAggregateExists()}). A line at a workflow module, a
+   * workflow or a task would do nothing at all. So it gets an answer and is not ignored. It
+   * reads like every other misplaced setting, see {@link MisplacedSettings}.
    *
-   * @throws IllegalStateException Naming every place such a setting was written at and the keys
-   *           it may be written at
+   * @throws IllegalStateException Naming every place where such a setting was written, and
+   *           the keys at which it may be written
    */
   private void refuseDeliveryRetentionsBelowTheApplication() {
 
@@ -2031,10 +2031,10 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The keys of the delivery section which are read for the whole application only, as far as the
-   * given section writes one. All three decide what the housekeeping of the log DELETES, and the
-   * housekeeping runs once per store with one set of settings, so a value further down would do
-   * nothing at all.
+   * The keys of the delivery section which are only read for the whole application, as far as
+   * the given section writes one. All three decide what the housekeeping of the log DELETES.
+   * The housekeeping runs once per store with one set of settings. So a value further down
+   * would do nothing at all.
    *
    * @param delivery The delivery section of a workflow module, a workflow or a task, or
    *          <code>null</code>
@@ -2062,15 +2062,15 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * Refuses the release of delivery records written below the workflow module. The key is
-   * read at the workflow module and, where the module says nothing, at the application
-   * (see {@link #releasesDeliveryRecordsOnWorkflowEnd(String)}); a workflow or a task
-   * cannot be asked, because what the setting decides is a listener an adapter attaches
-   * to a whole deployed process. A line further down would do nothing at all, so it is
-   * answered instead of ignored. It reads like every other misplaced setting, see
+   * read at the workflow module and, where the module says nothing, at the application (see
+   * {@link #releasesDeliveryRecordsOnWorkflowEnd(String)}). A workflow or a task cannot be
+   * asked, because the setting decides about a listener which an adapter attaches to a whole
+   * deployed process. A line further down would do nothing at all. So it gets an answer and
+   * is not ignored. It reads like every other misplaced setting, see
    * {@link MisplacedSettings}.
    *
-   * @throws IllegalStateException Naming every place the release was written at and the
-   *           two keys it may be written at
+   * @throws IllegalStateException Naming every place where the release was written, and the
+   *           two keys at which it may be written
    */
   private void refuseDeliveryReleasesBelowTheWorkflowModule() {
 
@@ -2118,8 +2118,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * An adapter setting which is about a whole BPMN process: the name it is written under,
-   * and how to tell that a level wrote it.
+   * An adapter setting which is about a whole BPMN process: the name under which it is
+   * written, and how to tell that a level wrote it.
    *
    * @param key The last segment of the property key
    * @param writtenHere Whether the given level says anything about the setting
@@ -2130,9 +2130,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The adapter settings which are about a whole BPMN process. Everything reading one of
-   * them asks for a workflow and never for a task, so a line at a task is refused by
-   * {@link #refuseSettingsOfAWholeProcessWrittenAtATask()}.
+   * The adapter settings which are about a whole BPMN process. Everything which reads one of
+   * them asks for a workflow and never for a task. So
+   * {@link #refuseSettingsOfAWholeProcessWrittenAtATask()} refuses a line at a task.
    */
   private static final List<SettingOfAWholeProcess> SETTINGS_OF_A_WHOLE_PROCESS = List.of(
       new SettingOfAWholeProcess(
@@ -2146,18 +2146,18 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
           "outfaded-versions-in-use", adapter -> adapter.getOutfadedVersionsInUse() != null));
 
   /**
-   * Refuses a setting of a whole BPMN process written at a single task. The keys bind at
-   * all four levels like every other adapter setting, because one class carries what an
-   * adapter may be told, but the task level is read by nobody:
-   * {@link io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService}
-   * and {@code OutfadedProcessVersions} both ask
-   * {@link #resolveForAdapter(String, String, String, String, Function)} without a task.
-   * A line there would do nothing at all, so it is answered instead of ignored (see
-   * decision 89 in the repository's DECISIONS.md). It reads like every other misplaced
-   * setting, see {@link MisplacedSettings}.
+   * Refuses a setting of a whole BPMN process written at a single task. The keys bind at all
+   * four levels like every other adapter setting, because one class holds what an adapter may
+   * be told. But nobody reads the task level.
+   * {@link io.vanillabp.integration.adapter.migration.scoping.NameClashAvoidanceService} and
+   * {@code OutfadedProcessVersions} both ask
+   * {@link #resolveForAdapter(String, String, String, String, Function)} without a task. A
+   * line there would do nothing at all. So it gets an answer and is not ignored (see decision
+   * 89 in the repository's DECISIONS.md). It reads like every other misplaced setting, see
+   * {@link MisplacedSettings}.
    *
-   * @throws IllegalStateException Naming every task a setting was written at and the
-   *           three levels it may be written at
+   * @throws IllegalStateException Naming every task at which a setting was written, and the
+   *           three levels at which it may be written
    */
   private void refuseSettingsOfAWholeProcessWrittenAtATask() {
 
@@ -2208,12 +2208,12 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Whether the given workflow module accepts a prioritized adapter which cannot
-   * locate workflows next to other adapters
-   * (<code>vanillabp.election.guessing-adapters</code>, overridable as
-   * <code>vanillabp.workflow-modules.&lt;id&gt;.election.guessing-adapters</code>).
-   * The module's setting wins where it is defined, the global one applies otherwise,
-   * and the default is to reject.
+   * Whether the given workflow module accepts a prioritized adapter which cannot find
+   * workflows, next to other adapters (<code>vanillabp.election.guessing-adapters</code>,
+   * which can be overridden as
+   * <code>vanillabp.workflow-modules.&lt;id&gt;.election.guessing-adapters</code>). The
+   * module's setting wins where it is defined. Otherwise the global one applies, and the
+   * default is to reject.
    *
    * @param workflowModuleId The workflow module ID
    * @return Whether an adapter which has to guess is accepted for this module
@@ -2237,7 +2237,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The property naming the decision of {@link #acceptsGuessingAdapters(String)}, for
+   * The property which names the decision of {@link #acceptsGuessingAdapters(String)}, for
    * the guiding message which has to tell how to accept what it refuses.
    *
    * @param workflowModuleId The workflow module ID
@@ -2252,12 +2252,12 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Whether the workflows of the given workflow module release the records of their
-   * processed task deliveries when they end
-   * (<code>vanillabp.delivery.release-on-workflow-end</code>, overridable as
-   * <code>vanillabp.workflow-modules.&lt;id&gt;.delivery.release-on-workflow-end</code>).
-   * The module's setting wins where it is defined, the global one applies otherwise, and
-   * the default is to keep the records until the retention passed.
+   * Whether the workflows of the given workflow module release the records of their processed
+   * task deliveries when they end (<code>vanillabp.delivery.release-on-workflow-end</code>,
+   * which can be overridden as
+   * <code>vanillabp.workflow-modules.&lt;id&gt;.delivery.release-on-workflow-end</code>). The
+   * module's setting wins where it is defined. Otherwise the global one applies, and the
+   * default is to keep the records until the retention has passed.
    *
    * @param workflowModuleId The workflow module ID
    * @return Whether an ended workflow releases its delivery records
@@ -2282,18 +2282,16 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * Whether the election cache is told about workflows which ended
-   * (<code>vanillabp.workflow-adapter-cache.release-on-workflow-end</code>), so their
-   * hints leave it after
-   * <code>WorkflowAdapterCacheProperties.getEndedTimeToLive()</code> instead of after a full
-   * time-to-live. Global rather than per workflow module: there is one cache per
-   * application, and what it costs is one listener per deployed process either way.
+   * (<code>vanillabp.workflow-adapter-cache.release-on-workflow-end</code>). Then their hints
+   * leave it after <code>WorkflowAdapterCacheProperties.getEndedTimeToLive()</code>, instead
+   * of after a full time-to-live. It is global and not per workflow module. There is one
+   * cache per application, and it costs one listener per deployed process either way.
    * <p>
    * This is the third reason to have the BPMS report the end of a workflow, next to an
    * application's <code>&#64;WorkflowEnded</code> method and the release of delivery
-   * records - and where one of those asked for it already, the cache is served for
-   * free.
+   * records. Where one of those asked for it already, the cache gets it for free.
    *
-   * @return Whether the end of a workflow is reported for the election cache's sake
+   * @return Whether the end of a workflow is reported for the sake of the election cache
    */
   public boolean releasesElectionHintsOnWorkflowEnd() {
 
@@ -2302,9 +2300,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The property naming the decision of
-   * {@link #releasesDeliveryRecordsOnWorkflowEnd(String)}, for the messages which have to
-   * tell where the behaviour they describe comes from.
+   * The property which names the decision of
+   * {@link #releasesDeliveryRecordsOnWorkflowEnd(String)}, for the messages which have to tell
+   * where the behaviour they describe comes from.
    *
    * @param workflowModuleId The workflow module ID
    * @return The property key of the module-scoped override
@@ -2319,12 +2317,12 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * How long a task of the given scope may stay open before VanillaBP reports it
-   * (<code>vanillabp.delivery.max-task-age</code>, overridable per workflow module, per
-   * workflow and per task). The most specific level which configured a value wins, the
-   * same way adapter-scoped properties resolve; nothing configured anywhere means
-   * {@link DeliveryProperties#DEFAULT_MAX_TASK_AGE}.
+   * (<code>vanillabp.delivery.max-task-age</code>, which can be overridden per workflow
+   * module, per workflow and per task). The most specific level which configured a value
+   * wins, the same way as adapter-scoped properties resolve. If nothing is configured
+   * anywhere, it is {@link DeliveryProperties#DEFAULT_MAX_TASK_AGE}.
    * <p>
-   * A result of {@link Duration#ZERO} means the check is switched off.
+   * A result of {@link Duration#ZERO} means that the check is switched off.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID or <code>null</code>
@@ -2362,11 +2360,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * How many of the OTHER tasks open in a workflow one delivery probes
-   * (<code>vanillabp.delivery.max-open-tasks-checked</code>, overridable per workflow
-   * module, per workflow and per task). The most specific level which configured a value
-   * wins, the same way {@link #maxTaskAge(String, String, String)} resolves.
+   * (<code>vanillabp.delivery.max-open-tasks-checked</code>, which can be overridden per
+   * workflow module, per workflow and per task). The most specific level which configured a
+   * value wins, the same way as in {@link #maxTaskAge(String, String, String)}.
    * <p>
-   * Zero means the probing is off for that scope, and so does
+   * Zero means that the probing is off for that scope, and so does
    * <code>check-open-tasks-on-delivery: false</code>.
    *
    * @param workflowModuleId The workflow module ID
@@ -2393,8 +2391,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * Whether a delivery of the given scope looks at the other tasks open in its workflow at
-   * all (<code>vanillabp.delivery.check-open-tasks-on-delivery</code>, overridable per
-   * workflow module, per workflow and per task). Defaults to <code>true</code>.
+   * all (<code>vanillabp.delivery.check-open-tasks-on-delivery</code>, which can be
+   * overridden per workflow module, per workflow and per task). The default is
+   * <code>true</code>.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID or <code>null</code>
@@ -2416,8 +2415,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * The <code>delivery</code> sections which may answer a question about one task, most
-   * specific first: the task, its workflow, its workflow module and the global one. Each of
-   * them may be absent, which is what "whatever the next less specific level says" means.
+   * specific first: the task, its workflow, its workflow module, and the global one. Each of
+   * them may be missing. That is what "whatever the next less specific level says" means.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID or <code>null</code>
@@ -2449,8 +2448,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The property naming the decision of {@link #maxTaskAge(String, String, String)},
-   * for the message which reports a task older than it.
+   * The property which names the decision of {@link #maxTaskAge(String, String, String)}, for
+   * the message which reports a task older than that.
    *
    * @return The property key of the global setting
    */
@@ -2461,9 +2460,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Refuses a negative maximum age at every level it may be configured at: a negative
-   * duration would report every task on its first redelivery, which is a typo rather
-   * than a decision. Zero is allowed and switches the check off.
+   * Refuses a negative maximum age at every level at which it may be configured. A negative
+   * duration would report every task at its first redelivery. That is a typo, not a
+   * decision. Zero is allowed and switches the check off.
    */
   private void validateMaxTaskAge() {
 
@@ -2493,8 +2492,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     if (offenders.isEmpty()) {
       return;
     }
-    // the maps come from a binder and keep no order, so the message is sorted to read
-    // the same way on every boot
+    // the maps come from a binder and keep no order. So the message is sorted, to read the
+    // same way on every boot
     offenders.sort(String::compareTo);
     throw new IllegalStateException(
         """
@@ -2524,17 +2523,16 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Provides the resources location according to the given properties, resolved in
-   * this order:
+   * The resources locations for the given properties, resolved in this order:
    * <ol>
    * <li>the adapter-specific location
    * <code>vanillabp.workflow-modules.&lt;module&gt;.adapters.&lt;id&gt;.resources-location</code>,</li>
    * <li>the same key at the adapter itself,
-   * <code>vanillabp.adapters.&lt;id&gt;.resources-location</code>, which is where an
-   * application keeping the BPMN of all its modules in one place per BPMS writes it,</li>
+   * <code>vanillabp.adapters.&lt;id&gt;.resources-location</code>. An application which
+   * keeps the BPMN of all its modules in one place per BPMS writes it there,</li>
    * <li>the global <code>vanillabp.resources-location</code> for BPMN which is NOT
    * specific to a BPMS,</li>
-   * <li>the <b>convention</b> - what the classpath facts imply:
+   * <li>the <b>convention</b>, which is what the classpath facts imply:
    * <table border="1">
    * <caption>Conventional locations</caption>
    * <tr><th>Situation</th><th>Location</th></tr>
@@ -2549,17 +2547,16 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * </table>
    * A conventional location is adapter-specific like a configured one.</li>
    * </ol>
-   * The locations are returned in the order they are searched, and the first one
-   * holding BPMN files wins (see {@code DeploymentService}) - so a process is never
-   * deployed twice. A configured location is always the only one; the convention
-   * names two where the application IS the workflow module, because a module tested
-   * inside its own Maven module is the main artifact as well while its files sit
-   * below the module ID.
+   * The locations are returned in the order in which they are searched. The first one with
+   * BPMN files wins (see {@code DeploymentService}). So a process is never deployed twice. A
+   * configured location is always the only one. The convention names two where the
+   * application IS the workflow module. A module tested inside its own Maven module is the
+   * main artifact as well, while its files are below the module ID.
    *
    * @param workflowModuleId The workflow module ID
    * @param adapterId The adapter ID
-   * @return The locations to search, never empty, each carrying whether it contains
-   *         VanillaBP BPMN (true) or BPMN specific to the target BPMS (false)
+   * @return The locations to search, never empty. Each says whether it has VanillaBP BPMN
+   *         (true) or BPMN for the target BPMS (false)
    */
   public List<ResourcesLocation> getAdapterResourcesLocationsFor(
       final String workflowModuleId,
@@ -2609,14 +2606,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   /**
    * Why the convention searched where it did for a workflow module, as a sentence for a
-   * message about BPMN files which were not found. The convention searches below
-   * <code>processes/</code> only for the single workflow module of the application's own
-   * artifact, and a developer who put the files there needs to know whether VanillaBP saw
-   * the module that way.
+   * message about BPMN files which were not found. The convention only searches below
+   * <code>processes/</code> for the single workflow module of the application's own artifact.
+   * A developer who put the files there needs to know whether VanillaBP saw the module that
+   * way.
    *
    * @param workflowModuleId The workflow module ID
    * @return The sentence, or nothing where every adapter of the module reads a configured
-   *         location and the convention played no part
+   *         location, and the convention played no part
    */
   public Optional<String> whyTheConventionSearchedThere(
       final String workflowModuleId) {
@@ -2657,14 +2654,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Validates the configuration of a platform which has nothing to add to the messages -
-   * the same run as {@link #validateProperties(List, List, String)} without a note of its
+   * Checks the configuration of a platform which has nothing to add to the messages. It is
+   * the same run as {@link #validateProperties(List, List, String)}, without a note of its
    * own.
    *
    * @param adaptersLoaded The adapter types found in the classpath
    * @param knownWorkflowModuleIds The workflow module IDs found in the classpath
    * @throws IllegalStateException Where the configuration cannot be made to work, with a
-   *           message naming the keys to write
+   *           message which names the keys to write
    */
   public void validateProperties(
       final List<String> adaptersLoaded,
@@ -2675,11 +2672,11 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Appends a platform-specific note to a guiding message, if there is one.
+   * Adds a platform-specific note to a guiding message, if there is one.
    *
    * @param message The platform-neutral message
    * @param platformConfigurationNote The note or null
-   * @return The message, followed by the note in an own paragraph
+   * @return The message, followed by the note in a paragraph of its own
    */
   private static String appendPlatformNote(
       final String message,
@@ -2693,18 +2690,18 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Validates the configuration. Identical on all platforms, except for the
-   * <code>platformConfigurationNote</code>: platforms whose configuration binding
-   * behaves in a way a developer cannot guess from the properties alone pass a
-   * sentence naming that behavior, which is appended to those messages a developer
-   * could otherwise misread (see
+   * Checks the configuration. It is the same on all platforms, except for the
+   * <code>platformConfigurationNote</code>. On some platforms the configuration binding
+   * behaves in a way which a developer cannot guess from the properties alone. Such a
+   * platform passes a sentence which names that behaviour. It is added to the messages which
+   * a developer could otherwise misread (see
    * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#adapterTypes()}
-   * for the id-is-the-type convention this concerns).
+   * for the convention "the id is the type", which this is about).
    *
    * @param adaptersLoaded The adapter types found in the classpath
    * @param knownWorkflowModuleIds The workflow module IDs found in the classpath
-   * @param platformConfigurationNote A platform-specific note appended to
-   *     "nothing configured" messages, or null
+   * @param platformConfigurationNote A platform-specific note added to "nothing configured"
+   *     messages, or null
    */
   public void validateProperties(
       final List<String> adaptersLoaded,
@@ -2718,23 +2715,22 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Validates the configuration, having derived everything derivable from the
-   * classpath facts before (see {@link #normalize(ClasspathFacts)}) - the
-   * validation rules are identical for configured and derived entries.
+   * Checks the configuration, after everything which can be derived from the classpath
+   * facts was derived (see {@link #normalize(ClasspathFacts)}). The rules are the same for
+   * configured and for derived entries.
    * <p>
-   * What this refuses is thrown where it is found, not collected into
+   * What this refuses is thrown where it is found, and not collected into
    * {@link io.vanillabp.integration.adapter.migration.startup.StartupFindings}. This runs
-   * while the configuration is bound, which is before there is an adapter, a workflow
-   * module or a deployment, and every later check reads the very object this one just
-   * called unusable. A start walking on from here would answer the next hundred
-   * questions out of a configuration nobody can trust, and the box at its end would
-   * name a hundred things a developer does not have to change. What the validation
-   * NOTICES rather than refuses does go into the box.
+   * while the configuration is bound, before there is an adapter, a workflow module or a
+   * deployment. Every later check reads the very object which this one just called unusable.
+   * A start which went on from here would answer the next hundred questions from a
+   * configuration which nobody can trust. And the box at its end would name a hundred things
+   * which a developer does not have to change. What the check NOTICES, and does not refuse,
+   * does go into the box.
    *
-   * @param facts What the platform knows about the application without any
-   *          property
-   * @param platformConfigurationNote A platform-specific note appended to
-   *     "nothing configured" messages, or null
+   * @param facts What the platform knows about the application without any property
+   * @param platformConfigurationNote A platform-specific note added to "nothing configured"
+   *     messages, or null
    */
   public void validateProperties(
       final ClasspathFacts facts,
@@ -2747,17 +2743,17 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     validateAndLink();
     validateWorkflowModuleIdsAgainstPrefixing();
     if (workflowAdapterCache == null) {
-      // a binder mapping an absent section onto null must not cost the defaults
+      // a binder which maps a missing section to null must not cost the defaults
       workflowAdapterCache = new WorkflowAdapterCacheProperties();
     }
     workflowAdapterCache.validate();
     if (metrics == null) {
-      // a binder mapping an absent section onto null must not cost the defaults
+      // a binder which maps a missing section to null must not cost the defaults
       metrics = new MetricsProperties();
     }
     metrics.validate();
     if (outbox == null) {
-      // a binder mapping an absent section onto null must not cost the defaults
+      // a binder which maps a missing section to null must not cost the defaults
       outbox = new PhaseTwoOutboxProperties();
     }
     outbox.validateStoreNames();
@@ -2782,10 +2778,10 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     }
 
     if (adapters.isEmpty()) {
-      // several adapter types in the classpath (exactly one would have been derived
-      // by normalize): which one starts new workflows - and in which order existing
-      // workflows are looked up - cannot be guessed
-      // deterministic order: the classpath order of extensions/beans is not stable
+      // several adapter types in the classpath (exactly one would have been derived by
+      // normalize). Nobody can guess which one starts new workflows, and in which order
+      // existing workflows are looked up. The order is made deterministic, because the
+      // classpath order of extensions and beans is not stable
       final var sortedAdapterTypes = adaptersLoaded
           .stream()
           .sorted()
@@ -2814,8 +2810,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               platformConfigurationNote));
     }
 
-    // adapterTypes() collects into a hash map, so the lines are sorted to read the same
-    // way on every boot
+    // adapterTypes() collects into a hash map. So the lines are sorted, to read the same way
+    // on every boot
     final var adaptersNotInClasspath = adapterTypes()
         .entrySet()
         .stream()
@@ -2832,15 +2828,15 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               .formatted(adaptersNotInClasspath, adaptersLoaded));
     }
 
-    // a workflow module found in the classpath needs NO configuration any more:
-    // normalize(facts) derived an empty section for it, and its BPMN
-    // resources are found by the resources-location convention
+    // a workflow module found in the classpath needs NO configuration any more.
+    // normalize(facts) derived an empty section for it, and the resources-location
+    // convention finds its BPMN resources
 
     // unknown workflow-module properties
     final var workflowModulesConfiguredButNotInClasspath = new LinkedList<>(getWorkflowModules().keySet());
     workflowModulesConfiguredButNotInClasspath.removeAll(knownWorkflowModuleIds);
-    // the map comes from a binder and keeps no order, so the message is sorted to read
-    // the same way on every boot
+    // the map comes from a binder and keeps no order. So the message is sorted, to read the
+    // same way on every boot
     workflowModulesConfiguredButNotInClasspath.sort(String::compareTo);
     if (!workflowModulesConfiguredButNotInClasspath.isEmpty()) {
       final var propPrefix = "\n  %s.workflow-modules.".formatted(PREFIX);
@@ -2859,9 +2855,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                       String.join(propPrefix, workflowModulesConfiguredButNotInClasspath)));
     }
 
-    // adapter entries which are never used (V1-style check): every key under an
-    // 'adapters.<id>' section of any level (workflow module, workflow, task) has
-    // to reference a configured adapter id
+    // adapter entries which are never used (a check from V1). Every key under an
+    // 'adapters.<id>' section of any level (workflow module, workflow, task) has to refer to
+    // a configured adapter id
     final var unusedModuleAdapterEntries = getWorkflowModules()
         .values()
         .stream()
@@ -2902,8 +2898,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
         getPrioritizedAdapters(),
         "%s.prioritized-adapters".formatted(PREFIX));
 
-    // if more than one adapter is configured, the property
-    // 'vanillabp.prioritized-adapters' has to list each configured adapter
+    // if more than one adapter is configured, the property 'vanillabp.prioritized-adapters'
+    // has to list each configured adapter
     if (adapters.size() > 1 && (getPrioritizedAdapters().size() != adapters.size())) {
       throw new IllegalStateException(
           """
@@ -2930,8 +2926,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     // adapter configured
     if (adapters.size() == 1) {
       final var adapterId = adapters.keySet().iterator().next();
-      // only CONFIGURED adapter-specific locations are worth the hint - a location
-      // derived by convention is adapter-specific by construction
+      // only CONFIGURED adapter-specific locations are worth the hint. A location derived
+      // by convention is adapter-specific by design
       final var specificBpmnResources = workflowModules
           .entrySet()
           .stream()
@@ -2944,7 +2940,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                 .isBlank();
           })
           .map(Map.Entry::getKey)
-          // the map comes from a binder and keeps no order, so the message is sorted to
+          // the map comes from a binder and keeps no order. So the message is sorted, to
           // read the same way on every boot
           .sorted()
           .toList();
@@ -2972,7 +2968,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
       }
     }
 
-    // adapters in class-path not used
+    // adapters in the classpath which are not used
     final var notConfiguredAdapters = new HashMap<String, Set<String>>();
     getPrioritizedAdapters()
         .stream()
@@ -3018,8 +3014,8 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
               There are VanillaBP adapters referenced not found in any property section 'vanillabp.adapters.*':
                 %s
               """
-              // the keys and the ids below them sit in hash collections, so both are
-              // sorted to read the same way on every boot
+              // the keys and the ids below them are in hash collections. So both are
+              // sorted, to read the same way on every boot
               .formatted(notConfiguredAdapters
                   .entrySet()
                   .stream()
@@ -3034,9 +3030,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                   .collect(Collectors.joining("\n  "))));
     }
 
-    // resources-location (an empty prioritized-adapters list cannot occur here:
-    // a single configured adapter is defaulted by normalize(), multiple adapters
-    // are forced into 'vanillabp.prioritized-adapters' by the check above)
+    // resources-location. An empty prioritized-adapters list cannot happen here. normalize()
+    // sets a single configured adapter as the default, and the check above forces several
+    // adapters into 'vanillabp.prioritized-adapters'
     knownWorkflowModuleIds.forEach(
         workflowModuleId -> {
           final var prioritizedAdaptersOfModule = getPrioritizedAdaptersFor(workflowModuleId, null);
@@ -3057,22 +3053,21 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Validates that environment variables addressing the <code>vanillabp.*</code> tree
-   * were actually taken over by the configuration binding. Environment variables can
-   * only <b>override</b> entries of dynamic maps (adapters, workflow modules) which
-   * are already declared in a configuration file - they cannot <b>introduce</b> a new
-   * entry whose ID contains dashes or dots (the binder cannot reconstruct the ID from
-   * the variable's name). Such a variable is silently ignored by the binding, so this
-   * check fails the startup with a guiding message instead.
+   * Checks that environment variables which address the <code>vanillabp.*</code> tree were
+   * really taken over by the configuration binding. Environment variables can only
+   * <b>override</b> entries of dynamic maps (adapters, workflow modules) which are already
+   * declared in a configuration file. They cannot <b>add</b> a new entry whose ID contains
+   * dashes or dots, because the binder cannot rebuild the ID from the variable's name. The
+   * binding silently ignores such a variable. So this check fails the startup with a guiding
+   * message instead.
    * <p>
-   * The check is a best-effort guard on the ID segments: matching is performed on a
-   * separator-free uppercase form (<code>c8-cloud</code> matches both
-   * <code>C8_CLOUD</code> and <code>C8CLOUD</code>), so unusual IDs sharing a prefix
-   * with another configured ID may escape detection - but a valid override is never
-   * reported as an error.
+   * The check is a best-effort guard on the ID segments. It matches on an uppercase form
+   * without separators (<code>c8-cloud</code> matches both <code>C8_CLOUD</code> and
+   * <code>C8CLOUD</code>). So unusual IDs which share a prefix with another configured ID may
+   * escape it. But a valid override is never reported as an error.
    *
-   * @param rawPropertyNames The raw names of all properties available, including the
-   *          unconverted environment-variable names (both platforms surface them)
+   * @param rawPropertyNames The raw names of all available properties, including the
+   *          unconverted names of environment variables (both platforms provide them)
    */
   public void validateEnvironmentVariableUsage(
       final Iterable<String> rawPropertyNames) {
@@ -3101,14 +3096,14 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
             "%s.workflow-modules".formatted(PREFIX),
             violations);
       }
-      // all other sections (e.g. prioritized-adapters, resources-location,
-      // outbox) carry no dynamic ID segment - a typo there is either caught by
-      // the platform's unknown-key detection or harmless to the BPMS election
+      // all other sections (for example prioritized-adapters, resources-location, outbox)
+      // have no dynamic ID segment. Either the platform's detection of unknown keys catches a
+      // typo there, or it does no harm to the BPMS election
     }
 
     if (!violations.isEmpty()) {
-      // the variables arrive in whatever order the platform hands them over, so the
-      // message is sorted to read the same way on every boot
+      // the variables arrive in whatever order the platform hands them over. So the message
+      // is sorted, to read the same way on every boot
       violations.sort(String::compareTo);
       throw new IllegalStateException(
           """
@@ -3143,7 +3138,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
                   sectionKey,
                   configuredIds.isEmpty()
                       ? "none configured"
-                      // the ids come from a binder's map and keep no order
+                      // the ids come from a binder's map, which keeps no order
                       : "'%s'".formatted(
                           configuredIds
                               .stream()
@@ -3189,10 +3184,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * The builder of {@link MigrationAdapterProperties}. Its two type parameters carry the
-   * class being built and the builder itself, so a call inherited from a base class
-   * comes back as the builder of the subclass and the next call in the chain sees every
-   * key again.
+   * The builder of {@link MigrationAdapterProperties}. Its two type parameters are the class
+   * being built and the builder itself. So a call inherited from a base class comes back as
+   * the builder of the subclass, and the next call in the chain sees every key again.
    *
    * @param <C> The class this builder builds
    * @param <B> The builder itself, which every method of the chain returns
@@ -3200,20 +3194,20 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   public abstract static class MigrationAdapterPropertiesBuilder<C extends MigrationAdapterProperties, B extends MigrationAdapterProperties.MigrationAdapterPropertiesBuilder<C, B>> extends AdaptersConfigurationProperties.AdaptersConfigurationPropertiesBuilder<C, B> {
 
     /**
-     * The configuration of all adapters known (properties section
-     * <code>vanillabp.adapters.&lt;id&gt;.*</code>). The builder starts from the same
-     * value the field does.
+     * The configuration of all known adapters (properties section
+     * <code>vanillabp.adapters.&lt;id&gt;.*</code>). The builder starts from the same value as
+     * the field.
      */
     private Map<String, AdapterConfigProperties> adapters = Map.of();
 
     /**
-     * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
+     * Where to load VanillaBP BPMN files from which are NOT specific to any adapter.
      */
     private String resourcesLocation;
 
     /**
-     * Properties specific to workflow modules. The builder starts from the same value
-     * the field does.
+     * Properties specific to workflow modules. The builder starts from the same value as the
+     * field.
      */
     private Map<String, WorkflowModuleAdapterProperties> workflowModules = Map.of();
 
