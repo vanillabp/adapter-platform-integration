@@ -15,29 +15,29 @@ import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
 
 /**
- * Configuration of the default {@link io.vanillabp.integration.spi.PhaseTwoOutbox}
- * implementations (properties section <code>vanillabp.outbox</code>) - the single
- * source of truth for keys, defaults and documentation, used by every store VanillaBP
- * ships: the JDBC one both platforms run on a relational database, and the MongoDB one of
+ * The configuration of the default {@link io.vanillabp.integration.spi.PhaseTwoOutbox}
+ * implementations (properties section <code>vanillabp.outbox</code>). This is the one source
+ * of truth for keys, defaults and documentation. Every store which VanillaBP ships uses it:
+ * the JDBC one which both platforms run on a relational database, and the MongoDB one of
  * each platform.
  * <p>
- * The delivery log reads its store settings here as well - whether the store is created,
- * whether the MongoDB default is active, and the name of its table respectively collection.
- * What that log owns alone is the period a record is kept, which lives in
+ * The delivery log reads its store settings here as well: whether the store is created,
+ * whether the MongoDB default is active, and the name of its table or collection. What
+ * belongs to that log alone is how long a record is kept. That lives in
  * {@link DeliveryProperties}.
  */
 public class PhaseTwoOutboxProperties {
 
   /**
-   * The empty section a configuration binder starts from: both platforms create the object
-   * and then write the keys the application configured into it, one setter per key.
+   * The empty section from which a configuration binder starts. Both platforms create the
+   * object and then write the keys which the application configured into it, one setter per
+   * key.
    * <p>
-   * It asks the builder for the values, and that is not a detour: every default of this
-   * class stands on the builder as well as on the field, and both ways into an object
-   * end here. A constructor which set the fields itself would have to repeat every
-   * default, and the first one somebody forgets would hand an application which
-   * configures no outbox a poll interval of <code>null</code> and no store sections at
-   * all.
+   * It asks the builder for the values, and that is not a detour. Every default of this class
+   * is on the builder as well as on the field, and both ways into an object end here. A
+   * constructor which set the fields itself would have to repeat every default. The first
+   * default somebody forgets would hand an application which configures no outbox a poll
+   * interval of <code>null</code> and no store sections at all.
    */
   public PhaseTwoOutboxProperties() {
 
@@ -46,72 +46,71 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * The section an application writes these keys below: <code>vanillabp.outbox</code>.
-   * Built from the prefix rather than written out, so a message names the section the way
+   * The section below which an application writes these keys: <code>vanillabp.outbox</code>.
+   * It is built from the prefix and not written out. So a message names the section the way
    * the application has to spell it.
    */
   public static final String SECTION = MigrationAdapterProperties.PREFIX
       + ".outbox";
 
   /**
-   * The longest a store's background poller sleeps while it owes nothing. Key
+   * The longest time for which a store's background poller sleeps while it owes nothing. Key
    * <code>vanillabp.outbox.poll-interval</code>.
    * <p>
-   * It is a cap and not a rhythm. A poller asks its store when the earliest entry which
-   * is still owed is due and sleeps until exactly that moment, so an entry is dispatched
-   * at its due time however long this is, and an application waiting in a timer issues no
-   * database command at all. What the cap covers is the one thing a sleeping node cannot
-   * see: work a node wrote down and then DIED before dispatching, which nobody is waiting
-   * for a notification about (decision 42 in the repository's DECISIONS.md). Raising it is
-   * how an application buys the saving; lowering it back to seconds gives the saving away
+   * It is a maximum and not a rhythm. A poller asks its store when the earliest entry which
+   * is still owed is due, and sleeps until exactly that moment. So an entry is dispatched at
+   * its due time, however long this is. And an application which waits in a timer sends no
+   * database command at all. The maximum covers the one thing which a sleeping node cannot
+   * see: work which a node wrote down and then DIED before it dispatched it. Nobody waits for
+   * a notification about that (decision 42 in the repository's DECISIONS.md). Raising it is
+   * how an application gets the saving. Lowering it back to seconds gives the saving away,
    * and buys nothing else.
    * <p>
-   * Ten seconds by default, which is the rhythm every VanillaBP application polled at
-   * before the sleeping was there, so an application which sets nothing keeps the timing
-   * it had.
+   * The default is ten seconds. Every VanillaBP application polled at that rhythm before the
+   * sleeping existed. So an application which sets nothing keeps the timing it had.
    */
   private Duration pollInterval = DEFAULT_POLL_INTERVAL;
 
   /**
-   * The default of {@link #pollInterval}, which the startup message about what still keeps
-   * a database awake compares against: a value moved away from it is an application asking
-   * for the saving, and that is the moment to say what remains.
+   * The default of {@link #pollInterval}. The startup message about what still keeps a
+   * database awake compares against it. A value moved away from it means an application which
+   * asks for the saving, and that is the moment to say what remains.
    */
   public static final Duration DEFAULT_POLL_INTERVAL = Duration.ofSeconds(10);
 
   /**
-   * The distance to the FIRST retry after a failed dispatch. Every further attempt
-   * doubles it until {@link #maxAttemptFrequency} is reached (see
-   * {@link #attemptDelay(int)}). It is the length of a claim on an entry as well, which is
-   * what {@link io.vanillabp.integration.adapter.migration.outbox.DispatchLease} renews
-   * while a dispatch runs.
+   * The time until the FIRST retry after a failed dispatch. Every further attempt doubles it,
+   * until {@link #maxAttemptFrequency} is reached (see {@link #attemptDelay(int)}). It is also
+   * the length of a claim on an entry, which
+   * {@link io.vanillabp.integration.adapter.migration.outbox.DispatchLease} renews while a
+   * dispatch runs.
    * <p>
    * Key <code>vanillabp.outbox.attempt-frequency</code>, thirty seconds by default.
    */
   private Duration attemptFrequency = Duration.ofSeconds(30);
 
   /**
-   * The key of {@link #attemptFrequency}:
-   * <code>vanillabp.outbox.attempt-frequency</code>. It is a constant because the
-   * message about an entry which is dispatched again names it.
+   * The key of {@link #attemptFrequency}: <code>vanillabp.outbox.attempt-frequency</code>.
+   * It is a constant, because the message about an entry which is dispatched again names
+   * it.
    */
   public static final String ATTEMPT_FREQUENCY_PROPERTY = SECTION
       + ".attempt-frequency";
 
   /**
-   * The longest distance the growing backoff reaches. Five minutes, so a BPMS which
-   * comes back is noticed within five minutes however long it was away.
+   * The longest time which the growing backoff reaches. It is five minutes. So a BPMS which
+   * comes back is noticed within five minutes, however long it was away.
    * <p>
    * Key <code>vanillabp.outbox.max-attempt-frequency</code>, five minutes by default.
    */
   private Duration maxAttemptFrequency = Duration.ofMinutes(5);
 
   /**
-   * After how many failed attempts an entry is blocked (not retried any longer).
-   * Fifty of them, which with the two defaults above span an outage of about four
-   * hours - a cluster upgrade rather than an exotic event. What ends up blocked is
-   * then an entry which is broken rather than one whose BPMS was away for a while,
-   * and it is the case an operator has to look at.
+   * After how many failed attempts an entry is blocked (not retried any more). Fifty of
+   * them, which with the two defaults above cover an outage of about four hours. That is a
+   * cluster upgrade, not an exotic event. So what ends up blocked is an entry which is
+   * broken, not one whose BPMS was away for a while. That is the case an operator has to
+   * look at.
    * <p>
    * Key <code>vanillabp.outbox.block-after-attempts</code>, fifty attempts by default.
    */
@@ -119,17 +118,17 @@ public class PhaseTwoOutboxProperties {
 
   /**
    * The key of {@link #blockAfterAttempts}:
-   * <code>vanillabp.outbox.block-after-attempts</code>. It is a constant because the
-   * message about an entry which could not be blocked names it.
+   * <code>vanillabp.outbox.block-after-attempts</code>. It is a constant, because the message
+   * about an entry which could not be blocked names it.
    */
   public static final String BLOCK_AFTER_ATTEMPTS_PROPERTY = SECTION
       + ".block-after-attempts";
 
   /**
    * Where an operator reads how to find a blocked entry, open it again or delete it, for
-   * every store VanillaBP writes itself. Each ERROR which reports a blocked entry ends with
-   * this address. It is a constant so the tests which read those lines name the same page
-   * the lines do. See decision 115 in the repository's DECISIONS.md.
+   * every store which VanillaBP writes itself. Each ERROR which reports a blocked entry ends
+   * with this address. It is a constant, so that the tests which read those lines name the
+   * same page as the lines. See decision 115 in the repository's DECISIONS.md.
    */
   public static final String BLOCKED_ENTRIES_GUIDE = "https://github.com/vanillabp/adapter-platform-integration/wiki/Blocked-outbox-entries";
 
@@ -137,24 +136,24 @@ public class PhaseTwoOutboxProperties {
    * How long an entry may wait for a BPMS which does not report its workflow yet, counted
    * from the moment the entry was written. After that the entry is blocked.
    * <p>
-   * Waiting for a read model is not a failure, so it uses no attempts: an adapter which
+   * Waiting for a read model is not a failure, so it uses no attempts. An adapter which
    * answers with {@link io.vanillabp.integration.spi.PhaseTwoRetryLater} gets its entry back
    * after the window it named, and <code>ATTEMPTS</code> stays as it was. Counting those
-   * answers blocked an entry after fifty windows, which is about eight minutes of a stopped
+   * answers blocked an entry after fifty windows. That is about eight minutes of a stopped
    * Camunda 8 exporter, while a database which was away for hours blocked nothing. This
-   * setting is what ends the wait instead.
+   * setting ends the wait instead.
    * <p>
-   * Key <code>vanillabp.outbox.wait-for-visibility-at-most</code>. Not set by default, and
-   * then it is the time the attempts of {@link #blockAfterAttempts} take with the growing
-   * backoff, see {@link #waitForVisibilityAtMost()}: about four hours with the defaults, so
-   * a stopped read model is given as long as a BPMS which is away. See decision 113 in the
-   * repository's DECISIONS.md.
+   * Key <code>vanillabp.outbox.wait-for-visibility-at-most</code>. It is not set by default.
+   * Then it is the time which the attempts of {@link #blockAfterAttempts} take with the
+   * growing backoff (see {@link #waitForVisibilityAtMost()}): about four hours with the
+   * defaults. So a stopped read model gets as long as a BPMS which is away. See decision 113
+   * in the repository's DECISIONS.md.
    */
   private Duration waitForVisibilityAtMost = null;
 
   /**
    * The key of {@link #waitForVisibilityAtMost}:
-   * <code>vanillabp.outbox.wait-for-visibility-at-most</code>. It is a constant because the
+   * <code>vanillabp.outbox.wait-for-visibility-at-most</code>. It is a constant, because the
    * message about an entry which waited too long names it.
    */
   public static final String WAIT_FOR_VISIBILITY_AT_MOST_PROPERTY = SECTION
@@ -162,13 +161,13 @@ public class PhaseTwoOutboxProperties {
 
   /**
    * How long an entry may wait for a BPMS which does not report its workflow yet: the value
-   * of <code>vanillabp.outbox.wait-for-visibility-at-most</code> where it is set, and
-   * otherwise the time the attempts take until an entry which keeps failing is blocked.
+   * of <code>vanillabp.outbox.wait-for-visibility-at-most</code> where it is set. Otherwise it
+   * is the time which the attempts take until an entry which keeps failing is blocked.
    * <p>
    * That time is the sum of the distances between the attempts. The first attempt runs at
    * once, and the entry is blocked when attempt number <code>block-after-attempts</code>
-   * failed, so there are <code>block-after-attempts - 1</code> distances. With the defaults
-   * these are 30 seconds, 1, 2 and 4 minutes, and 45 times 5 minutes, which is 3 hours and
+   * failed. So there are <code>block-after-attempts - 1</code> distances. With the defaults
+   * these are 30 seconds, 1, 2 and 4 minutes, and 45 times 5 minutes. That is 3 hours and
    * 52.5 minutes.
    *
    * @return How long an entry may wait, counted from the moment it was written
@@ -190,12 +189,12 @@ public class PhaseTwoOutboxProperties {
    * Whether an entry has waited for its BPMS long enough to be blocked.
    * <p>
    * Every store asks this when a dispatch is answered with
-   * {@link io.vanillabp.integration.spi.PhaseTwoRetryLater}, so the rule is the same on all
-   * of them. The clock starts when the entry was written. A younger call which replaced the
-   * entry starts it again, because the replacement writes that moment anew.
+   * {@link io.vanillabp.integration.spi.PhaseTwoRetryLater}. So the rule is the same on all of
+   * them. The clock starts when the entry was written. A younger call which replaced the
+   * entry starts it again, because the replacement writes that moment again.
    *
    * @param writtenAt When the entry was written, <code>null</code> where the store does not
-   *          know, which never counts as waited long enough
+   *          know. That never counts as waited long enough
    * @param now The moment the dispatch was answered
    * @return Whether the entry is to be blocked instead of being dispatched again
    */
@@ -211,9 +210,9 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * Refuses a time for waiting on a read model which is zero or negative. Such a value would
-   * block every entry the first time its BPMS was a moment behind, which is the opposite of
-   * what somebody writing the key wants.
+   * Refuses a time to wait for a read model which is zero or negative. Such a value would
+   * block every entry the first time its BPMS was a moment behind. That is the opposite of
+   * what somebody who writes the key wants.
    *
    * @throws IllegalStateException Naming the key and the way out
    */
@@ -233,20 +232,18 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * The distance to the next attempt after a dispatch which failed, doubling per
-   * attempt and capped at {@link #maxAttemptFrequency}. The first retry keeps
-   * {@link #attemptFrequency}, because most failures are momentary and waiting
-   * longer buys nothing there.
+   * The time to the next attempt after a dispatch which failed. It doubles with each attempt,
+   * up to {@link #maxAttemptFrequency}. The first retry keeps {@link #attemptFrequency},
+   * because most failures are momentary, and waiting longer buys nothing there.
    * <p>
-   * The stores VanillaBP owns compute their next attempt with this method, so the
-   * curve is the same on every platform and on every persistence. The gruelbox store is
-   * not one of them. It lives in the artifact
-   * <code>io.vanillabp:gruelbox-phase-two-outbox</code>, and an application which adds that
-   * artifact gets the retry policy of the gruelbox library. That library knows one fixed
-   * distance, and the README of that artifact says what follows from it.
+   * The stores which VanillaBP owns compute their next attempt with this method. So the curve
+   * is the same on every platform and on every persistence. The gruelbox store is not one of
+   * them. It lives in the artifact <code>io.vanillabp:gruelbox-phase-two-outbox</code>. An
+   * application which adds that artifact gets the retry policy of the gruelbox library. That
+   * library knows one fixed distance, and the README of that artifact says what follows from
+   * it.
    *
-   * @param attemptsSoFar The number of attempts already made, zero before the first
-   *        retry
+   * @param attemptsSoFar The number of attempts already made, zero before the first retry
    * @return The distance to the next attempt
    */
   public Duration attemptDelay(
@@ -255,9 +252,8 @@ public class PhaseTwoOutboxProperties {
     if (attemptsSoFar <= 0) {
       return attemptFrequency;
     }
-    // doubling in the exponent rather than in a loop, and bounded before it is
-    // computed: 2^attempts overflows a long at 63 attempts, and blockAfterAttempts is
-    // configurable
+    // doubling in the exponent and not in a loop, and limited before it is computed. 2^attempts
+    // overflows a long at 63 attempts, and blockAfterAttempts can be configured
     if (attemptsSoFar >= 62) {
       return maxAttemptFrequency;
     }
@@ -267,120 +263,118 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * How many entries an outbox of VanillaBP's own dispatches at the same time - the JDBC one
-   * and the MongoDB one of each platform. Which of the threads takes an entry is decided by
-   * the workflow aggregate, so two operations of one workflow keep the order they were
-   * written in while operations of different workflows travel at the same time (see
+   * How many entries an outbox of VanillaBP's own dispatches at the same time: the JDBC one,
+   * and the MongoDB one of each platform. The workflow aggregate decides which of the threads
+   * takes an entry. So two operations of one workflow keep the order in which they were
+   * written, while operations of different workflows travel at the same time (see
    * {@link io.vanillabp.integration.adapter.migration.outbox.DispatchLanes}).
    * <p>
    * Four of them, which is small on purpose. Everything a dispatch does costs a database
-   * connection and a call to the BPMS, so a large number here only moves the limit into
-   * the connection pool, where it is harder to see. Raise it where the BPMS is slow
-   * enough that the threads wait for it rather than for the database.
+   * connection and a call to the BPMS. So a large number here only moves the limit into the
+   * connection pool, where it is harder to see. Raise it where the BPMS is so slow that the
+   * threads wait for it and not for the database.
    * <p>
-   * Key <code>vanillabp.outbox.dispatch-threads</code>, four threads by default. Fewer
-   * than one is refused with a message naming the key.
+   * Key <code>vanillabp.outbox.dispatch-threads</code>, four threads by default. Fewer than
+   * one is refused, with a message which names the key.
    */
   private int dispatchThreads = 4;
 
   /**
-   * The key of {@link #dispatchThreads}:
-   * <code>vanillabp.outbox.dispatch-threads</code>. It is a constant because the message
-   * about fewer than one thread names it.
+   * The key of {@link #dispatchThreads}: <code>vanillabp.outbox.dispatch-threads</code>. It
+   * is a constant, because the message about fewer than one thread names it.
    */
   public static final String DISPATCH_THREADS_PROPERTY = SECTION
       + ".dispatch-threads";
 
   /**
-   * Whether the schema (table/collection) used to store outbox entries is created
-   * automatically. Disable this if the database schema is managed manually (e.g. by
+   * Whether the schema (table or collection) for the outbox entries is created
+   * automatically. Switch it off if the database schema is managed by hand (for example by
    * Flyway or Liquibase).
    * <p>
-   * Key <code>vanillabp.outbox.create-schema</code>, <code>true</code> by default. The
-   * records of processed task deliveries share it, because it is a setting of the store
-   * rather than of the outbox.
+   * Key <code>vanillabp.outbox.create-schema</code>, <code>true</code> by default. The records
+   * of processed task deliveries share it, because it is a setting of the store and not of
+   * the outbox.
    */
   private boolean createSchema = true;
 
   /**
-   * The key of {@link #createSchema}: <code>vanillabp.outbox.create-schema</code>. It is
-   * a constant because every message about a table or a collection which is missing
-   * names it, and a test reads the key from here instead of writing it a second time.
+   * The key of {@link #createSchema}: <code>vanillabp.outbox.create-schema</code>. It is a
+   * constant, because every message about a missing table or collection names it. And a test
+   * reads the key from here, instead of writing it a second time.
    */
   public static final String CREATE_SCHEMA_PROPERTY = SECTION
       + ".create-schema";
 
   /**
-   * How long successfully dispatched entries (marked as DONE) are retained before
-   * they are deleted asynchronously - what a retained entry buys is a dispatched
-   * operation somebody can still look at during support, not a longer deduplication
-   * window: that one ends with the dispatch (see
-   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
+   * How long successfully dispatched entries (marked as DONE) are kept before they are
+   * deleted in the background. A kept entry is a dispatched operation which somebody can still
+   * look at in a support case. It is not a longer window of deduplication, because that one
+   * ends with the dispatch (see {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
    * <p>
-   * This is the OUTBOX half only. The records of processed task deliveries have a
-   * retention of their own (<code>vanillabp.delivery.retention</code>), which defaults to
-   * this number and is a correctness setting rather than an operational one: a delivery
-   * arriving later than it finds no record and runs the business code a second time (see
+   * This is the OUTBOX half only. The records of processed task deliveries have a retention
+   * of their own (<code>vanillabp.delivery.retention</code>). It defaults to this number, and
+   * it is a setting for correctness, not for operations. A delivery which arrives later than
+   * that finds no record, and runs the business code a second time (see
    * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The two were one property until
-   * they were told apart (decision 24 in the repository's DECISIONS.md), which is why
-   * shortening this one to keep the outbox table small used to shorten a correctness window
-   * with the same hand.
+   * they were told apart (decision 24 in the repository's DECISIONS.md). That is why
+   * shortening this one to keep the outbox table small used to shorten a window for
+   * correctness at the same time.
    * <p>
    * Key <code>vanillabp.outbox.retention</code>, seven days by default.
    */
   private Duration retention = DEFAULT_RETENTION;
 
   /**
-   * The key of {@link #retention}: <code>vanillabp.outbox.retention</code>. It is a
-   * constant because the two messages telling the retentions apart name it next to
+   * The key of {@link #retention}: <code>vanillabp.outbox.retention</code>. It is a constant,
+   * because the two messages which tell the retentions apart name it next to
    * {@link DeliveryProperties#RETENTION_PROPERTY}.
    */
   public static final String RETENTION_PROPERTY = SECTION
       + ".retention";
 
   /**
-   * The default of {@link #retention}, and therefore the default of
-   * <code>vanillabp.delivery.retention</code>, which follows it where it is not set
-   * itself. Seven days.
+   * The default of {@link #retention}, and so the default of
+   * <code>vanillabp.delivery.retention</code>, which follows it where it is not set itself.
+   * Seven days.
    */
   public static final Duration DEFAULT_RETENTION = Duration.ofDays(7);
 
   /**
-   * Configuration of the JDBC default outbox, which both platforms run: Spring Boot on
-   * the connection of its transaction manager, Quarkus on an Agroal connection of the
-   * running JTA transaction. Both default outboxes (JDBC and MongoDB) may be active in
-   * the same application - each aggregate is served by the outbox matching its
-   * persistence.
+   * The configuration of the JDBC default outbox, which both platforms run: Spring Boot on
+   * the connection of its transaction manager, Quarkus on an Agroal connection of the running
+   * JTA transaction. Both default outboxes (JDBC and MongoDB) may be active in the same
+   * application. Each aggregate is served by the outbox which matches its persistence.
    */
   private JdbcOutboxProperties jdbc = new JdbcOutboxProperties();
 
   /**
-   * Configuration of the MongoDB-based default outbox. Both default outboxes (JDBC
-   * and MongoDB) may be active in the same application - each aggregate is served by
-   * the outbox matching its persistence.
+   * The configuration of the default outbox based on MongoDB. Both default outboxes (JDBC
+   * and MongoDB) may be active in the same application. Each aggregate is served by the
+   * outbox which matches its persistence.
    */
   private MongoOutboxProperties mongo = new MongoOutboxProperties();
 
   /**
-   * When the housekeeping of the outbox runs and in which time zone (properties section
+   * When the housekeeping of the outbox runs, and in which time zone (properties section
    * <code>vanillabp.outbox.housekeeping.*</code>).
    */
   private HousekeepingProperties housekeeping = new HousekeepingProperties();
 
   /**
-   * Refuses a configuration the housekeeping cannot run on - a window which is no window
-   * and a time zone nobody knows - and warns about the one case where a correct-looking
-   * configuration house-keeps at the wrong hour: a JVM on UTC without a zone of its own.
+   * Refuses a configuration on which the housekeeping cannot run: a window which is no
+   * window, and a time zone which nobody knows. And it warns about the one case where a
+   * configuration which looks correct cleans up at the wrong hour: a JVM on UTC without a
+   * zone of its own.
    *
-   * @param findings Where the warning about the zone is noted, so it reaches the reader in
-   *          the box at the end of the start rather than as a line of its own
+   * @param findings Where the warning about the zone goes. So it reaches the reader in the
+   *          box at the end of the start, and not as a line of its own
    * @throws IllegalStateException Naming the key and the way out
    */
   public void validateHousekeeping(
       final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
     if (housekeeping == null) {
-      // a binder mapping an absent section onto null must not cost the defaults
+      // a binder which maps a missing section to null must not cost the defaults
       housekeeping = new HousekeepingProperties();
     }
     housekeeping.validate(findings);
@@ -388,27 +382,27 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * Refuses a configuration in which two stores of one database would work on the same
-   * table or collection.
+   * Refuses a configuration in which two stores of one database would work on the same table
+   * or collection.
    * <p>
-   * Six names can be set, and nothing about them says that they have to differ. Two
-   * stores sharing one place read, count and delete each other's rows, and what comes
-   * out of that looks like a defect of the outbox rather than like a property somebody
-   * wrote twice. The names are compared at startup because that is the last moment
-   * before the first store works on the wrong place.
+   * Six names can be set, and nothing about them says that they have to differ. Two stores
+   * which share one place read, count and delete each other's rows. What comes out of that
+   * looks like a defect of the outbox, not like a property which somebody wrote twice. The
+   * names are compared at startup, because that is the last moment before the first store
+   * works on the wrong place.
    * <p>
-   * Both databases are checked whether their outbox is switched on or not. A name which
-   * is wrong is wrong the moment somebody turns the store on, and telling them now
-   * spares them the search then.
+   * Both databases are checked, whether their outbox is switched on or not. A wrong name is
+   * wrong the moment somebody turns the store on. Telling them now spares them the search
+   * then.
    */
   public void validateStoreNames() {
 
     if (jdbc == null) {
-      // a binder mapping an absent section onto null must not cost the defaults
+      // a binder which maps a missing section to null must not cost the defaults
       jdbc = new JdbcOutboxProperties();
     }
     if (mongo == null) {
-      // a binder mapping an absent section onto null must not cost the defaults
+      // a binder which maps a missing section to null must not cost the defaults
       mongo = new MongoOutboxProperties();
     }
     refuseTwoStoresInOnePlace(
@@ -425,7 +419,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * @return What each key of the relational stores names, the resolved name where the
+   * @return What each key of the relational stores names, or the resolved name where the
    *         application set none
    */
   private Map<String, String> tablesOfTheRelationalStores() {
@@ -440,7 +434,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * @return What each key of the MongoDB stores names, the resolved name where the
+   * @return What each key of the MongoDB stores names, or the resolved name where the
    *         application set none
    */
   private Map<String, String> collectionsOfTheMongoStores() {
@@ -457,10 +451,10 @@ public class PhaseTwoOutboxProperties {
   /**
    * Throws where two of the given keys name the same place.
    *
-   * @param namesByProperty What each key names, in the order the message lists them
-   * @param asTheDatabaseReadsThem How the database decides that two names are one place.
-   *          A relational database looks the table up in capitals whatever the
-   *          application wrote, while MongoDB tells two spellings of a collection apart
+   * @param namesByProperty What each key names, in the order in which the message lists them
+   * @param asTheDatabaseReadsThem How the database decides that two names are one place. A
+   *          relational database looks up the table in capitals, whatever the application
+   *          wrote. MongoDB tells two spellings of a collection apart
    * @param whatIsShared The word for the place, for the message
    * @param whatToDo How the application gets out of it again
    * @throws IllegalStateException Naming both keys, what each of them says, and the way
@@ -522,21 +516,21 @@ public class PhaseTwoOutboxProperties {
 
   /**
    * The keys of the JDBC default outbox (properties section
-   * <code>vanillabp.outbox.jdbc.*</code>): whether it is built at all, and the two tables
-   * it works on.
+   * <code>vanillabp.outbox.jdbc.*</code>): whether it is built at all, and the tables on which
+   * it works.
    */
   public static class JdbcOutboxProperties {
 
     /**
-     * The empty section a configuration binder starts from, and the section an application
-     * which writes nothing about the JDBC outbox gets, since the field holding it has this
-     * as its default.
+     * The empty section from which a configuration binder starts. An application which
+     * writes nothing about the JDBC outbox also gets this section, because the field which
+     * holds it has this as its default.
      * <p>
-     * It asks the builder for the values, and that is not a detour: every default of
-     * this class stands on the builder as well as on the field, and both ways into an
-     * object end here. A constructor which set the fields itself would have to repeat
-     * every default, and the first one somebody forgets would switch the JDBC outbox off
-     * for every application which configures no outbox.
+     * It asks the builder for the values, and that is not a detour. Every default of this
+     * class is on the builder as well as on the field, and both ways into an object end here.
+     * A constructor which set the fields itself would have to repeat every default. The first
+     * default somebody forgets would switch the JDBC outbox off for every application which
+     * configures no outbox.
      */
     public JdbcOutboxProperties() {
 
@@ -545,9 +539,9 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The key of {@link #table}: <code>vanillabp.outbox.jdbc.table</code>. It is a
-     * constant because the message about two stores in one table names it and a test
-     * reads the key from here instead of writing it a second time.
+     * The key of {@link #table}: <code>vanillabp.outbox.jdbc.table</code>. It is a constant,
+     * because the message about two stores in one table names it. And a test reads the key
+     * from here, instead of writing it a second time.
      */
     public static final String TABLE_PROPERTY = SECTION
         + ".jdbc.table";
@@ -577,29 +571,28 @@ public class PhaseTwoOutboxProperties {
         + ".jdbc.housekeeping-table";
 
     /**
-     * The name of the table the housekeeping of a relational outbox takes its lease in
+     * The name of the table in which the housekeeping of a relational outbox takes its lease,
      * where the application configures none.
      */
     public static final String DEFAULT_HOUSEKEEPING_TABLE = "VANILLABP_HOUSEKEEPING";
 
     /**
-     * Whether the JDBC-based default outbox is created when a data source is
-     * available. Disable it if the application defines its own
-     * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean and the
-     * default (including its store and background dispatcher) is unwanted.
+     * Whether the default outbox based on JDBC is created when a data source is available.
+     * Switch it off if the application defines its own
+     * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean, and the default (with its
+     * store and background dispatcher) is not wanted.
      * <p>
      * Key <code>vanillabp.outbox.jdbc.enabled</code>, <code>true</code> by default.
      */
     private boolean enabled = true;
 
     /**
-     * The name of the table storing outbox entries. Every outbox instance needs its
-     * own store - two dispatchers polling the same table would compete and
-     * double-dispatch. <code>null</code> means
-     * <code>VANILLABP_PHASE_TWO_OUTBOX</code>, on both platforms. The table meant here
-     * is the one VanillaBP writes itself. An application which uses the gruelbox store of
-     * <code>io.vanillabp:gruelbox-phase-two-outbox</code> stores its entries in gruelbox'
-     * own <code>TXNO_OUTBOX</code>, which this key does not rename, because that table
+     * The name of the table which stores the outbox entries. Every outbox instance needs its
+     * own store. Two dispatchers which poll the same table would compete and dispatch twice.
+     * <code>null</code> means <code>VANILLABP_PHASE_TWO_OUTBOX</code>, on both platforms. This
+     * is the table which VanillaBP writes itself. An application which uses the gruelbox store
+     * of <code>io.vanillabp:gruelbox-phase-two-outbox</code> stores its entries in gruelbox'
+     * own <code>TXNO_OUTBOX</code>. This key does not rename that table, because the table
      * and its columns belong to the library.
      * <p>
      * Key <code>vanillabp.outbox.jdbc.table</code>, unset by default.
@@ -607,61 +600,59 @@ public class PhaseTwoOutboxProperties {
     private String table = null;
 
     /**
-     * The name of the table storing the payloads of phase-two calls which carry one
-     * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). One table per
-     * outbox, for the reason the outbox itself has one: two applications sharing it
-     * would house-keep each other's rows. <code>null</code> means the name of the
-     * outbox table plus
-     * {@link io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore#TABLE_NAME_SUFFIX},
-     * so an application which renames the outbox renames the payloads with it.
+     * The name of the table which stores the payloads of phase-two calls which have one (see
+     * {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). There is one table per
+     * outbox, for the same reason as the outbox itself has one. Two applications which shared
+     * it would clean up each other's rows. <code>null</code> means the name of the outbox table
+     * plus
+     * {@link io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore#TABLE_NAME_SUFFIX}.
+     * So an application which renames the outbox renames the payloads with it.
      * <p>
      * Key <code>vanillabp.outbox.jdbc.payload-table</code>, unset by default.
      */
     private String payloadTable = null;
 
     /**
-     * The name of the table storing the records of processed task deliveries (see
-     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The name lies in this
-     * section because the STORE settings of the delivery log are the outbox' ones, the
-     * way <code>vanillabp.outbox.create-schema</code> already is; what belongs to the log
-     * alone is how long a record is kept
-     * (<code>vanillabp.delivery.retention</code>). <code>null</code> means
-     * {@link io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME},
-     * and unlike the payload table this one does NOT follow a renamed outbox: it is a
-     * store of its own, and a name derived from the outbox would rename it behind the
-     * application's back.
+     * The name of the table which stores the records of processed task deliveries (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The name is in this section,
+     * because the STORE settings of the delivery log are the ones of the outbox, just like
+     * <code>vanillabp.outbox.create-schema</code>. What belongs to the log alone is how long a
+     * record is kept (<code>vanillabp.delivery.retention</code>). <code>null</code> means
+     * {@link io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME}.
+     * Unlike the payload table, this one does NOT follow a renamed outbox. It is a store of its
+     * own, and a name derived from the outbox would rename it behind the application's back.
      * <p>
      * An application which sets it applies the same name to
      * <code>io.vanillabp:vanillabp-schema</code>, through the changelog property
-     * <code>vanillabp.delivery.table</code> - see decision 78 in the repository's
-     * DECISIONS.md.
+     * <code>vanillabp.delivery.table</code> (see decision 78 in the repository's
+     * DECISIONS.md).
      * <p>
      * Key <code>vanillabp.outbox.jdbc.delivery-table</code>, unset by default.
      */
     private String deliveryTable = null;
 
     /**
-     * The name of the table the nightly housekeeping takes its lease in - one row per
-     * store, holding who is house-keeping it and until when, so only one node of a
-     * cluster measures its own work (see decision 91 in the repository's DECISIONS.md).
-     * <code>null</code> means {@link #DEFAULT_HOUSEKEEPING_TABLE}. Like the delivery
-     * table and unlike the payload table this one does NOT follow a renamed outbox: it
-     * carries a row per store rather than belonging to one.
+     * The name of the table in which the nightly housekeeping takes its lease. There is one row
+     * per store. It holds who cleans it up and until when, so that only one node of a cluster
+     * measures its own work (see decision 91 in the repository's DECISIONS.md).
+     * <code>null</code> means {@link #DEFAULT_HOUSEKEEPING_TABLE}. Like the delivery table, and
+     * unlike the payload table, this one does NOT follow a renamed outbox. It has a row per
+     * store, and does not belong to one.
      * <p>
      * An application which sets it applies the same name to
      * <code>io.vanillabp:vanillabp-schema</code>, through the changelog property
-     * <code>vanillabp.housekeeping.table</code> - see decision 78 in the repository's
-     * DECISIONS.md.
+     * <code>vanillabp.housekeeping.table</code> (see decision 78 in the repository's
+     * DECISIONS.md).
      * <p>
      * Key <code>vanillabp.outbox.jdbc.housekeeping-table</code>, unset by default.
      */
     private String housekeepingTable = null;
 
     /**
-     * The table the housekeeping takes its lease in: the configured name where there is
-     * one, and {@link #DEFAULT_HOUSEKEEPING_TABLE} otherwise. Read this instead of the
-     * plain getter, which answers what the application wrote and is <code>null</code>
-     * most of the time.
+     * The table in which the housekeeping takes its lease: the configured name where there is
+     * one, otherwise {@link #DEFAULT_HOUSEKEEPING_TABLE}. Read this instead of the plain
+     * getter. The getter answers what the application wrote, and that is <code>null</code> most
+     * of the time.
      *
      * @return The housekeeping table name
      */
@@ -1047,11 +1038,11 @@ public class PhaseTwoOutboxProperties {
      * which writes nothing about the MongoDB outbox gets, since the field holding it has
      * this as its default.
      * <p>
-     * It asks the builder for the values, and that is not a detour: every default of
-     * this class stands on the builder as well as on the field, and both ways into an
-     * object end here. A constructor which set the fields itself would have to repeat
-     * every default, and the first one somebody forgets would switch the MongoDB outbox
-     * off and leave both collections unnamed.
+     * It asks the builder for the values, and that is not a detour. Every default of this
+     * class is on the builder as well as on the field, and both ways into an object end here.
+     * A constructor which set the fields itself would have to repeat every default. The first
+     * default somebody forgets would switch the MongoDB outbox off and leave both collections
+     * unnamed.
      */
     public MongoOutboxProperties() {
 
@@ -1584,11 +1575,11 @@ public class PhaseTwoOutboxProperties {
      * The empty section a configuration binder starts from, and the section an application
      * which writes nothing about the housekeeping gets.
      * <p>
-     * It asks the builder for the values, and that is not a detour: every default of
-     * this class stands on the builder as well as on the field, and both ways into an
-     * object end here. A constructor which set the fields itself would have to repeat
-     * every default, and the first one somebody forgets would hand an application which
-     * configures no outbox a window from <code>null</code> to <code>null</code>.
+     * It asks the builder for the values, and that is not a detour. Every default of this
+     * class is on the builder as well as on the field, and both ways into an object end here.
+     * A constructor which set the fields itself would have to repeat every default. The first
+     * default somebody forgets would hand an application which configures no outbox a window
+     * from <code>null</code> to <code>null</code>.
      */
     public HousekeepingProperties() {
 
