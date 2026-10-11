@@ -40,27 +40,26 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * A BPMS repeating a delivery must not run the business code twice. What is
- * pinned here is the CORE's part of it - which delivery is remembered, what a repeated
- * one is answered with, and when nothing is remembered at all:
+ * A BPMS which repeats a delivery must not run the business code twice. This pins the part
+ * of the CORE: which delivery is remembered, what a repeated one is answered with, and when
+ * nothing is remembered at all.
  * <ul>
- * <li>a repeated delivery skips the handler and reports the recorded outcome again
- * (completed as well as BPMN error, whose code and name have to survive);</li>
- * <li>a delivery whose handler threw leaves no record - the retry runs it, which is what
- * makes the BPMS' retry work;</li>
- * <li>a delivery whose adapter reports no identity is remembered all the same, under a key
- * which recognises no repetition - the row answers which BPMS holds the task and which kind
- * of id its id is, and only the switch turns that off too;</li>
- * <li>nothing is remembered where the feature is switched off for the adapter, the workflow
- * or the single task;</li>
- * <li>an adapter which may repeat deliveries without a log to remember them is reported
- * at startup, naming the property to silence it;</li>
- * <li>the elements of a multi-instance activity are told apart although they share task,
- * workflow and aggregate - the delivery id an adapter reports per activation is what
- * carries it, at any nesting depth, and a called process brings its own BPMN process id
- * on top.</li>
+ * <li>A repeated delivery skips the handler and reports the recorded outcome again. This
+ * holds for completed and for BPMN error, whose code and name have to survive.</li>
+ * <li>A delivery whose handler threw leaves no record. The retry runs it, and that makes the
+ * retry of the BPMS work.</li>
+ * <li>A delivery whose adapter reports no identity is still remembered, under a key which
+ * recognises no repetition. The row answers which BPMS holds the task and which kind of id
+ * its id is. Only the switch turns that off too.</li>
+ * <li>Nothing is remembered where the feature is switched off for the adapter, the workflow
+ * or the single task.</li>
+ * <li>An adapter which may repeat deliveries without a log to remember them is reported at
+ * startup. The report names the property which silences it.</li>
+ * <li>The elements of a multi-instance activity are told apart, although they share task,
+ * workflow and aggregate. The delivery id which an adapter reports per activation carries
+ * the difference, at any nesting depth. A called process adds its own BPMN process id.</li>
  * </ul>
- * The stores themselves (JDBC, MongoDB) are covered by the platform integrations' tests -
+ * The platform integrations cover the stores themselves (JDBC, MongoDB) in their tests,
  * per platform, as the coverage rules require.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -124,9 +123,9 @@ public class InboundIdempotencyTest {
   }
 
   /**
-   * A transaction which really rolls back: everything recorded and saved while the work
-   * ran is discarded when it throws - the only way to tell "no record was written"
-   * apart from "the record was written and ignored".
+   * A transaction which really rolls back. Everything recorded and saved while the work ran
+   * is discarded when it throws. Only so can the test tell "no record was written" apart
+   * from "the record was written and ignored".
    */
   static class TransactionRunnerStub implements TransactionRunner {
 
@@ -162,7 +161,7 @@ public class InboundIdempotencyTest {
   }
 
   /**
-   * A delivery log in memory, behaving like a store with a unique key.
+   * A delivery log in memory which behaves like a store with a unique key.
    */
   static class InMemoryDeliveryLog implements TaskDeliveryLog {
 
@@ -188,8 +187,8 @@ public class InboundIdempotencyTest {
   public static class TestWorkflowService {
 
     /**
-     * How often a handler really ran - counted outside the aggregate, since a
-     * rolled-back delivery takes the aggregate's changes with it.
+     * How often a handler really ran. It is counted outside the aggregate, because a
+     * delivery which is rolled back takes the changes of the aggregate with it.
      */
     static int handlerCalls;
 
@@ -229,8 +228,9 @@ public class InboundIdempotencyTest {
   private final InMemoryDeliveryLog deliveryLog = new InMemoryDeliveryLog();
 
   /**
-   * Properties where the given switch values are configured - <code>null</code> means
-   * "not configured at that level", so the resolution order of the key can be exercised.
+   * Properties with the given values of the switch. <code>null</code> means "not
+   * configured at that level". So the test can exercise the order in which the key is
+   * resolved.
    */
   private MigrationAdapterProperties properties(
       final Boolean adapterLevel,
@@ -280,9 +280,9 @@ public class InboundIdempotencyTest {
   }
 
   /**
-   * A process service of another BPMN process of the same workflow module - what a
-   * called process is: a secondary workflow of the SAME aggregate, delivering its tasks
-   * under its own BPMN process id.
+   * A process service of another BPMN process of the same workflow module. A called process
+   * is just that: a secondary workflow of the SAME aggregate, which delivers its tasks under
+   * its own BPMN process id.
    */
   private MigrationProcessService<Aggregate> processService(
       final MigrationAdapterProperties properties,
@@ -324,8 +324,8 @@ public class InboundIdempotencyTest {
 
     final var registry = new WorkflowTaskRegistry(
         new TransactionRunnerStub(() -> {
-          // the rolled-back transaction takes the delivery record AND the aggregate
-          // changes with it
+          // the transaction which is rolled back takes the delivery record AND the changes
+          // of the aggregate with it
           deliveryLog.records.clear();
           persistence.aggregates.values().forEach(aggregate -> aggregate.invocations = 0);
         }));
@@ -412,7 +412,7 @@ public class InboundIdempotencyTest {
     assertEquals(1, persistence.aggregates.get("4711").invocations, "the handler ran exactly once");
     assertEquals(1, deliveryLog.recorded.size(), "the delivery was recorded once");
 
-    // a genuinely new task instance of the same workflow is a different delivery
+    // a really new task instance of the same workflow is a different delivery
     testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4711", "job-2"));
     assertEquals(2, persistence.aggregates.get("4711").invocations);
 
@@ -486,8 +486,8 @@ public class InboundIdempotencyTest {
   @DisplayName("The switch turned off is the one case which writes nothing")
   public void nothingIsRememberedWhereTheSwitchIsOff() {
 
-    // a BPMS behind this switch may repeat a delivery, and a row per repetition would show
-    // the same task as many times as it was handed out
+    // a BPMS behind this switch may repeat a delivery. A row per repetition would show the
+    // same task as many times as it was handed out
     final var testee = registry(processService(properties(false, null, null), deliveryLog));
     storeAggregate("4717");
 
@@ -503,8 +503,8 @@ public class InboundIdempotencyTest {
   @DisplayName("The switch is resolved per task: workflow on, task off")
   public void theSwitchIsResolvedTaskBeforeWorkflowBeforeAdapter() {
 
-    // adapter level off, workflow level on, task level off again - the most specific
-    // value wins, so THIS task is not deduplicated
+    // adapter level off, workflow level on, task level off again. The most specific value
+    // wins, so THIS task is not deduplicated
     final var testee = registry(processService(properties(false, true, false), deliveryLog));
     storeAggregate("4715");
 
@@ -512,7 +512,7 @@ public class InboundIdempotencyTest {
     testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4715", "job-1"));
     assertEquals(2, persistence.aggregates.get("4715").invocations);
 
-    // another task of the same workflow inherits the workflow's ON
+    // another task of the same workflow inherits the ON of the workflow
     storeAggregate("4716");
     testee.invokeWorkflowTask(MODULE, PROCESS, delivery("erroneous", "4716", "job-2"));
     testee.invokeWorkflowTask(MODULE, PROCESS, delivery("erroneous", "4716", "job-2"));
@@ -538,7 +538,7 @@ public class InboundIdempotencyTest {
         message.contains("vanillabp.adapters.test-adapter.deduplicate-deliveries"),
         "names the property to state that the handlers are idempotent themselves");
 
-    // the message names a configuration gap - it must not be repeated per delivery
+    // the message names a gap in the configuration. It must not be repeated per delivery
     assertEquals(
         messages,
         reportedWhile(properties, testee::validateTaskDeliveryLogAtStartup),
@@ -597,7 +597,7 @@ public class InboundIdempotencyTest {
   }
 
   /**
-   * The messages a logger emitted while the given work ran - the guiding messages are
+   * The messages a logger emitted while the given work ran. The guiding messages are
    * WARNings, and "normal" logging is switched off during tests.
    */
   private List<String> loggedBy(
@@ -622,8 +622,8 @@ public class InboundIdempotencyTest {
   }
 
   /**
-   * What the checks of the start reported while the work ran - a check leaves its
-   * finding in the collection the configuration carries instead of writing a line.
+   * What the checks of the start reported while the work ran. A check leaves its finding in
+   * the collection of the configuration instead of writing a line.
    */
   private List<String> reportedWhile(
       final MigrationAdapterProperties properties,
@@ -642,9 +642,9 @@ public class InboundIdempotencyTest {
     final var testee = registry(processService(properties(null, null, null), deliveryLog));
     storeAggregate("4718");
 
-    // one task of one workflow, three activations: the adapter reports a delivery id per
-    // activation (Camunda 8 the job key, the Process-Engine-API the task id), which is
-    // the whole reason no multi-instance index has to enter the key. Sequential and
+    // one task of one workflow, three activations. The adapter reports a delivery id per
+    // activation (the job key on Camunda 8, the task id on the Process-Engine-API). That is
+    // the whole reason why no multi-instance index has to enter the key. Sequential and
     // parallel multi-instance look exactly the same from here
     testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4718", "job-1"));
     testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4718", "job-2"));
@@ -653,7 +653,7 @@ public class InboundIdempotencyTest {
     assertEquals(3, persistence.aggregates.get("4718").invocations, "every element ran its handler");
     assertEquals(3, deliveryLog.records.size(), "every element got its own record");
 
-    // and a redelivery of ONE element is still answered from that element's record
+    // and a redelivery of ONE element is still answered from the record of that element
     final var redelivered = testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4718", "job-2"));
 
     assertEquals(WorkflowTaskOutcome.Kind.COMPLETED, redelivered.kind());
@@ -667,10 +667,10 @@ public class InboundIdempotencyTest {
 
     final var properties = properties(null, null, null);
     final var testee = registry(processService(properties, deliveryLog));
-    // the called process of a multi-instance call activity: a secondary workflow of the
-    // same aggregate, so nothing but the BPMN process id and the delivery id tells its
-    // tasks apart from the caller's. The argument counts no levels, which is why any
-    // nesting depth is covered by this one
+    // the called process of a multi-instance call activity is a secondary workflow of the
+    // same aggregate. So only the BPMN process id and the delivery id tell its tasks apart
+    // from those of the caller. The argument counts no levels. That is why this one test
+    // covers any nesting depth
     register(testee, "CalledProcess", processService(properties, deliveryLog, "CalledProcess"));
     storeAggregate("4719");
 

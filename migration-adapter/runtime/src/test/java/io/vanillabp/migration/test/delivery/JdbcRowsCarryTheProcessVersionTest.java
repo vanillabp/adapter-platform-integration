@@ -21,9 +21,9 @@ import io.vanillabp.integration.spi.WorkflowStartKey;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The version of the process definition in the SQL both platforms share, on H2: written with a
- * delivery and with the start of a workflow, read back with them, and added to the start row of a
- * workflow whose first report did not know it.
+ * The version of the process definition in the SQL which both platforms share, on H2. It is
+ * written with a delivery and with the start of a workflow, and read back with them. It is
+ * also added to the start row of a workflow whose first report did not know it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class JdbcRowsCarryTheProcessVersionTest {
@@ -109,8 +109,8 @@ public class JdbcRowsCarryTheProcessVersionTest {
   @DisplayName("A second report of the same start adds the version the first one lacked")
   public void aSecondReportAddsTheMissingVersion() {
 
-    // the adapter started the workflow and named no version, the BPMS reported the same start
-    // afterwards and knew it
+    // the adapter started the workflow and named no version. The BPMS reported the same
+    // start afterwards and knew it
     givenAStart("instance-1", null);
 
     assertTrue(givenAStart("instance-1", "3"), "the row holds something it did not hold before");

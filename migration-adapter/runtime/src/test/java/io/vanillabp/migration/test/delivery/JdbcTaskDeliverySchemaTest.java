@@ -20,14 +20,15 @@ import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An application which creates its schema with Liquibase or Flyway switches VanillaBP's
- * table creation off. A missing table is then a deployment which forgot to apply the migration, and
- * that has to be said at startup - not at the first delivery, hours later.
+ * An application which creates its schema with Liquibase or Flyway switches off the table
+ * creation of VanillaBP. A missing table then means a deployment which forgot to apply the
+ * migration. That has to be said at startup, and not at the first delivery, hours later.
  * <p>
- * A column added to the table later is the case a check for the TABLE alone does not catch: a
- * table created by an earlier version of VanillaBP exists, so the check passes and the missing
- * column surfaces at the first delivery. The columns added later are therefore verified as well,
- * whether the application hands the schema over or lets VanillaBP create it.
+ * A check for the TABLE alone does not catch a column which was added to the table later. A
+ * table created by an earlier version of VanillaBP exists. So the check passes, and the
+ * missing column shows up at the first delivery. That is why the columns added later are
+ * checked as well, whether the application hands the schema over or lets VanillaBP create
+ * it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class JdbcTaskDeliverySchemaTest {
@@ -113,9 +114,9 @@ public class JdbcTaskDeliverySchemaTest {
   @DisplayName("A table created by the shipped changelog satisfies the check as well")
   public void aTableOfTheChangelogPasses() throws SQLException {
 
-    // the columns the changelog of vanillabp-schema creates, spelled out here because the core must
-    // not depend on that artifact - if the two ever diverge, this test and the schema module's own
-    // test disagree, which is the point
+    // the columns which the changelog of vanillabp-schema creates. They are spelled out
+    // here, because the core must not depend on that artifact. If the two ever differ, this
+    // test and the own test of the schema module disagree. That is the point
     try (Connection connection = h2("changelog").acquire(); var statement = connection.createStatement()) {
       statement
           .executeUpdate(
@@ -150,7 +151,7 @@ public class JdbcTaskDeliverySchemaTest {
   @DisplayName("A table without PROCESS_VERSION names the column and what an extension loses")
   public void aTableWithoutTheProcessVersionIsReported() throws SQLException {
 
-    // the table as the version before this column wrote it: everything else is there
+    // the table as the version before this column wrote it. Everything else is there
     try (Connection connection = h2("without-process-version").acquire(); var statement = connection
         .createStatement()) {
       statement
@@ -190,8 +191,8 @@ public class JdbcTaskDeliverySchemaTest {
   }
 
   /**
-   * The table as VanillaBP created it before the second timestamp existed - the case a check
-   * looking at tables only cannot see.
+   * The table as VanillaBP created it before the second timestamp existed. A check which
+   * looks only at tables cannot see this case.
    */
   private static void createTableOfAnEarlierVersion(
       final String database) throws SQLException {
@@ -215,7 +216,7 @@ public class JdbcTaskDeliverySchemaTest {
   }
 
   /**
-   * The table of an earlier version: with LAST_SEEN_AT, without ADAPTER_ID.
+   * The table of an earlier version: with LAST_SEEN_AT, but without ADAPTER_ID.
    */
   private static void createTableWithoutAdapterId(
       final String database) throws SQLException {
@@ -259,8 +260,8 @@ public class JdbcTaskDeliverySchemaTest {
   }
 
   /**
-   * The table of an earlier version: with ADAPTER_ID, without the two columns which tell the
-   * election which BPMS holds a task.
+   * The table of an earlier version: with ADAPTER_ID, but without the two columns which tell
+   * the election which BPMS holds a task.
    */
   private static void createTableWithoutTheTaskColumns(
       final String database) throws SQLException {
@@ -299,8 +300,8 @@ public class JdbcTaskDeliverySchemaTest {
     assertTrue(
         failure.getMessage().contains("ALTER TABLE VANILLABP_TASK_DELIVERY ADD TASK_ID VARCHAR(255)"),
         failure.getMessage());
-    // a column read once per task operation without an index costs more than it saves, so the
-    // remedy names the index too
+    // a column read once per task operation without an index costs more than it saves. So
+    // the remedy names the index too
     assertTrue(
         failure
             .getMessage()
@@ -311,8 +312,8 @@ public class JdbcTaskDeliverySchemaTest {
   }
 
   /**
-   * The table of an earlier version: everything the election needs, but nothing about the
-   * element of the model and the workflow of the BPMS.
+   * The table of an earlier version. It has everything the election needs, but nothing
+   * about the element of the model and the workflow of the BPMS.
    */
   private static void createTableWithoutTheElementColumns(
       final String database) throws SQLException {
@@ -340,8 +341,8 @@ public class JdbcTaskDeliverySchemaTest {
   }
 
   /**
-   * The same table one column further: with BPMN_ELEMENT_ID, without WORKFLOW_ID. The check
-   * names one missing column at a time, so the second one needs a table of its own.
+   * The same table one column further: with BPMN_ELEMENT_ID, but without WORKFLOW_ID. The
+   * check names one missing column at a time. So the second one needs a table of its own.
    */
   private static void createTableWithoutTheWorkflowId(
       final String database) throws SQLException {
@@ -370,8 +371,8 @@ public class JdbcTaskDeliverySchemaTest {
   }
 
   /**
-   * The table one column further still: everything but TASK_KIND, which is the last column a
-   * version of VanillaBP added.
+   * The table one column further still: everything but TASK_KIND. That is the last column
+   * which a version of VanillaBP added.
    */
   private static void createTableWithoutTheTaskKind(
       final String database) throws SQLException {
@@ -418,7 +419,8 @@ public class JdbcTaskDeliverySchemaTest {
         failure.getMessage().contains("the id of a task or of a user task"),
         "the message says what the column is for: "
             + failure.getMessage());
-    // a record is found by its task and the kind is read from that row, so no index is asked for
+    // a record is found by its task, and the kind is read from that row. So no index is
+    // asked for
     assertFalse(failure.getMessage().contains("CREATE INDEX"), failure.getMessage());
 
   }
@@ -437,7 +439,7 @@ public class JdbcTaskDeliverySchemaTest {
     assertTrue(
         failure.getMessage().contains("ALTER TABLE VANILLABP_TASK_DELIVERY ADD BPMN_ELEMENT_ID VARCHAR(255)"),
         failure.getMessage());
-    // the second column is named by the boot which follows, once the first one is there
+    // the boot which follows names the second column, once the first one is there
     createTableWithoutTheWorkflowId("without-workflow-id");
     final var second = assertThrows(
         IllegalStateException.class,
@@ -446,8 +448,8 @@ public class JdbcTaskDeliverySchemaTest {
     assertTrue(
         second.getMessage().contains("ALTER TABLE VANILLABP_TASK_DELIVERY ADD WORKFLOW_ID VARCHAR(255)"),
         second.getMessage());
-    // the core reads the open tasks of one workflow by WORKFLOW_ID on every wake-up, so the
-    // remedy names the index that read needs
+    // the core reads the open tasks of one workflow by WORKFLOW_ID on every wake-up. So the
+    // remedy names the index which that read needs
     assertTrue(
         second
             .getMessage()
@@ -491,9 +493,9 @@ public class JdbcTaskDeliverySchemaTest {
   }
 
   /**
-   * A connection whose statements wait for the other thread. Both stores get past "the table is
-   * not there" before either of them runs the DDL, which is the race of two instances starting
-   * together - without a sleep and without a real race in the test.
+   * A connection whose statements wait for the other thread. Both stores get past "the table
+   * is not there" before either of them runs the DDL. That is the race of two instances which
+   * start together, without a sleep and without a real race in the test.
    */
   private static JdbcConnectionAccess synchronizedAt(
       final String database,

@@ -20,10 +20,10 @@ import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The record of a task which is still open outlives the retention, the record of
- * one nobody redelivers any more does not. Both are the JDBC store's business, which is
- * shared by the two platforms, so this is where the SQL is pinned - on H2, with records
- * backdated instead of waited for.
+ * The record of a task which is still open outlives the retention. The record of one which
+ * nobody redelivers any more does not. Both are the business of the JDBC store, which the two
+ * platforms share. So the SQL is pinned here, on H2, with records which are backdated
+ * instead of waited for.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OpenTaskRecordRetentionTest {
@@ -52,8 +52,8 @@ public class OpenTaskRecordRetentionTest {
   }
 
   /**
-   * A record written the given time ago - both of its timestamps, exactly as the insert
-   * writes them.
+   * A record written the given time ago. Both of its timestamps are set exactly as the
+   * insert writes them.
    */
   private void record(
       final String deliveryKey,
@@ -88,9 +88,9 @@ public class OpenTaskRecordRetentionTest {
 
     recordOf("old-bpms", "open-of-old", "COMPLETION_PENDING");
     recordOf("new-bpms", "open-of-new", "COMPLETION_PENDING");
-    // a completed task is no leftover: nothing is redelivered for it any more
+    // a completed task is no leftover, because nothing is redelivered for it any more
     recordOf("done-bpms", "completed", "COMPLETED");
-    // a record written before the column existed has no adapter id and is no answer
+    // a record written before the column existed has no adapter id, and it is no answer
     testee
         .record(
             new TaskDelivery("open-without-adapter", null, "test-module", "TestProcess", "4711", null, "awaitCompletion", null, null, "COMPLETION_PENDING", null, null, Instant
@@ -118,8 +118,8 @@ public class OpenTaskRecordRetentionTest {
   }
 
   /**
-   * The two timestamps of a record, read past the store - which maps only the one the
-   * core knows about.
+   * The two timestamps of a record, read past the store. The store maps only the one which
+   * the core knows about.
    */
   private java.sql.Timestamp[] timestampsOf(
       final String deliveryKey) throws SQLException {
@@ -157,7 +157,7 @@ public class OpenTaskRecordRetentionTest {
     record("job-forgotten", "COMPLETION_PENDING", Duration.ofHours(2));
     record("job-done", "COMPLETED", Duration.ofHours(2));
 
-    // the BPMS redelivered the open task, which is what the core reports to the store
+    // the BPMS redelivered the open task, and the core reports that to the store
     testee.stillOpen("job-open");
 
     final var deleted = testee.deleteExpired(Duration.ofHours(1));

@@ -14,11 +14,10 @@ import io.vanillabp.integration.adapter.migration.delivery.OpenTaskTouches;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * How the keys of the open tasks a BPMS redelivered reach their store. The
- * bundling itself is what is pinned here - that nothing is written while a delivery is
- * being processed, that the store sees blocks of at most
- * {@link OpenTaskTouches#BLOCK_SIZE} keys however many arrive, and that a failing block
- * neither kills the flush nor the keys which come after it.
+ * How the keys of the open tasks which a BPMS redelivered reach their store. This pins the
+ * bundling itself. Nothing is written while a delivery is processed. The store sees blocks
+ * of at most {@link OpenTaskTouches#BLOCK_SIZE} keys, however many arrive. And a failing
+ * block kills neither the flush nor the keys which come after it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OpenTaskTouchesTest {
@@ -99,7 +98,7 @@ public class OpenTaskTouchesTest {
           + i);
     }
 
-    // the first block throws, so the flush ends there - the keys it did not reach stay
+    // the first block throws, so the flush ends there. The keys it did not reach stay
     assertEquals(0, testee.flush());
     assertEquals(10, testee.size(), "what was not collected yet is still remembered");
 

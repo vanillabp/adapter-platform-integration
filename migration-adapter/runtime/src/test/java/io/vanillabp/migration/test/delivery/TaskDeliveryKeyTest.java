@@ -15,13 +15,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.TaskEvent;
 
 /**
- * What tells two task deliveries apart: the delivery ID an adapter reports is
- * unique within ITS BPMS only, so the key is qualified by adapter, workflow module, BPMN
- * process and event - and it is hashed where it would outgrow what a store can index.
+ * What tells two task deliveries apart. The delivery ID which an adapter reports is unique
+ * only within ITS BPMS. So the key is qualified by adapter, workflow module, BPMN process and
+ * event. It is hashed where it would grow beyond what a store can index.
  * <p>
- * A delivery whose adapter reports no ID is in here too. It gets a key of its own rather
- * than none, because the row it writes answers two questions besides the deduplication, and
- * that key must never be the key of a second delivery.
+ * A delivery whose adapter reports no ID is in here too. It gets a key of its own instead of
+ * none, because the row it writes answers two questions besides the deduplication. That key
+ * must never be the key of a second delivery.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TaskDeliveryKeyTest {
@@ -82,14 +82,14 @@ public class TaskDeliveryKeyTest {
 
     final var key = TaskDeliveryKey.of(MODULE, PROCESS, context("c8", TaskEvent.Event.CREATED, "job-1")).key();
 
-    // two BPMS may hand out the same ID - a migration runs both at the same time
+    // two BPMS may hand out the same ID, because a migration runs both at the same time
     assertNotEquals(key, TaskDeliveryKey.of(MODULE, PROCESS, context("c7", TaskEvent.Event.CREATED, "job-1")).key());
     assertNotEquals(
         key,
         TaskDeliveryKey.of("other-module", PROCESS, context("c8", TaskEvent.Event.CREATED, "job-1")).key());
     assertNotEquals(key,
         TaskDeliveryKey.of(MODULE, "OtherProcess", context("c8", TaskEvent.Event.CREATED, "job-1")).key());
-    // creation and cancellation of ONE user task share the ID and are two deliveries
+    // creation and cancellation of ONE user task share the ID, and they are two deliveries
     assertNotEquals(key, TaskDeliveryKey.of(MODULE, PROCESS, context("c8", TaskEvent.Event.CANCELED, "job-1")).key());
     assertNotEquals(key, TaskDeliveryKey.of(MODULE, PROCESS, context("c8", TaskEvent.Event.CREATED, "job-2")).key());
 
@@ -106,7 +106,7 @@ public class TaskDeliveryKeyTest {
         identity.key().startsWith("c8|test-module|TestProcess|CREATED|(not-deduplicated)"),
         "a reader of the store sees it at the key: "
             + identity.key());
-    // the same delivery asked twice is two rows, which is what makes the key unique
+    // the same delivery asked twice is two rows. That makes the key unique
     assertNotEquals(
         identity.key(),
         TaskDeliveryKey.of(MODULE, PROCESS, context("c8", TaskEvent.Event.CREATED, null)).key());
@@ -133,9 +133,8 @@ public class TaskDeliveryKeyTest {
         "c8|test-module|TestProcess|CREATED|job-1",
         TaskDeliveryKey.of(MODULE, PROCESS, context("c8", TaskEvent.Event.CREATED, "job-1")).key());
 
-    // past the boundary, pinned as a literal: the cap-and-hash is shared with the
-    // outbound idempotency key now, and sharing it must not move this string by a
-    // single character
+    // past the boundary, pinned as a literal. The outbound idempotency key now shares the
+    // cap and the hash. Sharing them must not move this string by a single character
     assertEquals(
         "sha256:4a4b5afafe8bbe0b1ef41a04bd55b156b580d888d653c970ab67c5bfc455fdc6",
         TaskDeliveryKey

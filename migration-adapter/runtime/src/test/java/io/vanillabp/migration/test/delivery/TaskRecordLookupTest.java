@@ -19,9 +19,9 @@ import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Reading a record by the task it belongs to, and writing down that the task was closed -
- * what the BPMS election of a task operation asks the store instead of asking a BPMS. The
- * SQL is shared by both platforms, so this is where it is pinned, on H2.
+ * Reading a record by the task it belongs to, and writing down that the task was closed. The
+ * BPMS election of a task operation asks the store this, instead of asking a BPMS. Both
+ * platforms share the SQL, so it is pinned here, on H2.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TaskRecordLookupTest {
@@ -78,8 +78,8 @@ public class TaskRecordLookupTest {
     assertEquals("c8", found.adapterId(), "the adapter which delivered is what the election is after");
     assertEquals("job-1", found.taskId());
     assertNull(found.taskClosedAt(), "a record is born open");
-    // the element of the model and the workflow of the BPMS ride along, through the INSERT
-    // and back out of every statement which reads a whole record
+    // the element of the model and the workflow of the BPMS ride along. They go through the
+    // INSERT and back out of every statement which reads a whole record
     assertEquals("Activity_awaitSignature", found.bpmnElementId());
     assertEquals("workflow-4711", found.workflowId());
     assertEquals("Activity_awaitSignature", testee.recordedDelivery("open").orElseThrow().bpmnElementId());
