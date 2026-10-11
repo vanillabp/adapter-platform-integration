@@ -25,13 +25,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * Two BPMN processes of one application which reach the BPMS under one identifier. A
- * deployment is per workflow module, so the two sides of such a clash arrive in two separate
- * calls, and the order of the modules is not the application's choice: every case here is
+ * deployment is per workflow module. So the two sides of such a clash arrive in two separate
+ * calls, and the application does not choose the order of the modules. Every case here is
  * driven from both sides where the order could matter.
  * <p>
- * The mode decides what an equal pair of strings means, which is why there is a case per
- * mode rather than one for all of them. Under <code>by-adapter</code> nothing is prefixed and
- * the BPMS is supposed to keep the modules apart, so the adapter is asked and a correct
+ * The mode decides what an equal pair of strings means. That is why there is a case per
+ * mode, and not one for all of them. Under <code>by-adapter</code> nothing is prefixed, and
+ * the BPMS is supposed to keep the modules apart. So the adapter is asked, and a correct
  * application must not be refused.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -49,7 +49,7 @@ public class CollidingProcessIdsAcrossWorkflowModulesTest {
 
   /**
    * The configuration of one adapter id: a mode at the adapter level, modes per workflow
-   * module and modes per workflow of a module.
+   * module, and modes per workflow of a module.
    */
   private static MigrationAdapterProperties configuration(
       final NameClashAvoidance adapterLevel,
@@ -135,8 +135,8 @@ public class CollidingProcessIdsAcrossWorkflowModulesTest {
   }
 
   /**
-   * A boot of an application whose adapter is not known to the core, which is every
-   * platform-free test: the modes are configuration and need nobody to resolve them.
+   * A boot of an application whose adapter the core does not know. Every test without a
+   * platform is like this. The modes are configuration, and nobody needs to resolve them.
    */
   private static NameClashAvoidanceService bootWith(
       final NameClashAvoidance adapterLevel) {
@@ -146,7 +146,7 @@ public class CollidingProcessIdsAcrossWorkflowModulesTest {
   }
 
   /**
-   * An adapter which answers the isolation question as told. Each boot gets its own, so the
+   * An adapter which answers the isolation question as told. Each boot gets its own. So the
    * count of questions belongs to that boot.
    */
   @SuppressWarnings("unchecked")
@@ -176,7 +176,7 @@ public class CollidingProcessIdsAcrossWorkflowModulesTest {
   }
 
   /**
-   * One workflow module being deployed, with the processes it hands over.
+   * One workflow module which is deployed, with the processes it hands over.
    */
   private static void deploys(
       final NameClashAvoidanceService boot,
@@ -226,8 +226,8 @@ public class CollidingProcessIdsAcrossWorkflowModulesTest {
         loansFirst.contains("vanillabp.adapters.c7.name-clash-avoidance"),
         () -> loansFirst);
 
-    // the order of the workflow modules is not the application's choice, so the refusal may
-    // not depend on it
+    // the application does not choose the order of the workflow modules. So the refusal
+    // must not depend on it
     final var paymentsFirst = refusalOf(
         () -> {
           final var boot = bootWith(NameClashAvoidance.NONE);
@@ -248,8 +248,8 @@ public class CollidingProcessIdsAcrossWorkflowModulesTest {
     deploys(boot, ADAPTER, LOANS, PROCESS);
     deploys(boot, ADAPTER, PAYMENTS, PROCESS);
 
-    // this is the application the naive widening would have refused: nothing is prefixed
-    // under the default mode, so the core sees one string twice
+    // the naive widening would have refused this application. Nothing is prefixed under the
+    // default mode, so the core sees one string twice
     Mockito
         .verify(adapter)
         .ownIsolationSeparatesWorkflowModules(LOANS, PAYMENTS);
@@ -279,8 +279,8 @@ public class CollidingProcessIdsAcrossWorkflowModulesTest {
   @DisplayName("An adapter which answers nothing is treated like a BPMS without isolation")
   public void anAdapterAnsweringTheDefault() {
 
-    // the interface's own answer, not a stub: what an adapter written before the question
-    // existed says is 'my isolation separates nothing'
+    // the own answer of the interface, not a stub. An adapter written before the question
+    // existed says 'my isolation separates nothing'
     @SuppressWarnings("unchecked")
     final AdapterDeploymentService<Object, Object> adapter = Mockito
         .mock(AdapterDeploymentService.class, Mockito.CALLS_REAL_METHODS);
@@ -305,8 +305,8 @@ public class CollidingProcessIdsAcrossWorkflowModulesTest {
   @DisplayName("A prefixed form of one module meets the plain id of another under 'none'")
   public void aPrefixedFormMeetsAPlainId() {
 
-    // module 'a' prefixes its process 'b' to 'a__b', and the other module deploys a process
-    // which is literally called 'a__b' without any scoping at all
+    // module 'a' prefixes its process 'b' to 'a__b'. The other module deploys a process
+    // which is literally called 'a__b', without any scoping at all
     final var boot = new NameClashAvoidanceService(
         configuration(NameClashAvoidance.NONE, Map.of("a", NameClashAvoidance.USE_PREFIX), Map.of()));
 
@@ -317,7 +317,7 @@ public class CollidingProcessIdsAcrossWorkflowModulesTest {
         });
 
     assertTrue(refusal.contains("reach the BPMS as 'a__b'"), () -> refusal);
-    // a mixed configuration is what produced it, so the message names a mode per side
+    // a mixed configuration produced it, so the message names a mode per side
     assertTrue(refusal.contains("mode 'use-prefix'"), () -> refusal);
     assertTrue(refusal.contains("mode 'none'"), () -> refusal);
     assertTrue(
@@ -330,8 +330,8 @@ public class CollidingProcessIdsAcrossWorkflowModulesTest {
   @DisplayName("Inside one workflow module a prefixed process meets an unprefixed one, and only a rename helps")
   public void onePrefixedAndOnePlainProcessOfOneModule() {
 
-    // the mode is resolvable per workflow, so one module can prefix one of its processes and
-    // leave the next one alone
+    // the mode can be resolved per workflow. So one module can prefix one of its processes
+    // and leave the next one alone
     final var boot = new NameClashAvoidanceService(
         configuration(
             NameClashAvoidance.NONE,
@@ -342,7 +342,7 @@ public class CollidingProcessIdsAcrossWorkflowModulesTest {
 
     assertTrue(refusal.contains("reach the BPMS as 'm__x'"), () -> refusal);
     assertTrue(refusal.contains("only a rename helps"), () -> refusal);
-    // nothing a tenant or a prefix could do separates two processes of one module
+    // nothing which a tenant or a prefix could do separates two processes of one module
     assertTrue(!refusal.contains("tenant-id"), () -> refusal);
 
   }
@@ -354,11 +354,11 @@ public class CollidingProcessIdsAcrossWorkflowModulesTest {
     final var boot = new NameClashAvoidanceService(
         configuration(List.of(ADAPTER, SECOND_ADAPTER), NameClashAvoidance.NONE, Map.of(), Map.of()));
 
-    // what a migration looks like: one workflow module deployed to two adapter ids, each of
-    // them its own engine or its own scope of one
+    // a migration looks like this: one workflow module deployed to two adapter ids. Each of
+    // them is its own engine, or its own scope of one engine
     deploys(boot, ADAPTER, LOANS, PROCESS);
     deploys(boot, SECOND_ADAPTER, LOANS, PROCESS);
-    // and a second module colliding in the first id is still refused there
+    // and a second module which collides in the first id is still refused there
     final var refusal = refusalOf(() -> deploys(boot, ADAPTER, PAYMENTS, PROCESS));
 
     namesBothSides(refusal);
@@ -372,8 +372,8 @@ public class CollidingProcessIdsAcrossWorkflowModulesTest {
 
     final var boot = bootWith(NameClashAvoidance.NONE);
 
-    // one BPMN file may hold several processes and a module may be handed over once per
-    // adapter, so the same pair arrives more than once
+    // one BPMN file may hold several processes, and a module may be handed over once per
+    // adapter. So the same pair arrives more than once
     deploys(boot, ADAPTER, LOANS, PROCESS, PROCESS);
     deploys(boot, ADAPTER, LOANS, PROCESS);
     boot.validateNoCollidingProcessIds(ADAPTER, null);

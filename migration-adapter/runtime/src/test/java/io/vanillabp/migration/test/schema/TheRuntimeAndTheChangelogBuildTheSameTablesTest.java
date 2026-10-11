@@ -33,31 +33,31 @@ import liquibase.database.jvm.JdbcConnection;
 import liquibase.resource.ClassLoaderResourceAccessor;
 
 /**
- * An application has two ways to the same tables: VanillaBP creates them while it starts,
- * or the application applies the changelog of
- * <code>io.vanillabp:vanillabp-schema</code>. The two have to end in the same table,
- * because an application may start with the first and move to the second later, and it
- * does so at the moment it is least prepared for a surprise.
+ * An application has two ways to the same tables. Either VanillaBP creates them while it
+ * starts, or the application applies the changelog of
+ * <code>io.vanillabp:vanillabp-schema</code>. Both have to end in the same table. An
+ * application may start with the first way and move to the second later. It does so at the
+ * moment when it is least prepared for a surprise.
  * <p>
- * The test lives here, next to the classes which write the runtime's DDL. The schema
- * module cannot hold it: it has no dependency on the runtime on purpose, and its own test
- * can therefore only compare the changelog with the database the changelog itself built.
- * Here both sides are on the classpath, the schema artifact in the test scope alone, so
- * it stays a leaf nothing ships a dependency on.
+ * The test lives here, next to the classes which write the DDL of the runtime. The schema
+ * module cannot hold it. It has no dependency on the runtime on purpose. So its own test can
+ * only compare the changelog with the database which the changelog itself built. Here both
+ * sides are on the classpath. The schema artifact is in the test scope only, so it stays a
+ * leaf on which nothing ships a dependency.
  * <p>
  * <strong>What a difference means.</strong> Neither side is the authority by itself. A
- * column the runtime creates and the changelog does not is a changeset somebody owes, and
- * a column only the changelog knows is a column the runtime forgot to add. Whoever finds
- * this test red reads the column: it belongs to the change which introduced it, and that
- * change has to reach both places.
+ * column which the runtime creates and the changelog does not is a changeset somebody owes.
+ * A column which only the changelog knows is a column the runtime forgot to add. Whoever
+ * finds this test red reads the column. It belongs to the change which introduced it, and
+ * that change has to reach both places.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheRuntimeAndTheChangelogBuildTheSameTablesTest {
 
   /**
-   * What the JDBC metadata says about one column: the type the database chose for it and
-   * how wide it is. Both are read from the same H2, so a difference is a difference of
-   * the two DDLs and not of two databases.
+   * What the JDBC metadata says about one column: the type the database chose for it, and
+   * how wide it is. Both are read from the same H2. So a difference is a difference of the
+   * two DDLs, and not of two databases.
    *
    * @param type The type name of the database
    * @param size How many characters or digits it holds
@@ -74,7 +74,7 @@ public class TheRuntimeAndTheChangelogBuildTheSameTablesTest {
   }
 
   /**
-   * The database an application gets which applies the changelog.
+   * The database which an application gets when it applies the changelog.
    *
    * @return A connection to it
    */
@@ -95,8 +95,8 @@ public class TheRuntimeAndTheChangelogBuildTheSameTablesTest {
   }
 
   /**
-   * The database an application gets which lets VanillaBP create its tables: the outbox
-   * with the payloads beside it, and the log of the task deliveries.
+   * The database which an application gets when it lets VanillaBP create its tables: the
+   * outbox with the payloads beside it, and the log of the task deliveries.
    *
    * @return A connection to it
    */
@@ -154,8 +154,8 @@ public class TheRuntimeAndTheChangelogBuildTheSameTablesTest {
 
   /**
    * @param connection The database
-   * @return The tables of VanillaBP in it, which is every table this platform creates one
-   *         way or the other
+   * @return The tables of VanillaBP in it. That is every table this platform creates in
+   *         one way or the other
    */
   private static TreeSet<String> vanillaBpTablesOf(
       final Connection connection) throws Exception {
@@ -175,9 +175,10 @@ public class TheRuntimeAndTheChangelogBuildTheSameTablesTest {
   }
 
   /**
-   * The indexes VanillaBP names itself, each with the columns it spans in their order. Only the
-   * named ones: a primary key and a unique constraint bring an index whose name the database makes
-   * up, and two databases would then differ over a name nobody wrote.
+   * The indexes which VanillaBP names itself, each with the columns it spans, in their
+   * order. Only the named ones count. A primary key and a unique constraint bring an index
+   * whose name the database makes up. Two databases would then differ over a name which
+   * nobody wrote.
    *
    * @param connection The database
    * @param table The table to read them from
@@ -209,9 +210,9 @@ public class TheRuntimeAndTheChangelogBuildTheSameTablesTest {
     try (var fromTheChangelog = builtByTheChangelog(); var fromTheRuntime = builtByTheRuntime()) {
 
       for (final var table : new TreeSet<>(ChangelogDescription.of(Map.of()).tableNames())) {
-        // a table which is read by its primary key alone carries no index VanillaBP named,
-        // and the claim of the housekeeping is one of those. That both ways build the
-        // table at all is what the assertion over the columns holds
+        // a table which is read by its primary key alone carries no index which VanillaBP
+        // named. The claim of the housekeeping is one of those. The assertion over the columns
+        // holds that both ways build the table at all
         final var built = namedIndexesOf(fromTheChangelog, table);
         assertEquals(
             built,
@@ -239,8 +240,8 @@ public class TheRuntimeAndTheChangelogBuildTheSameTablesTest {
       assertFalse(tables.isEmpty(), "the changelog describes no table at all");
       for (final var table : tables) {
         final var built = columnsOf(fromTheChangelog, table);
-        // a table which is not there answers with no column at all, and two tables which
-        // are both missing would compare as equal - which is the one way this test could
+        // a table which is not there answers with no column at all. Two tables which are
+        // both missing would compare as equal. That is the one way in which this test could
         // pass while proving nothing
         assertFalse(built.isEmpty(), "the changelog did not build '%s'".formatted(table));
         assertEquals(

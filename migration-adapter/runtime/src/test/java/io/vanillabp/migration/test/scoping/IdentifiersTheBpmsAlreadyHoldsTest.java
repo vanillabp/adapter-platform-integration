@@ -24,11 +24,11 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ScopedIden
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What an adapter reports about the identifiers its BPMS already held, and what a
- * developer reads about it: the scoped form the BPMS sees, the mode and property which
- * produced it, the holder as the adapter described it, and the change which frees the
- * name. A finding never ends a boot, because the holder may be an application which runs
- * correctly.
+ * What an adapter reports about the identifiers which its BPMS already held, and what a
+ * developer reads about it. That is the scoped form which the BPMS sees, the mode and the
+ * property which produced it, the holder as the adapter described it, and the change which
+ * frees the name. A finding never ends a boot, because the holder may be an application
+ * which runs correctly.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class IdentifiersTheBpmsAlreadyHoldsTest {
@@ -40,8 +40,8 @@ public class IdentifiersTheBpmsAlreadyHoldsTest {
   private static final String ADAPTER = "c7";
 
   /**
-   * The configuration the service built last runs on - what a check reports into hangs
-   * on it, so this is where a test reads what was reported.
+   * The configuration on which the last built service runs. A check reports into what
+   * hangs on it. So a test reads here what was reported.
    */
   private static MigrationAdapterProperties lastProperties;
 
@@ -70,8 +70,8 @@ public class IdentifiersTheBpmsAlreadyHoldsTest {
   }
 
   /**
-   * Everything logged while the given findings are reported - the message is the whole
-   * feature, so it is read rather than mocked.
+   * Everything logged while the given findings are reported. The message is the whole
+   * feature, so the test reads it and does not mock it.
    */
   private static List<Finding> reportOf(
       final NameClashAvoidanceService testee,
@@ -119,18 +119,17 @@ public class IdentifiersTheBpmsAlreadyHoldsTest {
     assertTrue(reported.contains(MODULE), reported);
     assertTrue(reported.contains("BPMN process id 'RiskAssessment'"), reported);
     assertTrue(reported.contains("'loan-approval__RiskAssessment'"), reported);
-    // the kinds are named in the words a developer sees in a modeller, so a line says
-    // which of the five module-wide names it is about
+    // the kinds are named in the words which a developer sees in a modeller. So a line says
+    // which of the five names of the module it is about
     assertTrue(reported.contains("message name 'PaymentReceived'"), reported);
     assertTrue(reported.contains("'loan-approval__PaymentReceived'"), reported);
     assertTrue(reported.contains("BPMN error code 'PAYMENT_FAILED'"), reported);
     assertTrue(reported.contains("'loan-approval__PAYMENT_FAILED'"), reported);
-    // a task definition is the one kind scoped by its BPMN process as well, so the
+    // a task definition is the one kind which is also scoped by its BPMN process. So the
     // warning names the process it belongs to
     assertTrue(reported.contains("task definition 'scoreApplicant' of BPMN process 'RiskAssessment'"), reported);
     assertTrue(reported.contains("'loan-approval__RiskAssessment__scoreApplicant'"), reported);
-    // a decision is called by several processes of a module, so it is scoped by the
-    // module alone
+    // several processes of a module call a decision. So it is scoped by the module alone
     assertTrue(reported.contains("DMN decision id 'scoring'"), reported);
     assertTrue(reported.contains("'loan-approval__scoring'"), reported);
     assertTrue(reported.contains("another deployment"), reported);
@@ -149,7 +148,7 @@ public class IdentifiersTheBpmsAlreadyHoldsTest {
     assertFalse(provable.contains("cannot tell"), provable);
 
     // a reader who cannot see which of the two they got learns to ignore the whole
-    // message, so the uncertainty belongs into the line it applies to
+    // message. So the uncertainty belongs into the line to which it applies
     final var unprovable = warningOf(
         serviceWith(NameClashAvoidance.USE_PREFIX, null),
         List.of(
@@ -227,14 +226,14 @@ public class IdentifiersTheBpmsAlreadyHoldsTest {
     assertTrue(isolated.contains("mode 'by-adapter'"), isolated);
     assertTrue(isolated.contains("vanillabp.adapters.c7.tenant-id"), isolated);
 
-    // the mode is resolvable per workflow module, and the warning names the level which
-    // decided rather than the one the developer would have to add
+    // the mode can be resolved per workflow module. The warning names the level which
+    // decided, not the one which the developer would have to add
     final var perModule = warningOf(serviceWith(NameClashAvoidance.NONE, NameClashAvoidance.USE_PREFIX), found);
     assertTrue(
         perModule.contains("vanillabp.workflow-modules.loan-approval.adapters.c7.name-clash-avoidance"),
         perModule);
 
-    // ... and where nothing is configured at all it says which default applies
+    // ... and where nothing is configured at all, it says which default applies
     lastProperties = new MigrationAdapterProperties();
     final var unconfigured = warningOf(new NameClashAvoidanceService(lastProperties), found);
     assertTrue(unconfigured.contains("nothing is configured"), unconfigured);
@@ -247,8 +246,8 @@ public class IdentifiersTheBpmsAlreadyHoldsTest {
 
     final var testee = serviceWith(NameClashAvoidance.USE_PREFIX, null);
 
-    // an adapter holding back parts of a finding, a module nobody configured, a kind
-    // without an identifier: a diagnostic must not be the reason a deployment fails
+    // an adapter which holds back parts of a finding, a module which nobody configured, a
+    // kind without an identifier. A diagnostic must not be the reason a deployment fails
     final var recorded = reportOf(
         testee,
         java.util.Arrays

@@ -20,9 +20,9 @@ import io.vanillabp.integration.extension.spi.handler.HandlerMultiInstance;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Nested multi-instance elements are read from the outside in, so the scopes of one
- * invocation are worth nothing without their order. A workflow task always carried it;
- * a call an extension builds lost it while the call was closed.
+ * Nested multi-instance elements are read from the outside in. So the scopes of one
+ * invocation are worth nothing without their order. A workflow task always carried it. A
+ * call which an extension builds lost it while the call was closed.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class NestedMultiInstancesKeepTheirOrderTest {

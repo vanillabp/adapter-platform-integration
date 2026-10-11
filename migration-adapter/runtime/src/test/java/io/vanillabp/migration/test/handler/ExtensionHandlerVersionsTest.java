@@ -44,13 +44,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.service.TaskParam;
 
 /**
- * The methods of an extension are chosen by the version of the BPMN process an event came
- * from, exactly as the <code>&#64;WorkflowTask</code> methods of an application are: the
- * same specifications, the same version tags, the same reading of what is ambiguous and
- * what is two generations of one model standing next to each other.
+ * The methods of an extension are chosen by the version of the BPMN process from which an
+ * event came. This works exactly as for the <code>&#64;WorkflowTask</code> methods of an
+ * application: the same specifications, the same version tags, and the same reading of
+ * what is ambiguous and what is two generations of one model side by side.
  * <p>
- * The implementation behind both is one class, so what is proven here about an extension
- * is the behaviour VanillaBP's own annotations have (see decision 56 in the repository's
+ * One class implements both. So what this test proves about an extension is the behaviour
+ * which the own annotations of VanillaBP have (see decision 56 in the repository's
  * DECISIONS.md).
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -65,8 +65,8 @@ public class ExtensionHandlerVersionsTest {
   private static final String ADAPTER = "test-adapter";
 
   /**
-   * The startup reports of these tests are written by loggers of the core, and this
-   * module logs into no appender by default.
+   * Loggers of the core write the startup reports of these tests. This module logs into no
+   * appender by default.
    */
   private ListAppender<ILoggingEvent> logWatcher;
 
@@ -97,8 +97,8 @@ public class ExtensionHandlerVersionsTest {
             logWatcher.list
                 .stream()
                 .map(ILoggingEvent::getFormattedMessage),
-            // what a check of the start found goes into the collection of the start
-            // rather than into a line of its own
+            // what a check of the start found goes into the collection of the start, not
+            // into a line of its own
             io.vanillabp.migration.test.startup.WhatWasFound
                 .entries(lastProperties.startupFindings())
                 .stream())
@@ -107,7 +107,7 @@ public class ExtensionHandlerVersionsTest {
   }
 
   /**
-   * The configuration the registry built last reports into.
+   * The configuration into which the last built registry reports.
    */
   private static MigrationAdapterProperties lastProperties;
 
@@ -137,7 +137,7 @@ public class ExtensionHandlerVersionsTest {
   }
 
   /**
-   * The extension's own payload.
+   * The own payload of the extension.
    */
   public record Payload(String text) {
   }
@@ -206,7 +206,7 @@ public class ExtensionHandlerVersionsTest {
   }
 
   /**
-   * A method for a version tag, which only the BPMS can place.
+   * A method for a version tag. Only the BPMS can place it.
    */
   public static class TaggedService {
 
@@ -245,7 +245,7 @@ public class ExtensionHandlerVersionsTest {
   }
 
   /**
-   * A method for a version no BPMS of this application holds.
+   * A method for a version which no BPMS of this application holds.
    */
   public static class UnreachableService {
 
@@ -260,7 +260,7 @@ public class ExtensionHandlerVersionsTest {
   }
 
   /**
-   * A method naming a version next to one naming none.
+   * A method which names a version, next to one which names none.
    */
   public static class MixedService {
 
@@ -283,8 +283,8 @@ public class ExtensionHandlerVersionsTest {
   }
 
   /**
-   * Two generations of one element reading different process variables, next to a method
-   * serving every element.
+   * Two generations of one element which read different process variables, next to a
+   * method which serves every element.
    */
   public static class ReadingGenerationsService {
 
@@ -410,8 +410,8 @@ public class ExtensionHandlerVersionsTest {
   }
 
   /**
-   * What one BPMS knows about the versions of the process - here two versions, the
-   * second of them tagged.
+   * What one BPMS knows about the versions of the process. Here it is two versions, and the
+   * second of them is tagged.
    */
   static class TwoDeployedVersions implements ProcessVersionCatalog {
 
@@ -508,8 +508,8 @@ public class ExtensionHandlerVersionsTest {
   }
 
   /**
-   * The contract of these tests: the versions are read from the annotation's
-   * <code>version</code> attribute, and the calls name the version they are about.
+   * The contract of these tests. The versions are read from the <code>version</code>
+   * attribute of the annotation, and the calls name the version they are about.
    */
   private static HandlerContract contract(
       final boolean callsCarryTheProcessVersion) {
@@ -600,9 +600,9 @@ public class ExtensionHandlerVersionsTest {
         .getExtensionHandlers();
 
     // whichever generation the event comes from, it has to carry what that method reads.
-    // The method serving every element counts as well: no single method of the element
-    // serves every version, so the walk cannot rule the catch-all out, and one variable
-    // too many costs less than one missing
+    // The method which serves every element counts as well. No single method of the
+    // element serves every version, so the walk cannot rule the catch-all out. And one
+    // variable too many costs less than one missing
     assertEquals(
         List.of("fallback", "newInput", "oldInput"),
         handlers.taskParameterNames(Note.class, MODULE, PROCESS, List.of("TheTask")));
@@ -622,8 +622,8 @@ public class ExtensionHandlerVersionsTest {
 
     assertEquals("early/hello", handlers.invoke(call("TheTask", "2")).orElseThrow());
     assertEquals("early/hello", handlers.invoke(call("TheTask", "3")).orElseThrow());
-    // a version outside the range is served by nobody, which is an empty answer rather
-    // than a failure: what to do instead is the extension's own business
+    // nobody serves a version outside the range. That is an empty answer, not a failure.
+    // What to do instead is the business of the extension
     assertTrue(handlers.invoke(call("TheTask", "4")).isEmpty());
     assertFalse(handlers.hasHandler(Note.class, MODULE, PROCESS, List.of("TheTask"), "4"));
     assertTrue(handlers.hasHandler(Note.class, MODULE, PROCESS, List.of("TheTask"), "3"));
@@ -634,7 +634,7 @@ public class ExtensionHandlerVersionsTest {
   @DisplayName("Methods for separate ranges stand next to each other, overlapping ones end the boot naming both")
   public void onlyOverlappingRangesAreAmbiguous() {
 
-    // "1" next to ">1" is two generations of one model and boots
+    // "1" next to ">1" is two generations of one model, and it boots
     registry(VersionedService.class, VersionedService::new, true);
 
     final var refused = assertThrows(
@@ -658,7 +658,7 @@ public class ExtensionHandlerVersionsTest {
         .getExtensionHandlers();
 
     assertEquals("every", handlers.invoke(call("AnotherTask", null)).orElseThrow());
-    // whether a version lies within a range nobody reported is not guessed
+    // whether a version lies within a range which nobody reported is not guessed
     assertTrue(handlers.invoke(call("TheTask", null)).isEmpty());
     assertEquals("second", handlers.invoke(call("TheTask", "2")).orElseThrow());
 
@@ -673,7 +673,7 @@ public class ExtensionHandlerVersionsTest {
     registry.resolveProcessVersions(MODULE);
 
     final var handlers = registry.getExtensionHandlers();
-    // version 2 carries the tag, version 1 does not
+    // version 2 carries the tag, and version 1 does not
     assertEquals("tagged/hello", handlers.invoke(call("TheTask", "2")).orElseThrow());
     assertTrue(handlers.invoke(call("TheTask", "1")).isEmpty());
 
