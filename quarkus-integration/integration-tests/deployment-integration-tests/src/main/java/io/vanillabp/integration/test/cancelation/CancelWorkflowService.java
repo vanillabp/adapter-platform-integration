@@ -25,8 +25,8 @@ public class CancelWorkflowService {
 
   /**
    * How many of the next cancellations of {@link #awaitSignature} have to fail. A test
-   * sets it to make a handler throw, which is what leaves the record open and has the
-   * task derived again later.
+   * sets it to make a handler throw. This leaves the record open, so the task is derived
+   * again later.
    */
   public static final AtomicInteger CANCELATIONS_WHICH_FAIL = new AtomicInteger();
 
@@ -78,8 +78,8 @@ public class CancelWorkflowService {
   }
 
   /**
-   * A task which reads a value of the element it runs in, which is what a derived
-   * cancellation cannot carry - the method the boot names.
+   * A task which reads a value of the element it runs in. A derived cancellation cannot
+   * carry such a value. This is the method which the boot names.
    *
    * @param aggregate The workflow aggregate
    * @param taskId The BPMS' identity of the task

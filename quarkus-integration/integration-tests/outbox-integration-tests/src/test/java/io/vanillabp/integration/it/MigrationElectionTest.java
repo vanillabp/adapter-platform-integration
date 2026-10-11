@@ -23,12 +23,11 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * THE migration scenario on Quarkus: instances were started while
- * adapter 'old-bpms' was first priority; the configuration was then flipped
- * ('new-bpms' promoted). Operations on OLD instances still route to 'old-bpms'
- * (probing election), NEW workflows start in 'new-bpms', and the second operation
- * on the same workflow skips the walk via the election cache (the demoted-first
- * adapter is not probed again).
+ * THE migration scenario on Quarkus. Instances were started while adapter 'old-bpms' had
+ * first priority. Then the configuration was flipped, and 'new-bpms' was promoted.
+ * Operations on OLD instances still go to 'old-bpms', found by the probing election. NEW
+ * workflows start in 'new-bpms'. The second operation on the same workflow skips the walk
+ * through the election cache, so the new first-priority adapter is not probed again.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MigrationElectionTest {
@@ -102,8 +101,8 @@ public class MigrationElectionTest {
         listener.getStartedByAdapter().getFirst(),
         "new workflows must start in the promoted first-priority adapter");
 
-    // first operation on the OLD instance: the walk probes 'new-bpms' first
-    // (UNKNOWN), then 'old-bpms' answers ACTIVE and executes
+    // first operation on the OLD instance: the walk probes 'new-bpms' first, which
+    // answers UNKNOWN. Then 'old-bpms' answers ACTIVE and executes
     inTransaction(() -> workflowService.completeTask(aggregate, "task-old-1"));
     awaitCompletedTasksByAdapter(1);
     assertTrue(
@@ -116,9 +115,8 @@ public class MigrationElectionTest {
     final var newBpmsProbesAfterFirstOperation = awareness.countProbesOf("new-bpms");
     assertTrue(newBpmsProbesAfterFirstOperation > 0, "the walk must have probed the first-priority adapter");
 
-    // second operation: the cache routes directly to 'old-bpms' - the
-    // first-priority adapter is NOT probed again (neither in phase one nor at
-    // phase-two dispatch)
+    // second operation: the cache routes directly to 'old-bpms'. The first-priority
+    // adapter is NOT probed again, neither in phase one nor at the phase-two dispatch
     inTransaction(() -> workflowService.completeTask(aggregate, "task-old-2"));
     awaitCompletedTasksByAdapter(2);
     assertTrue(

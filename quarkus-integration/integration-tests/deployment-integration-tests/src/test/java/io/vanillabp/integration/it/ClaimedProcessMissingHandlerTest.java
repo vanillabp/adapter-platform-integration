@@ -16,11 +16,11 @@ import io.vanillabp.integration.test.deployment.TaskAggregatePersistence;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The other half of {@code UnclaimedBpmnProcessTest}: in the same file with two
- * executable processes, the process a workflow service DOES claim has a task no
- * <code>&#64;WorkflowTask</code> method serves. That is the case which really is a
- * defect, and the process nobody claims next to it changes nothing about it - the boot
- * ends with the message it always had.
+ * The other half of {@code UnclaimedBpmnProcessTest}. The same file has two executable
+ * processes. The process which a workflow service DOES claim has a task which no
+ * <code>&#64;WorkflowTask</code> method serves. That case really is a defect. The process
+ * next to it, which nobody claims, changes nothing about it: the boot ends with the message
+ * it always had.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ClaimedProcessMissingHandlerTest {

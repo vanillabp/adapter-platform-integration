@@ -32,10 +32,10 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of workflows the BPMS starts on its own on Quarkus,
- * with the dummy adapter standing in for a BPMS reporting a timer or signal start: the
- * application's <code>&#64;WorkflowStartedByBpms</code> method builds the aggregate, and
- * a repeated notification creates nothing twice where the id it chose says so.
+ * Acceptance test, on Quarkus, of workflows which the BPMS starts on its own. The dummy
+ * adapter stands in for a BPMS which reports a timer or signal start. The application's
+ * <code>&#64;WorkflowStartedByBpms</code> method builds the aggregate. A repeated
+ * notification creates nothing twice, if the id which the method chose says so.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class BpmsInitiatedStartTest {
@@ -155,8 +155,8 @@ public class BpmsInitiatedStartTest {
     assertEquals(42, timerAggregate.getAmount());
     assertEquals("TIMER", timerAggregate.getStartedBy());
 
-    // (b) the same start reported again, now carrying the name the adapter wrote into
-    // the BPMS: nothing is created twice and business data written meanwhile survives
+    // (b) the same start reported again, now with the name which the adapter wrote into
+    // the BPMS. Nothing is created twice, and business data written meanwhile survives
     timerAggregate.setRegion("changed meanwhile");
     persistence.put(timerAggregate);
     final var repeated = dummyAdapter
@@ -190,8 +190,8 @@ public class BpmsInitiatedStartTest {
   public void aReportFromInsideTheStartDoesNothing() {
 
     // the dummy adapter knows no workflow of this aggregate, like a Camunda 8 cluster which does
-    // not show the workflow while its start listener runs. A report which asked it would end the
-    // start with a WorkflowNotFoundException
+    // not show the workflow while its start listener runs. A report which asked the adapter would
+    // end the start with a WorkflowNotFoundException
     final var reportingStart = dummyAdapter()
         .startWorkflowByBpms(
             MODULE,
@@ -255,9 +255,9 @@ public class BpmsInitiatedStartTest {
 
     assertEquals("ended:CANCELED/null", persistence.stored("ended-4711").getStartedBy());
 
-    // the notification proves which BPMS held the workflow AND that it is over: the
-    // hint is marked rather than refreshed, so it leaves the cache long before a
-    // living one would
+    // the notification proves which BPMS held the workflow AND that it is over. So the
+    // hint is marked and not refreshed, and it leaves the cache long before the hint of
+    // a living workflow would
     assertEquals(1, statistics.getEndedMarks());
     assertEquals(
         1,

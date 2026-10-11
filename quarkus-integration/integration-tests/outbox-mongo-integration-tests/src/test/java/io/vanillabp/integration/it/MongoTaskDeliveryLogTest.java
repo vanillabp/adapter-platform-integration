@@ -26,15 +26,15 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * The MongoDB store behind the inbound idempotency on Quarkus. MongoDB is no
- * JTA resource here, so a record is written immediately and removed again when the
- * transaction does not commit - that best-effort compensation is what makes a rolled-back
- * delivery reach its handler again, and it is pinned here together with reading a record
- * back, the uniqueness of a delivery key and the retention cleanup.
+ * The MongoDB store behind the inbound idempotency on Quarkus. MongoDB is no JTA resource
+ * here. So a record is written at once, and removed again when the transaction does not
+ * commit. This best-effort undo makes a rolled-back delivery reach its handler again. The
+ * test pins it, together with reading a record back, the uniqueness of a delivery key and
+ * the retention cleanup.
  * <p>
- * What a cleanup deleted is read back as state rather than counted, because the cleanup
- * running in the background of this application deletes the same records - see decision 46
- * in the repository's DECISIONS.md.
+ * The test reads back as state what a cleanup deleted, and does not count it. The reason:
+ * the cleanup in the background of this application deletes the same records. See decision
+ * 46 in the repository's DECISIONS.md.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoTaskDeliveryLogTest {
@@ -54,8 +54,8 @@ public class MongoTaskDeliveryLogTest {
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .overrideConfigKey("quarkus.mongodb.database", DATABASE)
       // an hour of retention, and the one record which has to expire is written two hours
-      // old: nothing here waits for a clock, and the cleanup running in the background of
-      // this application cannot reach a fresh record a test is still looking at
+      // old. So nothing here waits for a clock. And the cleanup in the background of this
+      // application cannot reach a fresh record which a test still looks at
       .overrideConfigKey("vanillabp.outbox.retention", "PT1H");
 
   @Inject
@@ -103,8 +103,8 @@ public class MongoTaskDeliveryLogTest {
     assertEquals("BPMN_ERROR", recorded.get().outcome());
     assertEquals("PAYMENT_FAILED", recorded.get().bpmnErrorCode());
     assertEquals("PaymentFailed", recorded.get().bpmnErrorName());
-    // the element of the model and the workflow of the BPMS: written into the document and
-    // read back out of it, which is all this store owes them
+    // the element of the model and the workflow of the BPMS. They are written into the
+    // document and read back out of it, and that is all this store owes them
     assertEquals("Activity_processTask", recorded.get().bpmnElementId());
     assertEquals("workflow-4711", recorded.get().workflowId());
 
@@ -151,7 +151,7 @@ public class MongoTaskDeliveryLogTest {
     deliveryLog
         .record(
             new TaskDelivery("w-2", "test-adapter", "test-module", "TestProcess", "4711", "workflow-1", "awaitCompletion", null, "task-2", "COMPLETION_PENDING", null, null, now, null));
-    // a task a called process handed out: another BPMN process, the same workflow
+    // a task which a called process handed out: another BPMN process, the same workflow
     deliveryLog
         .record(
             new TaskDelivery("w-1", "test-adapter", "test-module", "CalledProcess", "4711", "workflow-1", "awaitCompletion", null, "task-1", "COMPLETION_PENDING", null, null, now
@@ -298,8 +298,8 @@ public class MongoTaskDeliveryLogTest {
   }
 
   /**
-   * A record of the given workflow, for the release which is bounded by exactly these
-   * three values plus the moment it runs at.
+   * A record of the given workflow. It is for the release, which is bounded by exactly
+   * these three values plus the moment it runs at.
    */
   private TaskDelivery deliveryOf(
       final String deliveryKey,
@@ -326,7 +326,7 @@ public class MongoTaskDeliveryLogTest {
 
     userTransaction.begin();
     final var released = deliveryLog
-        // a moment safely after the records were written: a store's timestamp has
+        // a moment safely after the records were written. A store's timestamp has
         // millisecond resolution, and the bound is strict
         .releaseRecordsOf("test-module", "TestProcess", "4711", java.time.Instant.now().plusSeconds(1));
     userTransaction.commit();
@@ -344,7 +344,7 @@ public class MongoTaskDeliveryLogTest {
   @DisplayName("A record written after the end of the workflow survives the release")
   public void aRecordWrittenAfterTheNotificationSurvives() throws Exception {
 
-    // a moment safely before the record is written - see above on the resolution
+    // a moment safely before the record is written. See above about the resolution
     final var endOfTheWorkflow = java.time.Instant.now().minusSeconds(1);
 
     userTransaction.begin();
@@ -352,7 +352,7 @@ public class MongoTaskDeliveryLogTest {
     userTransaction.commit();
 
     // the delivery of a SECOND workflow on the same aggregate, processed after the first
-    // one ended - the time bound is what keeps its record
+    // one ended. The time bound keeps its record
     userTransaction.begin();
     final var released = deliveryLog.releaseRecordsOf("test-module", "TestProcess", "4711", endOfTheWorkflow);
     userTransaction.commit();
@@ -363,10 +363,10 @@ public class MongoTaskDeliveryLogTest {
   }
 
   /**
-   * A record written two hours ago, which is past the hour this application keeps one for.
-   * The age is written into the record rather than waited for, and it is two hours rather
-   * than a moment because the bound of the cleanup is strict while a store's timestamp has
-   * millisecond resolution.
+   * A record written two hours ago. That is past the hour for which this application keeps
+   * a record. The age is written into the record, so nobody waits for it. It is two hours
+   * and not just a moment, because the bound of the cleanup is strict, and a store's
+   * timestamp has millisecond resolution.
    */
   private TaskDelivery twoHoursOld(
       final String deliveryKey) {
@@ -385,9 +385,9 @@ public class MongoTaskDeliveryLogTest {
     deliveryLog.record(twoHoursOld("job-4"));
     userTransaction.commit();
 
-    // twice on purpose: the second run meets a store the first one already emptied, which
-    // is the position the cleanup running in the background is in when it gets there first.
-    // What is asserted is the state, so the answer holds whoever deleted the record
+    // twice on purpose. The second run meets a store which the first one already emptied.
+    // The cleanup in the background is in the same position when it gets there first. The
+    // test asserts the state, so the answer holds, whoever deleted the record
     deliveryLog.cleanUpExpiredRecords();
     deliveryLog.cleanUpExpiredRecords();
 

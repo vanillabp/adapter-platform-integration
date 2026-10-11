@@ -6,11 +6,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * An extension in miniature: something which writes entries of its own into the
- * transaction of a workflow aggregate and therefore has to ask the platform which store
- * that transaction reaches. It injects the resolver like any other bean of the
- * application - the point of this class is that the injection resolves at all, and that
- * an extension needs nothing of the platform's internals to get the answer.
+ * An extension in miniature. It writes entries of its own into the transaction of a
+ * workflow aggregate. So it has to ask the platform which store that transaction reaches.
+ * It injects the resolver like any other bean of the application. The point of this class:
+ * the injection works at all, and an extension needs none of the platform's internals to
+ * get the answer.
  */
 @ApplicationScoped
 public class OutboxUsingExtension {

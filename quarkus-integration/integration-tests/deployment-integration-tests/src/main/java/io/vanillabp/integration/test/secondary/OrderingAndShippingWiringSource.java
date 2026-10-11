@@ -8,8 +8,8 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Stands in for a BPMN file holding the calling process and the called one, each with the
- * task its workflow service has the handler of.
+ * Stands in for a BPMN file with the calling process and the called one. Each has the task
+ * whose handler is in its workflow service.
  */
 @ApplicationScoped
 public class OrderingAndShippingWiringSource implements DummyTaskWiringSource {

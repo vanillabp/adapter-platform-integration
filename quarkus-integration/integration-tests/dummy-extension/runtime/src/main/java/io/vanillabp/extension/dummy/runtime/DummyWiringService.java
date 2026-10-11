@@ -7,11 +7,11 @@ import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import jakarta.enterprise.inject.Instance;
 
 /**
- * The dummy extension's wiring service - the Quarkus counterpart of the Spring Boot
- * integration's dummy extension. Model and processing context are plain
- * {@link Object}s, so the extension matches every adapter whose declared types are
- * {@code Object} (e.g. the dummy adapter); every pipeline call is logged and
- * forwarded to optional {@link DummyExtensionListener} beans.
+ * The dummy extension's wiring service. It is the Quarkus counterpart of the dummy
+ * extension of the Spring Boot integration. Model and processing context are plain
+ * {@link Object}s. So the extension matches every adapter whose declared types are
+ * {@code Object}, e.g. the dummy adapter. Every pipeline call is logged and passed on to
+ * optional {@link DummyExtensionListener} beans.
  */
 public class DummyWiringService implements ExtensionWiringService<Object, Object> {
 
@@ -41,8 +41,9 @@ public class DummyWiringService implements ExtensionWiringService<Object, Object
   }
 
   /**
-   * An extension says which VanillaBP platform integration it was built against, and the name it
-   * answers here is where the boot looks: <code>META-INF/vanillabp/extension-dummy.properties</code>.
+   * An extension says which VanillaBP platform integration it was built against. The name it
+   * answers here tells the boot where to look:
+   * <code>META-INF/vanillabp/extension-dummy.properties</code>.
    */
   @Override
   public String getExtensionName() {

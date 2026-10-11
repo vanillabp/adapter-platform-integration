@@ -31,17 +31,16 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of the release of delivery records on Quarkus, with the
- * default JDBC-based delivery log: a workflow which ended deletes the records of its
- * processed deliveries instead of leaving them to the retention. The workflow service of
- * this test has NO <code>&#64;WorkflowEnded</code> method on purpose - the end
- * notification is asked for by the release alone, which is what makes the feature work
- * without touching any adapter.
+ * Acceptance test of the release of delivery records on Quarkus, with the default delivery
+ * log based on JDBC. A workflow which ended deletes the records of its processed deliveries.
+ * It does not leave them to the retention. On purpose, the workflow service of this test
+ * has NO <code>&#64;WorkflowEnded</code> method. Only the release asks for the end
+ * notification. That is why the feature works without touching any adapter.
  * <p>
- * Pinned as well: the record of a SECOND workflow on the same aggregate, written after the
- * end of the first one, survives, and the records of another workflow stay untouched. The
- * case with the option switched off is pinned by {@link InboundIdempotencyTest}, whose
- * application does not configure the release.
+ * The test pins two more things. The record of a SECOND workflow on the same aggregate,
+ * written after the end of the first one, survives. And the records of another workflow
+ * stay untouched. {@link InboundIdempotencyTest} pins the case with the option switched
+ * off, because its application does not configure the release.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DeliveryRecordReleaseTest {
@@ -188,8 +187,8 @@ public class DeliveryRecordReleaseTest {
     assertEquals(0, recordCount("4711"), "the ended workflow releases its records");
     assertEquals(1, recordCount("4712"), "another workflow keeps its own");
 
-    // a SECOND workflow on the same aggregate: its delivery is processed after the end of
-    // the first one, so its record was written after the notification and stays
+    // a SECOND workflow on the same aggregate. Its delivery is processed after the end of
+    // the first one. So its record was written after the notification, and it stays
     dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4711", "job-4"));
     assertEquals(1, recordCount("4711"));
 

@@ -6,12 +6,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * An extension in miniature: something which writes next to a workflow aggregate and
- * therefore has to run in the transaction of that aggregate rather than in one of its
- * own. It injects the RESOLVER and asks it per aggregate class, which is the whole
- * contract - the platform's own runner is what the answer is where the application
- * contributed none, and injecting a runner directly would be ambiguous the moment an
- * application brings one.
+ * An extension in miniature. It writes next to a workflow aggregate. So it has to run in
+ * the transaction of that aggregate, not in one of its own. It injects the RESOLVER and
+ * asks it for each aggregate class, and that is the whole contract. Where the application
+ * brings no runner, the answer is the platform's own runner. Injecting a runner directly
+ * would be ambiguous as soon as an application brings one.
  */
 @ApplicationScoped
 public class TransactionUsingExtension {

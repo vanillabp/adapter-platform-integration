@@ -30,12 +30,12 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of <code>&#64;WorkflowTask</code> processing on Quarkus with the dummy
- * adapter standing in for a BPMS: the adapter triggers task
- * invocations through the core's {@code WorkflowTaskInvoker}, which loads the
- * aggregate, runs the handler within a JTA transaction WITH an activated CDI
- * request context (proven by a {@code @RequestScoped} probe - handlers run on
- * adapter threads) and maps the three outcomes of the restored V1 contract.
+ * Acceptance test of <code>&#64;WorkflowTask</code> processing on Quarkus. The dummy
+ * adapter stands in for a BPMS. It triggers task calls through the core's
+ * {@code WorkflowTaskInvoker}. The invoker loads the aggregate and runs the handler in a JTA
+ * transaction WITH an active CDI request context. A {@code @RequestScoped} probe proves the
+ * context, because handlers run on adapter threads. The invoker also maps the three
+ * outcomes of the restored V1 contract.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowTaskProcessingTest {
@@ -100,8 +100,8 @@ public class WorkflowTaskProcessingTest {
 
     final var dummyAdapter = dummyAdapter();
 
-    // (a) normal return: task completed, aggregate changes saved; the handler
-    // itself asserts an active JTA transaction and accesses a @RequestScoped bean
+    // (a) normal return: task completed, aggregate changes saved. The handler itself
+    // asserts an active JTA transaction and uses a @RequestScoped bean
     persistence.seed("4711");
     final var completed = dummyAdapter.invokeTask("test-module", "TaskProcess", context("processTask", "4711"));
     assertEquals(WorkflowTaskOutcome.Kind.COMPLETED, completed.kind());
@@ -115,8 +115,8 @@ public class WorkflowTaskProcessingTest {
     assertEquals("PAYMENT_FAILED", bpmnError.errorCode());
     assertEquals("bpmn-error-raised", persistence.stored("4712").getStatus());
 
-    // (c) any other exception: propagates, task NOT completed, aggregate changes
-    // NOT saved (transaction rolled back)
+    // (c) any other exception: it propagates, the task is NOT completed, and the
+    // aggregate changes are NOT saved, because the transaction is rolled back
     persistence.seed("4713");
     final var failure = assertThrows(
         IllegalStateException.class,

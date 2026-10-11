@@ -19,8 +19,8 @@ public class MongoRepositoryWorkflowService {
   @Inject
   MongoRepositoryAggregateRepository repository;
 
-  // the aggregate and the outbox entry planning phase two are written in ONE
-  // transaction, so the caller opens one
+  // The aggregate and the outbox entry which plans phase two are written in ONE
+  // transaction. So the caller opens one.
   @jakarta.transaction.Transactional
   public MongoRepositoryAggregate startWorkflow(
       final String id) {
@@ -33,8 +33,8 @@ public class MongoRepositoryWorkflowService {
   }
 
   /**
-   * Completes a task of an already started workflow - used by the phase-two test:
-   * on a BPMS needing a two-phase commit this schedules phase two, which calls back
+   * Completes a task of a workflow which is already started. The phase-two test uses it.
+   * On a BPMS which needs a two-phase commit, this schedules phase two. Phase two calls back
    * into this application's persistence from the dispatcher's thread.
    *
    * @param id The aggregate's ID

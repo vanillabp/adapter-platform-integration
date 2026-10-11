@@ -33,14 +33,14 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test on Quarkus, with the default JDBC-based delivery log: the
- * record which answers the redeliveries of an OPEN task outlives the retention as long as
- * the BPMS keeps redelivering that task, while the record of a task nobody hands out any
- * more expires as it always did. The age of the open task keeps being measured from the
- * moment the handler ran, so <code>vanillabp.delivery.max-task-age</code> still fires.
+ * Acceptance test on Quarkus, with the default delivery log based on JDBC. A record answers
+ * the redeliveries of an OPEN task. It outlives the retention as long as the BPMS keeps
+ * redelivering that task. The record of a task which nobody hands out any more expires as it
+ * always did. The age of the open task is still measured from the moment the handler ran,
+ * so <code>vanillabp.delivery.max-task-age</code> still fires.
  * <p>
- * An hour of retention and an hour of maximum age, with the records backdated by two -
- * nothing here waits for a clock.
+ * An hour of retention and an hour of maximum age, and the records are backdated by two.
+ * Nothing here waits for a clock.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OpenTaskRetentionTest {
@@ -153,8 +153,8 @@ public class OpenTaskRetentionTest {
   }
 
   /**
-   * Moves every record of the table back in time, both of its timestamps - a database two
-   * hours older than the application which reads it.
+   * Moves every record of the table back in time, both of its timestamps. It is like a
+   * database two hours older than the application which reads it.
    */
   private void backdateEveryRecordBy(
       final Duration age) throws SQLException {
@@ -191,8 +191,8 @@ public class OpenTaskRetentionTest {
 
     final var dummyAdapter = dummyAdapter();
 
-    // an asynchronous task the application never completes, and an ordinary one which is
-    // done the moment its handler returns
+    // an asynchronous task which the application never completes, and an ordinary one
+    // which is done the moment its handler returns
     persistence.store("4711");
     persistence.store("4712");
     final var opened = dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitCompletion", "4711", "job-1"));
@@ -201,22 +201,22 @@ public class OpenTaskRetentionTest {
     assertEquals(1, recordCount("4711"));
     assertEquals(1, recordCount("4712"));
 
-    // what an extension reads before it shows what a workflow is waiting for: the task the
-    // application has not completed, and only that one
+    // what an extension reads before it shows what a workflow waits for: the task which
+    // the application has not completed, and only that one
     final var openTasks = deliveryLog.openTasksOfAggregate(MODULE, PROCESS, "4711");
     assertEquals(1, openTasks.size(), openTasks::toString);
     assertEquals("job-1", openTasks.getFirst().taskId());
     assertEquals("awaitCompletion", openTasks.getFirst().taskDefinition());
-    // the element of the model and the workflow of the BPMS come back out of the table the
-    // way the adapter named them - what an extension addresses this task by
+    // the element of the model and the workflow of the BPMS come back out of the table as
+    // the adapter named them. An extension addresses this task by them
     assertEquals("Activity_awaitCompletion", openTasks.getFirst().bpmnElementId());
     assertEquals("workflow-of-4711", openTasks.getFirst().workflowId());
     assertTrue(
         deliveryLog.openTasksOfAggregate(MODULE, PROCESS, "4712").isEmpty(),
         "a task whose handler finished it was never open");
 
-    // the same records read by the workflow of the BPMS instead of by the aggregate, which
-    // is what the core asks on every wake-up
+    // the same records, read by the workflow of the BPMS and not by the aggregate. The core
+    // asks this on every wake-up
     final var openInTheWorkflow = deliveryLog.openTasksOfWorkflow(MODULE, "workflow-of-4711");
     assertEquals(1, openInTheWorkflow.size(), openInTheWorkflow::toString);
     assertEquals("job-1", openInTheWorkflow.getFirst().taskId());
@@ -228,7 +228,7 @@ public class OpenTaskRetentionTest {
     backdateEveryRecordBy(Duration.ofHours(2));
     final var backdated = lastSeenAt("4711");
 
-    // the BPMS renews the lock of the task nobody completed, which is a redelivery
+    // the BPMS renews the lock of the task which nobody completed. That is a redelivery
     final var redelivered = dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitCompletion", "4711", "job-1"));
     assertEquals(WorkflowTaskOutcome.Kind.COMPLETION_PENDING, redelivered.kind());
     assertEquals(
@@ -244,9 +244,9 @@ public class OpenTaskRetentionTest {
         "so a task open longer than 'vanillabp.delivery.max-task-age' is still reported");
 
     // the cleanup writes what the redelivery collected and then deletes what nobody saw.
-    // What it left behind is read back from the table rather than counted: the cleanup
-    // running in the background deletes the same records, and a count would say who got
-    // there first rather than what is left
+    // What it left behind is read back from the table, not counted. The cleanup which runs
+    // in the background deletes the same records. A count would say who got there first,
+    // not what is left
     deliveryLog.cleanUpExpiredRecords();
 
     assertEquals(

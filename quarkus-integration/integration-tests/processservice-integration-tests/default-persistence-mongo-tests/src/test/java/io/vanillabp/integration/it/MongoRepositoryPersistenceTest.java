@@ -26,9 +26,9 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * An application storing its aggregate in a MongoDB Panache repository
- * writes no {@code AggregatePersistenceAware} at all - VanillaBP uses the repository
- * (persistOrUpdate). The write takes part in the transaction VanillaBP opens, because
+ * An application stores its aggregate in a MongoDB Panache repository. It writes no
+ * {@code AggregatePersistenceAware} at all, because VanillaBP uses the repository
+ * (persistOrUpdate). The write takes part in the transaction which VanillaBP opens, because
  * MongoDB Panache binds a MongoDB session to it (see {@code MongoOneTransactionTest}).
  */
 @ExtendWith(SuppressOutputExtension.class)

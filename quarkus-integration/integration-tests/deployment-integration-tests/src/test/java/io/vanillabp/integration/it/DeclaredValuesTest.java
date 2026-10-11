@@ -16,9 +16,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * The same application as in {@code UndeclaredValuesTest}, with the decimal declared at
- * its workflow and the parameter declared at its task. It starts, which is what a
- * declaration is for.
+ * The same application as in {@code UndeclaredValuesTest}, but the decimal is declared at
+ * its workflow and the parameter at its task. It starts. That is what a declaration is
+ * for.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DeclaredValuesTest {

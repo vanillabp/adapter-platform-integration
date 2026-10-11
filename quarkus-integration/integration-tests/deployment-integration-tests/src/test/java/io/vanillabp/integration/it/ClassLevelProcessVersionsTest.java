@@ -27,15 +27,15 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of <code>&#64;BpmnProcess(version = ...)</code> on Quarkus: two
- * workflow service classes serve one BPMN task of one process, each bound to a
- * generation of the model by the range its <code>&#64;BpmnProcess</code> declares, and
- * not one method repeats that range. The version the adapter reports decides which of
- * the two classes runs.
+ * Acceptance test of <code>&#64;BpmnProcess(version = ...)</code> on Quarkus. Two workflow
+ * service classes serve one BPMN task of one process. The range which its
+ * <code>&#64;BpmnProcess</code> declares binds each class to a generation of the model, and
+ * no method repeats that range. The version which the adapter reports decides which of the
+ * two classes runs.
  * <p>
- * A method which INHERITS a range is as restricted as one naming it, so a delivery
- * whose version the BPMS did not report reaches neither class, and the message names
- * the declaration the range came from.
+ * A method which INHERITS a range is as restricted as one which names it. So a delivery
+ * whose version the BPMS did not report reaches neither class. The message names the
+ * declaration the range came from.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ClassLevelProcessVersionsTest {
@@ -113,9 +113,9 @@ public class ClassLevelProcessVersionsTest {
     dummyAdapter.invokeTask("test-module", "ClassVersionedProcess", context("4711", "3"));
     assertEquals("afterTwo", persistence.stored("4711").getServedBy());
 
-    // an inherited range restricts as much as one written on the method, so a BPMS
-    // reporting no version reaches neither class - and the message names the
-    // declaration the range came from, since neither method carries one
+    // an inherited range restricts as much as one written on the method. So a BPMS which
+    // reports no version reaches neither class. The message names the declaration the
+    // range came from, because neither method carries one
     final var unreported = assertThrows(
         IllegalStateException.class,
         () -> dummyAdapter.invokeTask("test-module", "ClassVersionedProcess", context("4711", null)));

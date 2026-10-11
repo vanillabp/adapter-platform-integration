@@ -9,9 +9,9 @@ import io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Stands in for the BPMS query a real adapter runs to learn the deployed versions of
- * a process, and counts how often it ran - the query belongs to the startup and to
- * versions never seen before, not to every task delivery.
+ * Stands in for the BPMS query which a real adapter runs to learn the deployed versions
+ * of a process. It counts how often the query ran. The query belongs to the startup and
+ * to versions never seen before, not to every task delivery.
  */
 @ApplicationScoped
 public class VersionedProcessVersionSource implements DummyProcessVersionSource {
@@ -46,8 +46,8 @@ public class VersionedProcessVersionSource implements DummyProcessVersionSource 
   }
 
   /**
-   * Mimics another cluster node deploying a new version and moving the version tag
-   * to it - what a rolling deployment does while this node is running.
+   * Plays another cluster node which deploys a new version and moves the version tag to
+   * it. A rolling deployment does this while this node is running.
    *
    * @param version The version the other node deployed
    * @param versionTag The tag it carries now

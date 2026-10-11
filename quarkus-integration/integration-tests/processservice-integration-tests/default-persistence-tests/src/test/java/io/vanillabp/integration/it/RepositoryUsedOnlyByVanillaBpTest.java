@@ -20,12 +20,12 @@ import jakarta.inject.Inject;
 import jakarta.persistence.EntityManager;
 
 /**
- * An application whose repository is used by VanillaBP alone injects it
- * nowhere. Quarkus removes beans nobody injects while building the application, and
- * although the Panache extension keeps repositories itself today, VanillaBP looks this
- * one up by class and marks it unremovable rather than relying on that. The aggregate
- * is read back through the entity manager here - injecting the repository would be
- * exactly the injection point this test must not have.
+ * Only VanillaBP uses the repository of this application, so the application injects it
+ * nowhere. Quarkus removes beans which nobody injects while it builds the application.
+ * Today the Panache extension keeps repositories itself. VanillaBP does not rely on that:
+ * it looks this one up by class and marks it unremovable. The test reads the aggregate
+ * back through the entity manager. Injecting the repository would add exactly the
+ * injection point which this test must not have.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class RepositoryUsedOnlyByVanillaBpTest {

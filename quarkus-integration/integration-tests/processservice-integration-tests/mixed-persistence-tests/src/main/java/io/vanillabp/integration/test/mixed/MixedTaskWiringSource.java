@@ -8,7 +8,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Stands in for the BPMN models of this application: both processes have one task,
+ * Stands in for the BPMN models of this application. Both processes have one task. It is
  * wired to the <code>processTask</code> handler of their workflow service.
  */
 @ApplicationScoped

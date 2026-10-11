@@ -7,9 +7,9 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * In-memory persistence for the aggregate of the extension acceptance test. Aggregates
- * are copied on save and load, so what a handler changed without being saved never leaks
- * into the store - which is what makes the save observable at all.
+ * In-memory persistence for the aggregate of the extension acceptance test. It copies
+ * aggregates on save and on load. So a change which a handler did not save never reaches
+ * the store. Only this makes the save visible at all.
  */
 @ApplicationScoped
 public class NoteAggregatePersistence implements AggregatePersistenceAware<NoteAggregate> {

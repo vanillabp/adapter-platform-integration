@@ -9,10 +9,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
 /**
- * Exposes a property defined in <code>no-index-module.yaml</code> which is part of the
- * workflow-module JAR not having a Jandex index. The property is only available if the
- * workflow module was detected: only then the config source for the module-specific
- * config file is generated.
+ * Exposes a property defined in <code>no-index-module.yaml</code>. That file is part of the
+ * workflow-module JAR which has no Jandex index. The property is only there if the
+ * workflow module was detected, because only then is the config source for the module's
+ * own config file generated.
  */
 @Path("/introspect")
 @ApplicationScoped

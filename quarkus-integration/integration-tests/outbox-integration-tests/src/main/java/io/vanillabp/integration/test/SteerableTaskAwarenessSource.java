@@ -5,8 +5,8 @@ import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Steers the dummy adapter's task awareness per test: the answer set here is
- * returned for every probe (default {@link WorkflowAwareness#UNKNOWN_TO_BPMS}).
+ * Steers the dummy adapter's task awareness per test. Every probe gets the answer set
+ * here (default {@link WorkflowAwareness#UNKNOWN_TO_BPMS}).
  */
 @ApplicationScoped
 public class SteerableTaskAwarenessSource implements DummyTaskAwarenessSource {
@@ -31,9 +31,9 @@ public class SteerableTaskAwarenessSource implements DummyTaskAwarenessSource {
   }
 
   /**
-   * How many WORKFLOW probes still answer UNKNOWN_TO_BPMS before the configured
-   * answer applies - an eventually consistent BPMS: the workflow
-   * exists, its BPMS just cannot find it yet.
+   * How many WORKFLOW probes still answer UNKNOWN_TO_BPMS before the configured answer
+   * applies. This plays an eventually consistent BPMS: the workflow exists, but its BPMS
+   * cannot find it yet.
    */
   private final java.util.concurrent.atomic.AtomicInteger invisibleProbes = new java.util.concurrent.atomic.AtomicInteger();
 
@@ -44,8 +44,8 @@ public class SteerableTaskAwarenessSource implements DummyTaskAwarenessSource {
   private volatile io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay visibilityDelay;
 
   /**
-   * Lets the next <code>probes</code> workflow probes answer "not visible yet" and
-   * makes this adapter report the given window while doing so.
+   * Lets the next <code>probes</code> workflow probes answer "not visible yet". Meanwhile
+   * this adapter reports the given window.
    *
    * @param probes How many probes report the workflow as unknown
    * @param window The window the adapter asks the core to wait

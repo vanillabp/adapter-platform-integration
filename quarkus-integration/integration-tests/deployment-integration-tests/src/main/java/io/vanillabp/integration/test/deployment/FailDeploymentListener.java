@@ -6,11 +6,11 @@ import io.vanillabp.bpmsdouble.DummyDeploymentListener;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Makes the dummy adapter's <code>deployResources</code> fail for the adapter id
- * configured by the property <code>test.fail-deploy-for</code> - used to test the
- * <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code> policy. The failure
- * must be configured declaratively (not from test code) because it has to strike
- * during startup, before any test method runs.
+ * Makes the dummy adapter's <code>deployResources</code> fail for the adapter id in the
+ * property <code>test.fail-deploy-for</code>. Tests of the
+ * <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code> policy use it. The failure
+ * must be set in the configuration, not in test code. It has to happen during startup,
+ * before any test method runs.
  */
 @ApplicationScoped
 public class FailDeploymentListener implements DummyDeploymentListener {

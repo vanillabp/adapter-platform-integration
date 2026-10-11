@@ -36,16 +36,15 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * The visibility delay on Quarkus: correlating a message right after the start, on a BPMS whose
- * awareness probe reads an eventually consistent model.
+ * The visibility delay on Quarkus: correlating a message right after the start, on a BPMS
+ * whose awareness probe reads an eventually consistent model.
  * <p>
- * Phase two of the start records which adapter created the instance, so the
- * correlation's election probes that adapter first - and where that adapter does not
- * report the workflow yet, the correlation is PLANNED rather than waited for: the
- * caller's transaction is not the place to sit out a read model. The dispatch asks
- * again, and where the answer is still no it hands the entry back with a due time instead
- * of holding its thread. A workflow nobody ever started has no such record and
- * fails immediately, inside the call.
+ * Phase two of the start records which adapter created the instance. So the election of
+ * the correlation probes that adapter first. Where that adapter does not report the
+ * workflow yet, the correlation is PLANNED and not waited for. The caller's transaction is
+ * not the place to sit out a read model. The dispatch asks again. Where the answer is still
+ * no, it hands the entry back with a due time and does not hold its thread. A workflow
+ * which nobody ever started has no such record, and it fails at once, inside the call.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowVisibilityDelayTest {
@@ -66,29 +65,29 @@ public class WorkflowVisibilityDelayTest {
 
   /**
    * How many probes report the workflow as not visible yet in the test below. Three, so
-   * that one probe used up and three probes left over are two different numbers.
+   * that "one probe used up" and "three probes left over" are two different numbers.
    */
   private static final int INVISIBLE_PROBES = 3;
 
   /**
-   * The window the awareness double reports while the workflow is not visible yet. Every
-   * probe which answers "unknown" makes the dispatch hand the entry back, due one window
-   * later.
+   * The window which the awareness double reports while the workflow is not visible yet.
+   * Every probe which answers "unknown" makes the dispatch hand the entry back, due one
+   * window later.
    */
   private static final Duration VISIBILITY_WINDOW = Duration.ofSeconds(1);
 
   /**
    * What the case below costs on an idle machine. Phase one uses the first probe, and
-   * every probe left over buys the dispatch one more window.
+   * every probe left over costs the dispatch one more window.
    */
   private static final Duration WINDOWS_THE_CASE_COSTS = VISIBILITY_WINDOW
       .multipliedBy(INVISIBLE_PROBES - 1);
 
   /**
-   * How long a test waits for a dispatch before it says that none is coming. Three times
-   * what the case costs, and never less than thirty seconds: a machine carrying other
-   * builds leaves this JVM without a turn for seconds at a time, and such a pause does not
-   * get smaller when the window does. Nothing is measured here, so the budget is spent
+   * How long a test waits for a dispatch before it says that none is coming. It is three
+   * times what the case costs, and never less than thirty seconds. A machine which runs
+   * other builds gives this JVM no turn for seconds at a time, and such a pause does not
+   * get smaller when the window does. Nothing is measured here, so the whole budget is used
    * only when the test fails. A test which is right stops waiting as soon as the
    * correlation arrives.
    */
@@ -118,8 +117,8 @@ public class WorkflowVisibilityDelayTest {
 
   /**
    * Waits until the outbox entry of the correlation of that aggregate is marked as
-   * dispatched. The listener reports the dispatch before the store writes the mark, so the
-   * entry is what has to be read.
+   * dispatched. The listener reports the dispatch before the store writes the mark. So the
+   * test has to read the entry.
    *
    * @param aggregate The aggregate the correlation was for
    * @return The dispatched entry
@@ -156,10 +155,10 @@ public class WorkflowVisibilityDelayTest {
   }
 
   /**
-   * Starts a workflow and returns right after the commit, deliberately WITHOUT
-   * waiting for phase two: on a remote BPMS the instance is created asynchronously,
-   * and an operation in the next transaction is exactly the case the visibility delay
-   * is for. Scheduling the start already records which adapter holds the workflow.
+   * Starts a workflow and returns right after the commit. On purpose it does NOT wait for
+   * phase two. On a remote BPMS the instance is created later, in the background. An
+   * operation in the next transaction is exactly the case which the visibility delay is
+   * for. Scheduling the start already records which adapter holds the workflow.
    */
   private Aggregate started(
       final String content) throws Exception {
@@ -181,14 +180,14 @@ public class WorkflowVisibilityDelayTest {
   public void correlationIsPlannedAndDispatchedWhenTheWorkflowShowsUp() throws Exception {
 
     final var aggregate = started("visibility-delay");
-    // the BPMS holds the workflow but reports it as unknown for the next three
-    // probes - what an exporter-fed read model does right after a start. Each dispatch
-    // asks once and gives the entry back due in the window, so three probes are three
-    // attempts: the window is what decides how long the correlation takes
+    // the BPMS holds the workflow but reports it as unknown for the next three probes.
+    // A read model fed by an exporter does that right after a start. Each dispatch asks
+    // once and gives the entry back, due one window later. So three probes are three
+    // attempts, and the window decides how long the correlation takes
     awareness.becomeVisibleAfter(INVISIBLE_PROBES, VISIBILITY_WINDOW);
 
-    // the number of probes left over is read INSIDE the transaction, because the dispatch
-    // begins right after the commit and probes as well
+    // the number of probes left over is read INSIDE the transaction. The dispatch begins
+    // right after the commit, and it probes as well
     final int probesLeftByPhaseOne;
     userTransaction.begin();
     try {
@@ -200,21 +199,21 @@ public class WorkflowVisibilityDelayTest {
       throw e;
     }
 
-    // the point of the story: the caller's transaction holds a database connection
-    // and the locks on the aggregate, so nothing sleeps in it. Waiting for the BPMS
-    // means asking again every twenty milliseconds, so the probes phase one used up
-    // are what says whether it waited. The seconds the call took would not: a machine
-    // carrying several builds leaves this JVM without a turn for seconds at a time, and
-    // a wall clock cannot tell that apart from a caller sitting out the window
+    // the point of the story: the caller's transaction holds a database connection and
+    // the locks on the aggregate, so nothing sleeps in it. Waiting for the BPMS means asking
+    // again every twenty milliseconds. So the probes which phase one used up say whether it
+    // waited. The seconds the call took would not say it. A machine which runs several
+    // builds gives this JVM no turn for seconds at a time. A wall clock cannot tell that
+    // apart from a caller who sits out the window
     assertEquals(
         INVISIBLE_PROBES - 1,
         probesLeftByPhaseOne,
         "phase one asks once and leaves asking again to the dispatch");
 
-    // every probe which still reports the workflow as unknown costs one window, and two
-    // of the three probes are left for the dispatch. This guard has to span both of them
-    // plus whatever a loaded machine adds, and it measures nothing: what is asserted is
-    // that the correlation arrives, not how soon
+    // every probe which still reports the workflow as unknown costs one window, and two of
+    // the three probes are left for the dispatch. This guard has to span both of them, plus
+    // whatever a loaded machine adds. It measures nothing: the test asserts that the
+    // correlation arrives, not how soon
     final var deadline = System.currentTimeMillis() + UNTIL_A_DISPATCH_COUNTS_AS_LOST;
     while (listener.getCorrelatedMessages().isEmpty()) {
       assertTrue(
@@ -228,8 +227,8 @@ public class WorkflowVisibilityDelayTest {
             + ":PaymentReceived:null"));
 
     // the dispatch was told "not yet" twice and went through once. Only the last one is
-    // an attempt: waiting for a read model is no failure, and counting it blocked entries
-    // after a few minutes of a stopped exporter
+    // an attempt. Waiting for a read model is no failure. Counting it as one blocked
+    // entries after a few minutes of a stopped exporter
     final var correlation = awaitDispatchedCorrelationOf(aggregate);
     assertEquals(
         1,
@@ -252,9 +251,9 @@ public class WorkflowVisibilityDelayTest {
         .filter(entry -> aggregate.getId().toString().equals(entry.aggregateId()))
         .findFirst()
         .orElseThrow();
-    // what a node which restarted has: no hint in memory, and the row written when the workflow
-    // started in the database. The dummy adapter reports no workflow id, so the row is written
-    // here, the way an adapter which reports one leaves it behind
+    // what a node which restarted has: no hint in memory, and in the database the row
+    // written when the workflow started. The dummy adapter reports no workflow id, so the
+    // test writes the row here, as an adapter which reports one would leave it behind
     cache.invalidate(start.workflowModuleId(), start.bpmnProcessId(), start.aggregateId());
     userTransaction.begin();
     try {
@@ -326,9 +325,9 @@ public class WorkflowVisibilityDelayTest {
     }
     final var elapsed = Duration.ofNanos(System.nanoTime() - startedAt);
 
-    // thirty seconds against a window of five minutes: the call is either refused at once
-    // or it sits out the window, and nothing a loaded machine does to this JVM falls
-    // between the two. A tighter number would only turn a stalled JVM into a red test
+    // thirty seconds against a window of five minutes. The call is either refused at once,
+    // or it sits out the window. Nothing a loaded machine does to this JVM falls between the
+    // two. A tighter number would only turn a stalled JVM into a red test
     assertTrue(
         elapsed.toSeconds() < 30,
         "an unknown workflow must fail without waiting, but took "

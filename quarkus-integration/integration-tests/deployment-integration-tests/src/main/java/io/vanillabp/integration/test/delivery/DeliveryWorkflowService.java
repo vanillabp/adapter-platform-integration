@@ -11,8 +11,8 @@ import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The workflow service of the inbound-idempotency test: one method per outcome a
- * repeated delivery has to be answered with, each counting its invocations.
+ * The workflow service of the inbound-idempotency test. It has one method for each answer
+ * a repeated delivery has to get. Each method counts how often it ran.
  */
 @ApplicationScoped
 @WorkflowService(
@@ -50,9 +50,9 @@ public class DeliveryWorkflowService {
   }
 
   /**
-   * A task the application completes later, so it stays open from the BPMS' point of view
-   * and is redelivered until somebody completes it - the record which answers those
-   * redeliveries is what the open-task retention keeps alive.
+   * A task the application completes later. So for the BPMS it stays open, and the BPMS
+   * delivers it again until somebody completes it. The open-task retention keeps alive the
+   * record which answers those repeated deliveries.
    */
   @WorkflowTask
   public void awaitCompletion(
@@ -66,10 +66,10 @@ public class DeliveryWorkflowService {
 
 
   /**
-   * A task the application completes later and which asks to hear about its cancellation
-   * as well - the method a cancellation of the BPMS reaches. What the delivery of
-   * {@link io.vanillabp.spi.service.TaskEvent.Event#CANCELED} does to the record of that
-   * task is what the cancellation tests read.
+   * A task the application completes later. It also asks to hear about its cancellation,
+   * so a cancellation by the BPMS reaches this method. The cancellation tests read what the
+   * delivery of {@link io.vanillabp.spi.service.TaskEvent.Event#CANCELED} does to the
+   * record of that task.
    *
    * @param aggregate The workflow aggregate
    * @param taskId The BPMS' identity of the task
@@ -100,16 +100,16 @@ public class DeliveryWorkflowService {
   }
 
   /**
-   * What {@link #concurrentTask(DeliveryAggregate)} does before it returns, so a test
-   * can hold one delivery inside the handler while it hands the same task out a second
-   * time. Nothing, until a test puts something in.
+   * What {@link #concurrentTask(DeliveryAggregate)} does before it returns. So a test can
+   * hold one delivery inside the handler while it hands out the same task a second time.
+   * It does nothing until a test puts something in.
    */
   public static final AtomicReference<Runnable> WHILE_THE_CONCURRENT_TASK_RUNS = new AtomicReference<>(() -> {
   });
 
   /**
-   * A task whose handler can be held inside its transaction, which is what two
-   * deliveries of one task overlapping each other needs.
+   * A task whose handler can be held inside its transaction. Two deliveries of one task
+   * need this to overlap each other.
    */
   @WorkflowTask
   public void concurrentTask(

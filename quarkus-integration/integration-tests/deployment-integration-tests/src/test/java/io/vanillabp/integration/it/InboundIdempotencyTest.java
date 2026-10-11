@@ -41,14 +41,14 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of the inbound idempotency on Quarkus, with the default
- * JDBC-based delivery log doing the remembering: the dummy adapter delivers a task TWICE
- * under the same delivery identity - as a BPMS which never learned the result does - and
- * the <code>&#64;WorkflowTask</code> method has to run once while both deliveries are
- * answered with the same outcome. Also pinned: a delivery whose handler threw leaves no
- * record (its retry runs the handler again), the task-level switch turns the feature
- * off, and two deliveries of one task which overlap each other are named in the log and
- * counted, since a record written after the work cannot prevent that case.
+ * Acceptance test of the inbound idempotency on Quarkus. The default delivery log, based
+ * on JDBC, does the remembering. The dummy adapter delivers a task TWICE under the same
+ * delivery identity, as a BPMS does which never learned the result. The
+ * <code>&#64;WorkflowTask</code> method has to run once, and both deliveries get the same
+ * outcome. The test pins three more things. A delivery whose handler threw leaves no
+ * record, so its retry runs the handler again. The switch at the task turns the feature
+ * off. And two deliveries of one task which overlap are named in the log and counted,
+ * because a record written after the work cannot prevent that case.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class InboundIdempotencyTest {
@@ -100,8 +100,8 @@ public class InboundIdempotencyTest {
   }
 
   /**
-   * One delivery of a task, as an adapter of a remote BPMS builds it: the delivery ID is
-   * what stays the same when the BPMS repeats it.
+   * One delivery of a task, as an adapter of a remote BPMS builds it. The delivery ID stays
+   * the same when the BPMS repeats the delivery.
    */
   private TaskInvocationContext delivery(
       final String taskDefinition,
@@ -235,10 +235,10 @@ public class InboundIdempotencyTest {
 
   /**
    * What the application logged while one test ran. The captured output of
-   * {@link SuppressOutputExtension} is not available here: a method of a
-   * {@link QuarkusExtensionTest} is invoked by reflection in the application's class
-   * loader, so a resolved parameter of it never arrives. The WARN is therefore read
-   * where it is written, from a handler on the log manager this module runs under.
+   * {@link SuppressOutputExtension} is not available here. A method of a
+   * {@link QuarkusExtensionTest} is called by reflection in the application's class loader,
+   * so a resolved parameter never arrives. So the WARN is read where it is written: from a
+   * handler on the log manager which this module runs under.
    */
   private static final List<String> LOGGED_WHILE_THE_TEST_RAN = new CopyOnWriteArrayList<>();
 
@@ -276,7 +276,7 @@ public class InboundIdempotencyTest {
     final var secondDeliveryCommitted = new CountDownLatch(1);
     final var handlerRuns = new AtomicInteger();
     // the first delivery to arrive stays in the handler until the second one is
-    // through, which is the overlap a real BPMS produces when its lock is too short
+    // through. A real BPMS produces this overlap when its lock is too short
     DeliveryWorkflowService.WHILE_THE_CONCURRENT_TASK_RUNS.set(() -> {
       if (handlerRuns.incrementAndGet() > 1) {
         return;

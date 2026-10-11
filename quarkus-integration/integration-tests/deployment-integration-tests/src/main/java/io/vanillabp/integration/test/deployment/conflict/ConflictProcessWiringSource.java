@@ -8,8 +8,8 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Stands in for the BPMN model of the version-conflict acceptance test: supplies the
- * tasks of 'ConflictProcess' matching the handlers of {@link ConflictWorkflowService}.
+ * Stands in for the BPMN model of the version-conflict acceptance test. It supplies the
+ * tasks of 'ConflictProcess' which match the handlers of {@link ConflictWorkflowService}.
  */
 @ApplicationScoped
 public class ConflictProcessWiringSource implements DummyTaskWiringSource {

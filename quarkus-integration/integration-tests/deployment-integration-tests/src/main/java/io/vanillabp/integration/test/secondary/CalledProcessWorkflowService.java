@@ -13,8 +13,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * The workflow service of the test which shows that a called process is no workflow of its
- * own. 'Ordering' calls 'Shipping', and 'Dispatching' is the id a renamed process left behind,
- * with no model in this application.
+ * own. 'Ordering' calls 'Shipping'. 'Dispatching' is the id which a renamed process left
+ * behind. It has no model in this application.
  */
 @ApplicationScoped
 @WorkflowService(

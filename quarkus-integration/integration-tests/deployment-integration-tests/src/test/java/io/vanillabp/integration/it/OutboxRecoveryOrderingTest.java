@@ -29,18 +29,18 @@ import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 
 /**
- * Crash-recovery ordering, a hard requirement: a committed-but-undispatched
- * phase-two outbox entry left over by a "crashed" previous instance is dispatched by
- * the JDBC outbox dispatcher's startup poll - but never BEFORE the deployment
- * pipeline deployed the BPMN resources and started workflow processing. The entry is
- * seeded into a file-based H2 database before the application boots; the observer
- * priorities (deployment runner before the outbox dispatchers) enforce the ordering,
- * asserted here on the recorded events.
+ * Order after a crash, a hard requirement. A "crashed" earlier instance left a phase-two
+ * outbox entry behind, committed but not dispatched. The startup poll of the JDBC outbox
+ * dispatcher dispatches it. But it never does that BEFORE the deployment pipeline deployed
+ * the BPMN resources and started workflow processing. The entry is seeded into a
+ * file-based H2 database before the application boots. The observer priorities enforce
+ * the order: the deployment runner comes before the outbox dispatchers. The test asserts
+ * the order on the recorded events.
  * <p>
- * The table is created with the statement the store itself creates it with, and the entry
- * is written into the table the store reads. The DDL used to stand in this file, where it
- * described a table nothing checked: the store could have moved a column and this test
- * would have gone on seeding the old one.
+ * The table is created with the statement which the store itself uses, and the entry is
+ * written into the table which the store reads. The DDL used to stand in this file. There
+ * it described a table which nothing checked: the store could have moved a column, and
+ * this test would have gone on seeding the old one.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OutboxRecoveryOrderingTest {
@@ -50,7 +50,8 @@ public class OutboxRecoveryOrderingTest {
       .toAbsolutePath();
 
   /**
-   * The outbox the application under test runs, named where it is declared rather than here.
+   * The outbox which the application under test runs. Its name comes from where it is
+   * declared, not from here.
    */
   private static final String OUTBOX_TABLE = PhaseTwoOutboxReader.defaultOutboxTableName();
 
@@ -86,8 +87,9 @@ public class OutboxRecoveryOrderingTest {
         "jdbc:h2:file:"
             + DB_DIRECTORY.resolve("outbox")
             + ";DB_CLOSE_DELAY=-1")) {
-      // the table is built by the store which reads it, not described here a second time:
-      // a test writing its own DDL keeps working while the store moves on to another table
+      // the store which reads the table also builds it. It is not described here a second
+      // time. A test with its own DDL keeps working while the store moves on to another
+      // table
       try (var statement = connection.createStatement()) {
         statement.executeUpdate(JdbcPhaseTwoOutboxDispatcher.createTableStatement(connection, OUTBOX_TABLE));
         for (final var index : JdbcPhaseTwoOutboxDispatcher.INDEXES) {
@@ -125,8 +127,8 @@ public class OutboxRecoveryOrderingTest {
   @DisplayName("A recovered phase-two entry is dispatched only AFTER deployment and start of workflow processing")
   public void recoveredEntryDispatchedAfterProcessingStarted() throws Exception {
 
-    // the seeded entry has to be dispatched by the dispatcher's startup poll
-    // (aggregate ID converted back from '42' to the aggregate's Long ID type)
+    // the dispatcher's startup poll has to dispatch the seeded entry. The aggregate ID
+    // is converted back from '42' to the aggregate's Long ID type
     final var recorded = events.awaitEvent("phaseTwo:", 10000);
 
     final var deployIndex = recorded.indexOf("adapter:demo:deployResources:test-module");

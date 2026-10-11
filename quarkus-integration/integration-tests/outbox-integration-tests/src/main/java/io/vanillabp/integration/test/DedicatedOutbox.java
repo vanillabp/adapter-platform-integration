@@ -8,9 +8,9 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * An application-defined {@link PhaseTwoOutbox} recording scheduled calls - the test
- * double for a dedicated outbox store assigned to a "hot" process via
- * {@link DedicatedOutboxAware}.
+ * A {@link PhaseTwoOutbox} defined by the application, which records the scheduled calls.
+ * It is the test double for a dedicated outbox store which {@link DedicatedOutboxAware}
+ * assigns to a "hot" process.
  */
 @ApplicationScoped
 public class DedicatedOutbox implements PhaseTwoOutbox {

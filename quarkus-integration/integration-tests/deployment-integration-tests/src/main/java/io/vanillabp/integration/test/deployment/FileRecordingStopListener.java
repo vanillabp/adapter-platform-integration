@@ -15,11 +15,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * Records <code>stopWorkflowProcessing</code> calls into the file configured by
- * <code>test.stop-events-file</code>. Needed to assert the REAL
- * {@code ShutdownEvent} path: the shutdown happens when the test application is
- * undeployed, i.e. after all test methods ran - the assertions run in the test's
- * {@code afterUndeployListener}, which has no access to the (undeployed)
- * application's beans, so the events are handed over via the file system.
+ * <code>test.stop-events-file</code>. A test needs it to check the REAL
+ * {@code ShutdownEvent} path. The shutdown happens when the test application is
+ * undeployed, so after all test methods ran. The checks run in the test's
+ * {@code afterUndeployListener}. That listener cannot reach the beans of the undeployed
+ * application. So the events are handed over through the file system.
  */
 @ApplicationScoped
 public class FileRecordingStopListener implements DummyDeploymentListener, DummyExtensionListener {

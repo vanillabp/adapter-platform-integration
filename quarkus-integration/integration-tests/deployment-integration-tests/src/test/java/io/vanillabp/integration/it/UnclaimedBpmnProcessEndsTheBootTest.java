@@ -17,15 +17,16 @@ import io.vanillabp.integration.test.deployment.TaskAggregatePersistence;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The file of {@link UnclaimedBpmnProcessTest} without the line saying that something else
- * serves the second process. The start cannot tell a forgotten workflow service from a process
- * somebody else serves, so it ends and names both ways out.
+ * The file of {@link UnclaimedBpmnProcessTest}, but without the line which says that
+ * something else serves the second process. The start cannot tell a forgotten workflow
+ * service from a process which somebody else serves. So it ends and names both ways out.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class UnclaimedBpmnProcessEndsTheBootTest {
 
   /**
-   * The first words of the refusal, which {@link UnclaimedBpmnProcessTest} looks for in vain.
+   * The first words of the refusal. {@link UnclaimedBpmnProcessTest} checks that they never
+   * appear.
    */
   static final String REFUSAL = "deploys BPMN processes which no @WorkflowService class of this application claims";
 

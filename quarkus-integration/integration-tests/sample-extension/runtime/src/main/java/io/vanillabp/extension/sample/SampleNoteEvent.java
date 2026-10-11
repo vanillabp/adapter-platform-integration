@@ -7,10 +7,11 @@ import java.lang.annotation.Target;
 
 /**
  * Marks a parameter of a {@link SampleNote} method which receives what happened to the
- * element - the shape of the Business Cockpit's <code>&#64;DetailsEvent</code>.
+ * element. The Business Cockpit's <code>&#64;DetailsEvent</code> has the same shape.
  * <p>
- * It is the second kind of parameter this extension contributes a binder for: the first
- * one is recognized by its TYPE ({@link SampleNoteDetails}), this one by its annotation.
+ * It is the second kind of parameter which this extension contributes a binder for. The
+ * first one is recognized by its TYPE ({@link SampleNoteDetails}), this one by its
+ * annotation.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.PARAMETER)

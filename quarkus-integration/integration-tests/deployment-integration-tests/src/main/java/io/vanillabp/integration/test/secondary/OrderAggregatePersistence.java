@@ -7,8 +7,8 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * In-memory persistence for the called-process test's aggregate, copying on save and load
- * so an un-saved mutation never leaks into the store.
+ * In-memory persistence for the aggregate of the called-process test. It copies the
+ * aggregate on save and on load, so a change which was not saved never reaches the store.
  */
 @ApplicationScoped
 public class OrderAggregatePersistence implements AggregatePersistenceAware<OrderAggregate> {

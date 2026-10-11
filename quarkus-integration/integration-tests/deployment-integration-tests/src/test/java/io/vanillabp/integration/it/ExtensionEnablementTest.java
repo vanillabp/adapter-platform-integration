@@ -35,14 +35,14 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * What an extension gets from VanillaBP on Quarkus: its own annotation runs through the
- * mechanics of <code>&#64;WorkflowTask</code>, its per-aggregate service is injectable
- * with the aggregate as its type argument, the election answers which BPMS holds a
- * workflow, and its settings live below <code>vanillabp.extensions</code>.
+ * What an extension gets from VanillaBP on Quarkus. Its own annotation runs through the
+ * mechanics of <code>&#64;WorkflowTask</code>. Its service per aggregate can be injected
+ * with the aggregate as its type argument. The election answers which BPMS holds a
+ * workflow. And its settings live below <code>vanillabp.extensions</code>.
  * <p>
- * The same four things the Spring Boot integration proves in its own scenario - measured
- * separately per platform on purpose, because a mechanism working in the core says
- * nothing about a platform ever calling it.
+ * The Spring Boot integration proves the same four things in its own scenario. They are
+ * measured per platform on purpose: a mechanism which works in the core does not prove
+ * that a platform ever calls it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ExtensionEnablementTest {
@@ -114,10 +114,10 @@ public class ExtensionEnablementTest {
         .noteOf(aggregate, "TheServiceTask", SampleNoteDetails.Kind.CREATED)
         .orElseThrow();
 
-    // the workflow aggregate VanillaBP loaded, the note the extension prefilled, the
-    // value of the extension's own annotated parameter, and a process variable.
-    // "Servus" rather than "Hello": the workflow module overrides what the extension is
-    // configured with globally
+    // the workflow aggregate which VanillaBP loaded, the note which the extension
+    // prefilled, the value of the extension's own annotated parameter, and a process
+    // variable. "Servus" and not "Hello", because the workflow module overrides the
+    // global configuration of the extension
     assertEquals("a-loan/Servus TheServiceTask/CREATED/CREATED", note.getTitle());
 
   }
@@ -229,8 +229,8 @@ public class ExtensionEnablementTest {
 
     final var aggregate = aggregate("8", "no-transaction-here");
 
-    // the extension asks for nothing about transactions, and an extension called from a
-    // worker thread of a BPMS is the normal case rather than a mistake
+    // the extension asks for nothing about transactions. An extension called from a
+    // worker thread of a BPMS is the normal case, not a mistake
     noteService
         .recordNoteOf(aggregate, "TheServiceTask", SampleNoteDetails.Kind.CREATED)
         .orElseThrow();
@@ -278,8 +278,8 @@ public class ExtensionEnablementTest {
 
     assertEquals(List.of("kind"),
         handlers.taskParameterNames(SampleNote.class, MODULE, PROCESS, List.of("TheServiceTask")));
-    // the keys are walked like an invocation walks them: the method naming the element id
-    // serves every version, so the one naming the task definition never runs for it
+    // the keys are walked like a call walks them. The method which names the element id
+    // serves every version, so the one which names the task definition never runs for it
     assertEquals(
         List.of(),
         handlers
@@ -296,7 +296,7 @@ public class ExtensionEnablementTest {
                 MODULE,
                 PROCESS,
                 List.of(NoteTaskWiringSource.TASK_DEFINITION, NoteTaskWiringSource.ACTIVITY_ID)));
-    // two generations of one element: the event has to carry what either of them reads
+    // two generations of one element: the event has to carry what each of them reads
     assertEquals(
         List.of("firstGenerationInput", "laterGenerationInput"),
         handlers.taskParameterNames(SampleNote.class, MODULE, PROCESS, List.of("Activity_TwoGenerations")));
@@ -311,7 +311,7 @@ public class ExtensionEnablementTest {
   @DisplayName("An adapter is told which process variables the methods of every extension read")
   public void theAdapterReadsWhichTaskParametersTheExtensionsTake() {
 
-    // the keys in the order an extension looks an element up: element id first
+    // the keys in the order in which an extension looks up an element: element id first
     assertEquals(
         List.of(),
         workflowTaskWiring
@@ -342,8 +342,8 @@ public class ExtensionEnablementTest {
     assertEquals(
         java.util.Optional.of(NoteTaskWiringSource.NAME),
         handlers.bpmnTaskNameOf(MODULE, PROCESS, NoteTaskWiringSource.ACTIVITY_ID));
-    // an element the adapter reported no name for, and a process nothing was deployed
-    // under, are both answered with nothing rather than with a guess
+    // an element which the adapter reported no name for, and a process under which nothing
+    // was deployed, are both answered with nothing and not with a guess
     assertEquals(java.util.Optional.empty(), handlers.bpmnTaskNameOf(MODULE, PROCESS, "TheServiceTask"));
     assertEquals(java.util.Optional.empty(), handlers.bpmnTaskNameOf(MODULE, "NobodyDeployedThis", "TheUserTask"));
 
@@ -354,7 +354,7 @@ public class ExtensionEnablementTest {
   public void anExtensionResolvesTheTransactionOfTheAggregate() {
 
     // this application contributed no runner of its own, so the answer is the platform's
-    // JTA - and it is the very object the process services write through, not a second
+    // JTA. It is the very object which the process services write through, not a second
     // one built next to it
     assertEquals("the JTA transaction of Quarkus", transactions.describeResolutionFor(NoteAggregate.class));
     assertNotNull(transactions.runnerOf(NoteAggregate.class));
@@ -365,16 +365,15 @@ public class ExtensionEnablementTest {
   @DisplayName("An extension is told which delivery log holds the records of the workflow")
   public void anExtensionResolvesTheDeliveryLogOfTheAggregate() {
 
-    // the same shape as the outbox and the transaction: the resolver is the bean, because
-    // which store serves an aggregate follows the persistence VanillaBP resolved for it -
-    // this application has a datasource, so the answer is the platform's JDBC store and not
-    // merely something non-null
+    // the same shape as the outbox and the transaction: the resolver is the bean. The
+    // store which serves an aggregate follows from the persistence which VanillaBP
+    // resolved for it. This application has a datasource, so the answer is the platform's
+    // JDBC store, and not just something which is not null
     assertInstanceOf(JdbcTaskDeliveryLog.class, deliveryLog.logOf(NoteAggregate.class));
 
-    // and it answers what an extension would show. Nothing is waiting here: the one user
-    // task of this model has no @WorkflowTask method, so the adapter finishes its
-    // notification itself and no record is written (see decision 54 in the repository's
-    // DECISIONS.md)
+    // and it answers what an extension would show. Nothing waits here. The one user task
+    // of this model has no @WorkflowTask method. So the adapter finishes its notification
+    // itself, and no record is written (see decision 54 in the repository's DECISIONS.md)
     assertTrue(deliveryLog.openTasksOf(NoteAggregate.class, MODULE, PROCESS, "1").isEmpty());
 
   }
@@ -409,9 +408,9 @@ public class ExtensionEnablementTest {
   @DisplayName("An extension setting is resolved from the most specific level which writes it")
   public void extensionSettingsResolveOverFourLevels() {
 
-    // this application starting at all is half the assertion: SmallRye refuses a key it
-    // does not know below the mapping root, so the workflow and the task section of
-    // 'extensions' have to be part of the mapping or nothing here boots
+    // the fact that this application starts at all is half the assertion. SmallRye
+    // refuses a key below the mapping root which it does not know. So the workflow and the
+    // task section of 'extensions' have to be part of the mapping, or nothing here boots
     assertEquals("Hello", properties.resolveForExtension(null, null, null, "sample", "greeting"));
     assertEquals("Servus", properties.resolveForExtension(MODULE, "OtherProcess", null, "sample", "greeting"));
     assertEquals("Gruess Gott", properties.resolveForExtension(MODULE, PROCESS, "otherTask", "sample", "greeting"));

@@ -14,9 +14,9 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 /**
- * Stands in for an extension which passes the state it saw at its sync point, the way a
- * sync to the Business Cockpit does. It registers an operation of its own and records
- * the calls dispatched to it, payload included.
+ * Stands in for an extension which passes on the state it saw at its sync point, like a
+ * sync to the Business Cockpit does. It registers an operation of its own. It records the
+ * calls dispatched to it, with their payload.
  */
 @ApplicationScoped
 public class PayloadExtension {

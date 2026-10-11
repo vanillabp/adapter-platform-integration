@@ -25,10 +25,10 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Broadcasting a BPMN signal on Quarkus with the dummy adapter forced to
- * require a two-phase commit: the broadcast of a REMOTE BPMS may only happen after
- * the local transaction was committed, which is what the outbox entry is for. A
- * rolled-back transaction broadcasts nothing at all.
+ * Broadcasting a BPMN signal on Quarkus, with the dummy adapter forced to need a
+ * two-phase commit. A REMOTE BPMS may broadcast only after the local transaction was
+ * committed, and the outbox entry is there for that. A transaction which is rolled back
+ * broadcasts nothing at all.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SendSignalTest {
@@ -36,11 +36,10 @@ public class SendSignalTest {
   /**
    * How long a test waits before it says that nothing more happened. The application
    * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * set to half a second. So this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A machine which gives this JVM no turn only
+   * makes the wait longer. Afterwards the test asserts a count which did not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -69,8 +68,8 @@ public class SendSignalTest {
 
   /**
    * The entries of the broadcast. The data source of a Quarkus application hands out a
-   * connection of the running JTA transaction, so an entry is read while the transaction
-   * which wrote it is still open.
+   * connection of the running JTA transaction. So an entry can be read while the
+   * transaction which wrote it is still open.
    *
    * @return The entries
    */
@@ -106,7 +105,7 @@ public class SendSignalTest {
 
     userTransaction.begin();
     workflowService.sendSignal("OrderReceived");
-    // the entry rides the transaction; nothing was broadcast yet
+    // the entry is part of the transaction, and nothing was broadcast yet
     assertEquals(1, signalEntries().size());
     assertTrue(listener.getBroadcastSignals().isEmpty());
     userTransaction.commit();
@@ -114,7 +113,7 @@ public class SendSignalTest {
     final var broadcast = awaitBroadcast(1);
     assertEquals(List.of("OrderReceived/phase-two"), broadcast);
 
-    // the entry has no aggregate: a broadcast is not about one workflow
+    // the entry has no aggregate, because a broadcast is not about one workflow
     assertEquals(
         1,
         signalEntries()

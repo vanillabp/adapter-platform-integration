@@ -7,9 +7,9 @@ import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The workflow service of the test about the elements an extension reports: the task is served
- * in every version, and the note of the test extension serves versions 1 to 4 only. Nothing
- * notes the process itself.
+ * The workflow service of the test about the elements an extension reports. The task has a
+ * method in every version. The note of the test extension serves versions 1 to 4 only.
+ * Nothing notes the process itself.
  */
 @ApplicationScoped
 @WorkflowService(

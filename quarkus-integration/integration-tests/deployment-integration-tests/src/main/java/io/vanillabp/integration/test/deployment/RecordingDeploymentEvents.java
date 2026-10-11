@@ -9,9 +9,9 @@ import io.vanillabp.extension.dummy.runtime.DummyExtensionListener;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Records the deployment-pipeline calls of the dummy adapter, the dummy extension
- * and the dummy adapter's phase-two invocations in ONE ordered event list, so tests
- * can assert the global ordering across all participants. Event formats:
+ * Records the deployment-pipeline calls of the dummy adapter and of the dummy extension,
+ * and the phase-two calls of the dummy adapter, in ONE ordered event list. So tests can
+ * check the order across all participants. Event formats:
  * <ul>
  *   <li><code>adapter:&lt;adapterId&gt;:&lt;method&gt;:&lt;moduleId&gt;[:&lt;detail&gt;]</code></li>
  *   <li><code>extension:&lt;method&gt;:&lt;moduleId&gt;[:&lt;detail&gt;]</code></li>

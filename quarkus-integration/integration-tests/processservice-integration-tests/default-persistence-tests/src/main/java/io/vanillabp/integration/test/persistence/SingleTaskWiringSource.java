@@ -8,9 +8,9 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Stands in for the BPMN model of all applications of this module: 'TestProcess' has
- * exactly one task, wired to the <code>processTask</code> handler every workflow
- * service here declares.
+ * Stands in for the BPMN model of all applications of this module. 'TestProcess' has
+ * exactly one task. It is wired to the <code>processTask</code> handler which every
+ * workflow service here declares.
  */
 @ApplicationScoped
 public class SingleTaskWiringSource implements DummyTaskWiringSource {

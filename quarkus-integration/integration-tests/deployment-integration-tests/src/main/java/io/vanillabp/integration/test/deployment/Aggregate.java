@@ -3,15 +3,15 @@ package io.vanillabp.integration.test.deployment;
 import io.vanillabp.spi.service.NoSyncWithBPMS;
 
 /**
- * A workflow aggregate having a non-string ID: the outbox serializes the ID as a
- * string and converts it back before dispatching phase two (relevant for the
- * outbox-recovery ordering test).
+ * A workflow aggregate whose ID is not a string. The outbox stores the ID as a string and
+ * converts it back before it dispatches phase two. The outbox-recovery ordering test needs
+ * this.
  */
 public class Aggregate {
 
   private Long id;
 
-  // the test reads this, no BPMN model does - so it stays out of the BPMS
+  // the test reads this field, but no BPMN model does, so it stays out of the BPMS
   @NoSyncWithBPMS
   private String content;
 

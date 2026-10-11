@@ -8,9 +8,9 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Stands in for the BPMN model of the process the inheriting workflow service serves: both
- * tasks belong to it, the one whose handler the class writes itself and the one whose
- * handler it inherits.
+ * Stands in for the BPMN model of the process which the inheriting workflow service
+ * serves. Both tasks belong to it: the one whose handler the class writes itself, and the
+ * one whose handler it inherits.
  */
 @ApplicationScoped
 public class InheritedProcessWiringSource implements DummyTaskWiringSource {

@@ -18,11 +18,11 @@ import io.vanillabp.integration.test.OurOwnWorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The same defect in its second shape: an annotation of the application carrying
- * <code>&#64;WorkflowService</code>. Jandex resolves no meta-annotation, so it reports the
- * annotation type as the annotated one and the class using it is never seen - the build
- * used to end asking for a CDI bean of the annotation. It ends naming both types now, and
- * says where the annotation belongs.
+ * The same defect in its second shape: an annotation of the application carries
+ * <code>&#64;WorkflowService</code>. Jandex resolves no meta-annotation. So it reports the
+ * annotation type as the annotated one, and nobody sees the class which uses it. The build
+ * used to end by asking for a CDI bean of the annotation. Now it ends by naming both types,
+ * and it says where the annotation belongs.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowServiceViaAnAnnotationOfItsOwnTest {

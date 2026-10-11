@@ -8,9 +8,9 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The same two-process file as {@link CallingAndCalledWiringSource}, but the CLAIMED
- * process 'Calling' has a task no <code>&#64;WorkflowTask</code> method serves. Used by
- * {@code ClaimedProcessMissingHandlerTest}: that is the case which really is a defect,
+ * The same file with two processes as {@link CallingAndCalledWiringSource}. But here the
+ * CLAIMED process 'Calling' has a task which no <code>&#64;WorkflowTask</code> method
+ * serves. {@code ClaimedProcessMissingHandlerTest} uses it. This case really is a defect,
  * and it still ends the boot.
  */
 @ApplicationScoped

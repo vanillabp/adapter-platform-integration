@@ -6,9 +6,9 @@ import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The workflow service of the process-version acceptance test: one BPMN
- * task served by three methods, told apart by the version of the deployed process -
- * two version ranges made of numbers and one naming a version tag.
+ * The workflow service of the process-version acceptance test. Three methods serve one
+ * BPMN task. The version of the deployed process tells them apart: two version ranges
+ * made of numbers, and one which names a version tag.
  */
 @ApplicationScoped
 @WorkflowService(

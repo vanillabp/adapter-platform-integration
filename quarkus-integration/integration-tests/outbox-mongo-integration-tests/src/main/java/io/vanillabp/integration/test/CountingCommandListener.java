@@ -13,15 +13,17 @@ import io.quarkus.mongodb.runtime.MongoClientCustomizer;
 import jakarta.inject.Singleton;
 
 /**
- * Every command the application's MongoDB client sends, so a test can claim that a
- * collection was not touched.
+ * Records every command which the application's MongoDB client sends. So a test can claim
+ * that a collection was not touched.
  * <p>
- * The driver reports a command before it goes out, which is the number an application pays
- * for. Its own topology monitoring does not come through here - those commands travel on
- * connections of their own - so what is counted is what the application asked for.
+ * The driver reports a command before it goes out. That is the number an application pays
+ * for. The driver's own topology monitoring does not come through here, because those
+ * commands travel on connections of their own. So this counts what the application asked
+ * for.
  * <p>
- * The commands are held statically because this is the client's customizer, built while the
- * application starts, while the test which reads them lives outside the application.
+ * The commands are held in a static field. This is the client's customizer, which is built
+ * while the application starts. But the test which reads the commands lives outside the
+ * application.
  */
 @Singleton
 public class CountingCommandListener implements MongoClientCustomizer, CommandListener {
@@ -48,9 +50,9 @@ public class CountingCommandListener implements MongoClientCustomizer, CommandLi
   }
 
   /**
-   * The collection a command names. A command document starts with its own name mapped to
-   * the collection it is about, which is where this reads it; a command about the database
-   * rather than about a collection answers an empty name.
+   * The collection which a command names. A command document starts with its own name,
+   * mapped to the collection it is about. This method reads it there. A command about the
+   * database and not about a collection answers an empty name.
    *
    * @param event The command which started
    * @return The collection or an empty string

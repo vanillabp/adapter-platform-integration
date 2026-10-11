@@ -25,15 +25,14 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * The outbox repeats a failed dispatch, which is what makes losing a
- * concurrency conflict survivable. A failure the BPMS answers the same way every time
- * gains nothing from that, so an adapter may say
- * ({@code MigratableProcessService#isPhaseTwoFailureRepeatable}) that repeating cannot
- * help - the entry is then blocked after the first attempt instead of after the
- * configured ones.
+ * The outbox repeats a failed dispatch. That is why losing a concurrency conflict does no
+ * harm. A failure which the BPMS answers the same way every time gains nothing from that.
+ * So an adapter may say that repeating cannot help
+ * ({@code MigratableProcessService#isPhaseTwoFailureRepeatable}). Then the entry is blocked
+ * after the first attempt, not after the configured number of attempts.
  * <p>
- * The test runs on a database of its own: it blocks an entry on purpose, and a blocked
- * entry stays in the store for operations to find.
+ * The test runs on a database of its own. It blocks an entry on purpose, and a blocked
+ * entry stays in the store for operations staff to find.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PermanentPhaseTwoFailureTest {
@@ -41,11 +40,10 @@ public class PermanentPhaseTwoFailureTest {
   /**
    * How long a test waits before it says that nothing more happened. The application
    * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * set to half a second. So this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A machine which gives this JVM no turn only
+   * makes the wait longer. Afterwards the test asserts a count which did not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -84,8 +82,8 @@ public class PermanentPhaseTwoFailureTest {
   }
 
   /**
-   * The entries of ONE aggregate. A count over the whole table would already be
-   * satisfied by a sibling test's entry.
+   * The entries of ONE aggregate. An entry of a sibling test would already satisfy a count
+   * over the whole table.
    *
    * @param aggregateId The aggregate asked about
    * @return Its entries
@@ -155,8 +153,8 @@ public class PermanentPhaseTwoFailureTest {
       dispatcherLog.removeHandler(errorWatcher);
     }
 
-    // the ERROR is where an operator starts, so it names the entry and the page which says
-    // how to find it, open it again or delete it
+    // an operator starts with the ERROR. So it names the entry, and the page which says how
+    // to find it, open it again or delete it
     final var blockedEntry = entriesOf(attachedAggregateId).get(0).id();
     assertTrue(
         errors
@@ -174,8 +172,8 @@ public class PermanentPhaseTwoFailureTest {
   }
 
   /**
-   * Collects what is logged at ERROR, the message together with its parameters, because
-   * the log manager of Quarkus hands the parameters over unformatted.
+   * Collects what is logged at ERROR, the message together with its parameters. The log
+   * manager of Quarkus hands the parameters over unformatted.
    *
    * @param errors Where the lines go
    * @return The handler to add to a logger
@@ -243,8 +241,8 @@ public class PermanentPhaseTwoFailureTest {
 
   /**
    * The counter of blocked entries, or zero while nothing was blocked yet and the meter
-   * does not exist. Read as a difference because the sibling test below blocks an entry
-   * too and the order of the two is nobody's promise.
+   * does not exist. The test reads it as a difference. The sibling test below blocks an
+   * entry too, and nobody promises the order of the two.
    *
    * @return How many entries of the JDBC store were blocked for a permanent failure
    */
@@ -269,10 +267,10 @@ public class PermanentPhaseTwoFailureTest {
   }
 
   /**
-   * A blocked entry used to hold its deduplication key, and the store refuses an
-   * identical key for as long as an entry holds it - so the failed operation silenced
-   * its own repetition, with an answer indistinguishable from a correct deduplication.
-   * Blocking releases the key now, exactly as a dispatch releases it.
+   * A blocked entry used to hold its deduplication key. The store refuses an identical key
+   * for as long as an entry holds it. So the failed operation silenced its own repetition,
+   * and the answer looked just like a correct deduplication. Now blocking releases the key,
+   * exactly as a dispatch releases it.
    */
   @Test
   @DisplayName("A blocked entry does not swallow the next attempt of the same operation")
@@ -296,8 +294,8 @@ public class PermanentPhaseTwoFailureTest {
     workflowService.startWorkflowAgain(attachedAggregate);
     userTransaction.commit();
 
-    // it reaches the BPMS: a second entry was written and dispatched, and the blocked
-    // one stays where it is for whoever repairs it
+    // it reaches the BPMS: a second entry was written and dispatched. The blocked one stays
+    // where it is, for whoever repairs it
     assertEquals(
         2,
         listener
@@ -312,9 +310,9 @@ public class PermanentPhaseTwoFailureTest {
   }
 
   /**
-   * The counter-check: a failure the adapter reports as repeatable is still repeated,
-   * so the blocking above is the adapter's answer and not a change of the store's
-   * behaviour.
+   * The counter-check: a failure which the adapter reports as repeatable is still
+   * repeated. So the blocking above is the adapter's answer, not a change in how the store
+   * behaves.
    */
   @Test
   @DisplayName("A repeatable failure is still retried instead of being blocked")

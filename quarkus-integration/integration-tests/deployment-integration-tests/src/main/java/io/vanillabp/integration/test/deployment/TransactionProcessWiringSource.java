@@ -8,9 +8,9 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Stands in for the BPMN model of the transaction-contract acceptance test: supplies the
- * tasks of 'TransactionProcess' matching the handlers of
- * {@link TransactionWorkflowService}; other processes have no tasks.
+ * Stands in for the BPMN model of the transaction-contract acceptance test. It supplies
+ * the tasks of 'TransactionProcess' which match the handlers of
+ * {@link TransactionWorkflowService}. Other processes have no tasks.
  */
 @ApplicationScoped
 public class TransactionProcessWiringSource implements DummyTaskWiringSource {

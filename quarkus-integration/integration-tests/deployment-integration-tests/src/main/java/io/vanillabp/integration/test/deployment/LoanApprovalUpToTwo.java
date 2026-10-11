@@ -6,8 +6,8 @@ import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The handlers of the older generation of the model: the whole class serves versions 1
- * and 2, which its {@code @BpmnProcess} says once instead of every method saying it.
+ * The handlers of the older generation of the model. The whole class serves versions 1
+ * and 2. Its {@code @BpmnProcess} says this once, so no method has to say it.
  */
 @ApplicationScoped
 @WorkflowService(

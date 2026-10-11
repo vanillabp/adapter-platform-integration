@@ -7,8 +7,8 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * In-memory persistence for the aggregate of the BPMS-initiated-start acceptance
- * test. Aggregates are copied on save/load so un-saved mutations never leak into
+ * In-memory persistence for the aggregate of the BPMS-initiated-start acceptance test.
+ * It copies aggregates on save and on load, so changes which were not saved never reach
  * the store.
  */
 @ApplicationScoped

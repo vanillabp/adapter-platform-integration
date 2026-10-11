@@ -7,16 +7,15 @@ import io.vanillabp.integration.adapter.spi.health.AdapterHealth;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Plays what the dummy adapter finds when it asks its BPMS. The answer is a static
- * field so a test can change it between assertions without rebuilding the
- * application.
+ * Plays what the dummy adapter finds when it asks its BPMS. The answer is a static field.
+ * So a test can change it between two checks without building the application again.
  */
 @ApplicationScoped
 public class TestHealthSource implements DummyHealthSource {
 
   /**
-   * What to answer, set by the test; the default contributes nothing, which is what
-   * an adapter without a check does.
+   * What to answer. The test sets it. The default adds nothing, just like an adapter
+   * without a check.
    */
   public static Function<String, AdapterHealth> answer = adapterId -> null;
 

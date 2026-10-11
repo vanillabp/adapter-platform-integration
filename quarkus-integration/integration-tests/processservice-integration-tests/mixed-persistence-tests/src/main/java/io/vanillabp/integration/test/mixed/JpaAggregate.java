@@ -5,8 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 
 /**
- * The aggregate stored in the relational database of this application, written as a
- * Hibernate ORM Panache active record.
+ * The aggregate which this application stores in its relational database. It is written as
+ * a Hibernate ORM Panache active record.
  */
 @Entity
 public class JpaAggregate extends PanacheEntityBase {

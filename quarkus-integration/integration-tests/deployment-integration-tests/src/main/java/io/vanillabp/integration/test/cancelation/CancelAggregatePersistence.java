@@ -7,8 +7,8 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * In-memory persistence for the derived-cancellation tests, copying on save and on load
- * so a handler which threw leaves nothing of what it changed behind.
+ * In-memory persistence for the derived-cancellation tests. It copies the aggregate on
+ * save and on load. So a handler which threw leaves none of its changes behind.
  */
 @ApplicationScoped
 public class CancelAggregatePersistence implements AggregatePersistenceAware<CancelAggregate> {

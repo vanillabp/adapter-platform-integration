@@ -13,7 +13,7 @@ public class InheritedAggregate {
 
   private String id;
 
-  // the test reads this, no BPMN model does - so it stays out of the BPMS
+  // the test reads this field, but no BPMN model does, so it stays out of the BPMS
 
   @NoSyncWithBPMS
 

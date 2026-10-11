@@ -5,10 +5,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * An extension whose declared model/context types ({@link String}) do NOT match the
- * dummy adapter's types ({@link Object}) - the deployment pipeline must never wire
- * or start it. Any recorded <code>extensionNonMatching:*</code> event is a test
- * failure.
+ * An extension whose declared model and context types ({@link String}) do NOT match the
+ * dummy adapter's types ({@link Object}). So the deployment pipeline must never wire or
+ * start it. Any recorded <code>extensionNonMatching:*</code> event makes a test fail.
  */
 @ApplicationScoped
 public class NonMatchingWiringService implements ExtensionWiringService<String, String> {

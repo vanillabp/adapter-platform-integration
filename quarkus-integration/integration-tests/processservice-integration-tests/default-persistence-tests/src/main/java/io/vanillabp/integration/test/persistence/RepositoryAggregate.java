@@ -4,8 +4,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 
 /**
- * The aggregate of the Hibernate ORM Panache repository idiom: a plain JPA entity
- * with an application-assigned ID, managed by {@link RepositoryAggregateRepository}.
+ * The aggregate of the Hibernate ORM Panache repository idiom. It is a plain JPA entity
+ * whose ID the application assigns. {@link RepositoryAggregateRepository} manages it.
  */
 @Entity
 public class RepositoryAggregate {

@@ -26,12 +26,12 @@ import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 
 /**
- * An entry whose BPMS does not report its workflow yet waits for time, not for attempts, on
- * the MongoDB store of Quarkus as on every other store.
+ * An entry whose BPMS does not report its workflow yet waits for time, not for attempts. That
+ * holds on the MongoDB store of Quarkus as on every other store.
  * <p>
  * Each answer "not yet" used to count an attempt. Against a Camunda 8 cluster whose exporter
- * was paused that blocked an entry after fifty windows of ten seconds, while a database which
- * was away just as long blocked nothing. The application here allows two attempts, so a store
+ * was paused, that blocked an entry after fifty windows of ten seconds. A database which was
+ * away just as long blocked nothing. The application here allows two attempts. So a store
  * which still counted the answers would block the entry long before the read model catches
  * up.
  */
@@ -39,7 +39,7 @@ import jakarta.inject.Inject;
 public class MongoWaitingForAReadModelUsesNoAttemptsTest {
 
   /**
-   * The window the adapter names. Short, so many answers fit into a test.
+   * The window which the adapter names. It is short, so many answers fit into a test.
    */
   private static final Duration WINDOW = Duration.ofMillis(100);
 
@@ -50,8 +50,8 @@ public class MongoWaitingForAReadModelUsesNoAttemptsTest {
   private static final int ANSWERS_BEFORE_THE_WORKFLOW_SHOWS_UP = 4;
 
   /**
-   * How long a test waits before it says that nothing more happened. Several windows, so an
-   * entry which was wrongly given back would have come again.
+   * How long a test waits before it says that nothing more happened. It is several windows,
+   * so an entry which was wrongly given back would have come again.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -93,8 +93,8 @@ public class MongoWaitingForAReadModelUsesNoAttemptsTest {
   }
 
   /**
-   * Puts the answers back, so a class running after this one is not told "not yet" for a
-   * reason nobody can see in it.
+   * Sets the answers back. Otherwise a class which runs after this one would be told "not
+   * yet", for a reason nobody can see in that class.
    */
   @AfterEach
   public void answerNormallyAgain() {
@@ -105,7 +105,7 @@ public class MongoWaitingForAReadModelUsesNoAttemptsTest {
 
   /**
    * Writes an entry which is due now and claims to have been written at the given moment.
-   * This JVM's outbox never saw it being scheduled, so a poll picks it up.
+   * The outbox of this JVM never saw it being scheduled, so a poll picks it up.
    *
    * @param aggregateId The aggregate the operation belongs to
    * @param writtenAt When the entry was written
@@ -177,8 +177,8 @@ public class MongoWaitingForAReadModelUsesNoAttemptsTest {
   public void anEntryWhichWaitedTooLongIsBlocked() throws Exception {
 
     listener.answerNotYet(Integer.MAX_VALUE, WINDOW);
-    // written two hours ago and never dispatched, which is what an exporter which stopped
-    // for two hours leaves behind
+    // written two hours ago and never dispatched. An exporter which stopped for two hours
+    // leaves that behind
     final var entry = anEntryWrittenAt("4713", Instant.now().minus(Duration.ofHours(2)));
 
     waitUntil("the entry which waited too long was not blocked", () -> entryOf(entry).isBlocked());

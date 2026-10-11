@@ -26,16 +26,16 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * What a workflow service declares is more than one BPMN process id, and everything
- * configurable per workflow is configurable for each of them: its prioritized adapters, its
- * outbox, what its leftovers were persisted under. The startup validations used to run for
- * the PRIMARY process only, so the id a rename leaves behind - the one whose workflows are
- * still out there - was the one nobody looked at.
+ * A workflow service declares more than one BPMN process id. Everything which can be
+ * configured per workflow can be configured for each of them: its prioritized adapters, its
+ * outbox, and the id its leftovers were stored under. The startup validations used to run
+ * for the PRIMARY process only. So nobody looked at the id which a rename leaves behind,
+ * although its workflows are still out there.
  * <p>
- * The check measured here is the one with the sharpest failure mode, and it is the same one
- * the Spring Boot integration measures: an aggregate whose persisted adapter id names an
- * adapter the configuration dropped is found at the first operation instead of at boot, and
- * for a renamed process the leftovers sit under the SECONDARY id.
+ * The check measured here has the sharpest failure mode, and the Spring Boot integration
+ * measures the same one. The stored adapter id of an aggregate may name an adapter which
+ * the configuration dropped. Without the check, this is found at the first operation and
+ * not at boot. For a renamed process, the leftovers sit under the SECONDARY id.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SecondaryProcessValidationTest {
@@ -43,7 +43,8 @@ public class SecondaryProcessValidationTest {
   static final String DEPLOYED_PROCESS = "OrderApproval";
 
   /**
-   * The id the rename left behind: declared, with no model of this boot under it.
+   * The id which the rename left behind. It is declared, but this boot has no model under
+   * it.
    */
   static final String OLD_PROCESS = "order_approval";
 
@@ -79,8 +80,8 @@ public class SecondaryProcessValidationTest {
             () -> "the leftovers of the secondary BPMN process were not reported: "
                 + messages);
         final var warning = reports.getFirst();
-        // the block names what a finding is about beside its text, so the process id
-        // stands above the message rather than inside it
+        // the block names what a finding is about next to its text. So the process id
+        // stands above the message and not inside it
         assertTrue(warning.contains("process '%s'".formatted(OLD_PROCESS)), warning);
         assertTrue(warning.contains("waiting phase-two outbox entries"), warning);
       });
@@ -92,8 +93,8 @@ public class SecondaryProcessValidationTest {
   @DisplayName("The application boots and its ProcessService is the one of the deployed id")
   public void theApplicationBootsWithBothIdsValidated() {
 
-    // the report itself is asserted on the boot's log records; a validation which now runs
-    // for a further id must not change what the primary one is
+    // the report itself is asserted on the boot's log records. A validation which now runs
+    // for one more id must not change what the primary one is
     assertEquals(
         DEPLOYED_PROCESS,
         ((io.vanillabp.integration.runtime.processservice.ProcessServiceBaseCdiBean<RenamedAggregate>) processService)
@@ -122,8 +123,8 @@ public class SecondaryProcessValidationTest {
   }
 
   /**
-   * The application after a rename: the new id is what this boot deploys, the old one is
-   * declared so the workflows still running under it keep being served.
+   * The application after a rename. This boot deploys the new id. The old one is declared,
+   * so the workflows which still run under it are still served.
    */
   @ApplicationScoped
   @WorkflowService(
@@ -134,9 +135,9 @@ public class SecondaryProcessValidationTest {
   }
 
   /**
-   * An outbox holding calls of the OLD id which were planned by an adapter the configuration
-   * does not know any more - what a migration abandoned halfway leaves behind, under the id a
-   * rename left behind.
+   * An outbox which holds calls of the OLD id. An adapter which the configuration does not
+   * know any more planned them. A migration which was abandoned halfway leaves this behind,
+   * under the id which a rename left behind.
    */
   @ApplicationScoped
   public static class OutboxHoldingCallsOfTheOldProcess implements PhaseTwoOutbox {

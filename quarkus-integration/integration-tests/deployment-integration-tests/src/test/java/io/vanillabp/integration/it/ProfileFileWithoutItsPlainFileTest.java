@@ -17,11 +17,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * A workflow module which ships <i>test-module-test.yaml</i> and no
- * <i>test-module.yaml</i>, with the profile <i>test</i> active: the settings of that file
- * are nowhere, and the application says so at startup naming the file it misses.
- * {@code ProfileFileWithItsPlainFileTest} is the same application with the plain file
- * added, where the same settings do arrive.
+ * A workflow module ships <i>test-module-test.yaml</i> but no <i>test-module.yaml</i>, and
+ * the profile <i>test</i> is active. The settings of that file are nowhere. The application
+ * says so at startup and names the file it misses. {@code ProfileFileWithItsPlainFileTest}
+ * is the same application with the plain file added. There the same settings do arrive.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ProfileFileWithoutItsPlainFileTest {

@@ -4,8 +4,8 @@ import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The class which IS the workflow service: it serves the process named after itself, with
- * its own handler and the one it inherited.
+ * The class which IS the workflow service. It serves the process which has its name. It
+ * uses its own handler and the one it inherited.
  */
 @ApplicationScoped
 public class InheritingWorkflowService extends HandlersEveryWorkflowServiceInherits {

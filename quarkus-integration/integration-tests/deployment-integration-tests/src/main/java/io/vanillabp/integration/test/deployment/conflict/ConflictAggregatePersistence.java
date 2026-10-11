@@ -7,9 +7,9 @@ import jakarta.persistence.EntityManager;
 import jakarta.transaction.Transactional;
 
 /**
- * JPA persistence of the version-conflict acceptance test's aggregate - the real
- * thing, since the point of the test is what Hibernate does when the version of a row
- * moved on while VanillaBP's transaction was open.
+ * JPA persistence of the aggregate of the version-conflict acceptance test. It is the
+ * real thing, because the test is about what Hibernate does in one case: the version of a
+ * row moved on while VanillaBP's transaction was open.
  */
 @ApplicationScoped
 public class ConflictAggregatePersistence implements AggregatePersistenceAware<ConflictAggregate> {

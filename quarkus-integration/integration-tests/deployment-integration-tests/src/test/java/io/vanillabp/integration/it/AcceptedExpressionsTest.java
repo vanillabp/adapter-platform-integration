@@ -20,9 +20,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * The same application as in {@code ExpressionsInTheModelTest}, with the line accepting the
- * expressions written at its workflow. Nothing about them is said then, which is what the
- * line is for.
+ * The same application as in {@code ExpressionsInTheModelTest}, but with the line which
+ * accepts the expressions written at its workflow. Then nothing is said about them. That is
+ * what the line is for.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AcceptedExpressionsTest {

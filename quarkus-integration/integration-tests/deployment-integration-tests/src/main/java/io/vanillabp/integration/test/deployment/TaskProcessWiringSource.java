@@ -8,9 +8,9 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Stands in for the BPMN model of the task-processing acceptance test: supplies
- * the tasks of 'TaskProcess' matching the handlers of {@link TaskWorkflowService}
- * (so the wiring validation passes); other processes have no tasks.
+ * Stands in for the BPMN model of the task-processing acceptance test. It supplies the
+ * tasks of 'TaskProcess' which match the handlers of {@link TaskWorkflowService}, so the
+ * wiring check passes. Other processes have no tasks.
  */
 @ApplicationScoped
 public class TaskProcessWiringSource implements DummyTaskWiringSource {

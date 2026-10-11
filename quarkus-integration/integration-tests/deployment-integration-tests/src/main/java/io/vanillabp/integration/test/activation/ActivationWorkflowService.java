@@ -8,10 +8,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * A handler which correlates a message while it runs, which is the shape the story is
- * about: the correlation id comes from business data and does not have to differ between
- * the elements of a multi-instance activity, so what tells the elements apart can only
- * come from the BPMS.
+ * A handler which correlates a message while it runs. This is the case the story is about.
+ * The correlation id comes from business data. It does not have to differ between the
+ * elements of a multi-instance activity. So only the BPMS can tell the elements apart.
  */
 @ApplicationScoped
 @WorkflowService(
@@ -20,8 +19,8 @@ import jakarta.inject.Inject;
 public class ActivationWorkflowService {
 
   /**
-   * The correlation id every element of the multi-instance activity uses - one partner
-   * asked once per element, and business data which is legitimately equal.
+   * The correlation id which every element of the multi-instance activity uses. One partner
+   * is asked once per element, and the business data is equal for a good reason.
    */
   public static final String CORRELATION_ID = "partner-42";
 

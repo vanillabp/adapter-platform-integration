@@ -21,15 +21,14 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of the Quarkus runtime deployment pipeline: at boot
- * the platform runs
+ * Acceptance test of the Quarkus runtime deployment pipeline. At boot the platform runs
  * <code>readBpmn &rarr; prepareBpmn &rarr; wireBpmn &rarr; deployResources &rarr;
- * startWorkflowProcessing</code> for the workflow module's BPMN resources - exactly
- * like the Spring Boot integration:
+ * startWorkflowProcessing</code> for the workflow module's BPMN resources, exactly like
+ * the Spring Boot integration:
  * <ul>
  *   <li>all <code>.bpmn</code> files below the configured
- *       <code>resources-location</code> are found (incl. subdirectories, keys keep
- *       the relative path),</li>
+ *       <code>resources-location</code> are found, also in subdirectories. The keys keep
+ *       the relative path.</li>
  *   <li>the <code>.dmn</code> files of the same location are read after them, into the
  *       context the processes produced,</li>
  *   <li>extensions are wired after the adapter, ordered by
@@ -84,9 +83,8 @@ public class DeploymentPipelineTest {
 
     final var recorded = events.getEvents();
 
-    // both files below the resources-location were found; the BPMN process id is
-    // derived from the relative path by the dummy adapter, so subdirectories are
-    // preserved
+    // both files below the resources-location were found. The dummy adapter derives the
+    // BPMN process id from the relative path, so subdirectories are kept
     assertOrder(recorded, "adapter:demo:readBpmn:test-module:first.bpmn",
         "adapter:demo:prepareBpmn:test-module:first.bpmn");
     assertOrder(recorded, "adapter:demo:prepareBpmn:test-module:first.bpmn", "adapter:demo:wireBpmn:test-module:first");
@@ -109,9 +107,9 @@ public class DeploymentPipelineTest {
 
     final var recorded = events.getEvents();
 
-    // the decision a business rule task calls belongs to the module, so it is deployed
-    // with it - after the processes, because the context it is added to is what reading
-    // a process produced
+    // the decision which a business rule task calls belongs to the module, so it is
+    // deployed with it. It comes after the processes, because reading a process produced
+    // the context which the decision is added to
     assertOrder(
         recorded,
         "adapter:demo:wireBpmn:test-module:first",

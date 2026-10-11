@@ -7,9 +7,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * The workflow service of the version-conflict acceptance test. Both
- * handlers change the aggregate; only {@link #conflictingTask} lets the other branch
- * commit in between, which makes VanillaBP's own commit fail.
+ * The workflow service of the version-conflict acceptance test. Both handlers change the
+ * aggregate. Only {@link #conflictingTask} lets the other branch commit in between. This
+ * makes VanillaBP's own commit fail.
  */
 @ApplicationScoped
 @WorkflowService(

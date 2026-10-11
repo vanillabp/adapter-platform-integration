@@ -13,11 +13,11 @@ import io.vanillabp.integration.test.utils.OneFreePortPerJvm;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Like {@link ConfigWatcherInDevModeTest} but for a workflow-module-specific config file
- * placed in a subdirectory named after the workflow module ID
- * (<code>test-module/test-module.yaml</code>): modifying such a file has to trigger a
- * dev-mode reload as well, so the file has to be watched using its relative path, not
- * just its file name.
+ * Like {@link ConfigWatcherInDevModeTest}, but for a config file of a workflow module
+ * which sits in a subdirectory named after the workflow module ID
+ * (<code>test-module/test-module.yaml</code>). Changing such a file has to trigger a
+ * dev-mode reload as well. So the file has to be watched by its relative path, not just
+ * by its file name.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ConfigWatcherForSubdirectoryConfigInDevModeTest {

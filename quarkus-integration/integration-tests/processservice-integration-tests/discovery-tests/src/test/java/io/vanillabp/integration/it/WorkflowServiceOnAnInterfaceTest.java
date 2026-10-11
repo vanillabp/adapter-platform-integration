@@ -18,12 +18,12 @@ import io.vanillabp.integration.test.WorkflowServiceInterface;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An interface carrying <code>&#64;WorkflowService</code> ends the build. Jandex reports
- * the interface as the annotated type, so the interface used to become the workflow
- * service and the methods declared IN it used to serve the tasks - while Spring Boot reads
- * the implementing class, whose overriding methods carry no annotation at all. The message
- * names the interface and the class which brought it in, and says where the annotation
- * belongs.
+ * An interface which carries <code>&#64;WorkflowService</code> ends the build. Jandex
+ * reports the interface as the annotated type. So the interface used to become the workflow
+ * service, and the methods declared IN it used to serve the tasks. Spring Boot, however,
+ * reads the implementing class, and its overriding methods carry no annotation at all. The
+ * message names the interface and the class which brought it in. It also says where the
+ * annotation belongs.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowServiceOnAnInterfaceTest {

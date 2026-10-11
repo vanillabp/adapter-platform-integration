@@ -29,17 +29,16 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of the transaction-contract safeguards on Quarkus: a
- * transaction annotation of the application in the call chain of a
- * <code>&#64;WorkflowTask</code> handler marks VanillaBP's JTA transaction
- * rollback-only, after which neither the aggregate changes nor the state of the BPMS can
- * be committed. Narayana refuses the commit of a transaction in state
- * {@code STATUS_MARKED_ROLLBACK}, so without the check the developer would be left with
- * Arjuna's wording one layer away from the cause.
+ * Acceptance test of the safeguards of the transaction contract on Quarkus. A transaction
+ * annotation of the application in the call chain of a <code>&#64;WorkflowTask</code>
+ * handler marks VanillaBP's JTA transaction rollback-only. After that, neither the
+ * aggregate changes nor the state of the BPMS can be committed. Narayana refuses the commit
+ * of a transaction in state {@code STATUS_MARKED_ROLLBACK}. Without the check, the
+ * developer would only get Arjuna's wording, one layer away from the cause.
  * <p>
- * The startup check covering an annotation ON the handler is asserted by the deployment
- * module's {@code TransactionAnnotationStartupTest}; the annotation matrix is covered by
- * the core's unit tests.
+ * The deployment module's {@code TransactionAnnotationStartupTest} asserts the startup
+ * check for an annotation ON the handler. The core's unit tests cover the matrix of
+ * annotations.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ApplicationTransactionTest {
@@ -116,9 +115,9 @@ public class ApplicationTransactionTest {
     assertTrue(failure.getMessage().contains(taskDefinition), failure.getMessage());
     assertTrue(failure.getMessage().contains(PROCESS), failure.getMessage());
     assertTrue(failure.getMessage().contains(MODULE), failure.getMessage());
-    // the rollback rule as it is written on THIS platform: Quarkus honors the JTA
-    // annotation, and Spring's only with the extension quarkus-spring-tx, which this
-    // application does not have - so its attribute must not be offered here
+    // the rollback rule as it is written on THIS platform. Quarkus honors the JTA
+    // annotation. It honors Spring's only with the extension quarkus-spring-tx, and this
+    // application does not have it. So Spring's attribute must not be offered here
     assertTrue(failure.getMessage().contains("dontRollbackOn = TaskException.class"), failure.getMessage());
     assertFalse(failure.getMessage().contains("noRollbackFor"), failure.getMessage());
 
@@ -130,8 +129,8 @@ public class ApplicationTransactionTest {
 
     final var dummyAdapter = dummyAdapter();
 
-    // (a) the shape of a remote BPMS: VanillaBP opens its own transaction, the
-    // nested bean joins it and takes it down with the TaskException
+    // (a) the shape of a remote BPMS: VanillaBP opens its own transaction. The nested
+    // bean joins it and takes it down with the TaskException
     persistence.seed("5001");
     final var ownTransaction = assertThrows(
         IllegalStateException.class,
@@ -148,17 +147,17 @@ public class ApplicationTransactionTest {
             .call(() -> dummyAdapter.invokeTask(MODULE, PROCESS, context("nestedTaskException", "5002", true))));
     assertGuidingMessage(joinedTransaction, "nestedTaskException");
 
-    // (c) no TaskException involved at all: the handler swallowed the exception of
-    // the nested call and returned normally, which would report the task as
-    // completed while nothing can be persisted
+    // (c) no TaskException involved at all. The handler swallowed the exception of the
+    // nested call and returned normally. That would report the task as completed,
+    // although nothing can be stored
     persistence.seed("5003");
     final var swallowed = assertThrows(
         IllegalStateException.class,
         () -> dummyAdapter.invokeTask(MODULE, PROCESS, context("swallowedNestedFailure", "5003", false)));
     assertGuidingMessage(swallowed, "swallowedNestedFailure");
 
-    // (d) the annotation a version-1 application carries: accepted by the startup
-    // check (this application booted with it) and working at runtime
+    // (d) the annotation which a version-1 application carries. The startup check
+    // accepts it (this application booted with it), and it works at runtime
     persistence.seed("5004");
     final var accepted = dummyAdapter.invokeTask(MODULE, PROCESS, context("acceptedAnnotation", "5004", false));
     assertEquals(WorkflowTaskOutcome.Kind.COMPLETED, accepted.kind());

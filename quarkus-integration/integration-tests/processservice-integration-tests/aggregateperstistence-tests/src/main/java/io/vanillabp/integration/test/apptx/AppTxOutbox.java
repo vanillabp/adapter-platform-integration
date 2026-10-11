@@ -10,9 +10,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * The application's own phase-two outbox: the entry rides the unit of work of the
- * application, and the dispatch happens right after its commit - the contract of
- * {@link PhaseTwoOutbox} fulfilled without any database.
+ * The application's own phase-two outbox. An entry joins the unit of work of the
+ * application, and the dispatch happens right after its commit. So it keeps the contract of
+ * {@link PhaseTwoOutbox} without any database.
  */
 @ApplicationScoped
 public class AppTxOutbox implements PhaseTwoOutbox {
@@ -41,10 +41,10 @@ public class AppTxOutbox implements PhaseTwoOutbox {
   public boolean schedule(
       final PhaseTwoCall call) {
 
-    // deliberately simpler than a real store: nothing here is ever marked done, so a
-    // key deduplicates for as long as this application lives, while a real store
-    // deduplicates the entries still waiting for their dispatch (see PhaseTwoOutbox).
-    // What these tests are about is which store an aggregate is served by
+    // Deliberately simpler than a real store. Nothing here is ever marked done, so a key
+    // deduplicates for as long as this application lives. A real store deduplicates only
+    // the entries which still wait for their dispatch (see PhaseTwoOutbox). These tests
+    // are about which store serves an aggregate.
     final var idempotencyKey = call
         .idempotencyKey()
         .orElse(null);

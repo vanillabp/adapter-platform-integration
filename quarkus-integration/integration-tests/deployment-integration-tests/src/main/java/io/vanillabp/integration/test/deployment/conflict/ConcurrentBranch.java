@@ -7,11 +7,11 @@ import jakarta.transaction.Transactional;
 import jakarta.transaction.Transactional.TxType;
 
 /**
- * The second writer of the version-conflict acceptance test: it changes the
- * same workflow aggregate in a transaction of ITS OWN and commits, while VanillaBP's
- * transaction is still open. That is the shape of the collision without a race - what
- * a parallel branch of a workflow does in real life, made sequential so the test
- * cannot flake.
+ * The second writer of the version-conflict acceptance test. It changes the same
+ * workflow aggregate in a transaction of ITS OWN and commits, while VanillaBP's
+ * transaction is still open. This is the collision without a race. In real life a
+ * parallel branch of a workflow does this. Here it happens one after the other, so the
+ * test cannot fail by chance.
  */
 @ApplicationScoped
 public class ConcurrentBranch {
@@ -20,8 +20,8 @@ public class ConcurrentBranch {
   EntityManager entityManager;
 
   /**
-   * Changes the aggregate in a separate transaction which is committed on return, so
-   * the version of the row is higher than the one VanillaBP's transaction read.
+   * Changes the aggregate in a separate transaction, which is committed on return. So the
+   * version of the row is higher than the one which VanillaBP's transaction read.
    *
    * @param aggregateId The aggregate's ID
    */

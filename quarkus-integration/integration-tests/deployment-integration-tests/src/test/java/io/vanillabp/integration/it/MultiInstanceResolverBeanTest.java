@@ -30,11 +30,11 @@ import jakarta.inject.Inject;
 
 /**
  * The resolver named by
- * <code>&#64;MultiInstanceElement(resolverBean = ...)</code> is a bean nothing injects.
- * Quarkus removes such beans while building the application, so VanillaBP's lookup
- * found nothing and every iteration of the task failed - with a message asking the
- * developer to define the bean they had defined. The build step keeps it now, and the
- * application needs no Quarkus annotation for it.
+ * <code>&#64;MultiInstanceElement(resolverBean = ...)</code> is a bean which nothing
+ * injects. Quarkus removes such beans while it builds the application. So VanillaBP's
+ * lookup found nothing, and every iteration of the task failed. The message asked the
+ * developer to define the bean which they had already defined. Now the build step keeps
+ * the bean, and the application needs no Quarkus annotation for it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MultiInstanceResolverBeanTest {

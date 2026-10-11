@@ -9,22 +9,24 @@ import io.quarkus.runtime.configuration.ConfigUtils;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Reads back the configuration the two workflow modules of this application ship, once for
- * every place such a file may sit: at the classpath root, in a <code>config</code>
- * directory, inside a directory named after the workflow module ID, and in a
- * <code>config</code> directory of that one. The places are split over the two modules,
- * because the same file may lie in one place only, and over both formats and both archives:
- * the application's own and a dependency JAR. Every file exists twice, plain and named after
- * the profile <code>tenant</code>, so the value read says which of the two won.
+ * Reads back the configuration which the two workflow modules of this application ship.
+ * It reads once for every place where such a file may sit: at the classpath root, in a
+ * <code>config</code> directory, inside a directory named after the workflow module ID,
+ * and in a <code>config</code> directory inside that one. The places are split over the two
+ * modules, because the same file may lie in one place only. They are also split over both
+ * formats and both archives: the application's own and a dependency JAR. Every file exists
+ * twice, plain and named after the profile <code>tenant</code>. So the value read says
+ * which of the two won.
  * <p>
- * On the JVM the profile variant wins wherever the profile is active. A native image carries
- * only the resources it was told about, so the same is true of a binary only because the
- * VanillaBP extension registers these files - which is what this check is here to notice.
+ * On the JVM, the profile variant wins wherever the profile is active. A native image
+ * carries only the resources it was told about. So a binary behaves the same only because
+ * the VanillaBP extension registers these files. This check is here to notice if it does
+ * not.
  * <p>
- * The last key comes from a profile section of <code>application.yaml</code> rather than from
- * a workflow module. It is the way out the extension recommends for the values a separate
- * <code>application-tenant.yaml</code> would carry, and it is asserted here so that the
- * recommendation is measured rather than believed.
+ * The last key comes from a profile section of <code>application.yaml</code>, not from a
+ * workflow module. The extension recommends this way out for the values which a separate
+ * <code>application-tenant.yaml</code> would carry. It is asserted here, so the
+ * recommendation is measured and not just believed.
  */
 @ApplicationScoped
 public class WorkflowModuleConfigurationCheck {
@@ -43,8 +45,8 @@ public class WorkflowModuleConfigurationCheck {
       "native-image-test.application-profile-section");
 
   /**
-   * @return One line per key whose value is not the one the active profile asks for, empty if
-   *         every file was read and the right one won
+   * @return One line per key whose value is not the one the active profile asks for. Empty
+   *         if every file was read and the right one won
    */
   public List<String> whatTheConfigurationGotWrong() {
 

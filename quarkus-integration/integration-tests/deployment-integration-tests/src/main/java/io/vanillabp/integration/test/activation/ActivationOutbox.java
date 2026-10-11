@@ -8,9 +8,9 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * A store of the application's own which never dispatches, so every planned call keeps
- * waiting and its key keeps deduplicating. That is exactly the window multi-instance
- * siblings used to collide in, held open for the length of a test.
+ * A store of the application's own which never dispatches. So every planned call keeps
+ * waiting, and its key keeps rejecting duplicates. Multi-instance siblings used to collide
+ * in exactly this window, and this store holds it open for the whole test.
  */
 @ApplicationScoped
 public class ActivationOutbox implements PhaseTwoOutbox {

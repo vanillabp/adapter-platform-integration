@@ -26,15 +26,15 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * What <code>vanillabp.outbox.create-schema: false</code> means on MongoDB: VanillaBP
- * creates no index, and a collection appears with the first document rather than at
- * startup. So the only thing such an application can be told is which indexes it owes, and
- * the startup names them with the statement which creates each one.
+ * What <code>vanillabp.outbox.create-schema: false</code> means on MongoDB. VanillaBP creates
+ * no index, and a collection appears with the first document, not at startup. So such an
+ * application can only be told which indexes it owes. The startup names them, each with the
+ * statement which creates it.
  * <p>
- * The message itself is held by the test of the core which writes it. What is tested here
- * is the half only a database answers: no index was created, and an index VanillaBP
- * created has to be an index VanillaBP recognizes again, or every startup would name
- * indexes which are there.
+ * The test of the core which writes the message checks the message itself. This test checks
+ * the half which only a database can answer. No index was created. And VanillaBP has to
+ * recognize an index which it created itself, or every startup would name indexes which are
+ * there.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoIndexesOfAnApplicationManagingItsOwnSchemaTest {
@@ -42,16 +42,16 @@ public class MongoIndexesOfAnApplicationManagingItsOwnSchemaTest {
   private static final String DATABASE = "missing-indexes-it";
 
   /**
-   * A database of its own for the round trip below, so the assertion about what the
-   * startup created does not meet the indexes this test creates itself.
+   * A database of its own for the round trip below. So the assertion about what the startup
+   * created does not see the indexes which this test creates itself.
    */
   private static final String DATABASE_OF_THE_ROUND_TRIP = "indexes-read-back-it";
 
   private static final String OUTBOX_COLLECTION = PhaseTwoOutboxProperties.MongoOutboxProperties.DEFAULT_COLLECTION;
 
   /**
-   * The index MongoDB creates itself, over the id of a document. Every collection carries
-   * it and nobody asked VanillaBP for it.
+   * The index which MongoDB creates itself, over the id of a document. Every collection has
+   * it, and nobody asked VanillaBP for it.
    */
   private static final String THE_INDEX_MONGODB_CREATES_ITSELF = "_id_";
 
@@ -66,16 +66,16 @@ public class MongoIndexesOfAnApplicationManagingItsOwnSchemaTest {
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .overrideConfigKey("quarkus.mongodb.database", DATABASE)
       .overrideConfigKey("vanillabp.outbox.create-schema", "false")
-      // the housekeeping window is held open on purpose, the way the two tests which
-      // watch the housekeeping do it. A window which ends before it starts crosses
-      // midnight, so this one is open all day but for the first minute of it.
+      // the housekeeping window is held open on purpose, like the two tests which watch the
+      // housekeeping do it. A window which ends before it starts crosses midnight. So this
+      // one is open all day except for its first minute.
       //
-      // The housekeeping claims its store by a write, and on MongoDB a write makes the
-      // collection it goes to. So the lease collection appears here although nobody
-      // created a schema. An assertion over the collection names was green all day and
-      // red between 04:00 and 05:00, which is the default window read in the zone the
-      // test JVMs of this build stand in. Holding the window open makes that write
-      // happen in every run, and what is asserted below is the promise itself: no index
+      // The housekeeping claims its store with a write, and on MongoDB a write creates the
+      // collection it goes to. So the lease collection appears here, although nobody created
+      // a schema. An assertion over the collection names was green all day, but red between
+      // 04:00 and 05:00. That is the default window, read in the time zone of the test JVMs
+      // of this build. With the window held open, that write happens in every run. The test
+      // below asserts the promise itself: no index
       .overrideConfigKey("vanillabp.outbox.housekeeping.start", "00:01")
       .overrideConfigKey("vanillabp.outbox.housekeeping.end", "00:00")
       .overrideConfigKey("vanillabp.outbox.housekeeping.zone", "Europe/Vienna");
@@ -131,7 +131,7 @@ public class MongoIndexesOfAnApplicationManagingItsOwnSchemaTest {
   }
 
   /**
-   * What the collection carries, read the way the startup reads it.
+   * The indexes of the collection, read the way the startup reads them.
    *
    * @param collection The collection to ask
    * @return Its indexes

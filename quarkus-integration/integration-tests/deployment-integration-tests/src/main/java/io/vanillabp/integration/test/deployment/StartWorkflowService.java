@@ -47,14 +47,14 @@ public class StartWorkflowService {
       final BpmsStartTrigger trigger,
       @TaskParam("startedAt") final String startedAt,
       @TaskParam("region") final String region,
-      // a wrapper rather than the primitive: a notification which carries no amount
+      // a wrapper, not the primitive: with the primitive, a notification without an amount
       // would end the start instead of building the aggregate
       @TaskParam("amount") final Integer amount) {
 
     final var aggregate = new StartAggregate();
-    // the time is the application's own value, filled by an expression in the model and
-    // read here - the trigger brings none, because no BPMS hands a start listener the
-    // time it scheduled the start for
+    // the time is the application's own value. An expression in the model fills it, and
+    // this method reads it. The trigger brings no time, because no BPMS tells a start
+    // listener the time for which it scheduled the start
     aggregate.setId(startedAt);
     aggregate.setStartedBy(trigger.kind().name());
     aggregate.setRegion(region);
@@ -82,9 +82,10 @@ public class StartWorkflowService {
   }
 
   /**
-   * Reports the aggregate it builds as changed, the way an application does which calls
-   * <code>aggregateChanged</code> wherever it changes one. The workflow cannot be found yet while
-   * this method runs, so the report does nothing and the start hands the values over.
+   * Reports the aggregate it builds as changed. Some applications call
+   * <code>aggregateChanged</code> wherever they change an aggregate, and this does the same.
+   * The workflow cannot be found yet while this method runs. So the report does nothing,
+   * and the start hands the values over.
    */
   @WorkflowStartedByBpms(id = "ReportingStart")
   public StartAggregate aggregateOfReportingStart(

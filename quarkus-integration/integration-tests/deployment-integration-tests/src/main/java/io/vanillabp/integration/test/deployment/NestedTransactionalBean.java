@@ -5,11 +5,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.transaction.Transactional;
 
 /**
- * A bean of the application carrying its own transaction annotation, called by a
- * <code>&#64;WorkflowTask</code> handler. This is the shape the startup check cannot
- * see: the annotation sits further down the call chain, not on the handler. Its
- * interceptor joins VanillaBP's transaction and marks it rollback-only as soon as an
- * exception passes it.
+ * A bean of the application with its own transaction annotation. A
+ * <code>&#64;WorkflowTask</code> handler calls it. The startup check cannot see this case,
+ * because the annotation sits further down the call chain, not on the handler. Its
+ * interceptor joins VanillaBP's transaction. It marks the transaction rollback-only as
+ * soon as an exception passes it.
  */
 @ApplicationScoped
 @Transactional

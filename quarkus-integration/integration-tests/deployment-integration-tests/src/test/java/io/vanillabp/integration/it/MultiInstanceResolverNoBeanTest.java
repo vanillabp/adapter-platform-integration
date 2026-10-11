@@ -18,9 +18,9 @@ import io.vanillabp.integration.test.deployment.ResolverProcessWiringSource;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * A resolver class which is no bean at all used to surface at the first
- * iteration of the task, one retry cycle at a time. Now the build says it, naming the
- * class and what it is used as.
+ * A resolver class which is no bean at all used to show up only at the first iteration of
+ * the task, one retry cycle at a time. Now the build reports it. It names the class and
+ * what the class is used as.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MultiInstanceResolverNoBeanTest {

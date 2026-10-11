@@ -6,8 +6,8 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 
 /**
- * A registry backend for the test: Quarkus adds every {@code MeterRegistry} bean to
- * its composite, and only a composite WITH a child actually records measurements.
+ * A registry backend for the test. Quarkus adds every {@code MeterRegistry} bean to its
+ * composite registry, and only a composite WITH a child really records measurements.
  */
 @ApplicationScoped
 public class TestMeterRegistryProducer {

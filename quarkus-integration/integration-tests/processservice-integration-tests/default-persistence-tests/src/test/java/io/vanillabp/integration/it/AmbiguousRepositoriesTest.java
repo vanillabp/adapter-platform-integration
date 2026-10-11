@@ -18,9 +18,9 @@ import io.vanillabp.integration.test.persistence.SingleTaskWiringSource;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Two repositories for one aggregate are not a coin flip. The build fails
- * and the message names both of them, so the developer either keeps one or writes
- * the {@code AggregatePersistenceAware} deciding it.
+ * Two repositories for one aggregate are not a coin flip. The build fails, and the message
+ * names both of them. So the developer either keeps one or writes the
+ * {@code AggregatePersistenceAware} which decides.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AmbiguousRepositoriesTest {

@@ -17,10 +17,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * The same workflow module as in {@code ProfileFileWithoutItsPlainFileTest}, with
- * <i>test-module.yaml</i> added: the settings of <i>test-module-test.yaml</i> are there,
- * and nothing is reported. It is the other half of the measurement, and it is what keeps
- * the report from being written for a module which is fine.
+ * The same workflow module as in {@code ProfileFileWithoutItsPlainFileTest}, but with
+ * <i>test-module.yaml</i> added. The settings of <i>test-module-test.yaml</i> are there,
+ * and nothing is reported. It is the other half of the measurement. It makes sure that the
+ * report is not written for a module which is fine.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ProfileFileWithItsPlainFileTest {

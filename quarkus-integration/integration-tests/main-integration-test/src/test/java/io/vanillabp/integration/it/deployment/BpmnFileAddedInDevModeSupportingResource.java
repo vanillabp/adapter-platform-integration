@@ -13,10 +13,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
 /**
- * Records which BPMN files the dummy adapter was handed while the application booted
- * and hands them back over HTTP, so a dev-mode test can ask a restarted application
- * what it deployed. A restart builds this bean anew, which is also what the boot ID
- * says: it is drawn once per run, so two runs never answer the same.
+ * Records which BPMN files the dummy adapter got while the application booted, and
+ * returns them over HTTP. So a dev-mode test can ask a restarted application what it
+ * deployed. A restart builds this bean anew, and the boot ID shows that. It is drawn once
+ * per run, so two runs never answer the same.
  */
 @ApplicationScoped
 @Path("/")

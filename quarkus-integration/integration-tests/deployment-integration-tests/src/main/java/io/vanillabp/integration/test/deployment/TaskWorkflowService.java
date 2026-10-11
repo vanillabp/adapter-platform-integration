@@ -16,11 +16,11 @@ import jakarta.inject.Inject;
 import jakarta.transaction.Status;
 
 /**
- * The workflow service of the task-processing acceptance test: one
- * <code>&#64;WorkflowTask</code> method per user-visible variation. The happy-path
- * handler additionally proves the platform contract for handler invocations on
- * adapter threads: a JTA transaction is active and the CDI request context was
- * activated (see {@link RequestScopedProbe}).
+ * The workflow service of the task-processing acceptance test. It has one
+ * <code>&#64;WorkflowTask</code> method for each variation a user can see. The handler
+ * of the normal case also proves the platform contract for handlers which run on adapter
+ * threads: a JTA transaction is active, and the CDI request context was activated (see
+ * {@link RequestScopedProbe}).
  */
 @ApplicationScoped
 @WorkflowService(
@@ -41,8 +41,8 @@ public class TaskWorkflowService {
     if (QuarkusTransaction.getStatus() == Status.STATUS_NO_TRANSACTION) {
       throw new IllegalStateException("no JTA transaction active in @WorkflowTask handler");
     }
-    // throws ContextNotActiveException if the platform did not activate the
-    // request context around the handler invocation
+    // throws ContextNotActiveException if the platform did not activate the request
+    // context around the call of the handler
     aggregate.setRequestScopedProbe(requestScopedProbe.ping());
     aggregate.setStatus("processed");
 
@@ -58,8 +58,8 @@ public class TaskWorkflowService {
   }
 
   /**
-   * What the logging context held while the handler ran - the assertion of the MDC
-   * VanillaBP puts around every delivery.
+   * What the logging context held while the handler ran. A test checks with it the MDC
+   * (mapped diagnostic context) which VanillaBP puts around every delivery.
    */
   public static final java.util.Map<String, String> MDC_DURING_TASK = new java.util.concurrent.ConcurrentHashMap<>();
 

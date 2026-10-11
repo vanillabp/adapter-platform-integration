@@ -8,8 +8,8 @@ import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The BPMS the derived-cancellation test elects: it knows every workflow it is asked
- * about, and it writes down which id the election passed it.
+ * The BPMS which the derived-cancellation test elects. It knows every workflow it is asked
+ * about, and it writes down which id the election passed to it.
  */
 @ApplicationScoped
 public class CancelAwarenessSource implements DummyTaskAwarenessSource {

@@ -17,11 +17,10 @@ import jakarta.transaction.RollbackException;
 import jakarta.transaction.UserTransaction;
 
 /**
- * A BPMS adapter hands its phase-one check to the platform and it runs right
- * before the transaction of the workflow aggregate commits. On Quarkus that is an interposed
- * JTA synchronization, so what this test pins is the ORDER (the check runs after everything
- * the caller did, not when it was handed over) and that a failing check takes the commit with
- * it.
+ * A BPMS adapter hands its phase-one check to the platform. The check runs right before the
+ * transaction of the workflow aggregate commits. On Quarkus that is an interposed JTA
+ * synchronization. So this test pins the ORDER: the check runs after everything the caller
+ * did, not when it was handed over. It also pins that a failing check stops the commit.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class QuarkusPreCommitRegistrarTest {

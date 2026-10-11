@@ -22,10 +22,9 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * What the phase-two outbox reports about itself: the entries waiting to
- * be dispatched are a gauge, and every dispatch is counted. Those are the numbers an
- * operator looks at when a BPMS is unreachable - the outbox is where a broken
- * connection piles up first.
+ * What the phase-two outbox reports about itself. A gauge shows the entries which wait to
+ * be dispatched, and every dispatch is counted. An operator looks at these numbers when a
+ * BPMS cannot be reached, because a broken connection piles up in the outbox first.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OutboxMetricsTest {
@@ -90,9 +89,9 @@ public class OutboxMetricsTest {
   /**
    * Waits until the wait of the dispatched entry was measured.
    * <p>
-   * The listener runs INSIDE the dispatch and the wait is reported when the dispatch
-   * returns, so the listener is not the signal that the measurement is there. Waiting
-   * for the meter is.
+   * The listener runs INSIDE the dispatch, and the wait is reported when the dispatch
+   * returns. So the listener does not signal that the measurement is there. Only the
+   * meter does.
    */
   private void awaitMeasuredWait() throws Exception {
 

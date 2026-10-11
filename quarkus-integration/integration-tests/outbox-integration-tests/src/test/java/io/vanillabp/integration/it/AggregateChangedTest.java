@@ -27,11 +27,11 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Pushing a changed workflow-aggregate on Quarkus with the dummy adapter
- * forced to require a two-phase commit: a REMOTE BPMS is written to after the local
- * transaction was committed, so the push rides an outbox entry. What this pins: the
- * task id travels in the entry's ARGS, the entry carries no idempotency key (the
- * values are read at dispatch time) and a rollback pushes nothing at all.
+ * Pushing a changed workflow aggregate on Quarkus, with the dummy adapter forced to need a
+ * two-phase commit. A REMOTE BPMS is written to after the local transaction was committed,
+ * so the push travels in an outbox entry. This test pins three things. The task id travels
+ * in the entry's ARGS. The entry carries no idempotency key, because the values are read at
+ * dispatch time. And a rollback pushes nothing at all.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AggregateChangedTest {
@@ -39,11 +39,10 @@ public class AggregateChangedTest {
   /**
    * How long a test waits before it says that nothing more happened. The application
    * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * set to half a second. So this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A machine which gives this JVM no turn only
+   * makes the wait longer. Afterwards the test asserts a count which did not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -76,7 +75,7 @@ public class AggregateChangedTest {
 
   /**
    * The entries this test is about. The data source of a Quarkus application hands out a
-   * connection of the running JTA transaction, so an entry is counted while the
+   * connection of the running JTA transaction. So an entry can be counted while the
    * transaction which wrote it is still open.
    *
    * @return The entries of the push operation
@@ -120,8 +119,8 @@ public class AggregateChangedTest {
     try {
       workflowService.aggregateChanged(aggregate);
       workflowService.aggregateChanged(aggregate, "task-1");
-      // repeating the very same push writes the then-current state again - nothing
-      // is deduplicated, on purpose
+      // repeating the very same push writes the state of that moment again. On purpose,
+      // nothing is deduplicated
       workflowService.aggregateChanged(aggregate, "task-1");
       assertEquals(3, pushEntries().size());
       assertTrue(listener.getAggregateChanges().isEmpty(), "nothing may be pushed before the commit");

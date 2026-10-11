@@ -25,9 +25,9 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * An aggregate written as a MongoDB Panache active record (no repository
- * anywhere) is persisted by VanillaBP through Panache's operations, not through the
- * static methods Panache generates onto the entity.
+ * An aggregate is written as a MongoDB Panache active record, with no repository anywhere.
+ * VanillaBP stores it through Panache's operations. It does not use the static methods
+ * which Panache generates onto the entity.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoActiveRecordPersistenceTest {

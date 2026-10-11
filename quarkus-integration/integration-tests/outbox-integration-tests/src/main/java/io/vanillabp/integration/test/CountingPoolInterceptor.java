@@ -7,15 +7,15 @@ import io.agroal.api.AgroalPoolInterceptor;
 import jakarta.inject.Singleton;
 
 /**
- * How often the application took a connection out of the pool, so a test can claim that it
- * did not touch its database at all.
+ * Counts how often the application took a connection out of the pool. So a test can claim
+ * that the application did not touch its database at all.
  * <p>
- * A connection is what every statement needs, so counting connections is the claim from
- * below: zero connections taken is zero statements issued, whatever the code would have sent
- * on them. A test which measures TIME cannot make that claim - a poller sleeping and a poller
- * asking every second both look like "the workflow went through".
+ * Every statement needs a connection, so counting connections makes the claim from below.
+ * Zero connections taken means zero statements sent, whatever the code would have sent on
+ * them. A test which measures TIME cannot make that claim. A poller which sleeps and a
+ * poller which asks every second both look like "the workflow went through".
  * <p>
- * The count is static because this is a bean of the application under test while the test
+ * The count is static, because this is a bean of the application under test, and the test
  * which reads it lives outside.
  */
 @Singleton

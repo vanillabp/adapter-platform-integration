@@ -31,12 +31,13 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * The START re-dispatch mitigation on the Quarkus JDBC outbox: an entry a dispatch has had
- * before is recognized as such - its ATTEMPTS carry an attempt which ended, or its LEASED_BY
- * carries the node which disappeared in the middle of one - and the recorded
- * adapter's {@code awarenessOfWorkflowForRedispatch} is probed first, so a workflow
- * already known consumes the entry WITHOUT a second start. The residual
- * at-least-once window is accepted and documented; this proves the mitigation.
+ * How the Quarkus JDBC outbox avoids a second START when it dispatches an entry again. It
+ * recognizes an entry which a dispatch has had before: its ATTEMPTS carry an attempt which
+ * ended, or its LEASED_BY carries the node which disappeared in the middle of one. Then it
+ * first probes {@code awarenessOfWorkflowForRedispatch} of the recorded adapter. If the
+ * workflow is already known, the entry is used up WITHOUT a second start. A small window
+ * for at-least-once delivery remains; it is accepted and documented. This test proves the
+ * mitigation.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OutboxRedispatchMitigationTest {
@@ -44,11 +45,10 @@ public class OutboxRedispatchMitigationTest {
   /**
    * How long a test waits before it says that nothing more happened. The application
    * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is four of those windows.
+   * set to half a second. So this is four of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A machine which gives this JVM no turn only
+   * makes the wait longer. Afterwards the test asserts a count which did not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 2000;
 
@@ -114,11 +114,11 @@ public class OutboxRedispatchMitigationTest {
     listener.reset();
     awareness.reset();
 
-    // the adapter reports the workflow as already known - like a crash/failure
-    // right after a successful start whose state is visible on retry
+    // the adapter reports the workflow as already known. That is like a crash or failure
+    // right after a successful start, whose state is visible on the retry
     awareness.answerFor("test", WorkflowAwareness.ACTIVE);
 
-    // the FIRST dispatch fails (BPMS "unreachable") - the entry stays pending and its
+    // the FIRST dispatch fails (BPMS "unreachable"). The entry stays pending, and its
     // ATTEMPTS column now carries the attempt which failed
     listener.failNextDispatches(1);
 
@@ -131,13 +131,13 @@ public class OutboxRedispatchMitigationTest {
       throw e;
     }
 
-    // the first (failing) dispatch happened - previouslyAttempted was false, so
-    // NO mitigation probe ran up to now
+    // the first (failing) dispatch happened. previouslyAttempted was false, so no
+    // mitigation probe ran up to now
     listener.awaitInvocations(1, 30_000);
     assertEquals(0, awareness.countProbesOf("test"), "the first dispatch must not probe");
 
-    // the RETRY recognizes attempts > 0, probes the adapter (ACTIVE) and consumes
-    // the entry without a second start
+    // the RETRY sees attempts > 0 and probes the adapter, which answers ACTIVE. So it uses
+    // up the entry without a second start
     final var deadline = System.currentTimeMillis() + 30_000;
     while ((awareness.countProbesOf("test") == 0) && (System.currentTimeMillis() < deadline)) {
       Thread.sleep(50);
@@ -146,8 +146,8 @@ public class OutboxRedispatchMitigationTest {
         awareness.countProbesOf("test") > 0,
         "the retried entry must probe the recorded adapter's workflow awareness");
 
-    // give the dispatcher time for further (wrong) dispatches, then assert the
-    // phase two never reached the adapter again
+    // give the dispatcher time for more (wrong) dispatches. Then assert that phase two
+    // never reached the adapter again
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertEquals(
         1,
@@ -166,8 +166,8 @@ public class OutboxRedispatchMitigationTest {
     awareness.answerFor("test", WorkflowAwareness.UNKNOWN_TO_BPMS);
     final var outbox = PhaseTwoOutboxReader.ofTheVanillaBpOutbox(dataSource);
 
-    // the first workflow of the aggregate: it starts, and its entry is done, which frees the
-    // key the second start is planned under
+    // the first workflow of the aggregate starts, and its entry is done. That frees the key
+    // which the second start is planned under
     final var aggregate = inATransaction(() -> workflowService.startWorkflow("first-workflow"));
     listener.awaitInvocations(1, 30_000);
     final var aggregateId = aggregate.getId().toString();
@@ -188,9 +188,9 @@ public class OutboxRedispatchMitigationTest {
         .findFirst()
         .orElseThrow();
 
-    // the row the first start leaves behind. The dummy adapter reports no workflow id, so the
-    // row is written here, the way an adapter which reports one leaves it, a day before the
-    // second start
+    // the row which the first start leaves behind. The dummy adapter reports no workflow id,
+    // so the test writes the row here, as an adapter which reports one would leave it. It is
+    // dated a day before the second start
     inATransaction(() -> deliveryLog
         .recordWorkflowStart(
             TaskDelivery
@@ -208,8 +208,9 @@ public class OutboxRedispatchMitigationTest {
     listener.failNextDispatches(1);
     inATransaction(() -> workflowService.startWorkflowAgain(aggregate));
 
-    // the retry reads the row of the first workflow, which is older than the entry, so it asks
-    // the adapter about workflows started since, which knows none, and starts
+    // the retry reads the row of the first workflow, which is older than the entry. So it
+    // asks the adapter about workflows started since then. The adapter knows none, so the
+    // retry starts
     listener.awaitInvocations(3, 30_000);
     assertEquals(
         3,

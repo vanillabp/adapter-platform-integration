@@ -9,10 +9,10 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The workflow aggregate of the version-conflict acceptance test: a JPA
- * entity carrying the version attribute which turns two writers into an exception
- * instead of a silent overwrite. Under JTA that exception arrives wrapped, which is
- * what this test is about.
+ * The workflow aggregate of the version-conflict acceptance test. It is a JPA entity with
+ * a version attribute. With it, two writers cause an exception instead of a silent
+ * overwrite. Under JTA (the Jakarta Transactions API) that exception arrives wrapped, and
+ * this test is about that.
  */
 @Entity
 @Table(name = "CONFLICT_TEST_AGGREGATE")
@@ -25,7 +25,7 @@ public class ConflictAggregate {
 
   private String content;
 
-  // the test reads this, no BPMN model does - so it stays out of the BPMS
+  // the test reads this field, but no BPMN model does, so it stays out of the BPMS
 
   @NoSyncWithBPMS
 

@@ -7,7 +7,7 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The application's own aggregate store - in a test that is a map, in reality an event
+ * The application's own aggregate store. In a test it is a map. In real life it is an event
  * store, a ledger or a service behind an API.
  */
 @ApplicationScoped
@@ -59,7 +59,7 @@ public class AppTxPersistence implements AggregatePersistenceAware<AppTxAggregat
 
   /**
    * @param id The aggregate's ID
-   * @return What is stored, as stored - the tests read the store, not the object they
+   * @return What is stored, as it is stored. The tests read the store, not the object they
    *         handed over
    */
   public AppTxAggregate stored(

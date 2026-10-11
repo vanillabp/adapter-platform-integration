@@ -27,8 +27,8 @@ import jakarta.transaction.UserTransaction;
 /**
  * Acceptance test on Quarkus of the rule that <code>ProcessService#startWorkflowByMessage</code>
  * starts the process of its own process service and no other. The dummy adapter reports that
- * 'StartProcess' starts on the message 'OrderPlaced'. That message is accepted, and one the
- * model does not know is refused before anything is saved or planned.
+ * 'StartProcess' starts on the message 'OrderPlaced'. That message is accepted. A message
+ * which the model does not know is refused before anything is saved or planned.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AMessageStartsOnlyItsOwnProcessTest {

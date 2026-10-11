@@ -14,16 +14,15 @@ import jakarta.inject.Singleton;
  * How the sample extension joins a Quarkus application: one producer and one
  * registration.
  * <p>
- * The contract is registered while the application starts. Whether the workflow services
- * were scanned by then does not matter - a contract arriving later is applied to the
+ * The contract is registered while the application starts. It does not matter whether the
+ * workflow services were scanned by then. A contract which arrives later is applied to the
  * classes registered so far.
  */
 @ApplicationScoped
 public class SampleExtensionProducer {
 
   /**
-   * @param properties VanillaBP's configuration, which is where this extension's own
-   *          section lives
+   * @param properties VanillaBP's configuration. This extension's own section lives there
    * @return The factory building one service per workflow aggregate
    */
   @Produces

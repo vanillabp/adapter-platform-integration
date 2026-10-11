@@ -8,10 +8,10 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Stands in for a BPMN file holding TWO executable processes: 'Calling', which
+ * Stands in for a BPMN file with TWO executable processes: 'Calling', which
  * {@link CallingWorkflowService} serves, and 'Called', which nobody serves. The task of
- * 'Called' is a service task - the non-optional kind, which is what used to end the
- * boot.
+ * 'Called' is a service task. That is the kind which is not optional, and it used to end
+ * the boot.
  */
 @ApplicationScoped
 public class CallingAndCalledWiringSource implements DummyTaskWiringSource {

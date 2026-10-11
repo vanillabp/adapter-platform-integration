@@ -9,9 +9,9 @@ import jakarta.inject.Inject;
 
 /**
  * A workflow service of the smallest useful shape: it starts a workflow and handles one
- * task. Its purpose here is to make the extension generate everything it generates for a
- * real application - the process-service bean, the transaction-runner resolution and the
- * coverage verdict among them - so the native image has to link all of it.
+ * task. It makes the extension generate everything it generates for a real application,
+ * for example the process-service bean, the transaction-runner resolution and the coverage
+ * verdict. So the native image has to link all of it.
  */
 @ApplicationScoped
 @WorkflowService(

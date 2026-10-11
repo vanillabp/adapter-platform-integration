@@ -5,8 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 
 /**
- * The aggregate of the Hibernate ORM Panache active record idiom: no repository
- * anywhere, the entity itself carries the persistence.
+ * The aggregate of the Hibernate ORM Panache active record idiom. There is no repository
+ * anywhere. The entity itself knows how to store itself.
  */
 @Entity
 public class ActiveRecordAggregate extends PanacheEntityBase {

@@ -28,13 +28,13 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * An application which has naming rules for its tables renames the delivery log the way it
+ * An application which has naming rules for its tables renames the delivery log like it
  * renames the outbox: <code>vanillabp.outbox.jdbc.delivery-table</code>.
  * <p>
- * The name is followed rather than read back: the table has to be created under the
- * configured name, the record has to land in it, and the default name must not exist at
- * all. A wiring which read the property and then wrote to the constant would pass a test
- * asserting the property and fail this one.
+ * The test follows the name and does not just read it back. The table has to be created
+ * under the configured name, and the record has to land in it. The default name must not
+ * exist at all. A wiring which read the property but wrote to the constant would pass a
+ * test which checks the property. It fails this one.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class JdbcDeliveryTableNameTest {

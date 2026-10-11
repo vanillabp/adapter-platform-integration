@@ -22,15 +22,14 @@ import jakarta.inject.Inject;
  * An application which brings a transaction runner of its own, with an extension next to
  * it. Two things have to hold at once here, and they used to contradict each other.
  * <p>
- * The application BOOTS: the platform's own runner is a CDI bean as well, and every
- * injection point of type <code>TransactionRunner</code> would be ambiguous if that bean
- * carried the SPI type. It does not, because the producer restricts it to its concrete
- * class.
+ * The application BOOTS. The platform's own runner is a CDI bean as well. If that bean
+ * carried the SPI type, every injection point of type <code>TransactionRunner</code> would
+ * be ambiguous. It does not, because the producer restricts it to its concrete class.
  * <p>
- * And the extension writes where the workflow writes: it asks the resolver per aggregate
- * class and is handed the runner the APPLICATION contributed, not the platform's JTA.
- * An extension injecting a runner directly would have got the wrong one or nothing at
- * all, which is why the resolver is the contract.
+ * And the extension writes where the workflow writes. It asks the resolver per aggregate
+ * class and gets the runner which the APPLICATION contributed, not the platform's JTA. An
+ * extension which injected a runner directly would have got the wrong one, or nothing at
+ * all. That is why the resolver is the contract.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ExtensionNextToApplicationTransactionTest {
@@ -76,8 +75,8 @@ public class ExtensionNextToApplicationTransactionTest {
   @DisplayName("The workflow's own writes go through the same runner")
   public void theWorkflowUsesTheSameRunner() {
 
-    // what makes the answer worth having: the entry of the extension and the workflow
-    // aggregate it belongs to are committed by one unit of work, not by two
+    // this is why the answer matters: one unit of work commits the entry of the
+    // extension and the workflow aggregate it belongs to, not two
     assertSame(applicationUnitOfWork, transactions.runnerOf(NoteAggregate.class));
 
   }

@@ -32,11 +32,10 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * {@code completeTask}/{@code cancelTask} through the Quarkus JDBC phase-two
- * outbox: the adapter is elected by probing, the task ID and the BPMN
- * error code travel in the outbox entry's ARGS column, phase two dispatches after
- * the commit, a rollback leaves nothing and an unknown task raises the guiding
- * {@link TaskNotFoundException}.
+ * {@code completeTask} and {@code cancelTask} through the Quarkus JDBC phase-two outbox.
+ * The adapter is elected by probing. The task ID and the BPMN error code travel in the
+ * ARGS column of the outbox entry. Phase two dispatches after the commit. A rollback
+ * leaves nothing. An unknown task raises the guiding {@link TaskNotFoundException}.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TaskOperationsDispatchTest {
@@ -44,11 +43,10 @@ public class TaskOperationsDispatchTest {
   /**
    * How long a test waits before it says that nothing more happened. The application
    * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * set to half a second. So this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A machine which gives this JVM no turn only
+   * makes the wait longer. Afterwards the test asserts a count which did not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -59,25 +57,25 @@ public class TaskOperationsDispatchTest {
   private static final int INVISIBLE_PROBES = 2;
 
   /**
-   * The window the awareness double reports while the workflow is not visible yet. Every
-   * probe which answers "unknown" makes the dispatch hand the entry back, due one window
-   * later.
+   * The window which the awareness double reports while the workflow is not visible yet.
+   * Every probe which answers "unknown" makes the dispatch hand the entry back, due one
+   * window later.
    */
   private static final Duration VISIBILITY_WINDOW = Duration.ofSeconds(5);
 
   /**
    * What that case costs on an idle machine. Phase one uses the first probe, and every
-   * probe left over buys the dispatch one more window.
+   * probe left over costs the dispatch one more window.
    */
   private static final Duration WINDOWS_THE_CASE_COSTS = VISIBILITY_WINDOW
       .multipliedBy(INVISIBLE_PROBES - 1);
 
   /**
-   * How long that case waits for a dispatch before it says that none is coming. Three
-   * times what the case costs, and never less than thirty seconds: a machine carrying
-   * other builds leaves this JVM without a turn for seconds at a time, and such a pause
-   * does not get smaller when the window does. Nothing is measured there, so the budget is
-   * spent only when the test fails. A test which is right stops waiting as soon as the
+   * How long that case waits for a dispatch before it says that none is coming. It is
+   * three times what the case costs, and never less than thirty seconds. A machine which
+   * runs other builds gives this JVM no turn for seconds at a time, and such a pause does
+   * not get smaller when the window does. Nothing is measured there, so the whole budget is
+   * used only when the test fails. A test which is right stops waiting as soon as the
    * correlation arrives.
    */
   private static final long UNTIL_A_DISPATCH_COUNTS_AS_LOST = Math
@@ -124,10 +122,10 @@ public class TaskOperationsDispatchTest {
   @AfterEach
   public void forgetWhatThisTestSteered() {
 
-    // the awareness source is a bean of the application all test methods of this class
-    // share, so a window one of them opened has to be closed here rather than at the end
-    // of that method: a method which fails leaves its window behind, and every workflow
-    // probe of the next one then reports "not visible yet" for nothing
+    // the awareness source is a bean of the application which all test methods of this
+    // class share. So a window which one of them opened has to be closed here, not at the
+    // end of that method. A method which fails leaves its window behind. Then every
+    // workflow probe of the next method reports "not visible yet" for nothing
     awareness.alwaysVisible();
 
   }
@@ -151,10 +149,10 @@ public class TaskOperationsDispatchTest {
   }
 
   /**
-   * An entry deduplicates and can be dispatched again for as long as it waits, which the
-   * dispatcher ends one write after the listener ran. An entry which was put aside is
-   * left out: it has released its key and waits for a person, so a test which waited for
-   * it would wait for ever.
+   * An entry deduplicates and can be dispatched again for as long as it waits. The
+   * dispatcher ends that state one write after the listener ran. An entry which was put
+   * aside is left out. It has released its key and waits for a person, so a test which
+   * waited for it would wait for ever.
    *
    * @param aggregate The aggregate asked about
    * @return How many of its entries are still waiting
@@ -176,12 +174,11 @@ public class TaskOperationsDispatchTest {
    * A workflow whose start is THROUGH: the outbox entry of its phase two is dispatched and
    * marked DONE.
    * <p>
-   * Waiting for the listener instead would answer a different question. The listener runs
-   * INSIDE the dispatch, one UPDATE before the dispatcher marks the entry DONE, so it says
-   * that the adapter was called and not that the entry is finished. Everything the tests
-   * below do next - steering what the adapter answers, planning a second operation on the
-   * same workflow - reads as if the start were over, and only the store knows whether it
-   * is.
+   * Waiting for the listener would answer a different question. The listener runs INSIDE
+   * the dispatch, one UPDATE before the dispatcher marks the entry DONE. So it says that the
+   * adapter was called, not that the entry is finished. Everything the tests below do next
+   * assumes that the start is over: steering what the adapter answers, or planning a second
+   * operation on the same workflow. Only the store knows whether it is.
    *
    * @param content What the aggregate carries, one value per test
    * @return The attached aggregate
@@ -286,7 +283,7 @@ public class TaskOperationsDispatchTest {
     userTransaction.begin();
     try {
       workflowService.correlateMessage(aggregate, "PaymentReceived");
-      // no correlation id: NO idempotency key - both dispatch
+      // no correlation id means NO idempotency key, so both dispatch
       workflowService.correlateMessage(aggregate, "PaymentReceived");
       // with correlation id: the duplicate schedule is a no-op
       workflowService.correlateMessage(aggregate, "ItemShipped", "item-4711");
@@ -333,8 +330,8 @@ public class TaskOperationsDispatchTest {
   @DisplayName("Correlating with a workflow nobody started raises the guiding WorkflowNotFoundException")
   public void unknownWorkflowRaisesGuidingException() throws Exception {
 
-    // never handed to startWorkflow, so nothing ever recorded an adapter for it:
-    // "unknown" is the final answer here, not a read model which is a moment behind
+    // never handed to startWorkflow, so nothing ever recorded an adapter for it. Here
+    // "unknown" is the final answer, not a read model which is a moment behind
     final var aggregate = new io.vanillabp.integration.test.Aggregate();
     aggregate.setId(-815L);
     aggregate.setContent("correlate-unknown");
@@ -363,7 +360,7 @@ public class TaskOperationsDispatchTest {
     final var aggregate = startedAggregate("correlate-not-visible-yet");
     listener.reset();
     // the start recorded which adapter holds the workflow, and that adapter does not
-    // report it yet - the everyday state of an exporter-fed read model
+    // report it yet. That is the everyday state of a read model fed by an exporter
     awareness.answerWith(WorkflowAwareness.ACTIVE);
     awareness.becomeVisibleAfter(INVISIBLE_PROBES, VISIBILITY_WINDOW);
 
@@ -376,8 +373,8 @@ public class TaskOperationsDispatchTest {
       throw e;
     }
 
-    // the probe left over costs one window before the correlation goes out, so this guard
-    // has to span that window plus whatever a loaded machine adds
+    // the probe left over costs one window before the correlation goes out. So this guard
+    // has to span that window, plus whatever a loaded machine adds
     final var deadline = System.currentTimeMillis() + UNTIL_A_DISPATCH_COUNTS_AS_LOST;
     while (listener.getCorrelatedMessages().isEmpty()) {
       assertTrue(

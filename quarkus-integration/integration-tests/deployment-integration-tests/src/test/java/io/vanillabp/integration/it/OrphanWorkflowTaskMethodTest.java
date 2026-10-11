@@ -14,17 +14,18 @@ import io.vanillabp.integration.test.deployment.OrphanMethodWorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * A <code>&#64;WorkflowTask</code> method matching no task of any BPMN process of its
- * workflow module is a defect the developer has to learn about while the application
- * starts - a typo in a task definition, or a method left behind after a model change,
- * otherwise stays silent until a workflow reaches the task.
+ * A <code>&#64;WorkflowTask</code> method which matches no task of any BPMN process of its
+ * workflow module is a defect. The developer has to learn about it while the application
+ * starts. Otherwise a typo in a task definition, or a method left behind after a model
+ * change, stays silent until a workflow reaches the task.
  * <p>
- * The check is old; who runs it is new. It used to be the adapter's duty, written down in
- * the javadoc of the SPI and nowhere else, and Camunda 7 forgot it for a year. Since the
+ * The check is old, but who runs it is new. It used to be the adapter's duty, written down
+ * in the javadoc of the SPI and nowhere else, and Camunda 7 forgot it for a year. Since the
  * SPI was split into
  * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring} and
- * {@code WorkflowTaskInvoker}, the core runs it once the last adapter of a module finished
- * deploying - the dummy adapter does not call it any more, and the boot still fails.
+ * {@code WorkflowTaskInvoker}, the core runs it when the last adapter of a module has
+ * finished deploying. The dummy adapter does not call it any more, and the boot still
+ * fails.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OrphanWorkflowTaskMethodTest {

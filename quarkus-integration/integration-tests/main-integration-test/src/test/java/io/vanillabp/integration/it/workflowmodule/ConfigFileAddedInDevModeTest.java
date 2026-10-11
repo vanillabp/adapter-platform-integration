@@ -14,17 +14,17 @@ import io.vanillabp.integration.test.utils.OneFreePortPerJvm;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * A workflow module may bring its own configuration file, and adding one to a module is
- * as ordinary as adding a process to it. The application here starts with a module which
- * has none, and the first test adds, one after the other, every file the module's config
+ * A workflow module may bring its own configuration file. Adding one to a module is as
+ * ordinary as adding a process to it. The application here starts with a module which has
+ * none. The first test adds, one after the other, every file which the module's config
  * sources read: the file at the classpath root, the file for the active profile, and the
  * file in the subdirectory named after the module.
  * <p>
- * Dev mode is where a developer meets this first, and an application which goes on
- * running against the files of the last build says nothing about it. The other two tests
- * keep what that must not cost. A YAML file named after no workflow module still restarts
- * nothing, and a configuration file which is there and changes still restarts the
- * application, which is what carries the changed value into the running one.
+ * A developer meets this first in dev mode. An application which goes on running with the
+ * files of the last build does not tell the developer. The other two tests guard what the
+ * fix must not break. A YAML file named after no workflow module still restarts nothing.
+ * A configuration file which is there and changes still restarts the application. That
+ * restart carries the changed value into the running application.
  *
  * @see ConfigWatcherInDevModeTest
  * @see ConfigWatcherForSubdirectoryConfigInDevModeTest
@@ -56,8 +56,8 @@ public class ConfigFileAddedInDevModeTest {
               + "vanillabp.workflow-modules.test-module.workflows.dummy.implemented-externally=true\n"),
               "application.properties")
           .addAsResource("META-INF/workflow-module")
-          // the resources location of the module, which is also what creates the
-          // subdirectory one of the configuration files below is written into
+          // the resources location of the module. It also creates the subdirectory which
+          // one of the configuration files below is written into
           .add(new StringAsset("not parsed by the dummy adapter"), "test-module/processes/dummy/dummy.bpmn")
           .addClass(ConfigFileAddedInDevModeSupportingResource.class));
 
@@ -106,7 +106,7 @@ public class ConfigFileAddedInDevModeTest {
         get("/added-at-root"),
         theFileWasNotRead(ROOT_CONFIG, bootIdBefore));
 
-    // the file for the profile dev mode runs under, next to the one at the root:
+    // the file for the profile which dev mode runs under, next to the one at the root.
     // SmallRye reads a profile file only where the file it belongs to is there too
     assertEquals("without the profile", get("/added-for-profile"));
     bootIdBefore = get("/boot-id");
@@ -118,9 +118,9 @@ public class ConfigFileAddedInDevModeTest {
         get("/added-for-profile"),
         theFileWasNotRead(PROFILE_CONFIG, bootIdBefore));
 
-    // the file in the subdirectory named after the module, where a module packaged as
-    // its own Maven module puts it to stay clear of the classpath root; a '.yml' this
-    // time, because the same file name may lie in one place only
+    // the file in the subdirectory named after the module. A module packaged as its own
+    // Maven module puts it there to stay clear of the classpath root. This time it is a
+    // '.yml', because the same file name may lie in one place only
     bootIdBefore = get("/boot-id");
     test.addResourceFile(
         SUBDIRECTORY_CONFIG,

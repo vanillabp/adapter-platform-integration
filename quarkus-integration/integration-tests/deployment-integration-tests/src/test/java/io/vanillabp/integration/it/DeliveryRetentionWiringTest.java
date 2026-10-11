@@ -21,9 +21,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Which of the two retentions the JDBC delivery log runs with on Quarkus. The two numbers
- * are set to different values here, so a store reading the wrong one cannot pass by
- * accident.
+ * Which of the two retentions the JDBC delivery log uses on Quarkus. The two numbers have
+ * different values here. So a store which reads the wrong one cannot pass by accident.
  * <p>
  * They were one property until the outbound deduplication window ended with the dispatch.
  * Since then the outbox number decides how long a dispatched entry stays readable during
@@ -53,7 +52,7 @@ public class DeliveryRetentionWiringTest {
   public void theDeliveryLogReadsItsOwnRetention() {
 
     // the application sets 'vanillabp.outbox.retention: PT1H' and
-    // 'vanillabp.delivery.retention: P30D', so reading the wrong number would show
+    // 'vanillabp.delivery.retention: P30D'. So reading the wrong number would show
     assertEquals(Duration.ofDays(30), deliveryLog.getDeliveryRetention());
     assertTrue(
         !Duration.ofHours(1).equals(deliveryLog.getDeliveryRetention()),

@@ -28,23 +28,23 @@ import jakarta.inject.Inject;
 /**
  * What happens to a dispatch of the MongoDB store whose entry was taken over while it ran.
  * <p>
- * The renewal notices it - the write matches no document - and the dispatch which lost the
- * entry runs to its end. What it must NOT do is write down how that ended, because the node
- * holding the entry now is doing the same operation and its answer is the one the collection
- * keeps. A late "blocked" over a finished entry would be the worst of them: the operation
- * reached the BPMS and somebody would be asked to repair it by hand.
+ * The renewal of the lease notices it, because its write matches no document. The dispatch
+ * which lost the entry runs to its end. But it must NOT write down how that ended. The node
+ * which holds the entry now does the same operation, and the collection keeps that node's
+ * answer. A late "blocked" over a finished entry would be the worst case: the operation
+ * reached the BPMS, and somebody would be asked to repair it by hand.
  * <p>
  * The node which loses the entry is the real dispatcher of this application, stopped inside
- * the adapter. The node which takes the entry over is played by the test, with the two writes
- * a dispatch of another node leaves behind: a Quarkus application holds one dispatcher, so a
- * second real one would need a second application. That costs nothing here, because the write
- * this test is about is the one which has to be REFUSED, and that write is the real
- * dispatcher's.
+ * the adapter. The test plays the node which takes the entry over. It does the two writes
+ * which a dispatch of another node leaves behind. A Quarkus application holds one
+ * dispatcher, so a second real one would need a second application. That costs nothing here.
+ * This test is about the write which has to be REFUSED, and that is the real dispatcher's
+ * write.
  * <p>
- * A second entry says when that refused write is over. The dispatcher polls in a loop, so it
- * reaches the next due entry only after it wrote down how the attempt before ended. The test
- * therefore waits for the second operation to reach the adapter instead of waiting a while and
- * calling the silence a result.
+ * A second entry tells when that refused write is over. The dispatcher polls in a loop. So
+ * it reaches the next due entry only after it wrote down how the attempt before ended. That
+ * is why the test waits for the second operation to reach the adapter. It does not just wait
+ * a while and call the silence a result.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoADispatchWhichLostItsLeaseTest {
@@ -58,8 +58,8 @@ public class MongoADispatchWhichLostItsLeaseTest {
   private static final String PROCESS = "WorkflowService";
 
   /**
-   * Who holds the entry once the test took it over. It only has to be a name this node never
-   * writes, and one an operator recognises in the collection.
+   * Who holds the entry once the test took it over. It only has to be a name which this node
+   * never writes, and which an operator recognises in the collection.
    */
   private static final String THE_NODE_TAKING_THE_ENTRY = "a-node-which-took-the-entry-over";
 
@@ -81,8 +81,8 @@ public class MongoADispatchWhichLostItsLeaseTest {
   MongoClient mongoClient;
 
   /**
-   * The outbox of the application, asked through the reader so that neither a collection
-   * nor a field is named here.
+   * The outbox of the application. It is asked through the reader, so this test names
+   * neither a collection nor a field.
    */
   private MongoPhaseTwoOutboxReader outbox() {
 
@@ -106,8 +106,8 @@ public class MongoADispatchWhichLostItsLeaseTest {
   }
 
   /**
-   * Writes an entry the way a node which crashed left it behind: nobody holds it and it is
-   * due, so only a poll can pick it up.
+   * Writes an entry the way a crashed node left it behind. Nobody holds it and it is due, so
+   * only a poll can pick it up.
    *
    * @param aggregateId The aggregate the operation belongs to
    * @return The entry's id
@@ -133,9 +133,9 @@ public class MongoADispatchWhichLostItsLeaseTest {
   }
 
   /**
-   * Does to the entry what another node's dispatch does to it: it claims the entry, which is
-   * what takes the lease away from the node still working on it, and then writes down that its
-   * own attempt got through.
+   * Does to the entry what a dispatch of another node does to it. It claims the entry, and
+   * that takes the lease away from the node which still works on it. Then it writes down that
+   * its own attempt got through.
    *
    * @param id The entry which changes hands
    */
@@ -156,9 +156,9 @@ public class MongoADispatchWhichLostItsLeaseTest {
   }
 
   /**
-   * Runs the story both tests share: the dispatcher of this application takes the entry and is
-   * stopped inside the adapter, another node takes it over and dispatches it, and then the
-   * held dispatch is allowed to end.
+   * Runs the story which both tests share. The dispatcher of this application takes the entry
+   * and is stopped inside the adapter. Another node takes the entry over and dispatches it.
+   * Then the held dispatch may end.
    *
    * @param aggregateId The aggregate of this test
    * @param theHeldDispatchEndsWith What the held dispatch throws, or <code>null</code> where
@@ -175,9 +175,9 @@ public class MongoADispatchWhichLostItsLeaseTest {
       listener.awaitInvocations(1, UNTIL_IT_HAPPENED);
       anotherNodeTakesTheEntryAndDispatchesIt(entry);
       final var afterTheOtherNode = entryOf(entry);
-      // what says that the held dispatch is over and wrote whatever it had to write. It is
-      // written down while the dispatcher still holds this entry, so the next entry it takes
-      // is the one after
+      // this entry tells when the held dispatch is over and wrote whatever it had to write.
+      // It is written while the dispatcher still holds the first entry, so the next entry
+      // the dispatcher takes is this one
       anEntryDueNow(aggregateId
           + "-the-entry-after");
 
@@ -213,8 +213,8 @@ public class MongoADispatchWhichLostItsLeaseTest {
   @DisplayName("A dispatch which lost its entry does not block an entry somebody else finished")
   public void aLostEntryIsNotBlockedByTheNodeWhichLostIt() throws Exception {
 
-    // the failure which blocks an entry with one attempt - the write which would be the most
-    // expensive of all to land on an entry the other node has just finished
+    // the failure which blocks an entry after one attempt. Of all writes, this one would cost
+    // the most if it landed on an entry which the other node has just finished
     final var afterTheHeldDispatch = theEntryChangesHands(
         "lost-entry-blocked-aggregate", new DummyPermanentFailure(
             "the adapter says repeating cannot help"));

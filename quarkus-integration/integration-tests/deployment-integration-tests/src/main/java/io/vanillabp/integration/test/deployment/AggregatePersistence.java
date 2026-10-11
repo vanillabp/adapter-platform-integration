@@ -8,8 +8,8 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * A simple in-memory aggregate persistence assigning generated IDs (like a JPA entity
- * with a generated ID would have).
+ * A simple in-memory aggregate persistence which assigns generated IDs, like a JPA entity
+ * with a generated ID.
  */
 @ApplicationScoped
 public class AggregatePersistence implements AggregatePersistenceAware<Aggregate> {

@@ -25,11 +25,11 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * The cache-override SPI: an application-provided
- * {@code WorkflowAdapterCache} bean replaces VanillaBP's in-memory
- * {@code @DefaultBean} - the election consults AND populates the application's
- * bean (this is how cluster setups share elections via their own cache
- * infrastructure) - and its lookups are counted like every other cache's.
+ * The SPI to override the cache. A {@code WorkflowAdapterCache} bean which the application
+ * provides replaces VanillaBP's {@code @DefaultBean} in memory. The election reads from
+ * AND writes into the application's bean. That is how a cluster shares elections through
+ * its own cache infrastructure. The lookups of this bean are counted like those of every
+ * other cache.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class CacheOverrideTest {
@@ -93,14 +93,14 @@ public class CacheOverrideTest {
         "the successful election must be stored in the application's cache but got: "
             + cache.getPuts());
 
-    // its lookups are counted like every other cache's - a metric which
-    // disappeared once an application plugs in its own cache would surprise exactly
-    // the operator who needs it
+    // its lookups are counted like those of every other cache. A metric which disappeared
+    // once an application plugs in its own cache would surprise exactly the operator who
+    // needs it
     assertTrue(
         (statistics.getHits() + statistics.getMisses()) > 0,
         "the lookups of an application-provided cache are counted, too");
-    // a size and an eviction are properties of an implementation, so they are not
-    // among the numbers of the election at all - see InMemoryWorkflowAdapterCacheStatistics
+    // a size and an eviction belong to an implementation, so they are not among the
+    // numbers of the election at all. See InMemoryWorkflowAdapterCacheStatistics
     assertTrue(
         java.util.Arrays
             .stream(WorkflowAdapterCacheStatistics.class.getMethods())
