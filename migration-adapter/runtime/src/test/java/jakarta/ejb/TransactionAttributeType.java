@@ -1,7 +1,7 @@
 package jakarta.ejb;
 
 /**
- * The values of {@link TransactionAttribute}, in the order the real enum declares
+ * The values of {@link TransactionAttribute}, in the order in which the real enum declares
  * them.
  */
 public enum TransactionAttributeType {

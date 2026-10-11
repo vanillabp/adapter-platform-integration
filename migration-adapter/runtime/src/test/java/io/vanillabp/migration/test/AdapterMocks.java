@@ -7,10 +7,10 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 /**
  * Gives a mocked adapter the phase operations every adapter has to answer.
  * <p>
- * Mockito answers a default method the way it answers every other one - with
- * <code>null</code> - so a mocked adapter would contribute no operation at all and the
- * core would refuse every call to it. What the mock answers here writes down what it was
- * asked, which is what a test wants to know: the map is what the core calls.
+ * Mockito answers a default method like every other one, with <code>null</code>. So a
+ * mocked adapter would contribute no operation at all, and the core would refuse every call
+ * to it. What the mock answers here writes down what it was asked. A test wants to know
+ * that, because the core calls the map.
  */
 public final class AdapterMocks {
 

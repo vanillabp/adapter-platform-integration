@@ -13,17 +13,17 @@ import io.vanillabp.integration.adapter.spi.health.AdapterHealth;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What the platform-neutral half of the health contribution does with the adapters'
- * answers: nothing is invented for an adapter which says nothing, an
- * adapter which throws is a defect worth seeing, and an adapter which is not
- * configured yet is not an outage.
+ * What the half of the health contribution which does not depend on a platform does with
+ * the answers of the adapters. Nothing is invented for an adapter which says nothing. An
+ * adapter which throws is a defect worth seeing. And an adapter which is not configured yet
+ * is not an outage.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AdapterHealthReportTest {
 
   /**
-   * An adapter which answers the health question and nothing else - the deployment
-   * pipeline is not what this test is about.
+   * An adapter which answers the health question and nothing else. This test is not about
+   * the deployment pipeline.
    */
   private static AdapterDeploymentService<?, ?> adapter(
       final String adapterId,

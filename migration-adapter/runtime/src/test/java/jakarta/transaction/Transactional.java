@@ -6,11 +6,11 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Stand-in for the JTA transaction annotation honored by both platforms, carrying the
- * members the core's check reads. See
- * {@link org.springframework.transaction.annotation.Transactional} for why the core's
- * tests use stand-ins; the real annotation is exercised by the acceptance tests of
- * both platform integrations.
+ * Stand-in for the JTA transaction annotation which both platforms honor. It carries the
+ * members which the check of the core reads. See
+ * {@link org.springframework.transaction.annotation.Transactional} for why the tests of the
+ * core use stand-ins. The acceptance tests of both platform integrations exercise the real
+ * annotation.
  */
 @Target({
     ElementType.METHOD, ElementType.TYPE

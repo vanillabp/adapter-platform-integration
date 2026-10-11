@@ -23,14 +23,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.migration.test.startup.WhatWasFound;
 
 /**
- * What an expression of a BPMN model costs, and which expressions are worth saying it
- * about. The rule is the platform's, so this is where it is pinned down: an expression
- * naming one variable is what VanillaBP recommends and is reported nowhere, one walking a
- * path or calling something is a WARN, and one merely computing is a NOTICE.
+ * What an expression of a BPMN model costs, and about which expressions it is worth saying
+ * so. The rule belongs to the platform, so it is pinned down here. An expression which names
+ * one variable is what VanillaBP recommends, and it is reported nowhere. One which walks a
+ * path or calls something is a WARN. One which merely computes is a NOTICE.
  * <p>
- * The whole way through a booted application is held by
- * {@code ExpressionsInTheModelTest} of each platform, which is where the reporting adapter
- * and the configuration meet the check.
+ * {@code ExpressionsInTheModelTest} of each platform holds the whole way through a booted
+ * application. There the reporting adapter and the configuration meet the check.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ModelExpressionCheckTest {
@@ -42,8 +41,7 @@ public class ModelExpressionCheckTest {
   private StartupFindings findings;
 
   /**
-   * The check with a configuration which accepts nothing, which is where an application
-   * starts.
+   * The check with a configuration which accepts nothing. An application starts there.
    *
    * @return The check under test
    */
@@ -65,8 +63,8 @@ public class ModelExpressionCheckTest {
       final String elementId,
       final String expression) {
 
-    // as an adapter reports it which did not strip its delimiters, the case the rule has
-    // to survive
+    // as an adapter reports it which did not strip its delimiters. The rule has to survive
+    // this case
     return ModelExpression.of(elementId, ExpressionPlace.SEQUENCE_FLOW_CONDITION, expression);
 
   }
@@ -126,8 +124,8 @@ public class ModelExpressionCheckTest {
             .contains(
                 "vanillabp.workflow-modules.test-module.workflows.ShippingProcess.accept-expressions-in-the-model"),
         warning);
-    // the expression which is fine is counted, never listed: the message is about what
-    // to change
+    // the expression which is fine is counted, never listed. The message is about what to
+    // change
     assertFalse(warning.contains("'Flow_Normal'"), warning);
     assertTrue(notices().isEmpty(), notices().toString());
 
@@ -337,7 +335,7 @@ public class ModelExpressionCheckTest {
     assertEquals(ExpressionForm.COMPUTES, ExpressionForm.of("'PT1H'"));
     assertEquals(ExpressionForm.COMPUTES, ExpressionForm.of("express shipping"));
     assertEquals(ExpressionForm.COMPUTES, ExpressionForm.of(null));
-    // delimiters an adapter did not strip are taken off, one block of them
+    // delimiters which an adapter did not strip are taken off, one block of them
     assertEquals(ExpressionForm.NAMES_A_VARIABLE, ExpressionForm.of("${shippedAsNormalItem}"));
     assertEquals(ExpressionForm.NAMES_A_VARIABLE, ExpressionForm.of("#{shippedAsNormalItem}"));
     assertEquals(ExpressionForm.NAMES_A_VARIABLE, ExpressionForm.of("= shippedAsNormalItem"));

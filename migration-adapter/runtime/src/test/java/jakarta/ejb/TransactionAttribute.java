@@ -6,11 +6,10 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Stand-in for the EJB transaction annotation, which Spring honors through its
- * {@code Ejb3TransactionAnnotationParser}. It has no rollback rules at all, so a
- * joining value is always a defect. See
- * {@link org.springframework.transaction.annotation.Transactional} for why the core's
- * tests use stand-ins.
+ * Stand-in for the EJB transaction annotation. Spring honors it through its
+ * {@code Ejb3TransactionAnnotationParser}. It has no rollback rules at all, so a joining
+ * value is always a defect. See {@link org.springframework.transaction.annotation.Transactional}
+ * for why the tests of the core use stand-ins.
  */
 @Target({
     ElementType.METHOD, ElementType.TYPE

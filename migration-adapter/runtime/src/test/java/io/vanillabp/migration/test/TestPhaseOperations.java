@@ -9,10 +9,10 @@ import io.vanillabp.integration.spi.PhaseOperation;
 /**
  * The phase operations of an adapter double which is not the subject of the test.
  * <p>
- * Most tests here care about one operation, or about none at all - they watch the
- * election, the outbox or the delivery log. Their adapter still has to answer what it
- * serves, so it answers everything and does nothing, and a test which cares about one
- * operation puts its own handler into that map.
+ * Most tests here care about one operation, or about none at all. They watch the election,
+ * the outbox or the delivery log. Their adapter still has to answer what it serves. So it
+ * answers everything and does nothing. A test which cares about one operation puts its own
+ * handler into that map.
  */
 public final class TestPhaseOperations {
 
