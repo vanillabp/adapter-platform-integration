@@ -11,9 +11,9 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
- * Core-owned router dispatching {@link PhaseTwoCall}s scheduled via
- * {@link PhaseTwoOutbox} to the {@link MigrationProcessService} of the workflow
- * module/BPMN process:
+ * The router, owned by the core, which hands {@link PhaseTwoCall}s planned in the
+ * {@link PhaseTwoOutbox} to the {@link MigrationProcessService} of their workflow module and
+ * BPMN process:
  *
  * <pre>
  * PhaseTwoOutbox (store)
@@ -22,22 +22,22 @@ import io.vanillabp.integration.spi.TransactionRunner;
  *             --&gt; MigratableProcessService (BPMS adapter)
  * </pre>
  *
- * The platform integration registers every process-service bean at bean-creation
- * time. The serialized (String) workflow-aggregate ID of an outbox entry is
- * converted back into the aggregate's ID type by the process service itself
- * ({@link MigrationProcessService#convertAggregateId} - the ID type comes from the
- * aggregate's persistence support), so the conversion happens exactly once, here.
+ * The platform integration registers every process-service bean when the beans are created.
+ * The process service itself converts the serialized (String) workflow-aggregate ID of an
+ * outbox entry back into the aggregate's ID type
+ * ({@link MigrationProcessService#convertAggregateId}). The ID type comes from the
+ * persistence support of the aggregate. So the conversion happens exactly once, here.
  * <p>
- * WHICH operations exist is not hardcoded here: the router owns a
- * {@link PhaseOperationRegistry} and registers the dispatch of VanillaBP's core
- * operations into it while it is built. An extension registers its own operations
- * in the same registry (see {@link #getOperations()}) and receives their calls in
- * its own {@link io.vanillabp.integration.spi.PhaseOperationDispatch} - the
- * process-service routing below applies to core operations only.
+ * WHICH operations exist is not hard-coded here. The router owns a
+ * {@link PhaseOperationRegistry}, and registers the dispatch of VanillaBP's core operations
+ * in it while it is built. An extension registers its own operations in the same registry
+ * (see {@link #getOperations()}). It receives their calls in its own
+ * {@link io.vanillabp.integration.spi.PhaseOperationDispatch}. The routing to process
+ * services below applies to core operations only.
  * <p>
- * Why anything reaches this router at all instead of running in the caller's transaction is
- * decision 2 in the repository's DECISIONS.md; why every dispatch is wrapped in the transaction
- * runner of ITS aggregate is decision 11 in the repository's DECISIONS.md.
+ * Decision 2 in the repository's DECISIONS.md says why anything reaches this router at all,
+ * instead of running in the caller's transaction. Decision 11 says why every dispatch is
+ * wrapped in the transaction runner of ITS aggregate.
  */
 // see decision 1 in the repository's DECISIONS.md
 @SuppressWarnings("LombokGetterMayBeUsed")
@@ -53,28 +53,27 @@ public final class PhaseTwoRouter {
   private final PhaseOperationRegistry operations;
 
   /**
-   * Provides the transaction (and whatever else the platform needs, e.g. an active
-   * CDI request context on Quarkus) the dispatch runs in, or <code>null</code> where
-   * the platform hands the router none. Spring Boot hands none: there a dispatch runs
-   * in the runner of its own aggregate, which {@link #runnerFor(PhaseTwoCall)} asks the
-   * process service for.
+   * Provides the transaction in which the dispatch runs, and whatever else the platform
+   * needs, for example an active CDI request context on Quarkus. It is <code>null</code> where
+   * the platform hands the router none. Spring Boot hands none. There a dispatch runs in the
+   * runner of its own aggregate, which {@link #runnerFor(PhaseTwoCall)} asks the process
+   * service for.
    */
   private final TransactionRunner transactionRunner;
 
   /**
-   * What the application counts about its outbox. Handed in by the
-   * platform integration;
-   * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#NONE}
+   * What the application counts about its outbox. The platform integration hands it in. It
+   * is {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#NONE}
    * for an application without a metrics backend.
    */
   private volatile io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics metrics = io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.NONE;
 
   /**
-   * Hands the router what to count into. Called by the platform integration right after the
-   * router was built, because the metrics are a bean of their own and may be absent
-   * altogether. A missing one is not an error: it becomes
-   * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#NONE},
-   * so a dispatch never has to ask whether anybody is counting.
+   * Hands the router what to count into. The platform integration calls it right after the
+   * router was built, because the metrics are a bean of their own and may be missing
+   * altogether. A missing one is not an error. It becomes
+   * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#NONE}. So
+   * a dispatch never has to ask whether anybody counts.
    *
    * @param metrics What to count dispatches into, never <code>null</code>
    */
@@ -89,8 +88,8 @@ public final class PhaseTwoRouter {
 
   /**
    * Builds a router with a registry of its own and no transaction runner of its own. A
-   * dispatch then runs in the transaction the process service of the call resolves for its
-   * aggregate (see decision 11 in the repository's DECISIONS.md), and an entry which routes
+   * dispatch then runs in the transaction which the process service of the call resolves for
+   * its aggregate (see decision 11 in the repository's DECISIONS.md). An entry which routes
    * to no process service runs without one.
    */
   public PhaseTwoRouter() {
@@ -100,8 +99,8 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * Builds a router on a registry somebody else owns, so the operations an extension
-   * registered and the core's own operations end up in one place.
+   * Builds a router on a registry which somebody else owns. So the operations which an
+   * extension registered and the core's own operations end up in one place.
    *
    * @param operations The registry to register the core operations in and to
    *        resolve dispatched operations from
@@ -114,10 +113,10 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * Builds a router with the platform's transaction runner. It is the fallback: a dispatch
+   * Builds a router with the platform's transaction runner. It is the fallback. A dispatch
    * whose aggregate resolves a runner of its own uses that one instead.
    *
-   * @param transactionRunner Provides the transaction dispatching runs in, see
+   * @param transactionRunner Provides the transaction in which the dispatch runs, see
    *        {@link #transactionRunner}
    */
   public PhaseTwoRouter(
@@ -128,14 +127,14 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * Builds a router on a given registry and with a given transaction runner. The other
-   * three constructors end up here, and this is where the core operations are registered,
-   * so an extension which registers its own operations later always finds the core ones
+   * Builds a router on a given registry, with a given transaction runner. The other three
+   * constructors end up here. This is where the core operations are registered. So an
+   * extension which registers its own operations later always finds the core ones
    * already there.
    *
    * @param operations The registry to register the core operations in and to
    *        resolve dispatched operations from
-   * @param transactionRunner Provides the transaction dispatching runs in, see
+   * @param transactionRunner Provides the transaction in which the dispatch runs, see
    *        {@link #transactionRunner}
    */
   public PhaseTwoRouter(
@@ -149,8 +148,8 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * The registry of phase-two operations - extensions register their own
-   * operations here (the platform integrations offer it as a bean).
+   * The registry of phase-two operations. Extensions register their own operations here (the
+   * platform integrations offer it as a bean).
    *
    * @return The operation registry used by this router
    */
@@ -161,8 +160,8 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * Register the process service of a workflow module/BPMN process as dispatch
-   * target, called by the platform integration at bean-creation time.
+   * Registers the process service of a workflow module and BPMN process as a target of the
+   * dispatch. The platform integration calls it when the beans are created.
    *
    * @param processService The process service to route calls to
    */
@@ -177,8 +176,8 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * The process service of a workflow module's BPMN process - what a caller outside the
-   * dispatch needs when it has a workflow module and a BPMN process and nothing else.
+   * The process service of a BPMN process of a workflow module. A caller outside the
+   * dispatch needs this when it has a workflow module and a BPMN process and nothing else.
    * The router is the one place where all of them are collected.
    *
    * @param workflowModuleId The workflow module ID
@@ -195,8 +194,8 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * The workflow modules and BPMN processes this application serves, for guiding
-   * messages naming what a caller could have meant.
+   * The workflow modules and BPMN processes which this application serves, for guiding
+   * messages which name what a caller could have meant.
    *
    * @return One <code>&lt;module&gt;/&lt;process&gt;</code> per registration, sorted
    */
@@ -212,14 +211,14 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * Dispatch the given phase-two call to the process service registered for its
-   * workflow module/BPMN process.
+   * Dispatches the given phase-two call to the process service registered for its workflow
+   * module and BPMN process.
    *
    * @param call The phase-two call to dispatch
-   * @throws IllegalStateException If no process service is registered for the
-   *         call's workflow module/BPMN process (e.g. the BPMN process is no longer
-   *         part of this application) - the outbox entry stays visible in the
-   *         outbox store for operations
+   * @throws IllegalStateException If no process service is registered for the call's
+   *         workflow module and BPMN process (for example because the BPMN process is no
+   *         longer part of this application). The outbox entry stays visible in the outbox
+   *         store for operations
    */
   public void dispatch(
       final PhaseTwoCall call) {
@@ -229,21 +228,20 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * Dispatch the given phase-two call to the process service registered for its
-   * workflow module/BPMN process.
+   * Dispatches the given phase-two call to the process service registered for its workflow
+   * module and BPMN process.
    *
    * @param call The phase-two call to dispatch
-   * @param previouslyAttempted Whether the outbox entry was dispatched before (a
-   *        recovered or retried entry) - START operations then run the
-   *        re-dispatch mitigation (probe the recorded adapter's workflow
-   *        awareness first; a workflow already known there consumes the entry
-   *        without a second start). Stores which cannot tell pass
-   *        <code>false</code> - the mitigation is best-effort, the residual
+   * @param previouslyAttempted Whether the outbox entry was dispatched before (a recovered or
+   *        retried entry). START operations then run the re-dispatch mitigation: they probe
+   *        the workflow awareness of the recorded adapter first. A workflow which is known
+   *        there already consumes the entry without a second start. Stores which cannot tell
+   *        pass <code>false</code>. The mitigation is best effort, and the remaining
    *        at-least-once window is accepted.
-   * @throws IllegalStateException If no process service is registered for the
-   *         call's workflow module/BPMN process (e.g. the BPMN process is no longer
-   *         part of this application) - the outbox entry stays visible in the
-   *         outbox store for operations
+   * @throws IllegalStateException If no process service is registered for the call's
+   *         workflow module and BPMN process (for example because the BPMN process is no
+   *         longer part of this application). The outbox entry stays visible in the outbox
+   *         store for operations
    */
   public void dispatch(
       final PhaseTwoCall call,
@@ -263,18 +261,17 @@ public final class PhaseTwoRouter {
                     call.workflowAggregateId(),
                     String.join(", ", operations.registeredNames()))));
 
-    // phase two runs on the outbox dispatcher's own thread and calls back into the
-    // application (the aggregate has to be loaded to build what the BPMS is told).
-    // Whatever that needs - a transaction, an active CDI request context - is
-    // VanillaBP's to provide here, once for every outbox implementation, instead of
-    // in each of them. Which transaction it is, belongs to the aggregate of the entry:
-    // an application storing this aggregate in a system of its own gets
-    // its own runner here as well, and an entry of an extension - which routes to no
-    // process service - gets the platform's.
+    // phase two runs on the own thread of the outbox dispatcher, and calls back into the
+    // application (the aggregate has to be loaded to build what the BPMS is told). Whatever
+    // that needs, a transaction or an active CDI request context, VanillaBP provides here,
+    // once for every outbox implementation, and not in each of them. The aggregate of the
+    // entry decides which transaction it is. An application which stores this aggregate in a
+    // system of its own gets its own runner here as well. An entry of an extension, which
+    // routes to no process service, gets the platform's runner
     final var runner = runnerFor(call);
     metrics.outboxDispatchStarted(call.operation(), previouslyAttempted);
-    // Whatever the dispatch logs - and a broken BPMS connection logs a lot -
-    // names the workflow it belongs to, exactly like a task delivery does
+    // whatever the dispatch logs (and a broken BPMS connection logs a lot) names the
+    // workflow it belongs to, exactly like a task delivery does
     try (var ignored = io.vanillabp.integration.adapter.migration.observability.DeliveryMdc
         .ofPhaseTwoDispatch(
             call.adapterId(),
@@ -300,13 +297,14 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * The runner providing the transaction of a dispatch: the one serving the aggregate
-   * of the call where a process service is registered for it, the platform's otherwise.
+   * The runner which provides the transaction of a dispatch: the one which serves the
+   * aggregate of the call where a process service is registered for it, otherwise the
+   * platform's.
    *
    * @param call The call about to be dispatched
-   * @return The runner, or <code>null</code> where neither the platform nor the
-   *         aggregate's process service offers one, and the outbox dispatches inside a
-   *         transaction it opened itself
+   * @return The runner, or <code>null</code> where neither the platform nor the aggregate's
+   *         process service offers one. Then the outbox dispatches inside a transaction which
+   *         it opened itself
    */
   private TransactionRunner runnerFor(
       final PhaseTwoCall call) {
@@ -324,7 +322,7 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * Registers the dispatch of every operation the core owns: each of them routes to the
+   * Registers the dispatch of every operation which the core owns. Each of them routes to the
    * process service of the call's workflow module and BPMN process.
    */
   private void registerCoreOperations() {
@@ -335,15 +333,15 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * Registers an operation which is executed by the BPMS adapters rather than by
-   * whoever contributed it: the router resolves the process service of the call's
-   * workflow module and BPMN process, converts the aggregate ID and lets the process
-   * service run the operation's phase two through the elected adapter's handler.
+   * Registers an operation which the BPMS adapters execute, and not whoever contributed it.
+   * The router resolves the process service of the call's workflow module and BPMN process,
+   * converts the aggregate ID, and lets the process service run the operation's phase two
+   * through the handler of the elected adapter.
    * <p>
-   * The core registers its own operations this way while this router is built. An
-   * extension whose operation addresses a workflow the way a core operation does - it
-   * says so through its {@link PhaseOperation#election()} - registers it here as well
-   * and contributes a handler per adapter, instead of registering a dispatch of its own
+   * The core registers its own operations this way while this router is built. An extension
+   * may have an operation which addresses a workflow the way a core operation does. It says
+   * so through its {@link PhaseOperation#election()}. Then it registers that operation here as
+   * well, and contributes a handler per adapter, instead of registering a dispatch of its own
    * in {@link #getOperations()}.
    *
    * @param operation The operation to route to the process services
@@ -363,12 +361,12 @@ public final class PhaseTwoRouter {
   }
 
   /**
-   * Resolves the process service of the call's workflow module and BPMN process,
-   * converts the serialized aggregate ID and lets it execute phase two - the shared
-   * dispatch of every operation an adapter executes.
+   * Resolves the process service of the call's workflow module and BPMN process, converts the
+   * serialized aggregate ID, and lets the service execute phase two. This is the shared
+   * dispatch of every operation which an adapter executes.
    *
    * @throws IllegalStateException If no process service is registered for the call's
-   *         workflow module/BPMN process
+   *         workflow module and BPMN process
    */
   private void dispatchToProcessService(
       final PhaseOperation operation,
@@ -389,8 +387,8 @@ public final class PhaseTwoRouter {
                   call.workflowModuleId()));
     }
 
-    // an operation which is not about ONE workflow carries no aggregate ID - there is
-    // nothing to convert, and the routing by (module, process) is all that applies
+    // an operation which is not about ONE workflow has no aggregate ID. There is nothing to
+    // convert, and only the routing by module and process applies
     final var workflowAggregateId = call.workflowAggregateId() == null
         ? null
         : processService.convertAggregateId(call.workflowAggregateId());
