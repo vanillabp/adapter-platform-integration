@@ -30,10 +30,10 @@ import io.vanillabp.spi.service.WorkflowService;
 
 /**
  * A BPMN process belongs to exactly one workflow aggregate. The text of the refusal is built
- * here for both platforms, and the registry of task handlers says it as well, for a platform
- * which did not check before. Both platforms check before: their own tests are
- * {@code AProcessBelongsToOneAggregateTest} of the Spring Boot main integration test and the
- * {@code AProcessOfTwoAggregates*Test} classes of the Quarkus deployment module.
+ * here for both platforms. The registry of task handlers says it as well, for a platform
+ * which did not check before. Both platforms do check before. Their own tests are
+ * {@code AProcessBelongsToOneAggregateTest} of the Spring Boot main integration test, and
+ * the {@code AProcessOfTwoAggregates*Test} classes of the Quarkus deployment module.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AProcessBelongsToOneAggregateTest {

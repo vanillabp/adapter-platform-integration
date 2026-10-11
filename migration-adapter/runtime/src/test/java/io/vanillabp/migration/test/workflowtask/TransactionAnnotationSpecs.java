@@ -6,14 +6,14 @@ import java.util.Set;
 import io.vanillabp.integration.adapter.migration.workflowtask.TransactionAnnotationSpec;
 
 /**
- * The specs the core's tests judge against. They mirror what the two platform
- * integrations supply, and they belong to the tests rather than to the core: which
- * annotations exist and whether a platform honors them is the platform's knowledge (see
+ * The specs against which the tests of the core judge. They mirror what the two platform
+ * integrations supply. They belong to the tests and not to the core. Which annotations
+ * exist, and whether a platform honors them, is knowledge of the platform (see
  * {@code SpringTransactionAnnotations} and {@code QuarkusTransactionAnnotations}).
  * <p>
- * The annotation classes themselves are the stand-ins of this module's test sources (see
- * {@link org.springframework.transaction.annotation.Transactional}), since the core must
- * not depend on either platform and the check matches by type name anyway.
+ * The annotation classes themselves are the stand-ins of the test sources of this module
+ * (see {@link org.springframework.transaction.annotation.Transactional}). The core must not
+ * depend on either platform, and the check matches by type name anyway.
  */
 final class TransactionAnnotationSpecs {
 
@@ -23,8 +23,8 @@ final class TransactionAnnotationSpecs {
   }
 
   /**
-   * A platform honoring all three transaction annotations, like Spring Boot does, with
-   * the pre-Jakarta one reported as ineffective.
+   * A platform which honors all three transaction annotations, like Spring Boot does. It
+   * reports the one from before Jakarta as ineffective.
    */
   static List<TransactionAnnotationSpec> ofATypicalPlatform() {
 
@@ -37,8 +37,8 @@ final class TransactionAnnotationSpecs {
   }
 
   /**
-   * A platform NOT honoring Spring's annotation and the EJB one, like Quarkus without the
-   * extension {@code quarkus-spring-tx}.
+   * A platform which does NOT honor the annotation of Spring and the EJB one, like Quarkus
+   * without the extension {@code quarkus-spring-tx}.
    */
   static List<TransactionAnnotationSpec> ofAPlatformWithoutSpringSupport() {
 

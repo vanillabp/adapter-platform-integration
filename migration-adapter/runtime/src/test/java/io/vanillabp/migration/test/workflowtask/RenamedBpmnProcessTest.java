@@ -34,20 +34,20 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * Renaming a BPMN process. The application brings the new id, while the BPMS keeps the old one
- * with every version ever deployed under it and with the workflows still running on them, and
- * <code>&#64;WorkflowService(secondaryBpmnProcesses = ...)</code> is how the application says
+ * Renaming a BPMN process. The application brings the new id. The BPMS keeps the old one,
+ * with every version ever deployed under it and with the workflows which still run on them.
+ * With <code>&#64;WorkflowService(secondaryBpmnProcesses = ...)</code> the application says
  * that it answers for both.
  * <p>
- * The declaration alone was never the whole story: an adapter registers the versions of the
- * processes it just deployed, and nothing was deployed under the old id, so the startup check
- * for old process versions never looked at the versions the workflows out there run on. Here
- * the core asks the adapter about the declared id, and every verdict of that check applies to
- * it - with "nothing deployed under this id" meaning that every version the BPMS holds is an
- * older one.
+ * The declaration alone was never the whole story. An adapter registers the versions of the
+ * processes it just deployed. Nothing was deployed under the old id. So the startup check
+ * for old process versions never looked at the versions on which the running workflows run.
+ * Here the core asks the adapter about the declared id, and every verdict of that check
+ * applies to it. "Nothing deployed under this id" then means that every version the BPMS
+ * holds is an older one.
  * <p>
- * The BPMS is a stub, because what is asked here is the core's arithmetic; the adapters prove
- * against real engines that their answer for a renamed id is the right one.
+ * The BPMS is a stub, because the arithmetic of the core is under test here. The adapters
+ * prove against real engines that their answer for a renamed id is the right one.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class RenamedBpmnProcessTest {
@@ -70,9 +70,9 @@ public class RenamedBpmnProcessTest {
   }
 
   /**
-   * The application after the rename: the new id as its process, the old id as a secondary
-   * process carrying the versions the BPMS still holds under it. The task 'approve' exists in
-   * both generations of the model.
+   * The application after the rename. The new id is its process, and the old id is a
+   * secondary process which carries the versions the BPMS still holds under it. The task
+   * 'approve' exists in both generations of the model.
    */
   @WorkflowService(
       workflowAggregateClass = Aggregate.class,
@@ -88,9 +88,9 @@ public class RenamedBpmnProcessTest {
   }
 
   /**
-   * The same rename where the new generation of the model DROPPED a task: 'checkCredit' exists
-   * in the versions the BPMS holds under the old id and nowhere else, which is what its
-   * version range says.
+   * The same rename, but the new generation of the model DROPPED a task. 'checkCredit'
+   * exists only in the versions the BPMS holds under the old id. Its version range says
+   * so.
    */
   @WorkflowService(
       workflowAggregateClass = Aggregate.class,
@@ -111,8 +111,8 @@ public class RenamedBpmnProcessTest {
   }
 
   /**
-   * A method naming a version no BPMS holds anywhere - the case the dead-method report exists
-   * for, next to the one it must not report.
+   * A method which names a version no BPMS holds anywhere. The report of dead methods
+   * exists for this case, and it sits next to a case it must not report.
    */
   @WorkflowService(
       workflowAggregateClass = Aggregate.class,
@@ -133,9 +133,8 @@ public class RenamedBpmnProcessTest {
   }
 
   /**
-   * A rename of a process which was a secondary process before it was renamed: the module
-   * deploys a called process as well, and its declaration is not the one nothing was deployed
-   * under.
+   * A rename of a process which was a secondary process before. The module also deploys a
+   * called process, and its declaration is not the one under which nothing was deployed.
    */
   @WorkflowService(
       workflowAggregateClass = Aggregate.class,
@@ -158,9 +157,10 @@ public class RenamedBpmnProcessTest {
   }
 
   /**
-   * A second workflow service of the module, serving the called process on its own. One of
-   * its methods names a task no model of that process carries, which is the defect the
-   * reverse wiring check exists for and has nothing to do with the rename next to it.
+   * A second workflow service of the module, which serves the called process on its own.
+   * One of its methods names a task which no model of that process carries. The reverse
+   * wiring check exists for this defect, and it has nothing to do with the rename next to
+   * it.
    */
   @WorkflowService(
       workflowAggregateClass = Aggregate.class,
@@ -180,9 +180,9 @@ public class RenamedBpmnProcessTest {
   }
 
   /**
-   * A rename whose kept method is wired to a BPMN ELEMENT rather than to a task
-   * definition. There is no model of the old id to read that element's task definition
-   * off, so nothing an adapter could subscribe to comes out of this declaration.
+   * A rename whose kept method is wired to a BPMN ELEMENT and not to a task definition.
+   * There is no model of the old id from which to read the task definition of that element.
+   * So this declaration gives an adapter nothing to subscribe to.
    */
   @WorkflowService(
       workflowAggregateClass = Aggregate.class,
@@ -203,7 +203,7 @@ public class RenamedBpmnProcessTest {
   }
 
   /**
-   * What a BPMS holds per BPMN process id, with every answer handed in by the test.
+   * What a BPMS holds per BPMN process id. The test hands in every answer.
    */
   private static class CatalogStub implements ProcessVersionCatalog {
 
@@ -215,9 +215,9 @@ public class RenamedBpmnProcessTest {
 
     /**
      * Every question this BPMS was asked, in order. A start asks about the versions of a
-     * process, never about the workflows which ran through it - decision 19 in the
-     * repository's DECISIONS.md - so what is asked about an id nothing was deployed under is
-     * worth reading in a test.
+     * process, never about the workflows which ran through it (decision 19 in the
+     * repository's DECISIONS.md). So a test should read what is asked about an id under
+     * which nothing was deployed.
      */
     private final List<String> questions = new ArrayList<>();
 
@@ -293,7 +293,7 @@ public class RenamedBpmnProcessTest {
     registry = new WorkflowTaskRegistry(new TransactionRunnerStub(), null, List.of(), properties);
 
     catalog = new CatalogStub();
-    // three versions under the old id, and the one this boot deployed under the new one
+    // three versions under the old id, and the one this boot deployed under the new id
     catalog.versions
         .put(OLD_ID, List
             .of(DeployedProcessVersion.of("1"), DeployedProcessVersion.of("2"), DeployedProcessVersion.of("3")));
@@ -370,7 +370,7 @@ public class RenamedBpmnProcessTest {
 
     theApplicationDeclares(RenamedService.class);
     theAdapterDeployed(NEW_ID, "1");
-    // version 1 is the one whose task nobody serves, so version 2 carries the workflows
+    // nobody serves the task of version 1, so version 2 carries the workflows
     catalog.instances.put("%s|2".formatted(OLD_ID), 5L);
 
     final var reports = theModuleFinishedDeploying(Level.INFO);
@@ -410,10 +410,10 @@ public class RenamedBpmnProcessTest {
   @DisplayName("Fading out the old id's versions while workflows run on them ends the boot with the FAIL policy")
   public void outfadedVersionsOfTheOldIdInUseEndTheBoot() {
 
-    // the versions of the old id are faded out where they belong, per workflow: each BPMN
-    // process id is counted from 1 by itself, so the same specification at adapter level
-    // would cover the version this boot deployed under the NEW id and end the boot for
-    // that reason instead
+    // the versions of the old id are faded out where they belong, per workflow. Each BPMN
+    // process id is counted from 1 by itself. So the same specification at adapter level
+    // would also cover the version this boot deployed under the NEW id. It would end the
+    // boot for that reason instead
     fadeOutForTheOldId("1-3", OutfadedVersionsInUsePolicy.FAIL);
     theApplicationDeclares(RenamedService.class);
     theAdapterDeployed(NEW_ID, "1");
@@ -434,7 +434,7 @@ public class RenamedBpmnProcessTest {
   public void aMethodOfTheOldGenerationIsNotDead() {
 
     theApplicationDeclares(ServiceKeepingTheOldGeneration.class);
-    // the rename happened a while ago: the new id was deployed a few times since
+    // the rename happened a while ago, and the new id was deployed a few times since
     catalog.versions
         .put(NEW_ID, List.of(DeployedProcessVersion.of("4"), DeployedProcessVersion.of("5")));
     catalog.tasks.put("%s|4".formatted(NEW_ID), List.of(new BpmnTaskSpec("Activity_approve", "approve")));
@@ -475,7 +475,7 @@ public class RenamedBpmnProcessTest {
     theApplicationDeclares(ServiceKeepingTheOldGeneration.class);
     theAdapterDeployed(NEW_ID, "1");
 
-    // what the deployment pipeline does once every adapter of the module deployed
+    // what the deployment pipeline does once every adapter of the module has deployed
     registry.registerVersionsOfProcessesNobodyDeployed(MODULE, ADAPTER, (
         module,
         process) -> catalog);
@@ -489,8 +489,8 @@ public class RenamedBpmnProcessTest {
 
     theApplicationDeclares(RenamedService.class);
     theAdapterDeployed(NEW_ID, "1");
-    // the last workflow of the old id ended and the BPMS forgot the definition - or the
-    // id is a typo, which looks exactly the same from here
+    // the last workflow of the old id ended, and the BPMS forgot the definition. Or the id
+    // is a typo, which looks exactly the same from here
     catalog.versions.remove(OLD_ID);
 
     final var reports = theModuleFinishedDeploying(Level.WARN);
@@ -553,8 +553,8 @@ public class RenamedBpmnProcessTest {
 
     theApplicationDeclares(ServiceKeepingTheOldGeneration.class);
     theAdapterDeployed(NEW_ID, "1");
-    // a BPMN file of the module carries a process nobody serves - it is not validated, and the
-    // boot goes on to the module-level checks
+    // a BPMN file of the module carries a process which nobody serves. It is not checked,
+    // and the boot goes on to the checks of the module
     registry
         .validateTaskWiring(
             MODULE,
@@ -663,7 +663,7 @@ public class RenamedBpmnProcessTest {
   }
 
   /**
-   * Fades out versions of the OLD id alone, which is where a rename puts them:
+   * Fades out versions of the OLD id alone, because a rename puts them there:
    * <code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;old id&gt;.adapters.&lt;adapter&gt;.outfaded-versions</code>.
    */
   private void fadeOutForTheOldId(
@@ -698,8 +698,8 @@ public class RenamedBpmnProcessTest {
   }
 
   /**
-   * Registers the workflow service class under every BPMN process id it declares, which is
-   * what the platform integration does at startup.
+   * Registers the workflow service class under every BPMN process id it declares. The
+   * platform integration does the same at startup.
    */
   private void theApplicationDeclares(
       final Class<?> workflowServiceClass) {
@@ -722,8 +722,9 @@ public class RenamedBpmnProcessTest {
   }
 
   /**
-   * What an adapter does for a BPMN process it really deployed: it wires the model, registers
-   * what its BPMS knows about that process and reports the version it was given.
+   * What an adapter does for a BPMN process it really deployed. It wires the model,
+   * registers what its BPMS knows about that process, and reports the version it was
+   * given.
    */
   private void theAdapterDeployed(
       final String bpmnProcessId,
@@ -752,9 +753,9 @@ public class RenamedBpmnProcessTest {
   }
 
   /**
-   * The two steps the deployment pipeline runs once every adapter of a workflow module
-   * deployed: the core asks each adapter about the ids nothing was deployed under, then the
-   * versions are resolved and checked.
+   * The two steps which the deployment pipeline runs once every adapter of a workflow module
+   * has deployed. First the core asks each adapter about the ids under which nothing was
+   * deployed. Then the versions are resolved and checked.
    */
   private List<String> theModuleFinishedDeploying(
       final Level level,
@@ -762,8 +763,8 @@ public class RenamedBpmnProcessTest {
 
     registry.registerVersionsOfProcessesNobodyDeployed(MODULE, ADAPTER, catalogOfProcess);
     registry.resolveProcessVersions(MODULE);
-    // the levels of the old log lines map onto the severities of a finding: a check no
-    // longer writes a line, it reports, and the start says it once at its end
+    // the levels of the old log lines map onto the severities of a finding. A check no
+    // longer writes a line. It reports, and the start says it once at its end
     final var wanted = Level.ERROR.equals(level)
         ? java.util.Set
             .of(
@@ -790,7 +791,7 @@ public class RenamedBpmnProcessTest {
   }
 
   /**
-   * The registry needs a process service to register a workflow service; nothing here
+   * The registry needs a process service to register a workflow service. Nothing here
    * invokes it.
    */
   @SuppressWarnings("unchecked")
@@ -806,7 +807,8 @@ public class RenamedBpmnProcessTest {
   }
 
   /**
-   * The transaction runner is irrelevant here - no test in this class runs a handler.
+   * The transaction runner does not matter here, because no test in this class runs a
+   * handler.
    */
   private static class TransactionRunnerStub implements TransactionRunner {
 

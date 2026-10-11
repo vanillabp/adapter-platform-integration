@@ -13,12 +13,11 @@ import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowServiceBe
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The refusal both platforms answer <code>&#64;WorkflowService</code> on an interface or on
- * an annotation of the application with. That both platforms say it is covered by their
- * own tests (Spring Boot: {@code WorkflowServiceDiscoveryTest}, Quarkus:
- * {@code WorkflowServiceOnAnInterfaceTest} and
- * {@code WorkflowServiceViaAnAnnotationOfItsOwnTest}); what is left here is the case
- * neither of them can produce, an annotated type nobody in the application uses.
+ * Both platforms refuse <code>&#64;WorkflowService</code> on an interface or on an
+ * annotation of the application. Their own tests cover that both say so (Spring Boot:
+ * {@code WorkflowServiceDiscoveryTest}, Quarkus: {@code WorkflowServiceOnAnInterfaceTest} and
+ * {@code WorkflowServiceViaAnAnnotationOfItsOwnTest}). What is left here is the case which
+ * neither of them can produce: an annotated type which nobody in the application uses.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowServiceBelongsOnAClassTest {

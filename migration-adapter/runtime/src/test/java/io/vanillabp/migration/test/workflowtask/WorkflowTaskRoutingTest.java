@@ -31,15 +31,15 @@ import lombok.Getter;
 /**
  * Which <code>&#64;WorkflowTask</code> method serves a delivery.
  * <p>
- * A method is wired by one of two keys and says which: <code>taskDefinition</code> names what
- * the BPMS subscribed to, <code>id</code> names the BPMN element. A delivery reports both,
- * and the routing has to match each key against the key of its own kind - the very pair the
- * wiring validation matches a method against while the application boots.
+ * A method is wired by one of two keys and says which one. <code>taskDefinition</code> names
+ * what the BPMS subscribed to. <code>id</code> names the BPMN element. A delivery reports
+ * both. The routing has to match each key against the key of its own kind. The wiring check
+ * matches a method against the same pair while the application boots.
  * <p>
- * Until it did, a service task wired by an expression whose method named the element id
- * passed the boot without a word and failed at the first delivery. That failure reached the
- * application as an incident of the BPMS, which is the worst place to learn about a wiring
- * defect.
+ * Before the routing did that, a service task wired by an expression could pass the boot
+ * without a word when its method named the element id. It failed at the first delivery.
+ * That failure reached the application as an incident of the BPMS, which is the worst place
+ * to learn about a wiring defect.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowTaskRoutingTest {
@@ -121,8 +121,8 @@ public class WorkflowTaskRoutingTest {
   }
 
   /**
-   * One method wired by the element id, one wired by a task definition - the two ways an
-   * application writes a handler, in one class.
+   * One method wired by the element id, and one wired by a task definition, in one class.
+   * These are the two ways in which an application writes a handler.
    */
   @WorkflowService(workflowAggregateClass = Aggregate.class, bpmnProcess = @io.vanillabp.spi.service.BpmnProcess(
       bpmnProcessId = PROCESS))
@@ -192,7 +192,7 @@ public class WorkflowTaskRoutingTest {
   }
 
   /**
-   * What an adapter reports about one delivery, both keys given.
+   * What an adapter reports about one delivery, with both keys given.
    */
   private static TaskInvocationContext delivery(
       final String aggregateId,
@@ -258,8 +258,8 @@ public class WorkflowTaskRoutingTest {
     final var registry = registryOfBothWirings();
     final var aggregate = storeAggregate("4713");
 
-    // the one value such an adapter reports IS the element id, which is what the routing
-    // has always assumed and what an adapter without getBpmnElementId still relies on
+    // the one value such an adapter reports IS the element id. The routing has always
+    // assumed that, and an adapter without getBpmnElementId still relies on it
     registry.invokeWorkflowTask(MODULE, PROCESS, delivery("4713", "IW_Task", null));
 
     assertEquals("element id", aggregate.servedBy);

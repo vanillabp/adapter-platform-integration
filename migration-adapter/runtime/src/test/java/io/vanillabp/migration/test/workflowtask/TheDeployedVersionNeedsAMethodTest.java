@@ -34,14 +34,14 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * The model a start deploys gets a version from the BPMS, and every task of it needs a
- * <code>&#64;WorkflowTask</code> method whose version range covers that version. The wiring
- * validation runs before the deployment and cannot ask this, so the check of the deployed
- * versions asks it and ends the start where a task is left without a method.
+ * The BPMS gives the model which a start deploys a version. Every task of that model needs
+ * a <code>&#64;WorkflowTask</code> method whose version range covers that version. The
+ * wiring check runs before the deployment and cannot ask this. So the check of the deployed
+ * versions asks it, and it ends the start where a task is left without a method.
  * <p>
- * The tests drive the registry the way an adapter does: wire the model, report the version
- * the BPMS gave it, hand over the catalog, and let the core resolve the versions of the
- * module.
+ * The tests drive the registry the way an adapter does. They wire the model, report the
+ * version the BPMS gave it, hand over the catalog, and let the core resolve the versions of
+ * the module.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheDeployedVersionNeedsAMethodTest {
@@ -66,7 +66,7 @@ public class TheDeployedVersionNeedsAMethodTest {
   }
 
   /**
-   * The blueprint after the method for version 1 was removed: only the method for the
+   * The blueprint after the method for version 1 was removed. Only the method for the
    * versions after 1 is left.
    */
   public static class OnlyLaterVersions {
@@ -123,8 +123,8 @@ public class TheDeployedVersionNeedsAMethodTest {
   }
 
   /**
-   * Every task is served in every version, and the notes of the extension serve only the
-   * versions after 1: one for the task, one for the process itself.
+   * Every task is served in every version. The notes of the extension serve only the
+   * versions after 1: one note for the task, and one for the process itself.
    */
   public static class NotesOfLaterVersions {
 
@@ -173,8 +173,8 @@ public class TheDeployedVersionNeedsAMethodTest {
   }
 
   /**
-   * Notes of the versions after 1 next to a task whose method misses version 1 as well, so one
-   * message names both.
+   * Notes of the versions after 1, next to a task whose method also misses version 1. So
+   * one message names both.
    */
   public static class TaskAndNoteOfLaterVersions {
 
@@ -374,8 +374,8 @@ public class TheDeployedVersionNeedsAMethodTest {
 
     register(PROCESS, OnlyLaterVersions.class);
 
-    // the method then serves no task of the deployed model, which is the other direction and
-    // not asked here
+    // then the method serves no task of the deployed model. That is the other direction,
+    // and it is not asked here
     assertDoesNotThrow(() -> deploy(ADAPTER, PROCESS, "1", List.of()));
 
   }
@@ -591,8 +591,8 @@ public class TheDeployedVersionNeedsAMethodTest {
   }
 
   /**
-   * Registers the contract of {@link Note}, which asks for a method for the deployed version,
-   * and the one of {@link Remark}, which does not.
+   * Registers the contract of {@link Note}, which asks for a method for the deployed version.
+   * It also registers the one of {@link Remark}, which does not.
    *
    * @param consequence What the extension says an element without a method means, or
    *          <code>null</code> for the neutral sentence
@@ -620,7 +620,7 @@ public class TheDeployedVersionNeedsAMethodTest {
             .callsCarryTheProcessVersion()
             .coreParameters(io.vanillabp.integration.extension.spi.handler.CoreHandlerParameter.WORKFLOW_AGGREGATE)
             .build());
-    // the other extension reports the same element, and is not asked about it
+    // the other extension reports the same element, and nobody asks it about it
     registry
         .getExtensionHandlers()
         .elementsOfTheDeployedModel(Remark.class, MODULE, PROCESS, List.of(List.of("ServiceTask_AssessRisk")));
@@ -658,9 +658,9 @@ public class TheDeployedVersionNeedsAMethodTest {
   }
 
   /**
-   * What an adapter does for one process: wire the model, report the version its BPMS gave
-   * it, hand over the catalog. Then the core resolves the versions of the module, which is
-   * where the check runs.
+   * What an adapter does for one process. It wires the model, reports the version its BPMS
+   * gave it, and hands over the catalog. Then the core resolves the versions of the module,
+   * and the check runs there.
    */
   private void deploy(
       final String adapterId,
@@ -691,8 +691,8 @@ public class TheDeployedVersionNeedsAMethodTest {
   }
 
   /**
-   * A BPMS holding nothing but the version this start deployed, so no older version adds a
-   * finding of its own.
+   * A BPMS which holds nothing but the version this start deployed. So no older version
+   * adds a finding of its own.
    */
   private record CatalogStub(
                              String deployed) implements ProcessVersionCatalog {
@@ -733,7 +733,8 @@ public class TheDeployedVersionNeedsAMethodTest {
   }
 
   /**
-   * The transaction runner is irrelevant here - no test in this class runs a handler.
+   * The transaction runner does not matter here, because no test in this class runs a
+   * handler.
    */
   private static class TransactionRunnerStub implements TransactionRunner {
 

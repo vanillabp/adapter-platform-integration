@@ -35,9 +35,10 @@ import lombok.Getter;
 
 /**
  * Every task of a claimed BPMN process needs a <code>&#64;WorkflowTask</code> method or the
- * property <code>implemented-externally=true</code>, a user task and a listener as well. The
- * property names a task by its element id or by its task definition, the element id winning
- * where both are written, and it may be written for one adapter only.
+ * property <code>implemented-externally=true</code>. This also holds for a user task and a
+ * listener. The property names a task by its element id or by its task definition. The
+ * element id wins where both are written. The property may be written for one adapter
+ * only.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ImplementedExternallyTest {
@@ -179,7 +180,7 @@ public class ImplementedExternallyTest {
   @DisplayName("What an adapter is told beats what the same level says, and a task beats its workflow")
   public void theMostSpecificPositionWins() {
 
-    // the workflow says every task is served elsewhere, the task says it is not
+    // the workflow says that every task is served elsewhere. The task says it is not
     workflow.setImplementedExternally(true);
     assertTrue(registry.isImplementedExternally(ADAPTER, MODULE, PROCESS, REVIEW));
     tasks.put("reviewForm", marked(false));
@@ -232,8 +233,8 @@ public class ImplementedExternallyTest {
   @DisplayName("A line above the task covers a task without a method, and a method next to it wins without a word")
   public void aLineAboveTheTaskCoversOnlyTasksWithoutAMethod() {
 
-    // the workflow says that something else serves its tasks: 'score' and 'Activity_Approve'
-    // have methods and keep them, 'Activity_Review' has none and is covered
+    // the workflow says that something else serves its tasks. 'score' and 'Activity_Approve'
+    // have methods and keep them. 'Activity_Review' has none and is covered
     workflow.setImplementedExternally(true);
     assertDoesNotThrow(() -> registry.validateTaskWiring(ADAPTER, MODULE, PROCESS, List.of(SCORE, APPROVE, REVIEW)));
 
@@ -313,7 +314,7 @@ public class ImplementedExternallyTest {
   @DisplayName("A listener is served by its task definition only, and its element id marks it")
   public void aListenerIsServedByItsTaskDefinitionOnly() {
 
-    // the method naming the element of the user task does not serve a listener on it
+    // the method which names the element of the user task does not serve a listener on it
     final var listener = BpmnTaskSpec.listener("Activity_Approve", "io.camunda:audit:1", null);
     final var exception = assertThrows(
         IllegalStateException.class,
@@ -356,15 +357,16 @@ public class ImplementedExternallyTest {
   @DisplayName("A listener a method serves keeps its method where the element id of its user task is marked")
   public void aServedListenerOnAMarkedElementKeepsItsMethod() {
 
-    // 'score' names a method; as a listener on the marked user task it is served by it, and the
-    // line for the element is about the element, not about this listener
+    // 'score' names a method. As a listener on the marked user task, that method serves
+    // it. The line for the element is about the element, not about this listener
     tasks.put("Activity_Review", marked(true));
     final var served = BpmnTaskSpec.listener("Activity_Review", "score", null);
 
     assertDoesNotThrow(
         () -> registry.validateTaskWiring(ADAPTER, MODULE, PROCESS, List.of(SCORE, APPROVE, REVIEW, served)));
 
-    // a line for the listener's own task definition next to its method is the contradiction
+    // a line for the own task definition of the listener, next to its method, is the
+    // contradiction
     tasks.put("score", marked(true));
     assertThrows(
         IllegalStateException.class,
@@ -432,8 +434,8 @@ public class ImplementedExternallyTest {
   }
 
   /**
-   * What the message says about the tasks it ends the start over, without the list of every
-   * task and method it closes with.
+   * What the message says about the tasks over which it ends the start. The list of every
+   * task and method at its end is left out.
    */
   private static String findingsOf(
       final IllegalStateException exception) {
@@ -467,7 +469,8 @@ public class ImplementedExternallyTest {
   }
 
   /**
-   * The transaction runner is irrelevant here - no test in this class runs a handler.
+   * The transaction runner does not matter here, because no test in this class runs a
+   * handler.
    */
   private static class TransactionRunnerStub implements TransactionRunner {
 
