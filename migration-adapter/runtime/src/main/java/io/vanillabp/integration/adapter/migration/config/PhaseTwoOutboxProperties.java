@@ -673,36 +673,36 @@ public class PhaseTwoOutboxProperties {
     public abstract static class JdbcOutboxPropertiesBuilder<C extends JdbcOutboxProperties, B extends JdbcOutboxProperties.JdbcOutboxPropertiesBuilder<C, B>> {
 
       /**
-       * Whether the JDBC-based default outbox is created when a data source is available. The
-       * builder starts from the same value as the field.
+       * Whether the default outbox based on JDBC is created when a data source is available.
+       * The builder starts from the same value as the field.
        */
       private boolean enabled = true;
 
       /**
-       * The name of the table storing outbox entries. The builder starts from the same value
-       * as the field.
+       * The name of the table which stores the outbox entries. The builder starts from the
+       * same value as the field.
        */
       private String table = null;
 
       /**
-       * The name of the table storing the payloads of phase-two calls which carry one (see
-       * {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). The builder starts from
-       * the same value as the field.
+       * The name of the table which stores the payloads of phase-two calls which have one
+       * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). The builder starts
+       * from the same value as the field.
        */
       private String payloadTable = null;
 
       /**
-       * The name of the table storing the records of processed task deliveries (see
+       * The name of the table which stores the records of processed task deliveries (see
        * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The builder starts from the
        * same value as the field.
        */
       private String deliveryTable = null;
 
       /**
-       * The name of the table the nightly housekeeping takes its lease in - one row per
-       * store, holding who is house-keeping it and until when, so only one node of a cluster
-       * measures its own work (see decision 91 in the repository's DECISIONS.md). The builder
-       * starts from the same value as the field.
+       * The name of the table in which the nightly housekeeping takes its lease. There is one
+       * row per store, which holds who cleans it up and until when. So only one node of a
+       * cluster measures its own work (see decision 91 in the repository's DECISIONS.md). The
+       * builder starts from the same value as the field.
        */
       private String housekeepingTable = null;
 
@@ -714,8 +714,7 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * Whether the JDBC-based default outbox is created when a data source is
-       * available.
+       * Whether the default outbox based on JDBC is created when a data source is available.
        *
        * @param enabled The value of {@link #enabled}
        * @return This builder, so the calls chain
@@ -729,7 +728,7 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * The name of the table storing outbox entries.
+       * The name of the table which stores the outbox entries.
        *
        * @param table The value of {@link #table}
        * @return This builder, so the calls chain
@@ -743,7 +742,7 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * The name of the table storing the payloads of phase-two calls which carry one
+       * The name of the table which stores the payloads of phase-two calls which have one
        * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}).
        *
        * @param payloadTable The value of {@link #payloadTable}
@@ -758,7 +757,7 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * The name of the table storing the records of processed task deliveries (see
+       * The name of the table which stores the records of processed task deliveries (see
        * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
        *
        * @param deliveryTable The value of {@link #deliveryTable}
@@ -773,10 +772,9 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * The name of the table the nightly housekeeping takes its lease in - one row per
-       * store, holding who is house-keeping it and until when, so only one node of a
-       * cluster measures its own work (see decision 91 in the repository's
-       * DECISIONS.md).
+       * The name of the table in which the nightly housekeeping takes its lease. There is one
+       * row per store, which holds who cleans it up and until when. So only one node of a
+       * cluster measures its own work (see decision 91 in the repository's DECISIONS.md).
        *
        * @param housekeepingTable The value of {@link #housekeepingTable}
        * @return This builder, so the calls chain
@@ -902,7 +900,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * Whether the JDBC-based default outbox is created when a data source is available.
+     * Whether the default outbox based on JDBC is created when a data source is available.
      *
      * @return The value of {@link #enabled}
      */
@@ -913,7 +911,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the table storing outbox entries.
+     * The name of the table which stores the outbox entries.
      *
      * @return The value of {@link #table}
      */
@@ -924,7 +922,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the table storing the payloads of phase-two calls which carry one (see
+     * The name of the table which stores the payloads of phase-two calls which have one (see
      * {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}).
      *
      * @return The value of {@link #payloadTable}
@@ -936,7 +934,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the table storing the records of processed task deliveries (see
+     * The name of the table which stores the records of processed task deliveries (see
      * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
      *
      * @return The value of {@link #deliveryTable}
@@ -948,8 +946,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the table the nightly housekeeping takes its lease in - one row per
-     * store, holding who is house-keeping it and until when, so only one node of a
+     * The name of the table in which the nightly housekeeping takes its lease. There is one
+     * row per store, which holds who cleans it up and until when. So only one node of a
      * cluster measures its own work (see decision 91 in the repository's DECISIONS.md).
      *
      * @return The value of {@link #housekeepingTable}
@@ -961,7 +959,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * Whether the JDBC-based default outbox is created when a data source is available.
+     * Whether the default outbox based on JDBC is created when a data source is available.
      *
      * @param enabled The value of {@link #enabled}
      */
@@ -973,7 +971,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the table storing outbox entries.
+     * The name of the table which stores the outbox entries.
      *
      * @param table The value of {@link #table}
      */
@@ -985,7 +983,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the table storing the payloads of phase-two calls which carry one (see
+     * The name of the table which stores the payloads of phase-two calls which have one (see
      * {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}).
      *
      * @param payloadTable The value of {@link #payloadTable}
@@ -998,7 +996,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the table storing the records of processed task deliveries (see
+     * The name of the table which stores the records of processed task deliveries (see
      * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
      *
      * @param deliveryTable The value of {@link #deliveryTable}
@@ -1011,8 +1009,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the table the nightly housekeeping takes its lease in - one row per
-     * store, holding who is house-keeping it and until when, so only one node of a
+     * The name of the table in which the nightly housekeeping takes its lease. There is one
+     * row per store, which holds who cleans it up and until when. So only one node of a
      * cluster measures its own work (see decision 91 in the repository's DECISIONS.md).
      *
      * @param housekeepingTable The value of {@link #housekeepingTable}
@@ -1112,19 +1110,19 @@ public class PhaseTwoOutboxProperties {
     public static final String DEFAULT_HOUSEKEEPING_COLLECTION = "vanillabp-housekeeping";
 
     /**
-     * Whether the MongoDB-based default outbox is created when a MongoDB connection
-     * is available. Disable it if the application defines its own
-     * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean and the
-     * default (including its store and background dispatcher) is unwanted.
+     * Whether the default outbox based on MongoDB is created when a MongoDB connection is
+     * available. Disable it if the application defines its own
+     * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean and the default (including its
+     * store and background dispatcher) is unwanted.
      * <p>
      * Key <code>vanillabp.outbox.mongo.enabled</code>, <code>true</code> by default.
      */
     private boolean enabled = true;
 
     /**
-     * The name of the collection storing outbox entries. Every outbox instance
-     * needs its own store - two dispatchers polling the same collection would
-     * compete and double-dispatch.
+     * The name of the collection which stores the outbox entries. Every outbox instance needs
+     * its own store - two dispatchers polling the same collection would compete and
+     * double-dispatch.
      * <p>
      * Key <code>vanillabp.outbox.mongo.collection</code>,
      * {@value #DEFAULT_COLLECTION} by default.
@@ -1132,25 +1130,23 @@ public class PhaseTwoOutboxProperties {
     private String collection = DEFAULT_COLLECTION;
 
     /**
-     * The name of the collection storing the payloads of phase-two calls which carry
-     * one (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). One
-     * collection per outbox, for the reason the outbox itself has one.
-     * <code>null</code> means the name of the outbox collection plus
-     * {@link #PAYLOAD_COLLECTION_SUFFIX}, so an application which renames the outbox
-     * renames the payloads with it.
+     * The name of the collection which stores the payloads of phase-two calls which have one
+     * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). One collection per
+     * outbox, for the reason the outbox itself has one. <code>null</code> means the name of
+     * the outbox collection plus {@link #PAYLOAD_COLLECTION_SUFFIX}, so an application which
+     * renames the outbox renames the payloads with it.
      * <p>
      * Key <code>vanillabp.outbox.mongo.payload-collection</code>, unset by default.
      */
     private String payloadCollection = null;
 
     /**
-     * The name of the collection storing the records of processed task deliveries (see
-     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The name lies in this
-     * section because the STORE settings of the delivery log are the outbox' ones, the
-     * way <code>vanillabp.outbox.mongo.enabled</code> and
-     * <code>vanillabp.outbox.create-schema</code> already are; what belongs to the log
-     * alone is how long a record is kept
-     * (<code>vanillabp.delivery.retention</code>).
+     * The name of the collection which stores the records of processed task deliveries (see
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The name lies in this section
+     * because the STORE settings of the delivery log are the outbox' ones, the way
+     * <code>vanillabp.outbox.mongo.enabled</code> and
+     * <code>vanillabp.outbox.create-schema</code> already are; what belongs to the log alone
+     * is how long a record is kept (<code>vanillabp.delivery.retention</code>).
      * <p>
      * Give it a name of its own where the database has naming rules, and keep it apart
      * from {@link #collection} and the payload collection: three stores sharing one
@@ -1162,12 +1158,11 @@ public class PhaseTwoOutboxProperties {
     private String deliveryCollection = DEFAULT_DELIVERY_COLLECTION;
 
     /**
-     * The name of the collection the nightly housekeeping takes its lease in - one
-     * document per store, holding who is house-keeping it and until when, so only one
-     * node of a cluster measures its own work (see decision 91 in the repository's
-     * DECISIONS.md). Like the delivery collection and unlike the payload collection it
-     * does not follow a renamed outbox: it carries a document per store rather than
-     * belonging to one.
+     * The name of the collection in which the nightly housekeeping takes its lease. There is
+     * one document per store, which holds who cleans it up and until when. So only one node
+     * of a cluster measures its own work (see decision 91 in the repository's DECISIONS.md).
+     * Like the delivery collection and unlike the payload collection it does not follow a
+     * renamed outbox: it carries a document per store rather than belonging to one.
      * <p>
      * Key <code>vanillabp.outbox.mongo.housekeeping-collection</code>,
      * {@value #DEFAULT_HOUSEKEEPING_COLLECTION} by default.
@@ -1201,36 +1196,36 @@ public class PhaseTwoOutboxProperties {
     public abstract static class MongoOutboxPropertiesBuilder<C extends MongoOutboxProperties, B extends MongoOutboxProperties.MongoOutboxPropertiesBuilder<C, B>> {
 
       /**
-       * Whether the MongoDB-based default outbox is created when a MongoDB connection is
+       * Whether the default outbox based on MongoDB is created when a MongoDB connection is
        * available. The builder starts from the same value as the field.
        */
       private boolean enabled = true;
 
       /**
-       * The name of the collection storing outbox entries. The builder starts from the same
-       * value as the field.
+       * The name of the collection which stores the outbox entries. The builder starts from
+       * the same value as the field.
        */
       private String collection = DEFAULT_COLLECTION;
 
       /**
-       * The name of the collection storing the payloads of phase-two calls which carry one
-       * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). The builder starts
-       * from the same value as the field.
+       * The name of the collection which stores the payloads of phase-two calls which have
+       * one (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). The builder
+       * starts from the same value as the field.
        */
       private String payloadCollection = null;
 
       /**
-       * The name of the collection storing the records of processed task deliveries (see
+       * The name of the collection which stores the records of processed task deliveries (see
        * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The builder starts from the
        * same value as the field.
        */
       private String deliveryCollection = DEFAULT_DELIVERY_COLLECTION;
 
       /**
-       * The name of the collection the nightly housekeeping takes its lease in - one document
-       * per store, holding who is house-keeping it and until when, so only one node of a
-       * cluster measures its own work (see decision 91 in the repository's DECISIONS.md). The
-       * builder starts from the same value as the field.
+       * The name of the collection in which the nightly housekeeping takes its lease. There
+       * is one document per store, which holds who cleans it up and until when. So only one
+       * node of a cluster measures its own work (see decision 91 in the repository's
+       * DECISIONS.md). The builder starts from the same value as the field.
        */
       private String housekeepingCollection = DEFAULT_HOUSEKEEPING_COLLECTION;
 
@@ -1242,7 +1237,7 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * Whether the MongoDB-based default outbox is created when a MongoDB connection is
+       * Whether the default outbox based on MongoDB is created when a MongoDB connection is
        * available.
        *
        * @param enabled The value of {@link #enabled}
@@ -1257,7 +1252,7 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * The name of the collection storing outbox entries.
+       * The name of the collection which stores the outbox entries.
        *
        * @param collection The value of {@link #collection}
        * @return This builder, so the calls chain
@@ -1271,7 +1266,7 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * The name of the collection storing the payloads of phase-two calls which carry
+       * The name of the collection which stores the payloads of phase-two calls which have
        * one (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}).
        *
        * @param payloadCollection The value of {@link #payloadCollection}
@@ -1286,7 +1281,7 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * The name of the collection storing the records of processed task deliveries (see
+       * The name of the collection which stores the records of processed task deliveries (see
        * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
        *
        * @param deliveryCollection The value of {@link #deliveryCollection}
@@ -1301,8 +1296,8 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * The name of the collection the nightly housekeeping takes its lease in - one
-       * document per store, holding who is house-keeping it and until when, so only one
+       * The name of the collection in which the nightly housekeeping takes its lease. There
+       * is one document per store, which holds who cleans it up and until when. So only one
        * node of a cluster measures its own work (see decision 91 in the repository's
        * DECISIONS.md).
        *
@@ -1430,7 +1425,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * Whether the MongoDB-based default outbox is created when a MongoDB connection is
+     * Whether the default outbox based on MongoDB is created when a MongoDB connection is
      * available.
      *
      * @return The value of {@link #enabled}
@@ -1442,7 +1437,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the collection storing outbox entries.
+     * The name of the collection which stores the outbox entries.
      *
      * @return The value of {@link #collection}
      */
@@ -1453,7 +1448,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the collection storing the payloads of phase-two calls which carry one
+     * The name of the collection which stores the payloads of phase-two calls which have one
      * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}).
      *
      * @return The value of {@link #payloadCollection}
@@ -1465,7 +1460,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the collection storing the records of processed task deliveries (see
+     * The name of the collection which stores the records of processed task deliveries (see
      * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
      *
      * @return The value of {@link #deliveryCollection}
@@ -1477,10 +1472,9 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the collection the nightly housekeeping takes its lease in - one
-     * document per store, holding who is house-keeping it and until when, so only one
-     * node of a cluster measures its own work (see decision 91 in the repository's
-     * DECISIONS.md).
+     * The name of the collection in which the nightly housekeeping takes its lease. There is
+     * one document per store, which holds who cleans it up and until when. So only one node
+     * of a cluster measures its own work (see decision 91 in the repository's DECISIONS.md).
      *
      * @return The value of {@link #housekeepingCollection}
      */
@@ -1491,7 +1485,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * Whether the MongoDB-based default outbox is created when a MongoDB connection is
+     * Whether the default outbox based on MongoDB is created when a MongoDB connection is
      * available.
      *
      * @param enabled The value of {@link #enabled}
@@ -1504,7 +1498,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the collection storing outbox entries.
+     * The name of the collection which stores the outbox entries.
      *
      * @param collection The value of {@link #collection}
      */
@@ -1516,7 +1510,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the collection storing the payloads of phase-two calls which carry one
+     * The name of the collection which stores the payloads of phase-two calls which have one
      * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}).
      *
      * @param payloadCollection The value of {@link #payloadCollection}
@@ -1529,7 +1523,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the collection storing the records of processed task deliveries (see
+     * The name of the collection which stores the records of processed task deliveries (see
      * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
      *
      * @param deliveryCollection The value of {@link #deliveryCollection}
@@ -1542,10 +1536,9 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The name of the collection the nightly housekeeping takes its lease in - one
-     * document per store, holding who is house-keeping it and until when, so only one
-     * node of a cluster measures its own work (see decision 91 in the repository's
-     * DECISIONS.md).
+     * The name of the collection in which the nightly housekeeping takes its lease. There is
+     * one document per store, which holds who cleans it up and until when. So only one node
+     * of a cluster measures its own work (see decision 91 in the repository's DECISIONS.md).
      *
      * @param housekeepingCollection The value of {@link #housekeepingCollection}
      */
@@ -1662,9 +1655,9 @@ public class PhaseTwoOutboxProperties {
     private LocalTime end = DEFAULT_END;
 
     /**
-     * The zone the two times above are read in. Key
-     * <code>vanillabp.outbox.housekeeping.zone</code>, unset by default, which means the
-     * zone of the JVM.
+     * The zone in which the two times above are read. Key
+     * <code>vanillabp.outbox.housekeeping.zone</code>, unset by default, which means the zone
+     * of the JVM.
      * <p>
      * Written the way {@link ZoneId} spells one, for example <code>Europe/Vienna</code>.
      * <p>
@@ -1814,8 +1807,8 @@ public class PhaseTwoOutboxProperties {
       private LocalTime end = DEFAULT_END;
 
       /**
-       * The zone the two times above are read in. The builder starts from the same value as
-       * the field.
+       * The zone in which the two times above are read. The builder starts from the same
+       * value as the field.
        */
       private String zone = null;
 
@@ -1855,7 +1848,7 @@ public class PhaseTwoOutboxProperties {
       }
 
       /**
-       * The zone the two times above are read in.
+       * The zone in which the two times above are read.
        *
        * @param zone The value of {@link #zone}
        * @return This builder, so the calls chain
@@ -1995,7 +1988,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The zone the two times above are read in.
+     * The zone in which the two times above are read.
      *
      * @return The value of {@link #zone}
      */
@@ -2030,7 +2023,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The zone the two times above are read in.
+     * The zone in which the two times above are read.
      *
      * @param zone The value of {@link #zone}
      */
@@ -2054,72 +2047,73 @@ public class PhaseTwoOutboxProperties {
   public abstract static class PhaseTwoOutboxPropertiesBuilder<C extends PhaseTwoOutboxProperties, B extends PhaseTwoOutboxProperties.PhaseTwoOutboxPropertiesBuilder<C, B>> {
 
     /**
-     * The longest a store's background poller sleeps while it owes nothing. The builder
-     * starts from the same value as the field.
+     * The longest time for which a store's background poller sleeps while it owes nothing.
+     * The builder starts from the same value as the field.
      */
     private Duration pollInterval = DEFAULT_POLL_INTERVAL;
 
     /**
-     * The distance to the FIRST retry after a failed dispatch. The builder starts from the
+     * The time until the FIRST retry after a failed dispatch. The builder starts from the
      * same value as the field.
      */
     private Duration attemptFrequency = Duration.ofSeconds(30);
 
     /**
-     * The longest distance the growing backoff reaches. The builder starts from the same
+     * The longest time which the growing backoff reaches. The builder starts from the same
      * value as the field.
      */
     private Duration maxAttemptFrequency = Duration.ofMinutes(5);
 
     /**
-     * After how many failed attempts an entry is blocked (not retried any longer). The
-     * builder starts from the same value as the field.
+     * After how many failed attempts an entry is blocked (not retried any more). The builder
+     * starts from the same value as the field.
      */
     private int blockAfterAttempts = 50;
 
     /**
      * How long an entry may wait for a BPMS which does not report its workflow yet. The
-     * builder starts from the same value the field does: not set.
+     * builder starts from the same value as the field: not set.
      */
     private Duration waitForVisibilityAtMost = null;
 
     /**
-     * How many entries an outbox of VanillaBP's own dispatches at the same time - the JDBC
-     * one and the MongoDB one of each platform. The builder starts from the same value as the
-     * field.
+     * How many entries an outbox of VanillaBP's own dispatches at the same time: the JDBC
+     * one, and the MongoDB one of each platform. The builder starts from the same value as
+     * the field.
      */
     private int dispatchThreads = 4;
 
     /**
-     * Whether the schema (table/collection) used to store outbox entries is created
+     * Whether the schema (table or collection) for the outbox entries is created
      * automatically. The builder starts from the same value as the field.
      */
     private boolean createSchema = true;
 
     /**
-     * How long successfully dispatched entries (marked as DONE) are retained before they are
-     * deleted asynchronously - what a retained entry buys is a dispatched operation somebody
-     * can still look at during support, not a longer deduplication window: that one ends with
-     * the dispatch (see {@link io.vanillabp.integration.spi.PhaseTwoOutbox}). The builder
-     * starts from the same value as the field.
+     * How long successfully dispatched entries (marked as DONE) are kept before they are
+     * deleted in the background. A kept entry is a dispatched operation which somebody can
+     * still look at in a support case. It is not a longer window of deduplication, because
+     * that one ends with the dispatch (see
+     * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}). The builder starts from the same
+     * value as the field.
      */
     private Duration retention = DEFAULT_RETENTION;
 
     /**
-     * Configuration of the JDBC default outbox, which both platforms run: Spring Boot on the
-     * connection of its transaction manager, Quarkus on an Agroal connection of the running
-     * JTA transaction. The builder starts from the same value as the field.
+     * The configuration of the JDBC default outbox, which both platforms run: Spring Boot on
+     * the connection of its transaction manager, Quarkus on an Agroal connection of the
+     * running JTA transaction. The builder starts from the same value as the field.
      */
     private JdbcOutboxProperties jdbc = new JdbcOutboxProperties();
 
     /**
-     * Configuration of the MongoDB-based default outbox. The builder starts from the same
-     * value as the field.
+     * The configuration of the default outbox based on MongoDB. The builder starts from the
+     * same value as the field.
      */
     private MongoOutboxProperties mongo = new MongoOutboxProperties();
 
     /**
-     * When the housekeeping of the outbox runs and in which time zone (properties section
+     * When the housekeeping of the outbox runs, and in which time zone (properties section
      * <code>vanillabp.outbox.housekeeping.*</code>). The builder starts from the same value
      * as the field.
      */
@@ -2133,7 +2127,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The longest a store's background poller sleeps while it owes nothing.
+     * The longest time for which a store's background poller sleeps while it owes nothing.
      *
      * @param pollInterval The value of {@link #pollInterval}
      * @return This builder, so the calls chain
@@ -2147,7 +2141,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The distance to the FIRST retry after a failed dispatch.
+     * The time until the FIRST retry after a failed dispatch.
      *
      * @param attemptFrequency The value of {@link #attemptFrequency}
      * @return This builder, so the calls chain
@@ -2161,7 +2155,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The longest distance the growing backoff reaches.
+     * The longest time which the growing backoff reaches.
      *
      * @param maxAttemptFrequency The value of {@link #maxAttemptFrequency}
      * @return This builder, so the calls chain
@@ -2175,7 +2169,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * After how many failed attempts an entry is blocked (not retried any longer).
+     * After how many failed attempts an entry is blocked (not retried any more).
      *
      * @param blockAfterAttempts The value of {@link #blockAfterAttempts}
      * @return This builder, so the calls chain
@@ -2203,8 +2197,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * How many entries an outbox of VanillaBP's own dispatches at the same time - the
-     * JDBC one and the MongoDB one of each platform.
+     * How many entries an outbox of VanillaBP's own dispatches at the same time: the JDBC
+     * one, and the MongoDB one of each platform.
      *
      * @param dispatchThreads The value of {@link #dispatchThreads}
      * @return This builder, so the calls chain
@@ -2218,7 +2212,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * Whether the schema (table/collection) used to store outbox entries is created
+     * Whether the schema (table or collection) for the outbox entries is created
      * automatically.
      *
      * @param createSchema The value of {@link #createSchema}
@@ -2233,10 +2227,10 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * How long successfully dispatched entries (marked as DONE) are retained before they
-     * are deleted asynchronously - what a retained entry buys is a dispatched operation
-     * somebody can still look at during support, not a longer deduplication window: that
-     * one ends with the dispatch (see
+     * How long successfully dispatched entries (marked as DONE) are kept before they are
+     * deleted in the background. A kept entry is a dispatched operation which somebody can
+     * still look at in a support case. It is not a longer window of deduplication, because
+     * that one ends with the dispatch (see
      * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
      *
      * @param retention The value of {@link #retention}
@@ -2251,7 +2245,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * Configuration of the JDBC default outbox, which both platforms run: Spring Boot on
+     * The configuration of the JDBC default outbox, which both platforms run: Spring Boot on
      * the connection of its transaction manager, Quarkus on an Agroal connection of the
      * running JTA transaction.
      *
@@ -2267,7 +2261,7 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * Configuration of the MongoDB-based default outbox.
+     * The configuration of the default outbox based on MongoDB.
      *
      * @param mongo The value of {@link #mongo}
      * @return This builder, so the calls chain
@@ -2281,8 +2275,8 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * When the housekeeping of the outbox runs and in which time zone (properties
-     * section <code>vanillabp.outbox.housekeeping.*</code>).
+     * When the housekeeping of the outbox runs, and in which time zone (properties section
+     * <code>vanillabp.outbox.housekeeping.*</code>).
      *
      * @param housekeeping The value of {@link #housekeeping}
      * @return This builder, so the calls chain
@@ -2432,7 +2426,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * The longest a store's background poller sleeps while it owes nothing.
+   * The longest time for which a store's background poller sleeps while it owes nothing.
    *
    * @return The value of {@link #pollInterval}
    */
@@ -2443,7 +2437,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * The distance to the FIRST retry after a failed dispatch.
+   * The time until the FIRST retry after a failed dispatch.
    *
    * @return The value of {@link #attemptFrequency}
    */
@@ -2454,7 +2448,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * The longest distance the growing backoff reaches.
+   * The longest time which the growing backoff reaches.
    *
    * @return The value of {@link #maxAttemptFrequency}
    */
@@ -2465,7 +2459,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * After how many failed attempts an entry is blocked (not retried any longer).
+   * After how many failed attempts an entry is blocked (not retried any more).
    *
    * @return The value of {@link #blockAfterAttempts}
    */
@@ -2489,8 +2483,8 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * How many entries an outbox of VanillaBP's own dispatches at the same time - the JDBC
-   * one and the MongoDB one of each platform.
+   * How many entries an outbox of VanillaBP's own dispatches at the same time: the JDBC one,
+   * and the MongoDB one of each platform.
    *
    * @return The value of {@link #dispatchThreads}
    */
@@ -2501,8 +2495,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * Whether the schema (table/collection) used to store outbox entries is created
-   * automatically.
+   * Whether the schema (table or collection) for the outbox entries is created automatically.
    *
    * @return The value of {@link #createSchema}
    */
@@ -2513,11 +2506,10 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * How long successfully dispatched entries (marked as DONE) are retained before they
-   * are deleted asynchronously - what a retained entry buys is a dispatched operation
-   * somebody can still look at during support, not a longer deduplication window: that
-   * one ends with the dispatch (see
-   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
+   * How long successfully dispatched entries (marked as DONE) are kept before they are
+   * deleted in the background. A kept entry is a dispatched operation which somebody can
+   * still look at in a support case. It is not a longer window of deduplication, because that
+   * one ends with the dispatch (see {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
    *
    * @return The value of {@link #retention}
    */
@@ -2528,9 +2520,9 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * Configuration of the JDBC default outbox, which both platforms run: Spring Boot on
-   * the connection of its transaction manager, Quarkus on an Agroal connection of the
-   * running JTA transaction.
+   * The configuration of the JDBC default outbox, which both platforms run: Spring Boot on
+   * the connection of its transaction manager, Quarkus on an Agroal connection of the running
+   * JTA transaction.
    *
    * @return The value of {@link #jdbc}
    */
@@ -2541,7 +2533,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * Configuration of the MongoDB-based default outbox.
+   * The configuration of the default outbox based on MongoDB.
    *
    * @return The value of {@link #mongo}
    */
@@ -2552,7 +2544,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * When the housekeeping of the outbox runs and in which time zone (properties section
+   * When the housekeeping of the outbox runs, and in which time zone (properties section
    * <code>vanillabp.outbox.housekeeping.*</code>).
    *
    * @return The value of {@link #housekeeping}
@@ -2564,7 +2556,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * The longest a store's background poller sleeps while it owes nothing.
+   * The longest time for which a store's background poller sleeps while it owes nothing.
    *
    * @param pollInterval The value of {@link #pollInterval}
    */
@@ -2576,7 +2568,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * The distance to the FIRST retry after a failed dispatch.
+   * The time until the FIRST retry after a failed dispatch.
    *
    * @param attemptFrequency The value of {@link #attemptFrequency}
    */
@@ -2588,7 +2580,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * The longest distance the growing backoff reaches.
+   * The longest time which the growing backoff reaches.
    *
    * @param maxAttemptFrequency The value of {@link #maxAttemptFrequency}
    */
@@ -2600,7 +2592,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * After how many failed attempts an entry is blocked (not retried any longer).
+   * After how many failed attempts an entry is blocked (not retried any more).
    *
    * @param blockAfterAttempts The value of {@link #blockAfterAttempts}
    */
@@ -2625,8 +2617,8 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * How many entries an outbox of VanillaBP's own dispatches at the same time - the JDBC
-   * one and the MongoDB one of each platform.
+   * How many entries an outbox of VanillaBP's own dispatches at the same time: the JDBC one,
+   * and the MongoDB one of each platform.
    *
    * @param dispatchThreads The value of {@link #dispatchThreads}
    */
@@ -2638,8 +2630,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * Whether the schema (table/collection) used to store outbox entries is created
-   * automatically.
+   * Whether the schema (table or collection) for the outbox entries is created automatically.
    *
    * @param createSchema The value of {@link #createSchema}
    */
@@ -2651,11 +2642,10 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * How long successfully dispatched entries (marked as DONE) are retained before they
-   * are deleted asynchronously - what a retained entry buys is a dispatched operation
-   * somebody can still look at during support, not a longer deduplication window: that
-   * one ends with the dispatch (see
-   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
+   * How long successfully dispatched entries (marked as DONE) are kept before they are
+   * deleted in the background. A kept entry is a dispatched operation which somebody can
+   * still look at in a support case. It is not a longer window of deduplication, because that
+   * one ends with the dispatch (see {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
    *
    * @param retention The value of {@link #retention}
    */
@@ -2667,9 +2657,9 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * Configuration of the JDBC default outbox, which both platforms run: Spring Boot on
-   * the connection of its transaction manager, Quarkus on an Agroal connection of the
-   * running JTA transaction.
+   * The configuration of the JDBC default outbox, which both platforms run: Spring Boot on
+   * the connection of its transaction manager, Quarkus on an Agroal connection of the running
+   * JTA transaction.
    *
    * @param jdbc The value of {@link #jdbc}
    */
@@ -2681,7 +2671,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * Configuration of the MongoDB-based default outbox.
+   * The configuration of the default outbox based on MongoDB.
    *
    * @param mongo The value of {@link #mongo}
    */
@@ -2693,7 +2683,7 @@ public class PhaseTwoOutboxProperties {
   }
 
   /**
-   * When the housekeeping of the outbox runs and in which time zone (properties section
+   * When the housekeeping of the outbox runs, and in which time zone (properties section
    * <code>vanillabp.outbox.housekeeping.*</code>).
    *
    * @param housekeeping The value of {@link #housekeeping}
