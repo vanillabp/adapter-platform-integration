@@ -150,14 +150,22 @@ public class ExtensionOperationDispatchTest {
   }
 
   /**
+   * Counts the waiting entries of the extension's operation, and only those.
+   * <p>
+   * Starting the workflow writes an entry of its own for the same aggregate. That entry
+   * names another BPMN process than the calls of these tests, so it travels in another
+   * dispatch lane. The extension's dispatch does not wait for it, and the start entry may
+   * still be waiting while a test counts. Counting it made the count 3 now and then
+   * instead of 2.
+   *
    * @param aggregateId The aggregate asked about
-   * @return How many of its entries are waiting, whatever they deduplicate against
+   * @return How many entries of the extension's operation for that aggregate are waiting,
+   *         whatever they deduplicate against
    */
-  private long waitingEntriesOf(
+  private long waitingEntriesOfTheOperation(
       final Object aggregateId) {
 
-    return outboxTable()
-        .entries()
+    return entriesOfTheOperation()
         .stream()
         .filter(Entry::isWaiting)
         .filter(entry -> aggregateId.toString().equals(entry.aggregateId()))
@@ -318,8 +326,19 @@ public class ExtensionOperationDispatchTest {
                           payloadOf("{\"amount\":2}"))));
       userTransaction.commit();
 
-      // two entries wait now: the one which is on its way and the one this call became
-      assertEquals(2L, waitingEntriesOf(aggregate.getId()));
+      // two entries of the operation wait now: the one which is on its way and the one
+      // this call became. The entry which started the workflow is not counted, because it
+      // may still be on its way in a lane of its own
+      assertEquals(
+          2L,
+          waitingEntriesOfTheOperation(aggregate.getId()),
+          () -> "The outbox holds these entries of the aggregate: %s"
+              .formatted(
+                  outboxTable()
+                      .entries()
+                      .stream()
+                      .filter(entry -> aggregate.getId().toString().equals(entry.aggregateId()))
+                      .toList()));
     } finally {
       extension.releaseHeldDispatch();
     }
