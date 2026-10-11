@@ -2,6 +2,7 @@ package io.vanillabp.integration.adapter.migration.processservice;
 
 import java.io.InputStream;
 import java.util.List;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
@@ -58,6 +59,13 @@ public final class WorkflowViewer<A> {
   private final Supplier<WorkflowScope> scope;
 
   /**
+   * Reads what VanillaBP wrote down about a workflow: the start row and the BPMS' own id. A
+   * function because the process service owns the rows, and the operations read them the same
+   * way.
+   */
+  private final Function<Object, WorkflowLocator.WrittenDown> writtenDownAbout;
+
+  /**
    * Built by the {@link MigrationProcessService} of this BPMN process, in its constructor,
    * and used by nobody else. It is handed the parts it reads from rather than the process
    * service itself, which keeps the reading half away from everything that changes a
@@ -73,6 +81,8 @@ public final class WorkflowViewer<A> {
    *          profits from what an operation learned and the other way round
    * @param scope Reports what this process service serves right now, asked at every probe
    *          because the platform fills it in after the process service was built
+   * @param writtenDownAbout Reads the start row and the BPMS' own id of the workflow of an
+   *          aggregate, the same way the election of an operation reads them
    */
   public WorkflowViewer(
       final String workflowModuleId,
@@ -81,7 +91,8 @@ public final class WorkflowViewer<A> {
       final List<MigratableProcessService<A>> adapterProcessServices,
       final AggregatePersistenceAware<A> aggregatePersistenceSupport,
       final WorkflowLocator workflowLocator,
-      final Supplier<WorkflowScope> scope) {
+      final Supplier<WorkflowScope> scope,
+      final Function<Object, WorkflowLocator.WrittenDown> writtenDownAbout) {
 
     this.workflowModuleId = workflowModuleId;
     this.bpmnProcessId = bpmnProcessId;
@@ -90,6 +101,7 @@ public final class WorkflowViewer<A> {
     this.aggregatePersistenceSupport = aggregatePersistenceSupport;
     this.workflowLocator = workflowLocator;
     this.scope = scope;
+    this.writtenDownAbout = writtenDownAbout;
 
   }
 
@@ -231,6 +243,14 @@ public final class WorkflowViewer<A> {
    * application started seconds ago is the ordinary case, and the one to three seconds
    * Camunda 8's exporter lags behind must not turn it into an error. Without a hint
    * nothing is waited for - a workflow nobody has ever seen fails at once.
+   * <p>
+   * The cache is not the only hint. It lives in the memory of one node, so on a second node,
+   * after a restart and once it forgot, it knows nothing about a workflow started a moment ago.
+   * So the read first looks at what VanillaBP wrote down, the same way an operation does: the
+   * row written when the workflow started names the adapter and the id. Where there is no such
+   * row, the rows of open tasks may still give the id. A start row counts as a hint, so the read
+   * waits for that adapter just as it does with a cached hint (decision 112 in the repository's
+   * DECISIONS.md). Without a row and without a cached hint it fails at once, as before.
    */
   private WorkflowLocator.Location<A> locateForReading(
       final Object aggregateId,
@@ -241,8 +261,10 @@ public final class WorkflowViewer<A> {
 
     // the hint is what buys the waiting: it says the workflow exists, so an adapter not
     // reporting it yet is asked again until its visibility window is used up. Nothing
-    // repeats a read later, so this is the only place it can happen
-    final var workflowId = workflowLocator.rememberedWorkflowId(aggregateId);
+    // repeats a read later, so this is the only place it can happen. The start row is a
+    // hint too, and the one a node gets which never saw the workflow
+    final var writtenDown = writtenDownAbout.apply(aggregateId);
+    final var workflowId = writtenDown.workflowId();
     final var location = workflowLocator.locate(
         adapterProcessServices,
         // the id VanillaBP holds rides along: this read waits out the visibility window of
@@ -252,7 +274,8 @@ public final class WorkflowViewer<A> {
             .awarenessOfWorkflow(scope.get(), aggregatePersistenceSupport, aggregateId, workflowId),
         aggregateId,
         subject,
-        WorkflowLocator.Patience.WAIT_FOR_VISIBILITY);
+        WorkflowLocator.Patience.WAIT_FOR_VISIBILITY,
+        writtenDown.recordedStart());
 
     if (location.awareness() == WorkflowAwareness.UNKNOWN_TO_BPMS) {
       throw new WorkflowNotFoundException(

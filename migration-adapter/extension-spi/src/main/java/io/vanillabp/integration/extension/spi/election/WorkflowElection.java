@@ -37,6 +37,10 @@ public interface WorkflowElection {
    * This also means that it does not throw after the workflow ended, as long as that row exists
    * (<code>vanillabp.delivery.workflow-start-retention</code>). Without the row, the election
    * asks the BPMS as the javadoc of the type describes.
+   * <p>
+   * Call this only where you read, never where you report a change: a report must not wait, so
+   * it uses {@link #workflowStartOf} and {@link #openUserTasksOf} (column 4 of decision 27 in the
+   * repository's DECISIONS.md).
    *
    * @param workflowModuleId The workflow module of the workflow
    * @param bpmnProcessId The BPMN process of the workflow
@@ -80,6 +84,9 @@ public interface WorkflowElection {
    * start of the workflow answers, both values come from that row, and this does not throw
    * after the workflow ended either. The default delegates and leaves the id empty. That is
    * what an implementation written before this method existed answers.
+   * <p>
+   * Like {@link #adapterIdOfWorkflow}, this is for reading, never for a report (column 4 of
+   * decision 27 in the repository's DECISIONS.md).
    *
    * @param workflowModuleId The workflow module of the workflow
    * @param bpmnProcessId The BPMN process of the workflow
