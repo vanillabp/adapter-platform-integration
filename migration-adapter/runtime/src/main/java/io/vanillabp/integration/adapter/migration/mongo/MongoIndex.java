@@ -4,13 +4,13 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * One index a MongoDB collection of VanillaBP needs, described once for both platform
- * integrations: the fields it spans, whether it is unique, whether it is sparse, and the
- * question it answers.
+ * One index which a MongoDB collection of VanillaBP needs. It is described once for both
+ * platform integrations. It names the fields the index spans, whether it is unique, whether
+ * it is sparse, and the question it answers.
  * <p>
- * Both platforms create their indexes from the lists in {@link MongoSchema} and both ask
- * the same lists what an existing collection is missing, so an index cannot be created on
- * one platform and forgotten on the other.
+ * Both platforms create their indexes from the lists in {@link MongoSchema}. Both also ask
+ * these lists what an existing collection is missing. So an index cannot be created on one
+ * platform and forgotten on the other.
  *
  * @param fields The fields it spans, in the order the questions read them
  * @param unique Whether the database refuses a second document with those values
@@ -25,8 +25,8 @@ public record MongoIndex(
                          String whatItIsReadBy) {
 
   /**
-   * An index over one or more fields, ascending, which is the order every question of
-   * VanillaBP reads them in.
+   * An ascending index over one or more fields. Every question of VanillaBP reads the
+   * fields in ascending order.
    *
    * @param whatItIsReadBy The question it answers, written for the developer who has to
    *          create it themselves
@@ -59,8 +59,8 @@ public record MongoIndex(
   }
 
   /**
-   * An index a document which does not carry the field stays out of, over one or more
-   * fields.
+   * A sparse index over one or more fields. A document which does not carry the field
+   * stays out of it.
    *
    * @param whatItIsReadBy The question it answers, written for the developer who has to
    *          create it themselves
@@ -76,13 +76,13 @@ public record MongoIndex(
   }
 
   /**
-   * Whether an index a collection carries today does what this one is there for. The
-   * fields decide, in their order, because that is what MongoDB answers a question from. A
-   * unique index is only served by a unique one: an index which lets a second document
-   * through would answer the question and stop refusing the duplicate.
+   * Whether an index which the collection already has does the job of this one. The
+   * fields decide, in their order, because MongoDB answers a question from them. Only a
+   * unique index can do the job of a unique one. An index which lets a second document in
+   * would answer the question, but it would no longer refuse the duplicate.
    * <p>
-   * Sparse is not compared. It keeps an index small and changes no answer, so an index
-   * spanning every document serves a sparse one.
+   * Sparse is not compared. It keeps an index small and changes no answer. So an index over
+   * every document does the job of a sparse one.
    *
    * @param indexInPlace An index the collection carries
    * @return Whether that index does what this one is there for
@@ -95,10 +95,10 @@ public record MongoIndex(
   }
 
   /**
-   * The statement which creates this index, written the way a developer pastes it into
-   * <code>mongosh</code>. The collection is named through <code>getCollection</code>
-   * because the default names carry hyphens, which the shorter <code>db.name</code> form
-   * reads as a subtraction.
+   * The statement which creates this index, written so that a developer can paste it into
+   * <code>mongosh</code>. It names the collection with <code>getCollection</code>. The
+   * default names contain hyphens, and the shorter <code>db.name</code> form would read a
+   * hyphen as a minus sign.
    *
    * @param collection The collection to create it on
    * @return The statement, ending with a semicolon and the question it answers

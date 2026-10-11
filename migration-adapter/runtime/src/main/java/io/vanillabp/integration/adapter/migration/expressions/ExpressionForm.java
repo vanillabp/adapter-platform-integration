@@ -3,47 +3,46 @@ package io.vanillabp.integration.adapter.migration.expressions;
 import java.util.regex.Pattern;
 
 /**
- * What an expression of a BPMN model does, as far as its text says - the rule behind
- * {@link ModelExpressionCheck} and the reason that rule lives in the platform: every
- * adapter finds the expressions of its own models, and all of them are answered the same
- * way here.
+ * What an expression of a BPMN model does, as far as its text tells. This is the rule
+ * behind {@link ModelExpressionCheck}. The rule lives in the platform because every adapter
+ * finds the expressions of its own models, and here all of them get the same answer.
  * <p>
- * The forms are told apart by shape, not by a grammar. Both expression languages VanillaBP
- * meets write a variable read as a bare name, a member access with a dot and a function call
- * with a parenthesis, and that is all this rule needs. Everything else it cannot place is
- * {@link #COMPUTES}, which is the mildest of the findings - a form nobody foresaw must not
- * turn into the loudest message.
+ * The forms are told apart by their shape, not by a grammar. VanillaBP meets two expression
+ * languages. Both write a variable as a bare name, a member access with a dot and a function
+ * call with a parenthesis. That is all this rule needs. Everything else counts as
+ * {@link #COMPUTES}, the mildest of the findings. A form nobody foresaw must not cause the
+ * loudest message.
  * <p>
- * A name with a space in it is legal in FEEL and is still not read as a name here: the
- * variables VanillaBP hands a model are named after the accessors of a workflow aggregate,
- * so a name which needs a space is not one VanillaBP put there.
+ * FEEL allows a space in a name, but this rule does not read such a text as a name. The
+ * variables which VanillaBP hands to a model are named after the getters of a workflow
+ * aggregate. So a name with a space is not one that VanillaBP put there.
  */
 public enum ExpressionForm {
 
   /**
-   * The expression is the name of one variable, which is what VanillaBP recommends: the
-   * model asks a question and the workflow aggregate answers it under that name. Nothing
-   * is reported about it.
+   * The expression is the name of one variable. VanillaBP recommends this form. The model
+   * asks a question, and the workflow aggregate answers it under that name. Nothing is
+   * reported about it.
    */
   NAMES_A_VARIABLE,
 
   /**
    * The expression walks into the object behind a name (<code>order.shipping.express</code>),
-   * index included. It binds the model to the shape of the application's data.
+   * maybe with an index. It ties the model to the shape of the application's data.
    */
   WALKS_A_PATH,
 
   /**
-   * The expression calls something - a method of an object, a function of the BPMS.
-   * It binds the model to the shape of the data or to the function library of one BPMS,
-   * usually to both.
+   * The expression calls something, for example a method of an object or a function of the
+   * BPMS. It ties the model to the shape of the data or to the functions of one BPMS. Usually
+   * it ties it to both.
    */
   CALLS_SOMETHING,
 
   /**
-   * Anything else: a negation, a comparison, a literal, several names joined by an
-   * operator. It leaves the application's data model alone and binds the expression
-   * language, whose words for "not" differ from one BPMS to the next.
+   * Anything else, for example a negation, a comparison, a literal, or several names joined by
+   * an operator. It leaves the application's data model alone. But it ties the model to the
+   * expression language, and each BPMS has its own word for "not".
    */
   COMPUTES;
 
@@ -53,14 +52,14 @@ public enum ExpressionForm {
   private static final Pattern A_NAME = Pattern.compile("[A-Za-z_$][\\w$]*");
 
   /**
-   * A name followed by member accesses and indexes, and nothing else. Whitespace around
-   * the dots is a modeller's formatting rather than a second thing the expression does.
+   * A name followed by member accesses and indexes, and nothing else. Whitespace around the
+   * dots is only how the modeller formatted it. It does not make the expression do more.
    */
   private static final Pattern A_PATH = Pattern
       .compile("[A-Za-z_$][\\w$]*(?:\\s*\\.\\s*[A-Za-z_$][\\w$]*|\\s*\\[\\s*\\d+\\s*\\])+");
 
   /**
-   * Reads the form off the text an expression language evaluates.
+   * Reads the form from the text which an expression language evaluates.
    *
    * @param body The expression without the delimiters of its language
    * @return The form, and {@link #COMPUTES} for a text this rule cannot place
@@ -73,8 +72,8 @@ public enum ExpressionForm {
     }
     final var text = unwrapped(body.trim());
     if (text.indexOf('(') >= 0) {
-      // a parenthesis is a call in both languages, and a call is judged as one however
-      // plain the rest of the expression looks
+      // a parenthesis is a call in both languages. It counts as a call, however plain the
+      // rest of the expression looks
       return CALLS_SOMETHING;
     }
     if (A_NAME.matcher(text).matches()) {
@@ -88,15 +87,15 @@ public enum ExpressionForm {
   }
 
   /**
-   * Takes the delimiters of an expression language off a text which still carries them -
-   * one <code>${...}</code> or <code>#{...}</code> around the whole of it, or the
-   * <code>=</code> a FEEL expression may begin with.
+   * Removes the delimiters of an expression language from a text which still has them. That
+   * is one <code>${...}</code> or <code>#{...}</code> around the whole text, or the
+   * <code>=</code> at the start of a FEEL expression.
    * <p>
-   * Stripping them is the adapter's job, since they belong to its BPMS, and this is the net
-   * under it: an adapter reporting an expression as it stands in the model would otherwise
-   * have every one of them read as a computation, which is the wrong half of the finding.
-   * Two blocks in one attribute (<code>${a}-${b}</code>) are left alone - that text really
-   * is more than one expression.
+   * Removing them is the adapter's job, because they belong to its BPMS. This is the safety
+   * net. An adapter might report an expression exactly as it stands in the model. Without
+   * this net every such expression would count as a computation, which is the wrong half of
+   * the finding. Two blocks in one attribute (<code>${a}-${b}</code>) stay as they are. That
+   * text really is more than one expression.
    *
    * @param text The trimmed expression
    * @return What the language evaluates
@@ -116,8 +115,8 @@ public enum ExpressionForm {
   }
 
   /**
-   * Whether an expression of this form binds the application's data model or the function
-   * library of one BPMS - the findings worth a warning, as against the ones which only bind
+   * Whether an expression of this form ties the model to the application's data model or to
+   * the functions of one BPMS. Those findings are worth a warning. The others only tie it to
    * the expression language.
    *
    * @return Whether it reaches into the application's data

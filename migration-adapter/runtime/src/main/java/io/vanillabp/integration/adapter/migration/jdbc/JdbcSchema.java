@@ -5,13 +5,14 @@ import java.sql.SQLException;
 import java.util.List;
 
 /**
- * Reading the database's own catalog, used by every store which either creates its table
- * or verifies that the application created it (see
+ * Reads the database's own catalog. Every store uses it which creates its table or checks that
+ * the application created it. Examples are
  * {@link io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore} and the
- * phase-two outboxes of both platform integrations).
+ * phase-two outboxes of both platform integrations.
  * <p>
- * Why VanillaBP ships one schema artifact for the four tables it owns, and why the startup check
- * looks at the columns and not only at the table, is decision 16 in the repository's DECISIONS.md.
+ * VanillaBP ships one schema artifact for the four tables it owns, and the startup check looks
+ * at the columns and not only at the table. Decision 16 in the repository's DECISIONS.md says
+ * why.
  */
 public final class JdbcSchema {
 
@@ -19,9 +20,9 @@ public final class JdbcSchema {
   }
 
   /**
-   * Whether a table of that name exists, asked of the JDBC metadata rather than by a
-   * <code>CREATE TABLE IF NOT EXISTS</code>, which not every database supports (e.g. Oracle,
-   * SQL Server).
+   * Whether a table of that name exists. It asks the JDBC metadata and does not use
+   * <code>CREATE TABLE IF NOT EXISTS</code>, because not every database supports that (for
+   * example Oracle and SQL Server).
    *
    * @param connection The connection to the database holding the table
    * @param tableName The table to look for, spelled as the application configured it
@@ -33,8 +34,8 @@ public final class JdbcSchema {
       final String tableName) throws SQLException {
 
     final var metaData = connection.getMetaData();
-    // unquoted identifiers are folded to upper case by some databases (Oracle, H2)
-    // and to lower case by others (PostgreSQL) - check both spellings
+    // some databases (Oracle, H2) turn unquoted identifiers into upper case, others
+    // (PostgreSQL) into lower case, so check both spellings
     for (final var name : List.of(
         tableName,
         tableName.toLowerCase())) {
@@ -51,11 +52,11 @@ public final class JdbcSchema {
   }
 
   /**
-   * Whether a column of that name exists in a table, asked of the JDBC metadata like
-   * {@link #tableExists(Connection, String)} is. Used where a table was created by an
-   * earlier version of VanillaBP or handed over by the application: the table alone does
-   * not prove that everything the current version writes has a place to go, and a missing
-   * column would surface at the first delivery rather than at startup.
+   * Whether a column of that name exists in a table. Like
+   * {@link #tableExists(Connection, String)}, it asks the JDBC metadata. It is used where an
+   * earlier version of VanillaBP created the table, or where the application provided it.
+   * The table alone does not prove that everything the current version writes has a place.
+   * A missing column would show up at the first delivery and not at startup.
    *
    * @param connection The connection to the database holding the table
    * @param tableName The table, spelled as the application configured it
@@ -69,7 +70,7 @@ public final class JdbcSchema {
       final String columnName) throws SQLException {
 
     final var metaData = connection.getMetaData();
-    // see tableExists on the spelling of unquoted identifiers
+    // some databases turn unquoted identifiers into upper case, others into lower case
     for (final var table : List.of(
         tableName,
         tableName.toLowerCase())) {
@@ -88,13 +89,12 @@ public final class JdbcSchema {
   }
 
   /**
-   * Whether an index of that name exists on a table, asked of the JDBC metadata like the two
-   * questions above. Used where a table was created by an earlier version of VanillaBP: the index
-   * a later version reads by is not there, and the statement which adds it is something the
-   * application has to run itself.
+   * Whether an index of that name exists on a table. It asks the JDBC metadata. It is used where
+   * an earlier version of VanillaBP created the table. Then the index which a later version reads
+   * by is missing, and the application has to run the statement which adds it.
    * <p>
-   * A database which cannot answer the question is treated as one which has the index, because a
-   * warning about a missing index is worth less than the confusion of a warning nobody can act on.
+   * If the database cannot answer the question, it counts as having the index. A warning about a
+   * warning would confuse more than it helps, because nobody could act on it.
    *
    * @param connection The connection to the database holding the table
    * @param tableName The table, spelled as the application configured it
@@ -108,7 +108,7 @@ public final class JdbcSchema {
 
     try {
       final var metaData = connection.getMetaData();
-      // see tableExists on the spelling of unquoted identifiers
+      // some databases turn unquoted identifiers into upper case, others into lower case
       for (final var table : List.of(
           tableName,
           tableName.toLowerCase())) {
@@ -129,16 +129,16 @@ public final class JdbcSchema {
   }
 
   /**
-   * Whether the table exists, without letting the question itself fail. Asked after a
-   * <code>CREATE TABLE</code> was refused: two instances starting at the same moment (a rolling
-   * deployment, a scale-up from zero) both see no table and both run the DDL, and the loser gets
-   * a "table already exists" which is no failure of that deployment. Which error a database
-   * reports for it differs per product, so the answer is not a guessed SQL state but the metadata
-   * question asked once more.
+   * Whether the table exists, without letting the question itself fail. It is asked after the
+   * database refused a <code>CREATE TABLE</code>. Two instances may start at the same moment, for
+   * example in a rolling deployment or a scale-up from zero. Both see no table and both run the
+   * DDL. The loser gets "table already exists", and that is no failure of its deployment. Each
+   * database product reports a different error for this. So instead of guessing an SQL state,
+   * the metadata question is asked once more.
    * <p>
-   * Ask it through a CONNECTION OF ITS OWN: where the pool does not commit each statement by
-   * itself, the failed DDL left the current connection in an aborted transaction and every
-   * further question on it would fail as well.
+   * Ask it through a CONNECTION OF ITS OWN. Where the pool does not commit each statement by
+   * itself, the failed DDL left the current connection in an aborted transaction. Every further
+   * question on that connection would fail as well.
    *
    * @param connection A connection of its own, not the one the DDL failed on
    * @param tableName The table to look for

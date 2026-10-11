@@ -9,18 +9,18 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The indexes the MongoDB stores of VanillaBP work with, and what a startup says about the
- * ones which are missing. Both platform integrations create them from the lists below and
- * both hold an existing collection against the same lists, the way
- * {@link io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema} serves the relational
- * stores.
+ * The indexes which the MongoDB stores of VanillaBP use, and what the startup says about
+ * missing ones. Both platform integrations create the indexes from the lists below. Both
+ * also compare an existing collection with the same lists.
+ * {@link io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema} does the same for the
+ * relational stores.
  * <p>
- * A collection needs no creating on MongoDB, it appears with the first document, so
- * <code>vanillabp.outbox.create-schema: false</code> leaves nothing to verify but the
- * indexes. That is why a missing one is reported and does not end the boot. Every question
- * is still answered, only it is read from the whole collection instead of from an index.
- * The relational stores report their missing indexes the same way and end the boot only
- * where a table or a column is missing, which on MongoDB has no counterpart.
+ * On MongoDB nobody has to create a collection. It appears with the first document. So with
+ * <code>vanillabp.outbox.create-schema: false</code> only the indexes are left to check.
+ * That is why a missing index is reported but does not stop the boot. Every question is
+ * still answered, it just reads the whole collection instead of an index. The relational
+ * stores report missing indexes the same way. They stop the boot only where a table or a
+ * column is missing, and MongoDB has nothing like that.
  */
 @Slf4j
 public final class MongoSchema {
@@ -32,21 +32,21 @@ public final class MongoSchema {
    * The indexes of the outbox collection
    * (<code>vanillabp.outbox.mongo.collection</code>).
    * <p>
-   * Three of them filter the same status and then read a moment of its own, and that is
-   * three indexes rather than one over three moments: such an index would serve none of
-   * the three questions.
+   * Three of them filter by the status and then read a different point in time each. That
+   * needs three indexes. One index over all three points in time would serve none of the
+   * three questions.
    */
   public static final List<MongoIndex> OUTBOX_INDEXES = List
       .of(
-          // 'dedupKey' and not 'idempotencyKey': the key deduplicates the operations still
-          // waiting for their dispatch, and the field holds the entry's own id once it was
-          // dispatched. Present on every entry, so the index needs neither sparse nor a
-          // partial filter
+          // 'dedupKey' and not 'idempotencyKey'. The key removes duplicates among the
+          // operations which still wait for their dispatch. Once an entry is dispatched,
+          // the field holds the entry's own id. Every entry has the field, so the index
+          // needs neither sparse nor a partial filter
           MongoIndex.uniqueIndexReadBy("what keeps one operation from being planned twice", "dedupKey"),
           MongoIndex.readBy("which entry is due next, and the claim which picks it up", "status", "nextAttemptAt"),
           MongoIndex.readBy("what the retention may delete, and the delete itself", "status", "doneAt"),
           MongoIndex.readBy("how long the oldest waiting entry has waited", "status", "createdAt"),
-          // only an entry which carries a payload has the field, and that is the rare one
+          // only an entry with a payload has this field, and few entries have one
           MongoIndex
               .sparseIndexReadBy(
                   "which of the expired payloads an entry still names",
@@ -62,9 +62,9 @@ public final class MongoSchema {
 
   /**
    * The indexes of the delivery-log collection
-   * (<code>vanillabp.outbox.mongo.delivery-collection</code>). MongoDB knows no key-length
-   * limit, so the aggregate id itself is an index here, unlike in the relational table
-   * whose column is too wide for one.
+   * (<code>vanillabp.outbox.mongo.delivery-collection</code>). MongoDB has no limit on the
+   * length of a key. So here the aggregate id itself has an index. In the relational table
+   * the column is too wide for one.
    */
   public static final List<MongoIndex> DELIVERY_INDEXES = List
       .of(
@@ -74,8 +74,8 @@ public final class MongoSchema {
           MongoIndex.readBy("the open tasks of one workflow of the BPMS", "workflowId"));
 
   /**
-   * One index a collection carries today, read back from the database by the platform
-   * integration.
+   * One index which a collection has today. The platform integration reads it back from the
+   * database.
    *
    * @param fields The fields it spans, in the order the database holds them
    * @param unique Whether it refuses a second document with those values
@@ -86,7 +86,7 @@ public final class MongoSchema {
   }
 
   /**
-   * Which of the needed indexes no existing one does the work of.
+   * The needed indexes whose job no existing index does.
    *
    * @param needed What the store reads by
    * @param indexesInPlace What the collection carries, empty where the collection does not
@@ -107,10 +107,10 @@ public final class MongoSchema {
   }
 
   /**
-   * Warns about every index a collection is missing, naming the statement which creates
-   * it. Called by an application which manages its schema itself
-   * (<code>vanillabp.outbox.create-schema: false</code>), because nothing else tells such
-   * an application what MongoDB expects of it.
+   * Warns about every index which a collection is missing, and names the statement which
+   * creates it. It is called where the application manages its schema itself
+   * (<code>vanillabp.outbox.create-schema: false</code>). Nothing else tells such an
+   * application what MongoDB needs.
    *
    * @param collection The collection as the application named it
    * @param needed What the store reads by
@@ -146,9 +146,9 @@ public final class MongoSchema {
   }
 
   /**
-   * The sentence about the unique index, appended where that one is among the missing. It
-   * is the one index which is not about speed, so a message listing it next to the others
-   * without a word would understate it.
+   * The sentence about the unique index, added where that index is missing. It is the only
+   * index which is not about speed. A message which listed it next to the others without a
+   * word would make it look harmless.
    *
    * @param missing The indexes the collection is missing
    * @return The sentence, or an empty string

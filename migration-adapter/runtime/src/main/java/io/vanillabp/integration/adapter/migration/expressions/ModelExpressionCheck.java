@@ -13,31 +13,32 @@ import io.vanillabp.integration.spi.startup.StartupTopic;
  * The startup hint about an expression in a BPMN model which is more than the name of a
  * variable.
  * <p>
- * Such an expression binds the model to two things at once: to the shape of the objects it
- * walks, and to the expression language of the BPMS it is deployed to. An attribute renamed
- * in the application then breaks a model nobody touched, and a move to another BPMS breaks
- * the expression. What VanillaBP recommends instead is a getter on the workflow aggregate
- * which answers the question the model asks, so the model reads one name and survives both
- * changes. The wiki has taught that technique for years; this check is what makes it
- * noticeable when a model does it differently.
+ * Such an expression ties the model to two things at once. It is tied to the shape of the
+ * objects it walks, and to the expression language of the BPMS it is deployed to. Then a
+ * renamed attribute in the application breaks a model which nobody touched. And a move to
+ * another BPMS breaks the expression. VanillaBP recommends a getter on the workflow
+ * aggregate instead, which answers the question the model asks. Then the model reads one
+ * name and survives both changes. The wiki has taught this for years. This check makes it
+ * visible when a model does it differently.
  * <p>
- * Reading the model is the adapter's job, since only it knows its BPMN dialect and its
- * expression language, and judging what an expression costs is the core's, since the answer
- * must not depend on the BPMS: the adapter reports the expressions it found
- * ({@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#reportModelExpressions},
- * once per BPMN process), and the rule which sorts them is {@link ExpressionForm}.
+ * Reading the model is the adapter's job, because only the adapter knows its BPMN dialect
+ * and its expression language. Judging what an expression costs is the core's job, because
+ * the answer must not depend on the BPMS. The adapter reports the expressions it found, once
+ * per BPMN process
+ * ({@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#reportModelExpressions}).
+ * {@link ExpressionForm} is the rule which sorts them.
  * <p>
- * The findings are a WARN and a NOTICE, never a refusal: an existing model would stop
- * deploying over a style we recommend, and a check which reads expressions can misread one.
- * The two levels are the two halves of the binding. An expression reaching into the
- * application's data is the warning, because a rename in Java breaks the model silently.
- * An expression which only computes is the notice, because all it binds is the language.
- * A process whose expressions are meant as they are says so once, with the property the
- * message hands out.
+ * The findings are a WARN and a NOTICE, never a refusal. A refusal would stop an existing
+ * model from deploying because of a style we recommend. And a check which reads expressions
+ * can misread one. The two levels match the two ties. An expression which reaches into the
+ * application's data gets the warning, because a rename in Java breaks the model without a
+ * word. An expression which only computes gets the notice, because it only ties the model to
+ * the language. If the expressions of a process are meant as they are, the application says
+ * so once, with the property which the message names.
  * <p>
- * Why the rule lives here while the detection lives in every adapter, and why an expression
- * naming a single variable is reported nowhere, is decision 103 in the repository's
- * DECISIONS.md.
+ * Decision 103 in the repository's DECISIONS.md says why the rule lives here while every
+ * adapter does the detection, and why an expression which names a single variable is
+ * reported nowhere.
  */
 public class ModelExpressionCheck {
 
@@ -56,8 +57,8 @@ public class ModelExpressionCheck {
    *
    * @param findings Where the hints are reported
    * @param properties The VanillaBP configuration, which may accept the expressions of a
-   *          process. A registry built without a configuration, in a test, passes
-   *          <code>null</code>, and nothing is accepted then
+   *          process. A test may build the registry without a configuration. It passes
+   *          <code>null</code>, and then nothing is accepted
    */
   public ModelExpressionCheck(
       final StartupFindings findings,
@@ -69,13 +70,13 @@ public class ModelExpressionCheck {
   }
 
   /**
-   * Sorts the expressions an adapter read out of one BPMN process and says what the ones
-   * which are more than a name cost.
+   * Sorts the expressions which an adapter read from one BPMN process. For those which are
+   * more than a name, it says what they cost.
    * <p>
-   * Called once per BPMN process, with every expression the model carries - the harmless
-   * ones included, because the message counts them: a developer reading that five of seven
-   * expressions already name a variable learns how far their model is, and a process doing
-   * everything right stays silent.
+   * It is called once per BPMN process, with every expression of the model. The harmless ones
+   * are included, because the message counts them. A developer who reads that five of seven
+   * expressions already name a variable learns how far the model has come. A process which
+   * does everything right stays silent.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -132,9 +133,8 @@ public class ModelExpressionCheck {
   }
 
   /**
-   * The warning about the expressions which walk a path or call something: those are the
-   * ones a rename in the application breaks, and the modeller who wrote them never sees
-   * that rename.
+   * The warning about the expressions which walk a path or call something. A rename in the
+   * application breaks them, and the modeller who wrote them never sees that rename.
    *
    * @param scope What the finding is about, for the box
    * @param expressions The expressions as the message lists them, empty where there are
@@ -176,8 +176,8 @@ public class ModelExpressionCheck {
   }
 
   /**
-   * The notice about the expressions which compute: they leave the data model alone, so
-   * they are the smaller half of the finding, and they are said at the smaller level.
+   * The notice about the expressions which compute. They leave the data model alone. So they
+   * are the smaller half of the finding, and they get the lower level.
    *
    * @param scope What the finding is about, for the box
    * @param expressions The expressions as the message lists them, empty where there are
@@ -213,8 +213,8 @@ public class ModelExpressionCheck {
   }
 
   /**
-   * The expressions as a message lists them - one per line, with the element they sit in
-   * and the place inside it, in the order the adapter reported them.
+   * The expressions as a message lists them. There is one per line, with its element and the
+   * place inside that element. The order is the one the adapter reported.
    *
    * @param expressions The readable expressions of the process
    * @param half Which half of the finding to list, asked of the form of each expression

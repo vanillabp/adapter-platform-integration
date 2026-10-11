@@ -8,19 +8,19 @@ import java.util.Locale;
  * The few places where the stores of VanillaBP cannot write one statement for every
  * database.
  * <p>
- * Most of what they do is plain SQL, and the DDL each store writes already picks its
- * types per database product. What needs the same treatment is an upper bound on the
- * rows a statement works on: there is no portable way to write it. PostgreSQL, MySQL
- * and H2 take a <code>LIMIT</code>, SQL Server a <code>TOP</code> and Oracle a
- * condition over <code>ROWNUM</code>, and a <code>DELETE</code> takes none of the three
- * at all, so a bounded delete is a delete over the keys a bounded select returned.
+ * Most of what the stores do is plain SQL. The DDL of each store already picks its types
+ * per database product. An upper limit on the rows a statement works on needs the same
+ * care, because there is no portable way to write it. PostgreSQL, MySQL and H2 take a
+ * <code>LIMIT</code>, SQL Server takes a <code>TOP</code>, and Oracle takes a condition on
+ * <code>ROWNUM</code>. A <code>DELETE</code> takes none of the three. So a limited delete
+ * deletes the keys which a limited select returned.
  * <p>
- * The same holds for putting the value of a column into the middle of a pattern: three
- * databases spell that in three ways, and a store looking for an identifier inside a
- * column of text needs it.
+ * The same is true for putting the value of a column into the middle of a pattern. Three
+ * databases write that in three ways. A store needs it to find an identifier inside a
+ * column of text.
  * <p>
- * The dialect is read from the connection, once per statement a store builds, the way
- * the DDL reads it.
+ * The dialect is read from the connection once for each statement a store builds. The DDL
+ * reads it the same way.
  */
 public enum JdbcDialect {
 
@@ -76,9 +76,9 @@ public enum JdbcDialect {
   }
 
   /**
-   * Bounds a select at a number of rows. WHICH rows those are is not said, and the
-   * callers of this method do not care: they delete a batch and come back for the next
-   * one, so any rows will do as long as there are not too many of them at once.
+   * Limits a select to a number of rows. It does not say WHICH rows, and the callers do not
+   * care. They delete a batch and come back for the next one. So any rows will do, as long
+   * as there are not too many at once.
    *
    * @param columns What the select reads, without the <code>SELECT</code> keyword
    * @param fromAndJoins The tables it reads from, from the <code>FROM</code> keyword
@@ -105,13 +105,13 @@ public enum JdbcDialect {
   }
 
   /**
-   * Deletes the rows a bounded select picked, which is how the three spellings above
-   * reach a statement none of them may stand in.
+   * Deletes the rows which a limited select picked. None of the three ways to limit rows is
+   * allowed in a delete, so the delete uses the select.
    * <p>
-   * The select is wrapped in a table of its own even though nothing reads two columns
-   * from it: MySQL refuses a subquery reading the table the delete works on, and a
-   * derived table is what it accepts instead. The alias carries no <code>AS</code>,
-   * which Oracle does not allow for a table.
+   * The select is wrapped in a table of its own, although nothing reads two columns from it.
+   * MySQL refuses a subquery which reads the table the delete works on, but it accepts a
+   * derived table. The alias has no <code>AS</code>, because Oracle does not allow it for a
+   * table.
    *
    * @param table The table to delete from
    * @param keyColumn The column the picked rows are addressed by
@@ -130,11 +130,10 @@ public enum JdbcDialect {
   }
 
   /**
-   * The pattern which matches a text carrying the value of a column anywhere inside it.
+   * The pattern which matches a text that contains the value of a column anywhere.
    * <p>
-   * Built as an expression rather than as a parameter of the statement, because the
-   * value is a column of the row being looked at and a prepared statement cannot carry
-   * one of those.
+   * It is an expression and not a parameter of the statement. The value is a column of the
+   * row being read, and a prepared statement cannot take a column as a parameter.
    *
    * @param column The column holding the value to look for, qualified by its table
    *          alias
