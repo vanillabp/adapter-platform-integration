@@ -12,13 +12,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * Where the payloads of an outbox go when nobody said so: into a store named after that
- * outbox. Two applications which share a schema and keep themselves apart by renaming the
- * outbox would otherwise still share the payloads, and the first sign of it would be one
- * of them deleting rows of the other.
+ * outbox. Two applications may share a schema and keep apart by renaming the outbox. They
+ * would otherwise still share the payloads. The first sign of it would be one of them
+ * deleting rows of the other.
  * <p>
- * The rule is resolved in one place per store, so this test reads those two places: the
- * JDBC one both platforms run, and the MongoDB one both platforms read their collection
- * name from.
+ * Each store resolves the rule in one place. So this test reads those two places: the JDBC
+ * one which both platforms run, and the MongoDB one from which both platforms read their
+ * collection name.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PayloadStoreIsNamedAfterItsOutboxTest {

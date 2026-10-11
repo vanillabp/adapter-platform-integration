@@ -32,14 +32,14 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The table every JDBC-backed outbox of VanillaBP puts its payloads in: what is written
- * comes back byte for byte, what was dispatched is removed, and what a crash left behind
- * is removed by the age sweep.
+ * The table in which every JDBC outbox of VanillaBP puts its payloads. What is written
+ * comes back byte for byte. What was dispatched is removed. What a crash left behind is
+ * removed by the age sweep.
  * <p>
- * The sweep is one statement which asks the entries itself, so every test about it needs
- * a table of entries beside the payloads. It is built here with the columns the outbox
- * store writes, and the entries are written by hand: what is under test is the question
- * the sweep asks, not the way an entry gets into the table.
+ * The sweep is one statement which asks the entries itself. So every test about it needs a
+ * table of entries beside the payloads. The test builds it with the columns the outbox store
+ * writes, and writes the entries by hand. What is under test is the question the sweep asks,
+ * not the way an entry gets into the table.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class JdbcPhaseTwoPayloadStoreTest {
@@ -54,9 +54,9 @@ public class JdbcPhaseTwoPayloadStoreTest {
   private static final String OUTBOX_TABLE_NAME = JdbcPhaseTwoOutboxStore.DEFAULT_TABLE_NAME;
 
   /**
-   * The outbox table, reduced to what the sweep looks at. The real one carries a dozen
-   * more columns, and none of them takes part in the question which payloads are still
-   * named - that question reads the column an entry names its payload in.
+   * The outbox table, cut down to what the sweep looks at. The real one has a dozen more
+   * columns. None of them takes part in the question which payloads are still named. That
+   * question reads the column in which an entry names its payload.
    */
   private static final String CREATE_ENTRIES = """
       CREATE TABLE IF NOT EXISTS %s (\
@@ -98,7 +98,7 @@ public class JdbcPhaseTwoPayloadStoreTest {
   }
 
   /**
-   * Writes an outbox entry naming a payload, the way the outbox store writes it: the
+   * Writes an outbox entry which names a payload, the way the outbox store writes it. The
    * reference stands among the serialized arguments and in a column of its own.
    *
    * @param database The database this test works on
@@ -281,9 +281,9 @@ public class JdbcPhaseTwoPayloadStoreTest {
     final var orphan = callWith("written by a process which then died");
     store.write(orphan);
 
-    // the entries lie in a table of their own, and the sweep reads it inside its own
-    // statement rather than on a second connection. A store borrowing one per step would
-    // wait for a connection it is holding itself, which on a pool of one never comes back
+    // the entries lie in a table of their own. The sweep reads it inside its own statement,
+    // not on a second connection. A store which borrowed one per step would wait for a
+    // connection it holds itself. On a pool of one, that connection never comes back
     final var removed = store.removeOrphansOlderThan(Instant.now().plus(Duration.ofSeconds(1)), 100);
 
     assertEquals(1, removed, "the sweep did not get through on one connection");
@@ -292,10 +292,9 @@ public class JdbcPhaseTwoPayloadStoreTest {
   }
 
   /**
-   * The same database, handing out one connection at a time and refusing a second one
-   * rather than making its caller wait. A pool makes the second caller wait, and a test
-   * doing that would hang instead of failing; refusing turns the same mistake into a
-   * message.
+   * The same database. It hands out one connection at a time and refuses a second one,
+   * instead of making its caller wait. A pool makes the second caller wait, and such a test
+   * would hang instead of failing. Refusing turns the same mistake into a message.
    *
    * @param name The database this test works on
    * @return Connections to it, one at a time
@@ -386,8 +385,8 @@ public class JdbcPhaseTwoPayloadStoreTest {
   }
 
   /**
-   * A payload written at a moment of the test's choosing, which is how a test about the
-   * age sweep gets a row older than the retention without waiting for it.
+   * A payload written at a moment the test chooses. So a test about the age sweep gets a row
+   * older than the retention without waiting for it.
    *
    * @param database The database this test works on
    * @param reference The payload to age

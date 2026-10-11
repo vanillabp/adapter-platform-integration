@@ -37,16 +37,17 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 /**
  * An entry whose BPMS does not report its workflow yet waits for time, not for attempts.
  * <p>
- * Measured against a Camunda 8 cluster whose exporter was paused: the adapter answered every
- * dispatch with a window of ten seconds, each answer counted an attempt, and after fifty of
- * them the entry was blocked. That was eight minutes, and the entries did not come back by
- * themselves once the exporter caught up. A database which was away for the same eight
- * minutes blocked nothing, because the growing backoff spreads fifty attempts over four
+ * This was measured against a Camunda 8 cluster whose exporter was paused. The adapter
+ * answered every dispatch with a window of ten seconds. Each answer counted as an attempt,
+ * and after fifty of them the entry was blocked. That took eight minutes. The entries did
+ * not come back by themselves once the exporter caught up. A database which was away for the
+ * same eight minutes blocked nothing. The growing backoff spreads fifty attempts over four
  * hours.
  * <p>
- * The tests below hold the two halves on the relational store: the answers use no attempts
- * however many there are, and the entry is blocked once
- * <code>vanillabp.outbox.wait-for-visibility-at-most</code> passed since it was written.
+ * The tests below hold the two halves on the relational store. The answers use no attempts,
+ * however many there are. And the entry is blocked once
+ * <code>vanillabp.outbox.wait-for-visibility-at-most</code> has passed since it was
+ * written.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -55,15 +56,15 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 public class WaitingForAReadModelUsesNoAttemptsTest {
 
   /**
-   * The window the adapter names here. Short, so many answers fit into a test, and the same
-   * on every answer, the way an adapter names it.
+   * The window the adapter names here. It is short, so many answers fit into a test. It is
+   * the same on every answer, as an adapter names it.
    */
   private static final Duration WINDOW = Duration.ofMillis(100);
 
   /**
-   * How many times the adapter says "not yet" in the first test. More than the attempts the
-   * store allows, so a store which counted them would block the entry before the workflow
-   * shows up.
+   * How many times the adapter says "not yet" in the first test. This is more than the
+   * attempts the store allows. A store which counted them would block the entry before the
+   * workflow shows up.
    */
   private static final int ANSWERS_BEFORE_THE_WORKFLOW_SHOWS_UP = 6;
 
@@ -74,8 +75,8 @@ public class WaitingForAReadModelUsesNoAttemptsTest {
   private static final int BLOCK_AFTER_ATTEMPTS = 2;
 
   /**
-   * How long a test waits for something it expects to happen. It is a guard against a machine
-   * which leaves the JVM without a turn, not a measurement of speed.
+   * How long a test waits for something it expects to happen. It guards against a machine
+   * which leaves the JVM without a turn. It does not measure speed.
    */
   private static final Duration UNTIL_IT_HAPPENED = Duration.ofSeconds(30);
 
@@ -97,7 +98,7 @@ public class WaitingForAReadModelUsesNoAttemptsTest {
   private MigrationProcessService<Object> processService;
 
   /**
-   * How often the adapter was asked, which is what says how often the entry came back.
+   * How often the adapter was asked. That says how often the entry came back.
    */
   private final AtomicInteger callsIntoTheAdapter = new AtomicInteger();
 
@@ -267,8 +268,8 @@ public class WaitingForAReadModelUsesNoAttemptsTest {
             Integer.MAX_VALUE),
         table);
     dispatcher.prepareSchema();
-    // written two hours ago and never dispatched, which is what an exporter which stopped
-    // for two hours leaves behind
+    // written two hours ago and never dispatched. An exporter which stopped for two hours
+    // leaves this behind
     final var entry = anEntryWrittenAt(connections, table, Instant.now().minus(Duration.ofHours(2)));
 
     try {
@@ -276,7 +277,7 @@ public class WaitingForAReadModelUsesNoAttemptsTest {
       waitUntil(
           "the entry which waited too long was not blocked",
           () -> JdbcPhaseTwoOutboxDispatcher.STATUS_BLOCKED.equals(entryOf(connections, table, entry).status()));
-      // long enough for several more windows: a blocked entry is read by no poll
+      // long enough for several more windows. No poll reads a blocked entry
       Thread.sleep(5 * WINDOW.toMillis());
     } finally {
       dispatcher.stop();

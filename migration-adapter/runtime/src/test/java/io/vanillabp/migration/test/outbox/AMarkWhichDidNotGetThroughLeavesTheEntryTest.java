@@ -49,16 +49,15 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
  * What happens when an attempt ended and the database could not be asked to write down how.
  * <p>
  * Such a write is not the same as a write which matched no row. A row which does not match
- * says that the entry changed hands, and the node holding it now writes what became of the
- * operation. A database which cannot be asked says nothing at all: the entry keeps its
- * status, its due time and its lease, this node still holds it, and the next poll reads it
- * again once that lease runs out. So the entry has to keep its payload, and it must not be
- * counted or reported as blocked either - an operator would go and repair a row which says
- * OPEN.
+ * says that the entry changed hands. The node which holds it now writes what became of the
+ * operation. A database which cannot be asked says nothing at all. The entry keeps its
+ * status, its due time and its lease. This node still holds it. The next poll reads it again
+ * once that lease runs out. So the entry has to keep its payload. It must also not be
+ * counted or reported as blocked, or an operator would go and repair a row which says OPEN.
  * <p>
- * The failing write is a real one and needs no double: the mark writes the entry's own id
- * into <code>DEDUP_KEY</code>, which the table holds unique, so a second row already
- * carrying that id there is enough to make every mark of this entry fail.
+ * The failing write is a real one and needs no double. The mark writes the id of the entry
+ * into <code>DEDUP_KEY</code>, and the table holds that column unique. A second row which
+ * already carries that id there makes every mark of this entry fail.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -67,15 +66,15 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
 
   /**
-   * How long a claim lasts here. Long enough that exactly one attempt happens while this
-   * test looks: the entry stays claimed after the write which failed, and the poll which
+   * How long a claim lasts here. It is long enough that exactly one attempt happens while
+   * this test looks. The entry stays claimed after the write which failed. The poll which
    * reads it again would dispatch the operation a second time.
    */
   private static final Duration LEASE = Duration.ofSeconds(30);
 
   /**
-   * How long a test waits for something it expects to happen. It is a guard against a
-   * machine which leaves the JVM without a turn, not a measurement of speed.
+   * How long a test waits for something it expects to happen. It guards against a machine
+   * which leaves the JVM without a turn. It does not measure speed.
    */
   private static final Duration UNTIL_IT_HAPPENED = Duration.ofSeconds(30);
 
@@ -102,8 +101,8 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
   private final AtomicInteger entriesCountedAsBlocked = new AtomicInteger();
 
   /**
-   * What the dispatcher wrote into the log, which is where an operator reads what became of
-   * an attempt.
+   * What the dispatcher wrote into the log. An operator reads there what became of an
+   * attempt.
    */
   private final ListAppender<ILoggingEvent> whatWasLogged = new ListAppender<>();
 
@@ -138,8 +137,8 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
   }
 
   /**
-   * A database per test, because every test of this class writes into the outbox table and
-   * reads what is in it afterwards.
+   * A database per test. Every test of this class writes into the outbox table and reads
+   * what is in it afterwards.
    */
   private static JdbcConnectionAccess databaseNamed(
       final String name) {
@@ -149,7 +148,7 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
   }
 
   /**
-   * What this test reads of the meters: the entries the dispatcher gave up on.
+   * What this test reads of the meters, which is the entries the dispatcher gave up on.
    */
   private final VanillaBpMetrics metrics = new VanillaBpMetrics() {
 
@@ -166,7 +165,7 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
   };
 
   /**
-   * The node dispatching the entry: its attempt ends the way the test asked for.
+   * The node which dispatches the entry. Its attempt ends the way the test asked for.
    *
    * @param endsWith What the dispatch throws, or <code>null</code> where it succeeds
    * @return The router of that node
@@ -194,9 +193,9 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
   }
 
   /**
-   * The payload store of a test, counting what the dispatcher asked it to remove. A removal
-   * is what a mark which got through leads to, so counting them is how this test reads
-   * whether the dispatcher believed its failed mark.
+   * The payload store of a test. It counts what the dispatcher asked it to remove. Only a
+   * mark which got through leads to a removal. So the count tells whether the dispatcher
+   * believed its failed mark.
    */
   private static class PayloadStoreCountingRemovals extends JdbcPhaseTwoPayloadStore {
 
@@ -245,13 +244,13 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
   }
 
   /**
-   * Writes the entry to be dispatched and, beside it, a dispatched entry which already
-   * carries that entry's id as its <code>DEDUP_KEY</code>. Marking the first one therefore
-   * cannot be written, whichever mark it is.
+   * Writes the entry to be dispatched. Beside it, it writes a dispatched entry which already
+   * carries the id of the first entry as its <code>DEDUP_KEY</code>. So no mark of the first
+   * entry can be written, whichever mark it is.
    *
    * @param connections The database of this test
    * @param table The outbox table of this test
-   * @param call The call the entry stands for - its arguments name its payload
+   * @param call The call the entry stands for. Its arguments name its payload
    * @return The id of the entry to be dispatched
    */
   private String anEntryWhoseMarkCannotBeWritten(
@@ -352,9 +351,9 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
     final var entry = anEntryWhoseMarkCannotBeWritten(connections, table, call);
 
     try {
-      // the two ends the attempt can have: it says that nothing was written, or it removes
-      // the payload of an entry it believes to be dispatched. Waiting for either of them is
-      // what makes this test say which one happened instead of running into its deadline
+      // the attempt can end in two ways. It says that nothing was written, or it removes
+      // the payload of an entry it believes to be dispatched. The test waits for either of
+      // them. So it says which one happened, instead of running into its deadline
       dispatcher.start();
       waitUntil(
           "the attempt whose mark could not be written never ended",
@@ -389,7 +388,7 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
     final var payloadStore = new JdbcPhaseTwoPayloadStore(
         connections, table + JdbcPhaseTwoPayloadStore.TABLE_NAME_SUFFIX, JdbcPhaseTwoOutboxStore
             .entriesNamingTheirPayload(table));
-    // the failure which blocks an entry with one attempt, so the blocking write is the
+    // the failure which blocks an entry with one attempt. So the blocking write is the
     // first thing the dispatcher tries after the attempt
     final var permanent = new PhaseTwoPermanentFailure("the adapter says repeating cannot help", null);
     final var dispatcher = dispatcherOf(connections, payloadStore, aRouterWhoseDispatch(permanent), table);
@@ -400,7 +399,7 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
 
     try {
       // either the attempt says that nothing was written, or it counts a blocked entry the
-      // table knows nothing about - the test waits for whichever comes and names it
+      // table knows nothing about. The test waits for whichever comes and names it
       dispatcher.start();
       waitUntil(
           "the attempt whose blocking could not be written never ended",

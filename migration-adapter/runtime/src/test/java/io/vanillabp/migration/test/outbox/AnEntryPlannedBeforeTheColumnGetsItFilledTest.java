@@ -29,14 +29,14 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An entry which was planned before the outbox table had a column for the payload
- * reference names its payload among its arguments and nowhere the housekeeping looks. Its
- * payload would be removed as an orphan, and the dispatch which is still to come would
- * find no bytes.
+ * Some entries were planned before the outbox table had a column for the payload
+ * reference. Such an entry names its payload among its arguments, and nowhere the
+ * housekeeping looks. Its payload would be removed as an orphan. The dispatch which is still
+ * to come would then find no bytes.
  * <p>
- * So the startup fills the column, and it fills it only for the entries which still wait:
- * a dispatched entry gave its payload back at the dispatch, so nothing asks about it any
- * more - and the dispatched entries are the part of the table which grows.
+ * So the startup fills the column, but only for the entries which still wait. A dispatched
+ * entry gave its payload back at the dispatch, so nothing asks about it any more. And the
+ * dispatched entries are the part of the table which grows.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AnEntryPlannedBeforeTheColumnGetsItFilledTest {
@@ -51,9 +51,9 @@ public class AnEntryPlannedBeforeTheColumnGetsItFilledTest {
       .build();
 
   /**
-   * An entry as an earlier version of VanillaBP wrote it: the reference stands among the
-   * arguments and the column is empty, which is what a table carried before the column
-   * was filled.
+   * An entry as an earlier version of VanillaBP wrote it. The reference stands among the
+   * arguments and the column is empty. A table looked like this before the column was
+   * filled.
    */
   private static final String AN_ENTRY_OF_AN_EARLIER_VERSION = """
       INSERT INTO %s \

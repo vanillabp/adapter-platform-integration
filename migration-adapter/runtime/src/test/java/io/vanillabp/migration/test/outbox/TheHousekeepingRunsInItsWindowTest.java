@@ -37,12 +37,12 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The outbox removes what it does not need any more inside a window and at no other
- * time. That is the whole point of the window: an application used to pay for the
- * housekeeping at the end of every poll, and now it pays for it once a night.
+ * The outbox removes what it does not need any more inside a window, and at no other time.
+ * That is the whole point of the window. An application used to pay for the housekeeping at
+ * the end of every poll. Now it pays for it once a night.
  * <p>
- * The tests work with a window of their own rather than with the default hour of the
- * night, because a test which waited for four in the morning would run once a day.
+ * The tests use a window of their own, not the default hour of the night. A test which
+ * waited for four in the morning would run once a day.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheHousekeepingRunsInItsWindowTest {
@@ -57,17 +57,15 @@ public class TheHousekeepingRunsInItsWindowTest {
       .build();
 
   /**
-   * How long a test waits for a window which is open to do its work. It is a generous
-   * bound rather than a promise about the speed: a run which needs it all is a run on a
-   * loaded machine, and what the test would report either way is that the housekeeping
-   * never ran.
+   * How long a test waits for an open window to do its work. It is a generous bound, not a
+   * promise about speed. A run which needs all of it runs on a loaded machine. Either way, the
+   * test would report that the housekeeping never ran.
    */
   private static final Duration UNTIL_THE_WINDOW_RAN = Duration.ofSeconds(20);
 
   /**
-   * How long a test watches a window which is SHUT before it believes that nothing
-   * happens. It is short, because what it proves is the absence of work and every second
-   * of it is a second of the build.
+   * How long a test watches a SHUT window before it believes that nothing happens. It is
+   * short. It proves that no work happens, and every second of it is a second of the build.
    */
   private static final Duration WATCHING_A_SHUT_WINDOW = Duration.ofSeconds(2);
 
@@ -96,7 +94,7 @@ public class TheHousekeepingRunsInItsWindowTest {
       properties.getHousekeeping().setStart(LocalTime.MIN);
       properties.getHousekeeping().setEnd(LocalTime.MAX);
     } else {
-      // an hour which is over, and which stays over for the length of this test
+      // an hour which is over, and stays over for the length of this test
       properties.getHousekeeping().setStart(now.minusHours(3));
       properties.getHousekeeping().setEnd(now.minusHours(2));
     }
@@ -116,8 +114,8 @@ public class TheHousekeepingRunsInItsWindowTest {
 
   /**
    * Writes a dispatched entry whose retention ran out long ago, the way the store writes
-   * one. It is written by hand because what is under test is the removal, not the
-   * dispatch which leads to it.
+   * one. The test writes it by hand, because the removal is under test, not the dispatch
+   * which leads to it.
    *
    * @param connections The database of this test
    * @param call The call the entry belongs to
@@ -159,8 +157,8 @@ public class TheHousekeepingRunsInItsWindowTest {
   }
 
   /**
-   * Writes a payload with a moment of the test's choosing, which is how an orphan older
-   * than the retention comes about without waiting for it.
+   * Writes a payload with a moment the test chooses. So an orphan older than the retention
+   * comes about without waiting for it.
    *
    * @param store The payload store
    * @param connections The database of this test
@@ -205,7 +203,7 @@ public class TheHousekeepingRunsInItsWindowTest {
   }
 
   /**
-   * What the housekeeping published about its last window, kept by a metrics double.
+   * What the housekeeping published about its last window. A metrics double keeps it.
    */
   private static final class WhatTheWindowSaid implements VanillaBpMetrics {
 
@@ -311,7 +309,7 @@ public class TheHousekeepingRunsInItsWindowTest {
             true), OUTBOX_TABLE, payloadStore, () -> null, () -> VanillaBpMetrics.NONE, "JdbcPhaseTwoOutbox");
     firstNode.prepareSchema();
 
-    // the claim is what a node takes before it works, and the second node is answered no
+    // a node takes the claim before it works, and the second node gets a no
     assertTrue(firstNode.claimHousekeepingUntil("first-node", Instant.now().plus(Duration.ofHours(1))));
     assertFalse(secondNode.claimHousekeepingUntil("second-node", Instant.now().plus(Duration.ofHours(1))));
 

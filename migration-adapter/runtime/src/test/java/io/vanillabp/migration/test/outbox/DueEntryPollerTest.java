@@ -18,28 +18,27 @@ import io.vanillabp.integration.adapter.migration.outbox.DueEntryPoller;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The schedule every outbox store shares: it asks when the store owes something and sleeps
- * until then, which is what lets an application with nothing to do leave its database
- * alone.
+ * The schedule which every outbox store shares. It asks when the store owes something and
+ * sleeps until then. So an application with nothing to do leaves its database alone.
  * <p>
- * The four stores differ in how they read that moment and not in what happens to it, so the
- * rules are pinned here, in milliseconds, instead of four times over a database. What each
- * store does cost a quiet application is counted in statements by the integration test of
- * that store.
+ * The four stores differ in how they read that moment, not in what happens with it. So the
+ * rules are pinned here once, in milliseconds, instead of four times over a database. The
+ * integration test of each store counts in statements what that store costs a quiet
+ * application.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DueEntryPollerTest {
 
   /**
    * How long a wait for polls goes on before the test gives up. It guards against a poller
-   * which stopped and it measures nothing: every timing this class claims is read from the
-   * moments the polls happened, so a slow machine makes a test slower rather than red.
+   * which stopped, and it measures nothing. Every timing this class claims is read from the
+   * moments of the polls. So a slow machine makes a test slower, not red.
    * <p>
-   * Five seconds did not do that job. A machine carrying five builds can leave the test JVM
-   * without a turn for five seconds. The wait then ends with one poll in hand while the
-   * poller has done nothing wrong. Measured on 2026-09-18, with the test JVM stopped for 4.6
-   * seconds at a time: the five second wait was red in seven of ten runs of this class, this
-   * wait in none of them.
+   * Five seconds were not enough. A machine with five builds can leave the test JVM without
+   * a turn for five seconds. The wait then ends with one poll in hand, while the poller has
+   * done nothing wrong. Measured on 2026-09-18, with the test JVM stopped for 4.6 seconds at
+   * a time: the wait of five seconds was red in seven of ten runs of this class. This wait
+   * was red in none of them.
    */
   private static final long UNTIL_A_POLLER_COUNTS_AS_STOPPED = 30000;
 
@@ -85,8 +84,8 @@ public class DueEntryPollerTest {
   }
 
   /**
-   * How far each poll was from the first one, so a red run says what the poller did rather
-   * than only how many times it did it.
+   * How far each poll was from the first one. So a red run says what the poller did, not
+   * only how many times it did it.
    *
    * @return The moments, relative to the first poll
    */
@@ -107,8 +106,8 @@ public class DueEntryPollerTest {
   @DisplayName("A store which owes nothing is asked again after the cap and not before")
   public void aStoreWhichOwesNothingIsLeftAloneUntilTheCap() throws Exception {
 
-    // nothing is owed, so the only thing which brings the poller back is the cap - which
-    // is there for work a node wrote down before it went away
+    // nothing is owed, so only the cap brings the poller back. The cap is there for work
+    // which a node wrote down before it went away
     earliestDueAt.set(null);
     aPollerSleepingAtMost(Duration.ofSeconds(30)).start();
 
@@ -167,7 +166,7 @@ public class DueEntryPollerTest {
   @DisplayName("A store answering 'due now' forever is not asked as fast as the thread can ask")
   public void aStoreAnsweringDueNowForeverIsNotSpunOn() throws Exception {
 
-    // two nodes racing for the same entry can answer this for a moment, and a poller
+    // two nodes which race for the same entry can answer this for a moment. A poller
     // without a floor would turn that moment into a busy loop
     earliestDueAt.set(Instant.now().minus(Duration.ofHours(1)));
     aPollerSleepingAtMost(Duration.ofHours(1)).start();
@@ -191,16 +190,16 @@ public class DueEntryPollerTest {
         });
     poller.start();
 
-    // the cap is what keeps a store with a broken connection being looked at, and the
-    // poll itself is where that failure is reported
+    // the cap keeps a store with a broken connection in view. The poll itself reports that
+    // failure
     awaitPolls(3);
 
-    // the cap has to be what brings the poller back, not the failure: a store which cannot
-    // answer would otherwise be asked as fast as the thread can ask. How much later than the
-    // cap it came back is not claimed here. A wall clock cannot tell those two apart, a
-    // poller which slept too long and a test JVM which did not run at all. The distance is
-    // made of two clock readings and comes out a millisecond short of the cap, so the check
-    // allows fifty milliseconds of slack
+    // the cap has to bring the poller back, not the failure. Otherwise a store which cannot
+    // answer would be asked as fast as the thread can ask. The test does not claim how much
+    // later than the cap it came back. A wall clock cannot tell a poller which slept too long
+    // from a test JVM which did not run at all. The distance is made of two clock readings
+    // and comes out a millisecond short of the cap. So the check allows fifty milliseconds of
+    // slack
     final var afterTheFirstThrow = Duration.between(polls.get(0), polls.get(1));
     assertTrue(
         afterTheFirstThrow.compareTo(cap.minusMillis(50)) >= 0,

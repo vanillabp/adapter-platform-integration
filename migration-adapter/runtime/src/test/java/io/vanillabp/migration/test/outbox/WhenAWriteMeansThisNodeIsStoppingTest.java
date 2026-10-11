@@ -14,19 +14,19 @@ import io.vanillabp.integration.adapter.migration.outbox.AStoppingNode;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Which failures of a store are this node being stopped.
+ * Which failures of a store mean that this node is being stopped.
  * <p>
- * The two readings of an exception out of a database driver are far apart: an outbox which
- * cannot reach its database is something to look at, a pod being replaced is not. The
- * stores ask this before they decide how loud to be about a result they could not write
+ * An exception out of a database driver can mean two very different things. An outbox which
+ * cannot reach its database is something to look at. A pod which is being replaced is not.
+ * The stores ask this before they decide how loud to be about a result they could not write
  * down.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WhenAWriteMeansThisNodeIsStoppingTest {
 
   /**
-   * A test which sets the interrupt flag clears it again: the flag belongs to the thread
-   * the whole class runs on.
+   * A test which sets the interrupt flag clears it again. The flag belongs to the thread on
+   * which the whole class runs.
    */
   @AfterEach
   public void clearTheFlag() {
@@ -36,8 +36,8 @@ public class WhenAWriteMeansThisNodeIsStoppingTest {
   }
 
   /**
-   * The driver's own wrapper, which this module knows by name because it carries no
-   * MongoDB dependency.
+   * The wrapper of the driver. This module knows it by name, because it has no MongoDB
+   * dependency.
    */
   private static class MongoInterruptedException extends RuntimeException {
 
@@ -59,7 +59,7 @@ public class WhenAWriteMeansThisNodeIsStoppingTest {
     Thread.currentThread().interrupt();
 
     // a driver which turns an interruption into an exception of its own restores the flag
-    // while it does so, which is why this is the most reliable of the three answers
+    // while it does so. That is why this is the most reliable of the three answers
     assertTrue(AStoppingNode.isTheReasonFor(new RuntimeException("anything at all")));
 
   }

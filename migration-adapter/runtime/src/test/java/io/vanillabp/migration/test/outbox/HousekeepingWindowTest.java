@@ -16,9 +16,9 @@ import io.vanillabp.integration.adapter.migration.outbox.HousekeepingWindow;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The hours of the day an outbox house-keeps in. What is under test is the clock: the
- * window follows the local time of the zone it was configured for, it may cross midnight,
- * and it survives the two nights a year on which a clock moves.
+ * The hours of the day in which an outbox does its housekeeping. The clock is under test.
+ * The window follows the local time of the zone it was configured for. It may cross
+ * midnight. And it survives the two nights a year on which a clock moves.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class HousekeepingWindowTest {
@@ -118,7 +118,7 @@ public class HousekeepingWindowTest {
     final var window = atNight();
 
     // central Europe moves its clocks on the last Sunday of October, at three in the
-    // morning, which is inside neither night but shortens the distance between the two
+    // morning. That is inside neither night, but it shortens the time between the two
     final var beforeTheChange = viennaAt("2026-10-24", "04:30");
     final var afterTheChange = window.opensAfter(beforeTheChange);
 
