@@ -11,37 +11,36 @@ import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Which node house-keeps a relational outbox store tonight, one row per store.
+ * Which node cleans up a relational outbox store tonight, with one row per store.
  * <p>
- * Every JDBC-backed outbox VanillaBP ships uses it: the store of each platform and the
- * gruelbox store on Spring Boot. The row is keyed by the store's name, so a database
- * carrying two outboxes carries two rows and both may be house-kept by different nodes at
- * the same time - the numbers a housekeeping measures belong to one store.
+ * Every JDBC-based outbox which VanillaBP ships uses it: the store of each platform, and the
+ * gruelbox store on Spring Boot. The row is keyed by the store's name. So a database with
+ * two outboxes has two rows, and different nodes may clean up both at the same time. The
+ * numbers which a housekeeping measures belong to one store.
  * <p>
- * A table of its own and not a row in the outbox: a claim is neither an entry nor a
- * payload, gruelbox owns its table so a row could not go there at all, and the alternative
- * of hiding the claim in another store's table would put the housekeeping of every store
- * into the path of that store's own reads. Why the claim is not renewed while the work
- * runs is decision 91 in the repository's DECISIONS.md.
+ * It is a table of its own and not a row in the outbox. A claim is neither an entry nor a
+ * payload. Gruelbox owns its table, so a row could not go there at all. And hiding the claim
+ * in the table of another store would put the housekeeping of every store into the way of
+ * that store's own reads. Decision 91 in the repository's DECISIONS.md says why the claim is
+ * not renewed while the work runs.
  * <p>
- * The claim is an optimistic <code>UPDATE</code>: exactly one node's write matches, and
- * every other node is answered no. The row is inserted the first time a store is
- * house-kept, and two nodes doing that at the same moment are sorted out by the primary
- * key.
+ * The claim is an optimistic <code>UPDATE</code>. Exactly one node's write matches, and
+ * every other node gets no as the answer. The row is inserted the first time a store is
+ * cleaned up. If two nodes do that at the same moment, the primary key sorts it out.
  */
 @Slf4j
 public class JdbcHousekeepingLease {
 
   /**
-   * Takes a claim which has run out or which nobody holds. A claim is given back when the
-   * window closes, so the moment normally matters only after a node died inside one.
+   * Takes a claim which has run out, or which nobody holds. A claim is given back when the
+   * window closes. So the moment usually matters only after a node died inside a window.
    */
   private static final String CLAIM = """
       UPDATE %s SET LEASED_BY = ?, LEASED_UNTIL = ? \
       WHERE STORE = ? AND (LEASED_UNTIL IS NULL OR LEASED_UNTIL <= ?)""";
 
   /**
-   * Writes the row of a store which was never house-kept before. It carries the claim
+   * Writes the row of a store which was never cleaned up before. The row carries the claim
    * right away, so the node which inserts it holds the store.
    */
   private static final String CLAIM_FIRST_TIME = """
@@ -58,7 +57,7 @@ public class JdbcHousekeepingLease {
    * Builds the claim of the stores in one database.
    *
    * @param connections How this platform hands out a connection
-   * @param tableName The table the claims lie in
+   * @param tableName The table with the claims
    *          (<code>vanillabp.outbox.jdbc.housekeeping-table</code>)
    */
   public JdbcHousekeepingLease(
@@ -71,10 +70,10 @@ public class JdbcHousekeepingLease {
   }
 
   /**
-   * The table this lease was built for, asked from outside where a test reads the claim
-   * directly.
+   * The table this lease was built for. A test which reads the claim directly asks for
+   * it.
    *
-   * @return The table the claims lie in
+   * @return The table with the claims
    */
   public String getTableName() {
 
@@ -109,8 +108,8 @@ public class JdbcHousekeepingLease {
       }
       return claimFirstTime(connection, store, owner, until);
     } catch (final SQLException e) {
-      // nothing is house-kept then, which costs one night and is visible in the meters.
-      // House-keeping without a claim would cost the measurement every night after it
+      // then nothing is cleaned up. That costs one night, and the meters show it. Cleaning
+      // up without a claim would cost the measurement every night after it
       log.warn("Could not claim the housekeeping of the outbox store '{}'", store, e);
       return false;
     } finally {
@@ -120,14 +119,14 @@ public class JdbcHousekeepingLease {
   }
 
   /**
-   * Writes the row of a store nobody has house-kept yet.
+   * Writes the row of a store which nobody has cleaned up yet.
    *
    * @param connection The connection to write on
    * @param store The store to claim
    * @param owner Which node is claiming
    * @param until When the claim runs out
-   * @return Whether the row was written, <code>false</code> where somebody else wrote it
-   *         first - which is them holding the store
+   * @return Whether the row was written. It is <code>false</code> where somebody else wrote
+   *         it first. Then they hold the store
    */
   private boolean claimFirstTime(
       final Connection connection,
@@ -141,15 +140,15 @@ public class JdbcHousekeepingLease {
       statement.setTimestamp(3, Timestamp.from(until));
       return statement.executeUpdate() > 0;
     } catch (final SQLException e) {
-      // the row is there, which means the update above found it held by somebody else
+      // the row is there. So the update above found it held by somebody else
       return false;
     }
 
   }
 
   /**
-   * Gives a claim back. A node which does not hold the store writes nothing, which is
-   * what the condition over the owner is for.
+   * Gives a claim back. A node which does not hold the store writes nothing. The condition
+   * on the owner is there for that.
    *
    * @param store The store to release
    * @param owner The node which claimed
@@ -167,7 +166,7 @@ public class JdbcHousekeepingLease {
         statement.executeUpdate();
       }
     } catch (final SQLException e) {
-      // the claim runs out by itself, so the next window is free either way
+      // the claim runs out by itself, so the next window is free anyway
       log.debug("Could not release the housekeeping claim of the outbox store '{}'", store, e);
     } finally {
       release(connection);
@@ -178,8 +177,8 @@ public class JdbcHousekeepingLease {
   /**
    * Creates the table unless it exists already.
    *
-   * @throws IllegalStateException If the DDL fails - naming the way out (manage the
-   *           schema manually)
+   * @throws IllegalStateException If the DDL fails. The message names the way out (manage
+   *           the schema manually)
    */
   public void createSchemaIfNotExists() {
 
@@ -209,9 +208,9 @@ public class JdbcHousekeepingLease {
   }
 
   /**
-   * Whether the DDL failed because another instance created the table between the check
-   * and the statement. Two instances starting together both see no table and both create
-   * it, and the loser's boot must not end over it.
+   * Whether the DDL failed because another instance created the table between the check and
+   * the statement. Two instances which start together both see no table, and both create it.
+   * The boot of the loser must not end because of that.
    *
    * @return Whether the table is there now
    */
@@ -234,8 +233,8 @@ public class JdbcHousekeepingLease {
   }
 
   /**
-   * Verifies that the table exists, for an application which creates its schema itself. A
-   * missing table would otherwise surface in the first housekeeping window, in the middle
+   * Checks that the table exists, for an application which creates its schema itself.
+   * Otherwise a missing table would show up in the first housekeeping window, in the middle
    * of the night.
    *
    * @throws IllegalStateException If the table is missing
@@ -283,8 +282,8 @@ public class JdbcHousekeepingLease {
   }
 
   /**
-   * Builds the CREATE TABLE statement with the timestamp type the database at hand
-   * spells: SQL Server's <code>TIMESTAMP</code> is a row version and MySQL's ends in
+   * Builds the CREATE TABLE statement with the timestamp type of the database at hand. The
+   * <code>TIMESTAMP</code> of SQL Server is a row version, and the one of MySQL ends in
    * 2038.
    *
    * @param connection The connection used to detect the database

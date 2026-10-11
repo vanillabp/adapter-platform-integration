@@ -18,67 +18,65 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * What an outbox store throws away, and when.
  * <p>
- * Two kinds of row are removed: the entries which were dispatched longer ago than
- * <code>vanillabp.outbox.retention</code>, and the payloads no entry names any more. Both
- * used to run at the end of every poll, so every application paid for them all day long
- * and nobody could say what one poll cost. They run in a window at night now
- * (<code>vanillabp.outbox.housekeeping.*</code>), and inside that window the store works
- * off as much as fits.
+ * Two kinds of row are removed. One is the entries which were dispatched longer ago than
+ * <code>vanillabp.outbox.retention</code>. The other is the payloads which no entry names
+ * any more. Both used to run at the end of every poll. So every application paid for them
+ * all day long, and nobody could say what one poll cost. Now they run in a window at night
+ * (<code>vanillabp.outbox.housekeeping.*</code>). Inside that window the store removes as
+ * much as fits.
  * <p>
- * <strong>The entries go first.</strong> They are the mass, and the table they leave is
- * the table the question about the orphaned payloads searches afterwards.
+ * <strong>The entries go first.</strong> They are the bulk. And the question about the
+ * orphaned payloads searches the table which they leave behind.
  * <p>
- * <strong>How much fits is measured, not configured.</strong> The rule lives here and not
- * in the stores, because otherwise the same awkward arithmetic would stand in four places
- * and every claim about it would depend on four copies staying equal. What it does is in
- * {@link HousekeepingBatchSize}.
+ * <strong>How much fits is measured, not configured.</strong> The rule lives here and not in
+ * the stores. Otherwise the same awkward arithmetic would be in four places, and every claim
+ * about it would depend on four copies staying equal. {@link HousekeepingBatchSize} says
+ * what it does.
  * <p>
- * <strong>One node at a time.</strong> Two nodes house-keeping at once would each measure
- * the other's work, and the batch size they arrive at would be nonsense. So a node claims
- * the store for the length of the window, in the store's own database, and the others
- * leave it alone that night. The claim lasts until the window closes rather than being
- * renewed while the work runs: unlike a dispatch, this piece of work has a known end. A
- * node which dies inside the window holds the store until that end, which costs the rest
- * of one night and is visible in the meters. The shared Hazelcast cache is deliberately
- * NOT used for this - it is optional, and an application without it would then house-keep
- * either not at all or uncoordinated, while the database is something every application
- * with an outbox has.
+ * <strong>One node at a time.</strong> Two nodes which clean up at the same time would each
+ * measure the other's work, and their batch size would be nonsense. So one node claims the
+ * store for the length of the window, in the store's own database. The other nodes leave it
+ * alone that night. The claim lasts until the window closes. It is not renewed while the
+ * work runs, because unlike a dispatch this work has a known end. A node which dies inside
+ * the window holds the store until that end. That costs the rest of one night, and the
+ * meters show it. The shared Hazelcast cache is deliberately NOT used for this. It is
+ * optional. An application without it would then clean up either not at all or without
+ * coordination. But every application with an outbox has the database.
  * <p>
  * <strong>The lease is per STORE.</strong> An application in a migration has a JPA outbox
- * and a MongoDB outbox; those are two databases, and two nodes may house-keep one each
- * without bending each other's numbers.
+ * and a MongoDB outbox. Those are two databases. Two nodes may clean up one each without
+ * spoiling each other's numbers.
  * <p>
- * <strong>What a window leaves behind is published</strong> through three meters, set when
- * the window closes and held until the next one closes - see
- * {@link VanillaBpMetrics#registerHousekeeping(String, Supplier, Supplier, Supplier)}.
+ * <strong>What a window leaves behind is published</strong> through three meters. They are
+ * set when the window closes, and held until the next one closes (see
+ * {@link VanillaBpMetrics#registerHousekeeping(String, Supplier, Supplier, Supplier)}).
  * <p>
- * A node which is down for the whole window does not house-keep that night, and nothing
- * catches it up. That is deliberate: what such a mechanism should do is a guess, and the
- * meters show the night which was missed.
+ * A node which is down for the whole window does not clean up that night, and nothing
+ * catches up later. That is on purpose. What such a mechanism should do would be a guess,
+ * and the meters show the night which was missed.
  */
 @Slf4j
 public class OutboxHousekeeping {
 
   /**
-   * What one outbox store lets its housekeeping do to it. Every store VanillaBP ships
-   * implements this on its dispatcher, which is where the table or the collection is
-   * known.
+   * What one outbox store lets its housekeeping do to it. Every store which VanillaBP ships
+   * implements this on its dispatcher, where the table or the collection is known.
    */
   public interface Store {
 
     /**
-     * The name this store is known by, in the log and as the <code>store</code> tag of
-     * the meters. The same value the store registers its other meters with.
+     * The name by which this store is known, in the log and as the <code>store</code> tag of
+     * the meters. It is the same value with which the store registers its other meters.
      *
      * @return The name
      */
     String storeName();
 
     /**
-     * Claims the right to house-keep this store until a moment, for one node.
+     * Claims the right to clean up this store until a moment, for one node.
      * <p>
-     * It is an optimistic write: the node whose write went through holds the store, and
-     * every other node is answered no and leaves it alone.
+     * It is an optimistic write. The node whose write went through holds the store. Every
+     * other node gets no as the answer, and leaves the store alone.
      *
      * @param owner Which node is claiming
      * @param until When the claim runs out by itself
@@ -89,8 +87,8 @@ public class OutboxHousekeeping {
         Instant until);
 
     /**
-     * Gives the claim back, so a node which house-kept early in a long window does not
-     * hold the store for the rest of it.
+     * Gives the claim back. So a node which cleaned up early in a long window does not hold
+     * the store for the rest of it.
      *
      * @param owner The node which claimed
      */
@@ -98,8 +96,8 @@ public class OutboxHousekeeping {
         String owner);
 
     /**
-     * Removes entries which were dispatched before a moment - the asynchronous half of
-     * the "DONE instead of delete" contract.
+     * Removes entries which were dispatched before a moment. This is the half of the "DONE
+     * instead of delete" contract which runs later.
      *
      * @param threshold Entries dispatched before this moment
      * @param maxRows The most entries to remove, a ceiling and not a target
@@ -121,14 +119,13 @@ public class OutboxHousekeeping {
         int maxRows);
 
     /**
-     * How many dispatched entries are still older than the retention - what the window
+     * How many dispatched entries are still older than the retention. That is what the window
      * did not get to.
      * <p>
-     * It is a <code>COUNT</code> and therefore a real question, which is why it is asked
-     * once per window rather than once per poll. The index it reads is the one the
-     * retention delete already uses. The orphaned payloads are not counted with it: on
-     * the stores which cannot index the reference that count is the expensive scan this
-     * story took out of the poll.
+     * It is a <code>COUNT</code> and so a real question. That is why it is asked once per
+     * window and not once per poll. It reads the index which the retention delete already
+     * uses. The orphaned payloads are not counted with it. On the stores which cannot index the
+     * reference, that count is the expensive scan which used to run in every poll.
      *
      * @param threshold Entries dispatched before this moment
      * @return How many there are, empty where the store could not say
@@ -139,15 +136,15 @@ public class OutboxHousekeeping {
   }
 
   /**
-   * How long the claim is held beyond the end of the window. It covers the batch which is
-   * still running when the window closes, so the claim does not fall to another node
-   * while this one is still writing.
+   * How long the claim is held beyond the end of the window. It covers the batch which still
+   * runs when the window closes. So the claim does not go to another node while this one is
+   * still writing.
    */
   private static final Duration BEYOND_THE_WINDOW = Duration.ofMinutes(5);
 
   /**
-   * The longest a shutdown waits for the claim to be given back. Two seconds is plenty
-   * for one write and short enough that a database which is already gone does not hold
+   * The longest a shutdown waits for the claim to be given back. Two seconds is plenty for
+   * one write. And it is short enough that a database which is already gone does not hold up
    * the shutdown for the timeout of its own client.
    */
   private static final Duration GIVING_THE_CLAIM_BACK = Duration.ofSeconds(2);
@@ -161,9 +158,9 @@ public class OutboxHousekeeping {
   private final HousekeepingWindow window;
 
   /**
-   * Which node holds a claim, as the row shows it during support. The host and the
-   * process are what an operator recognises, and the random tail is what tells two runs
-   * of the same process apart, exactly as {@link DispatchLease} builds it.
+   * Which node holds a claim, as the row shows it in a support case. An operator recognises
+   * the host and the process. The random tail tells two runs of the same process apart. It
+   * is built exactly like in {@link DispatchLease}.
    */
   private final String owner;
 
@@ -174,14 +171,14 @@ public class OutboxHousekeeping {
   private ScheduledExecutorService ticks;
 
   /**
-   * Whether the last tick found the window open, which is how the closing of a window is
-   * noticed at all.
+   * Whether the last tick found the window open. That is the only way to notice that a
+   * window closed.
    */
   private volatile boolean windowIsOpen;
 
   /**
-   * Whether this node won the claim on the window which is open, and therefore whether it
-   * does the work and publishes the numbers.
+   * Whether this node won the claim on the open window. Then it does the work and publishes
+   * the numbers.
    */
   private volatile boolean holdsTheStore;
 
@@ -199,8 +196,8 @@ public class OutboxHousekeeping {
    * Builds the housekeeping of one store.
    *
    * @param store The store to house-keep
-   * @param properties The bound <code>vanillabp.outbox</code> section, read for the
-   *          window, the zone and the retention
+   * @param properties The bound <code>vanillabp.outbox</code> section, read for the window,
+   *          the zone and the retention
    * @param metrics Where the three numbers of a closed window are published
    */
   public OutboxHousekeeping(
@@ -240,9 +237,9 @@ public class OutboxHousekeeping {
   }
 
   /**
-   * Publishes the three meters of this store and starts looking for its window. Called by
-   * the dispatcher once the application is ready, so nothing house-keeps while the models
-   * are still on their way to the BPMS.
+   * Publishes the three meters of this store and starts looking for its window. The
+   * dispatcher calls it once the application is ready. So nothing is cleaned up while the
+   * models are still on their way to the BPMS.
    */
   public void start() {
 
@@ -266,15 +263,15 @@ public class OutboxHousekeeping {
   }
 
   /**
-   * Stops looking for the window and gives a claim back where this node holds one, so a
-   * node taking over does not wait for the claim of a process which is gone.
+   * Stops looking for the window, and gives a claim back where this node holds one. So a
+   * node which takes over does not wait for the claim of a process which is gone.
    * <p>
-   * The claim is given back on the thread which took it, and this call waits
-   * {@link #GIVING_THE_CLAIM_BACK} for that and no longer. A shutdown often takes the
-   * database with it - the connection pool is closed, the container the test ran against
-   * is already stopped - and a client which then waits for a server it will not find
-   * would hold the whole shutdown for as long as its own timeout. Nothing is lost by
-   * giving up: the claim runs out by itself when the window ends.
+   * The claim is given back on the thread which took it. This call waits
+   * {@link #GIVING_THE_CLAIM_BACK} for that, and no longer. A shutdown often takes the
+   * database with it: the connection pool is closed, or the container of a test is already
+   * stopped. A client which then waits for a server it will not find would hold up the whole
+   * shutdown for as long as its own timeout. Giving up loses nothing, because the claim runs
+   * out by itself when the window ends.
    */
   public void stop() {
 
@@ -302,12 +299,12 @@ public class OutboxHousekeeping {
   }
 
   /**
-   * One look at the clock. Outside the window it does nothing but work out when to look
-   * again; inside it, it removes what fits until the window closes or nothing is left.
+   * One look at the clock. Outside the window it only works out when to look again. Inside
+   * the window it removes what fits, until the window closes or nothing is left.
    * <p>
-   * Inside the window it comes back every <code>vanillabp.outbox.poll-interval</code>
-   * rather than running once: an application writes entries while the window is open, and
-   * a store which was empty at four o'clock may have work at half past.
+   * Inside the window it comes back every <code>vanillabp.outbox.poll-interval</code>, and
+   * does not run only once. An application writes entries while the window is open. A store
+   * which was empty at four o'clock may have work at half past.
    */
   private void tick() {
 
@@ -379,8 +376,8 @@ public class OutboxHousekeeping {
   }
 
   /**
-   * Publishes what the window did, gives the claim back and forgets the batch sizes of
-   * this night - the next one starts from half of what fitted, which is what
+   * Publishes what the window did, gives the claim back, and forgets the batch sizes of this
+   * night. The next night starts from half of what fitted, as
    * {@link HousekeepingBatchSize#theWindowClosed()} works out.
    *
    * @param now The moment the window was found shut
@@ -404,9 +401,9 @@ public class OutboxHousekeeping {
   }
 
   /**
-   * Says what the window did, once a night and at INFO where something was left over.
-   * That line is what somebody reads who is deciding whether to widen the window, and a
-   * window which got through says the same thing at DEBUG so a healthy log stays quiet.
+   * Says what the window did, once a night. Where something was left over, it says so at
+   * INFO. Somebody who decides whether to widen the window reads that line. A window which
+   * got through says the same at DEBUG, so a healthy log stays quiet.
    */
   private void reportTheWindow() {
 
@@ -442,8 +439,8 @@ public class OutboxHousekeeping {
       final Instant closesAt) {
 
     final var threshold = retentionRunsOutBefore();
-    // the dispatched entries first: they are the mass, and the table they leave behind is
-    // the one the question about the orphaned payloads searches
+    // the dispatched entries first. They are the bulk, and the question about the orphaned
+    // payloads searches the table which they leave behind
     return sweep(entryBatches, closesAt, rows -> store.removeDispatchedEntriesOlderThan(threshold, rows)) + sweep(
         payloadBatches, closesAt, rows -> store.removeOrphanedPayloadsOlderThan(threshold, rows));
 
@@ -481,15 +478,15 @@ public class OutboxHousekeeping {
       removed += went;
       final var now = Instant.now();
       if (now.isAfter(closesAt)) {
-        // one wrong step must not cost the rest of the night, so the next batch is half
-        // the size - here and, through the rule, tomorrow as well
+        // one wrong step must not cost the rest of the night. So the next batch is half the
+        // size, here and, through the rule, tomorrow as well
         batches.aBatchOverran();
         break;
       }
       batches.aBatchFitted(took, Duration.between(now, closesAt));
       if (went < size) {
-        // a batch which came back short is the last one: there was nothing more of this
-        // kind to remove
+        // a batch which came back short is the last one. There was nothing more of this kind
+        // to remove
         break;
       }
     }
@@ -498,7 +495,7 @@ public class OutboxHousekeeping {
   }
 
   /**
-   * One batch of one kind of row, so the two sweeps read the same way.
+   * One batch of one kind of row, so that the two sweeps read the same way.
    */
   @FunctionalInterface
   private interface OneBatch {

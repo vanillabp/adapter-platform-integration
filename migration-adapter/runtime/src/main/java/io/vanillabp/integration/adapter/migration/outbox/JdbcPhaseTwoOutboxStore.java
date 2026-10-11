@@ -20,66 +20,63 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * The {@link PhaseTwoOutbox} of an application whose workflow aggregates live in a
- * relational database, on every platform VanillaBP supports: the outbox entry is written
+ * relational database, on every platform VanillaBP supports. The outbox entry is written
  * into the configured table (<code>vanillabp.outbox.jdbc.table</code>, default
- * {@link #DEFAULT_TABLE_NAME}) on a connection which takes part in the transaction the
- * caller is in, so the entry becomes visible if and only if that transaction commits.
+ * {@link #DEFAULT_TABLE_NAME}). The connection takes part in the caller's transaction. So
+ * the entry becomes visible if and only if that transaction commits.
  * <p>
- * What differs between the platforms is the transaction and nothing else: Spring Boot
- * binds its connection through {@code DataSourceUtils}, Quarkus enlists an Agroal
- * connection in the running JTA transaction. Both hand that in as a
- * {@link JdbcConnectionAccess} and a {@link PhaseTwoOutboxTransaction}, and the
- * behaviour below is then the same code for both (decision 75 in the repository's
- * DECISIONS.md).
+ * Only the transaction differs between the platforms. Spring Boot binds its connection
+ * through {@code DataSourceUtils}. Quarkus enlists an Agroal connection in the running JTA
+ * transaction. Both hand that in as a {@link JdbcConnectionAccess} and a
+ * {@link PhaseTwoOutboxTransaction}. Everything below is then the same code for both
+ * (decision 75 in the repository's DECISIONS.md).
  * <p>
- * The entry persists the fields of the {@link PhaseTwoCall} including the operation
- * discriminator and the elected adapter ID; the workflow-aggregate ID is stored in
- * its serialized (String) form only - conversion back to the aggregate's ID type
- * happens in the core's router at dispatch time.
+ * The entry stores the fields of the {@link PhaseTwoCall}, including the name of the
+ * operation and the elected adapter ID. The workflow-aggregate ID is stored only in its
+ * serialized form, as a String. The core's router converts it back to the aggregate's ID
+ * type at dispatch time.
  * <p>
- * <strong>Deduplication spans the entries still waiting for their dispatch</strong>, as
- * the contract of {@link PhaseTwoOutbox} demands. It is the column <code>DEDUP_KEY</code>
- * which is unique, and it carries the idempotency key only while the entry waits: the
- * dispatcher writes the entry's own ID into it when it marks the entry DONE
- * (see {@link JdbcPhaseTwoOutboxDispatcher}), so the key is free from that moment on
- * while <code>IDEMPOTENCY_KEY</code> keeps it readable for support. An entry without a
- * key gets its ID there right away, which is why the column is never null - a
- * database treating two nulls as equal (SQL Server does) would otherwise refuse the
- * second keyless entry. The at-least-once guarantee is unaffected, because a
- * redispatch reads the same entry: it is <code>STATUS</code>, <code>ATTEMPTS</code>
- * and <code>NEXT_ATTEMPT_AT</code> of this table which carry it, never the key.
+ * <strong>Deduplication spans the entries which still wait for their dispatch</strong>, as
+ * the contract of {@link PhaseTwoOutbox} demands. The column <code>DEDUP_KEY</code> is the
+ * unique one. It holds the idempotency key only while the entry waits. When the dispatcher
+ * marks the entry DONE, it writes the entry's own ID into it (see
+ * {@link JdbcPhaseTwoOutboxDispatcher}). So from that moment on the key is free, while
+ * <code>IDEMPOTENCY_KEY</code> keeps it readable for support. An entry without a key gets
+ * its ID there right away. That is why the column is never null. A database which treats
+ * two nulls as equal (SQL Server does) would otherwise refuse the second entry without a
+ * key. The at-least-once guarantee does not change, because a repeated dispatch reads the
+ * same entry. <code>STATUS</code>, <code>ATTEMPTS</code> and <code>NEXT_ATTEMPT_AT</code>
+ * of this table carry that guarantee, never the key.
  * <p>
- * A duplicate is detected by a read before the insert rather than by the constraint
- * violation: on PostgreSQL a failed statement leaves the whole transaction aborted, so
- * the aggregate the caller just persisted would go down with it. The constraint stays
- * the authority for two nodes scheduling at the same moment - there the losing
- * transaction fails, which is acceptable for an operation that was a duplicate anyway.
+ * A duplicate is found by a read before the insert, not by the constraint violation. On
+ * PostgreSQL a failed statement leaves the whole transaction aborted. So the aggregate
+ * which the caller just persisted would be lost with it. The constraint still decides when
+ * two nodes schedule at the same moment. There the losing transaction fails, and that is
+ * acceptable for an operation which was a duplicate anyway.
  * <p>
- * <strong>A younger call may take the waiting entry's place</strong> instead of being
- * discarded against it, where it says so
- * ({@link PhaseTwoCall#replacingWhatIsStillWaiting()}). The row keeps its ID and its
- * key and gets everything the dispatch reads, and the payload of the entry it replaced
- * is removed in the same transaction. What decides is the pair <code>ATTEMPTS</code> and
- * <code>LEASED_UNTIL</code>: no attempt of this entry has ended and nobody is dispatching
- * it right now, so no dispatch has read it and none is holding its payload. The update
- * carries both conditions, which makes it the same optimistic lock the claim is - if a
- * poller wins the row, the update matches nothing and the call becomes an entry of its own, with
- * <code>DEDUP_KEY</code> set to its own ID because the key belongs to the entry on its
- * way.
+ * <strong>A younger call may take the place of the waiting entry</strong>, instead of being
+ * discarded against it, where the call says so
+ * ({@link PhaseTwoCall#replacingWhatIsStillWaiting()}). The row keeps its ID and its key,
+ * and gets everything the dispatch reads. The payload of the replaced entry is removed in
+ * the same transaction. The pair <code>ATTEMPTS</code> and <code>LEASED_UNTIL</code>
+ * decides. No attempt of this entry has ended, and nobody dispatches it right now. So no
+ * dispatch has read it, and none holds its payload. The update has both conditions. That
+ * makes it the same optimistic lock as the claim. If a poller wins the row, the update
+ * matches nothing, and the call becomes an entry of its own. Its <code>DEDUP_KEY</code> is
+ * then its own ID, because the key belongs to the entry which is on its way.
  * <p>
- * The {@link PhaseTwoCall#args()} map is persisted GENERICALLY in its serialized
- * form ({@link PhaseTwoCall#serializeArgs(java.util.Map)}, column
- * <code>ARGS</code>) - the store stays operation-agnostic (stores never interpret
- * arguments; only the core's router does).
+ * The {@link PhaseTwoCall#args()} map is stored GENERICALLY in its serialized form
+ * ({@link PhaseTwoCall#serializeArgs(java.util.Map)}, column <code>ARGS</code>). So the
+ * store does not depend on any operation. Stores never interpret arguments, only the core's
+ * router does.
  */
 @Slf4j
 public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
 
   /**
-   * The default name of the table used to store outbox entries (override via
-   * <code>vanillabp.outbox.jdbc.table</code> - every outbox instance needs its own
-   * table, two dispatchers polling the same table would compete and
-   * double-dispatch).
+   * The default name of the table for the outbox entries. It can be changed with
+   * <code>vanillabp.outbox.jdbc.table</code>. Every outbox instance needs its own table. Two
+   * dispatchers which poll the same table would compete and dispatch twice.
    */
   public static final String DEFAULT_TABLE_NAME = "VANILLABP_PHASE_TWO_OUTBOX";
 
@@ -101,16 +98,16 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   private static final String SELECT_OLDEST_PENDING_ENTRY = "SELECT MIN(CREATED_AT) FROM %s WHERE STATUS = ?";
 
   /**
-   * Puts a younger call into the row of the entry it replaces. Everything the dispatch
-   * reads is overwritten, the identifiers included, because an extension is free to
-   * derive one key from several calls; what stays is the row's ID, so a poller holding
-   * the entry it read a moment ago still addresses the same row.
+   * Puts a younger call into the row of the entry which it replaces. Everything the dispatch
+   * reads is overwritten, the identifiers included, because an extension is free to derive
+   * one key from several calls. The row's ID stays. So a poller which holds the entry it
+   * read a moment ago still addresses the same row.
    * <p>
-   * The guard is that no attempt has ended and no lease is running: an entry no dispatch
-   * has taken is one nobody is reading, and a poller which claims it while this update waits
-   * for the row finds the update matching no row afterwards. Both halves are needed, because
-   * the attempts are written when an attempt ends - a dispatch which is on its way right now
-   * still shows zero of them and is named by the lease alone.
+   * The guard is that no attempt has ended and no lease is running. An entry which no
+   * dispatch has taken is one which nobody reads. A poller may claim it while this update
+   * waits for the row. Then the update afterwards matches no row. Both halves are needed,
+   * because the attempts are written when an attempt ends. A dispatch which is on its way
+   * right now still shows zero attempts, and only the lease names it.
    */
   private static final String REPLACE_PENDING_ENTRY = """
       UPDATE %s \
@@ -119,12 +116,11 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
       WHERE ID = ? AND ATTEMPTS = 0 AND (LEASED_UNTIL IS NULL OR LEASED_UNTIL <= ?)""";
 
   /**
-   * Resolves the name of the payload table: the configured one
-   * (<code>vanillabp.outbox.jdbc.payload-table</code>) where there is one, and
-   * otherwise the name of the outbox table plus
-   * {@link JdbcPhaseTwoPayloadStore#TABLE_NAME_SUFFIX}. An application which renames
-   * the outbox to keep two deployments apart gets the payloads renamed with it, so the
-   * second deployment does not house-keep the rows of the first.
+   * Resolves the name of the payload table. That is the configured one
+   * (<code>vanillabp.outbox.jdbc.payload-table</code>) where there is one. Otherwise it is
+   * the name of the outbox table plus {@link JdbcPhaseTwoPayloadStore#TABLE_NAME_SUFFIX}. An
+   * application may rename the outbox to keep two deployments apart. Then the payloads are
+   * renamed with it, so the second deployment does not clean up the rows of the first.
    *
    * @param properties The outbox configuration
    * @return The table name
@@ -142,8 +138,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * Where the entries of this store say which payload they carry, which is what its
-   * payload store house-keeps along.
+   * Where the entries of this store say which payload they have. The payload store cleans
+   * up along that.
    *
    * @param properties The outbox configuration
    * @return The description to build the payload store with
@@ -156,11 +152,11 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * Where the entries of one table of this shape say which payload they carry: in a
-   * column of their own, which an index reaches. The reference travels among the
-   * serialized arguments as well (decision 62 in the repository's DECISIONS.md), and the
-   * column is written from the same value - the arguments are what the dispatch reads,
-   * the column is what the housekeeping asks.
+   * Where the entries of one table of this shape say which payload they have: in a column of
+   * their own, which an index can reach. The reference travels among the serialized
+   * arguments as well (decision 62 in the repository's DECISIONS.md). The column is written
+   * from the same value. The dispatch reads the arguments, and the housekeeping asks the
+   * column.
    *
    * @param tableName The table the entries lie in
    * @return The description to build a payload store with
@@ -174,8 +170,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * Resolves the configured table name (<code>vanillabp.outbox.jdbc.table</code>,
-   * falling back to {@link #DEFAULT_TABLE_NAME}).
+   * Resolves the configured table name (<code>vanillabp.outbox.jdbc.table</code>, or else
+   * {@link #DEFAULT_TABLE_NAME}).
    *
    * @param properties The outbox configuration
    * @return The table name
@@ -199,9 +195,9 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   private final JdbcPhaseTwoPayloadStore payloadStore;
 
   /**
-   * What is called after the commit which wrote an entry: the dispatcher's poll, pulled
-   * forward to now. Crash recovery does not depend on it - the poller finds the entry
-   * anyway - it is what makes the ordinary case immediate.
+   * What runs after the commit which wrote an entry: the dispatcher's poll, moved forward to
+   * now. Crash recovery does not depend on it, because the poller finds the entry anyway. It
+   * makes the ordinary case immediate.
    */
   private final Runnable dispatchWhatIsDue;
 
@@ -218,16 +214,16 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   private final String selectOldestPendingEntry;
 
   /**
-   * Builds the store of one JDBC outbox: the statements for the table it was given, and
-   * the collaborators the platform has to hand it. The table is created by the dispatcher
-   * of that outbox, not here.
+   * Builds the store of one JDBC outbox: the statements for the given table, and the
+   * helpers which the platform has to hand in. The dispatcher of that outbox creates the
+   * table, not this store.
    *
-   * @param connections How this platform hands out a connection taking part in the
-   *          transaction currently running
-   * @param transaction How this platform answers whether a transaction is running and
-   *          tells the store that it committed
+   * @param connections How this platform hands out a connection which takes part in the
+   *          running transaction
+   * @param transaction How this platform answers whether a transaction is running, and how
+   *          it tells the store that the transaction committed
    * @param tableName The table entries are written into
-   * @param payloadStore Where the bytes of a call which carries a payload are written
+   * @param payloadStore Where the bytes of a call with a payload are written
    * @param dispatchWhatIsDue What to run after the commit, see
    *          {@link #dispatchWhatIsDue}
    */
@@ -253,9 +249,9 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * The table this store was built for. It is asked wherever a message or a housekeeping
-   * has to name the table: every outbox instance has one of its own, so a message which
-   * named the default would send a reader looking in the wrong place.
+   * The table this store was built for. A message or a housekeeping which has to name the
+   * table asks this. Every outbox instance has a table of its own. So a message which named
+   * the default would send a reader to the wrong place.
    *
    * @return The table this store writes its entries into
    */
@@ -266,9 +262,9 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * The adapter ids the OPEN entries of one BPMN process are waiting for: an
-   * id which is not configured any more means that it was renamed or removed too early,
-   * and both leave the workflow of a START entry unstarted.
+   * The adapter ids for which the OPEN entries of one BPMN process wait. An id which is not
+   * configured any more was renamed or removed too early. Both leave the workflow of a START
+   * entry unstarted.
    */
   @Override
   public Set<String> adapterIdsOfPendingCalls(
@@ -291,8 +287,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
         }
       }
     } catch (final SQLException e) {
-      // a startup diagnosis must not keep an application from booting: unanswered is
-      // what a store which cannot tell answers anyway
+      // a startup diagnosis must not keep an application from booting. A store which cannot
+      // tell leaves the question unanswered anyway
       log
           .debug(
               "Could not read the adapter ids of open outbox entries of BPMN process '{}' "
@@ -309,9 +305,9 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * Counts the entries waiting for their dispatch. A single indexed count over the
-   * outbox table, which holds what did not run yet plus what is kept until the
-   * retention passes - the same table the dispatcher polls.
+   * Counts the entries which wait for their dispatch. This is a single indexed count over
+   * the outbox table. The table holds what has not run yet, plus what is kept until the
+   * retention passes. It is the same table which the dispatcher polls.
    */
   @Override
   public OptionalLong pendingCalls() {
@@ -328,8 +324,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
         }
       }
     } catch (final SQLException e) {
-      // a metric must never be the reason an application fails - the gauge reports
-      // nothing for this collection and the next one tries again
+      // a metric must never be the reason why an application fails. The gauge reports
+      // nothing for this collection, and the next one tries again
       log.debug("Could not count the pending entries of the JDBC phase-two outbox", e);
       return OptionalLong.empty();
     } finally {
@@ -339,16 +335,16 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * How long the oldest waiting entry has been waiting, read from
-   * <code>CREATED_AT</code> - the moment the entry was written, which a replacing call
-   * sets anew because the row then carries a younger operation.
+   * How long the oldest waiting entry has been waiting, read from <code>CREATED_AT</code>.
+   * That is the moment the entry was written. A replacing call sets it again, because the
+   * row then has a younger operation.
    * <p>
-   * The index it is read along spans STATUS and CREATED_AT, so the database answers from
-   * the first entry of that index instead of walking the waiting ones. Without the index
-   * the answer costs what the count of the waiting entries costs, and both grow with the
-   * backlog: measured on PostgreSQL 16.15 in September 2026, 0.17 ms with a backlog of
-   * 1000 entries, 28 ms with 100000 and 78 ms with 500000, against 0.07 ms at every size
-   * with the index.
+   * The index which it reads spans STATUS and CREATED_AT. So the database answers from the
+   * first entry of that index, and does not walk the waiting ones. Without the index the
+   * answer costs as much as the count of the waiting entries, and both grow with the
+   * backlog. Measured on PostgreSQL 16.15 in September 2026: 0.17 ms with a backlog of 1000
+   * entries, 28 ms with 100000 and 78 ms with 500000. With the index it was 0.07 ms at
+   * every size.
    */
   @Override
   public Optional<Duration> ageOfOldestPendingCall() {
@@ -363,7 +359,7 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
             return Optional.empty();
           }
           final var oldest = resultSet.getTimestamp(1);
-          // no row at all means nothing waits, and that zero is a measurement: the
+          // no row at all means that nothing waits. That zero is a measurement: the
           // outbox owes nothing
           return Optional
               .of(oldest == null
@@ -372,8 +368,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
         }
       }
     } catch (final SQLException e) {
-      // a metric must never be the reason an application fails - the gauge reports
-      // nothing for this collection and the next one tries again
+      // a metric must never be the reason why an application fails. The gauge reports
+      // nothing for this collection, and the next one tries again
       log.debug("Could not read the oldest pending entry of the JDBC phase-two outbox", e);
       return Optional.empty();
     } finally {
@@ -396,10 +392,10 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
     final var now = Instant.now();
     final var entryId = UUID.randomUUID().toString();
     final var idempotencyKey = call.idempotencyKey().orElse(null);
-    // what the unique constraint sees. An operation which must not be deduplicated
-    // occupies its own ID instead of a null, because not every database treats two
-    // nulls as different values, and a second entry beside one a dispatch already took
-    // does the same: the key belongs to the entry on its way
+    // what the unique constraint sees. An operation which must not be deduplicated takes
+    // its own ID instead of a null, because not every database treats two nulls as
+    // different values. A second entry next to one which a dispatch already took does the
+    // same, because the key belongs to the entry which is on its way
     var dedupKey = idempotencyKey == null ? entryId : idempotencyKey;
     Connection connection = null;
     try {
@@ -416,8 +412,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
           dispatchAfterCommit();
           return true;
         }
-        // a poller claimed the entry between the read and the update: it runs to its
-        // end and this call becomes an entry of its own
+        // a poller claimed the entry between the read and the update. The poller's dispatch
+        // runs to its end, and this call becomes an entry of its own
         logSecondEntryBesideAClaimedOne(call);
         dedupKey = entryId;
       }
@@ -429,7 +425,7 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
         statement.setString(5, call.workflowAggregateId());
         statement.setString(6, call.adapterId());
         statement.setString(7, PhaseTwoCall.serializeArgs(call.args()));
-        // the same value the arguments carry, in a column the housekeeping can index
+        // the same value as in the arguments, in a column which the housekeeping can index
         statement.setString(8, call.payloadReference());
         statement.setString(9, idempotencyKey);
         statement.setString(10, dedupKey);
@@ -438,8 +434,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
         statement.executeUpdate();
       }
     } catch (final SQLException e) {
-      // two nodes scheduling the same operation at the same moment: the read above
-      // found nothing on both, and the constraint decided
+      // two nodes schedule the same operation at the same moment. The read above found
+      // nothing on both, and the constraint decided
       if (isDuplicateKey(e)) {
         logDiscardedSchedule(call);
         return false;
@@ -451,8 +447,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
       release(connection);
     }
 
-    // the entry is in, so the bytes it names may follow - in this very transaction, and
-    // only now, because a schedule discarded as a duplicate must leave nothing behind
+    // the entry is in, so the bytes it names may follow, in this same transaction. Only
+    // now, because a schedule which is discarded as a duplicate must leave nothing behind
     if (call.hasPayload()) {
       payloadStore.write(call);
     }
@@ -464,9 +460,9 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * A call which replaces goes the same way as any other, and this is the one method
-   * which says so - the mark travels in the call, so {@link #schedule(PhaseTwoCall)}
-   * reads it where the entry is written.
+   * A call which replaces takes the same way as any other. This is the one method which says
+   * so. The mark travels in the call, so {@link #schedule(PhaseTwoCall)} reads it where the
+   * entry is written.
    */
   @Override
   public boolean scheduleReplacingWhatIsStillWaiting(
@@ -477,8 +473,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * Dispatches the entry right after the transaction was committed; recovery after a
-   * crash is covered by the dispatcher's poller.
+   * Dispatches the entry right after the transaction was committed. The dispatcher's poller
+   * covers recovery after a crash.
    */
   private void dispatchAfterCommit() {
 
@@ -487,8 +483,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * The entry of this key still waiting for its dispatch, or <code>null</code> where
-   * the key is free. Nothing else can carry the key: the dispatcher replaces it by the
+   * The entry with this key which still waits for its dispatch, or <code>null</code> where
+   * the key is free. Nothing else can have the key. The dispatcher replaces it with the
    * entry's ID when the entry is marked DONE or blocked.
    */
   private PendingEntry pendingEntry(
@@ -509,13 +505,13 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   /**
    * Puts the younger call into the row of the waiting entry, its payload included.
    * <p>
-   * All three writes ride the transaction the call was scheduled in, so no reader ever
-   * sees one of them without the others, and a rollback takes them all. Removing the
-   * replaced payload is safe for the reason the replacement itself is safe: an entry
-   * which no dispatch has claimed has had its payload read by nobody.
+   * All three writes use the transaction in which the call was scheduled. So no reader ever
+   * sees one of them without the others, and a rollback takes them all. Removing the replaced
+   * payload is safe for the same reason as the replacement itself. Nobody has read the
+   * payload of an entry which no dispatch has claimed.
    *
-   * @return Whether the entry was replaced - <code>false</code> where a poller claimed
-   *         it in the meantime, which makes the call an entry of its own
+   * @return Whether the entry was replaced. It is <code>false</code> where a poller claimed
+   *         it in the meantime. Then the call becomes an entry of its own
    */
   private boolean replacePendingEntry(
       final Connection connection,
@@ -558,9 +554,9 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * Returns the connection to wherever it came from. A connection which cannot be
-   * returned is logged and nothing more: the work it did is committed or rolled back by
-   * the transaction it took part in, and a schedule must not fail over the way back.
+   * Returns the connection to wherever it came from. If a connection cannot be returned,
+   * that is logged and nothing more. The transaction it took part in commits or rolls back
+   * its work. A schedule must not fail because of the way back.
    *
    * @param connection The connection acquired before, may be <code>null</code>
    */
@@ -579,20 +575,20 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * What a store needs to know about the entry a younger call meets: which row it is,
+   * What a store needs to know about the entry which a younger call meets: which row it is,
    * which payload it names, and whether an attempt of it has ended already.
    *
    * @param id The entry's own ID
    * @param args The arguments it persisted, holding the reference of its payload
-   * @param attempts How many attempts of it have ended - zero plus a free lease means
-   *          nobody read it yet
+   * @param attempts How many attempts of it have ended. Zero plus a free lease means that
+   *          nobody has read it yet
    */
   private record PendingEntry(String id, String args, int attempts) {
   }
 
   /**
-   * A younger call took the place of the entry which was waiting. At DEBUG for the
-   * reason a discard is: it is what the caller asked for, and under a backlog it
+   * A younger call took the place of the entry which was waiting. This is logged at DEBUG,
+   * for the same reason as a discard. The caller asked for it, and under a backlog it
    * happens as often as reports are planned.
    */
   private static void logReplacedEntry(
@@ -610,9 +606,9 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
 
   /**
    * A younger call could not take the place of the entry it meant to replace, because a
-   * dispatch had claimed it. It becomes an entry of its own, so the handler is called
-   * twice - worth a line, because an application counting its reports finds the second
-   * one here.
+   * dispatch had claimed that entry. The call becomes an entry of its own, so the handler is
+   * called twice. That is worth a line. An application which counts its reports finds the
+   * second one here.
    */
   private static void logSecondEntryBesideAClaimedOne(
       final PhaseTwoCall call) {
@@ -629,9 +625,9 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * The technical half of a discarded schedule. Which of the two causes it was - a
-   * redelivered dispatch or an operation lost against one still waiting - the store
-   * cannot tell, so the core reports it to the caller and this line stays at DEBUG.
+   * The technical half of a discarded schedule. The store cannot tell which of the two causes
+   * it was: a repeated dispatch, or an operation lost against one which still waits. So the
+   * core reports it to the caller, and this line stays at DEBUG.
    */
   private static void logDiscardedSchedule(
       final PhaseTwoCall call) {
@@ -647,8 +643,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   }
 
   /**
-   * Whether the given exception signals a violated unique constraint (= an operation
-   * of this key is already planned).
+   * Whether the given exception signals a violated unique constraint, which means that an
+   * operation with this key is already planned.
    *
    * @param e The exception raised by the insert
    * @return Whether the insert failed due to a duplicate key
@@ -656,9 +652,9 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
   private static boolean isDuplicateKey(
       final SQLException e) {
 
-    // PostgreSQL's JDBC driver does not map unique violations to the dedicated
-    // subclass - fall back to the standard SQL state class 23 (integrity
-    // constraint violation) for such drivers
+    // the JDBC driver of PostgreSQL does not map unique violations to the special subclass.
+    // For such drivers, fall back to the standard SQL state class 23 (integrity constraint
+    // violation)
     return (e instanceof SQLIntegrityConstraintViolationException) || ((e.getSQLState() != null) && e.getSQLState()
         .startsWith("23"));
 

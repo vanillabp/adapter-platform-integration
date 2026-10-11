@@ -14,43 +14,42 @@ import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The payload store of every JDBC-backed outbox VanillaBP ships: the gruelbox store on
+ * The payload store of every JDBC-based outbox which VanillaBP ships. The gruelbox store on
  * Spring Boot and the own store of each platform write into the same table with the same
- * statements, and only the way a connection joins the running transaction differs
+ * statements. Only the way in which a connection joins the running transaction differs
  * between the two platforms ({@link JdbcConnectionAccess}).
  * <p>
- * One row per phase-two call which carries a payload, written in the transaction which
- * writes the outbox entry and read once per dispatch attempt of that entry. The row is
- * removed when the entry was dispatched and again with the dispatched entry itself;
- * {@link #removeOrphansOlderThan(Instant, int)} removes what a crash between the two
+ * There is one row per phase-two call with a payload. It is written in the transaction
+ * which writes the outbox entry, and read once per dispatch attempt of that entry. The row
+ * is removed when the entry was dispatched, and again together with the dispatched entry
+ * itself. {@link #removeOrphansOlderThan(Instant, int)} removes what a crash between the two
  * writes left behind, and only that.
  * <p>
- * What the store has to know for that is where the ENTRIES are and how one of them says
- * which payload it carries ({@link EntriesNamingTheirPayload}). It is a constructor
- * argument rather than something handed in per call, because it is a property of the
- * outbox this store belongs to and does not change while the application runs.
+ * For that, the store has to know where the ENTRIES are, and how one of them says which
+ * payload it has ({@link EntriesNamingTheirPayload}). It is an argument of the constructor
+ * and not handed in per call. It belongs to the outbox of this store, and it does not change
+ * while the application runs.
  * <p>
- * The table is VanillaBP's own, so it is described in
- * <code>io.vanillabp:vanillabp-schema</code> like the other two and created at startup
- * where the application does not manage its schema itself.
+ * The table is VanillaBP's own. So <code>io.vanillabp:vanillabp-schema</code> describes it
+ * like the other two. It is created at startup, where the application does not manage its
+ * schema itself.
  */
 @Slf4j
 public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
 
   /**
-   * Where the entries of one outbox lie and how one of them says which payload it
-   * carries. The housekeeping turns this into one condition inside its delete, so the
-   * question which payloads are still needed is answered by the database and no set of
-   * references travels through the application.
+   * Where the entries of one outbox are, and how one of them says which payload it has. The
+   * housekeeping turns this into one condition inside its delete. So the database answers
+   * which payloads are still needed, and no set of references travels through the
+   * application.
    *
-   * @param table The table the outbox entries lie in
-   * @param column The column of that table carrying the reference
-   * @param wholeColumn Whether the column holds the reference and nothing else. Where it
-   *        does, the condition is an equality and an index over the column answers it.
-   *        Where it does not, the reference stands somewhere inside a column of text and
-   *        the condition is a <code>LIKE</code>, which no index reaches - that is a scan
-   *        of the entries per payload row, and it is what an outbox whose table VanillaBP
-   *        does not own pays
+   * @param table The table with the outbox entries
+   * @param column The column of that table which holds the reference
+   * @param wholeColumn Whether the column holds the reference and nothing else. Then the
+   *        condition is an equality, and an index over the column answers it. Otherwise the
+   *        reference is somewhere inside a column of text. Then the condition is a
+   *        <code>LIKE</code>, which no index reaches. That is a scan of the entries per
+   *        payload row. An outbox whose table VanillaBP does not own pays that
    */
   public record EntriesNamingTheirPayload(String table, String column, boolean wholeColumn) {
 
@@ -70,12 +69,11 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
     }
 
     /**
-     * Entries which keep the reference somewhere inside a column of text - the
-     * serialized arguments of the call, or the serialized invocation of a library
-     * which owns the table.
+     * Entries which keep the reference somewhere inside a column of text: the serialized
+     * arguments of the call, or the serialized call of a library which owns the table.
      *
      * @param table The table the entries lie in
-     * @param column The column of text the reference stands in
+     * @param column The column of text in which the reference stands
      * @return The description to build a payload store with
      */
     public static EntriesNamingTheirPayload insideAText(
@@ -89,22 +87,22 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   }
 
   /**
-   * What is appended to the name of the outbox table to get the name of the payload
-   * table. It is written the way a table is written here, in capitals with an
-   * underscore, while the MongoDB store appends
+   * What is added to the name of the outbox table to get the name of the payload table. It
+   * is written the way tables are written here, in capitals with an underscore. The MongoDB
+   * store adds
    * {@link io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.MongoOutboxProperties#PAYLOAD_COLLECTION_SUFFIX}
-   * in the way a collection is written. The two are the same idea in two spellings, so
-   * do not pull them together into one string.
+   * the way collections are written. The two are the same idea in two spellings. So do not
+   * merge them into one string.
    */
   public static final String TABLE_NAME_SUFFIX = "_PAYLOAD";
 
   /**
-   * The name of the table the payloads are stored in where the application configures
-   * neither name (override via <code>vanillabp.outbox.jdbc.payload-table</code>). One
-   * table per outbox, for the reason the outbox has one table per instance: two
-   * applications sharing it would house-keep each other's rows. That is also why the
-   * name follows the outbox table: an application which renames the outbox to keep two
-   * deployments apart would otherwise share the payloads it wanted to separate.
+   * The name of the payload table where the application configures neither name (change it
+   * with <code>vanillabp.outbox.jdbc.payload-table</code>). There is one table per outbox,
+   * for the same reason as the outbox has one table per instance. Two applications which
+   * shared it would clean up each other's rows. That is also why the name follows the outbox
+   * table. An application which renames the outbox to keep two deployments apart would
+   * otherwise share the payloads it wanted to separate.
    */
   public static final String DEFAULT_TABLE_NAME = JdbcPhaseTwoOutboxStore.DEFAULT_TABLE_NAME + TABLE_NAME_SUFFIX;
 
@@ -118,9 +116,9 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   private static final String DELETE_PAYLOAD = "DELETE FROM %s WHERE REFERENCE = ?";
 
   /**
-   * The index the housekeeping reads along. Without it the question which payloads are
-   * old enough reads every payload ever written, which is the cost this table can least
-   * afford.
+   * The index along which the housekeeping reads. Without it, the question which payloads
+   * are old enough reads every payload ever written. This table can least afford that
+   * cost.
    */
   public static final String CREATE_AGE_INDEX = "CREATE INDEX %s_AGE ON %s (CREATED_AT)";
 
@@ -137,25 +135,25 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   private final String deletePayload;
 
   /**
-   * The bounded delete of the orphans, built on the first housekeeping run of this
-   * store. It needs the database product, which is read from a connection, so it cannot
-   * be built in the constructor next to the other three.
+   * The limited delete of the orphans, built on the first housekeeping run of this store.
+   * It needs the database product, which is read from a connection. So it cannot be built in
+   * the constructor next to the other three.
    */
   private String deleteOrphans;
 
   /**
-   * How many rows {@link #deleteOrphans} was built for. The bound is part of the
-   * statement on every database, so a run with another ceiling builds it again.
+   * How many rows {@link #deleteOrphans} was built for. The limit is part of the statement
+   * on every database, so a run with another limit builds it again.
    */
   private int deleteOrphansBoundedAt;
 
   /**
-   * Builds the payload store of one outbox: the statements for the table it was given,
-   * and where its entries say which payload they carry. The table itself is created by
-   * the dispatcher of that outbox.
+   * Builds the payload store of one outbox: the statements for the given table, and where
+   * its entries say which payload they have. The dispatcher of that outbox creates the table
+   * itself.
    *
-   * @param connectionAccess How this platform hands out a connection taking part in the
-   *        transaction currently running
+   * @param connectionAccess How this platform hands out a connection which takes part in
+   *        the running transaction
    * @param tableName The table to store payloads in
    * @param entries Where the entries of this outbox lie and how one of them names its
    *        payload
@@ -176,8 +174,8 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
 
   /**
    * The table this store was built for. The store itself formats its statements with that
-   * name; it is asked from outside where something writes into the table directly, which
-   * a test ageing a payload does.
+   * name. Code outside asks for it where it writes into the table directly. A test which
+   * makes a payload older does that.
    *
    * @return The table this store reads and writes
    */
@@ -249,8 +247,8 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
         statement.executeUpdate();
       }
     } catch (final SQLException e) {
-      // the entry it belonged to was dispatched, which is what counts - the row is
-      // removed by the housekeeping instead, one retention period later
+      // the entry it belonged to was dispatched, and that is what counts. The housekeeping
+      // removes the row instead, one retention period later
       log.warn("Could not remove the payload '{}' from table '{}'", reference, tableName, e);
     } finally {
       release(connection);
@@ -261,18 +259,18 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   /**
    * {@inheritDoc}
    * <p>
-   * One statement, on one connection, whatever the table holds. It deletes the payloads
-   * which are old enough and which no entry of the outbox names, and the question about
-   * the entries is a condition inside it rather than a question asked back - so nothing
-   * of the two sets travels through the application, and the pool never waits for a
-   * connection this method is holding itself.
+   * One statement, on one connection, whatever the table holds. It deletes the payloads which
+   * are old enough and which no entry of the outbox names. The question about the entries is
+   * a condition inside the statement, not a question asked back. So neither of the two sets
+   * travels through the application. And the pool never waits for a connection which this
+   * method holds itself.
    * <p>
-   * Where the entries keep the reference inside a column of text the condition is a
-   * <code>LIKE</code> with the reference in the middle. That is a scan of the entries
-   * per candidate row and it is the expensive shape; what it buys is that this remains
-   * one command. A reference which stands inside some other value of the same text is
-   * read as "still named", and a payload kept one run too long is the harmless direction
-   * of that mistake.
+   * Where the entries keep the reference inside a column of text, the condition is a
+   * <code>LIKE</code> with the reference in the middle. That is a scan of the entries per
+   * candidate row, and it is the expensive shape. What it buys is that this stays one
+   * command. A reference which stands inside some other value of the same text counts as
+   * "still named". Then a payload is kept one run too long, which is the harmless side of
+   * that mistake.
    */
   @Override
   public int removeOrphansOlderThan(
@@ -301,7 +299,7 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   }
 
   /**
-   * The delete of at most so many orphans, built once per ceiling and kept afterwards.
+   * The delete of at most so many orphans. It is built once per limit and kept afterwards.
    *
    * @param connection The connection, read for the database product
    * @param maxEntries The most rows the statement may remove
@@ -333,9 +331,9 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
 
   /**
    * Says that bytes were thrown away, at DEBUG and only when there were any. An orphan is a
-   * payload whose outbox entry never reached the table, so nothing was lost by removing it, and
-   * the normal count is zero. Somebody who finds payloads growing wants to see this line, and
-   * nobody else does.
+   * payload whose outbox entry never reached the table. So nothing was lost by removing it,
+   * and the normal count is zero. Somebody who sees the payloads grow wants to see this
+   * line, and nobody else does.
    *
    * @param removed How many payloads went
    */
@@ -354,11 +352,11 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   }
 
   /**
-   * Creates the table and the index the housekeeping deletes along, unless they exist
+   * Creates the table, and the index along which the housekeeping deletes, unless they exist
    * already.
    *
-   * @throws IllegalStateException If the DDL fails - naming the way out (manage the
-   *         schema manually)
+   * @throws IllegalStateException If the DDL fails. The message names the way out (manage
+   *         the schema manually)
    */
   public void createSchemaIfNotExists() {
 
@@ -389,9 +387,9 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   }
 
   /**
-   * Whether the DDL failed because another instance created the table between the check
-   * and the statement. Two instances starting together both see no table and both
-   * create it, and the loser's boot must not end over it.
+   * Whether the DDL failed because another instance created the table between the check and
+   * the statement. Two instances which start together both see no table, and both create it.
+   * The boot of the loser must not end because of that.
    *
    * @return Whether the table is there now
    */
@@ -416,9 +414,9 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   }
 
   /**
-   * Verifies that the table exists, for an application which creates its schema itself.
-   * A missing table would otherwise surface at the first call which carries a payload,
-   * inside the transaction of the application which planned it.
+   * Checks that the table exists, for an application which creates its schema itself.
+   * Otherwise a missing table would show up at the first call with a payload, inside the
+   * transaction of the application which planned it.
    *
    * @throws IllegalStateException If the table is missing
    */
@@ -465,10 +463,10 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   }
 
   /**
-   * Builds the CREATE TABLE statement with the types the database at hand spells its
-   * timestamps and its binary column in: PostgreSQL knows no <code>BLOB</code>, SQL
-   * Server writes a large binary as <code>VARBINARY(MAX)</code> and its
-   * <code>TIMESTAMP</code> is a row version, MySQL's timestamp ends in 2038.
+   * Builds the CREATE TABLE statement with the types in which the database at hand writes
+   * its timestamps and its binary column. PostgreSQL has no <code>BLOB</code>. SQL Server
+   * writes a large binary as <code>VARBINARY(MAX)</code>, and its <code>TIMESTAMP</code> is a
+   * row version. The timestamp of MySQL ends in 2038.
    *
    * @param connection The connection used to detect the database
    * @param tableName The table to create

@@ -5,19 +5,20 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 
 /**
- * The hours of the day an outbox house-keeps in, read in the zone the application named.
+ * The hours of the day in which an outbox cleans up, read in the zone which the application
+ * named.
  * <p>
- * A window is two local times and a zone, so it follows the clock of the place it was
- * meant for: it opens at four in the morning there whether or not that country is on
- * summer time. The moments are therefore computed per day rather than by adding a fixed
- * distance, which is what makes the two nights around a clock change come out right.
+ * A window is two local times and a zone. So it follows the clock of the place it was
+ * meant for. It opens at four in the morning there, whether or not that country is on
+ * summer time. That is why the moments are computed per day, and not by adding a fixed
+ * duration. Then the two nights around a clock change come out right.
  * <p>
- * A window whose end lies before its start crosses midnight, and <code>23:00</code> to
- * <code>01:00</code> is two hours. The end is exclusive, so a tick landing exactly on it
- * finds the window closed.
+ * A window whose end is before its start crosses midnight. <code>23:00</code> to
+ * <code>01:00</code> is two hours. The end is exclusive, so a tick exactly at the end finds
+ * the window closed.
  * <p>
- * It is public because the test which holds these answers lives in a test package of its
- * own, the way the other parts of the dispatch do.
+ * It is public because the test which holds these answers is in a test package of its own,
+ * like the tests of the other parts of the dispatch.
  */
 public class HousekeepingWindow {
 
@@ -28,7 +29,7 @@ public class HousekeepingWindow {
   private final ZoneId zone;
 
   /**
-   * Builds the window an outbox house-keeps in.
+   * Builds the window in which an outbox cleans up.
    *
    * @param start When the window opens, local time
    * @param end When it closes, local time
@@ -60,14 +61,14 @@ public class HousekeepingWindow {
     if (start.isBefore(end)) {
       return !local.isBefore(start) && local.isBefore(end);
     }
-    // the window crosses midnight, so it is open on both sides of it
+    // the window crosses midnight, so it is open on both sides of midnight
     return !local.isBefore(start) || local.isBefore(end);
 
   }
 
   /**
-   * When the window which is open now closes, or when the next one closes where none is
-   * open.
+   * When the window which is open now closes. Where none is open, when the next one
+   * closes.
    *
    * @param moment The moment to count from
    * @return The next moment the window is shut, always after the given one
@@ -97,7 +98,7 @@ public class HousekeepingWindow {
    *
    * @param time The local time to look for
    * @param moment The moment to count from
-   * @return That time on the day it comes round next
+   * @return That time on the next day it comes round
    */
   private Instant next(
       final LocalTime time,
