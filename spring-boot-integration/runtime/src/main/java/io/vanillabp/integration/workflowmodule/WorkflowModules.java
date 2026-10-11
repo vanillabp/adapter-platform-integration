@@ -18,9 +18,10 @@ public class WorkflowModules {
   private boolean workflowServicesAssociated = false;
 
   /**
-   * Built while the application boots, from the marker files found in the classpath, and
-   * built directly by tests which want a fixed set of modules. The list is taken as it is
-   * given: the order is the order the classpath was walked in, and nothing here sorts it.
+   * Built while the application boots, from the marker files found in the classpath.
+   * Tests which want a fixed set of modules build it directly. The list is kept as it is
+   * given. Its order is the order in which the classpath was walked, and nothing here
+   * sorts it.
    *
    * @param workflowModules The workflow modules of this application, possibly none
    */
@@ -36,9 +37,9 @@ public class WorkflowModules {
    * this bean (see
    * {@link WorkflowModuleAutoConfiguration#registerProcessServices(List, List)}).
    * The association is done only once, no matter how often this method is called.
-   * It is called lazily on creation of the first
-   * {@link io.vanillabp.spi.process.ProcessService} bean, so the workflow modules
-   * are determined using the application's resource loader.
+   * It is called lazily, when the first {@link io.vanillabp.spi.process.ProcessService}
+   * bean is created. So the workflow modules are found with the application's resource
+   * loader.
    *
    * @param allWorkflowServiceClasses All classes annotated by
    *     {@link io.vanillabp.spi.service.WorkflowService} found in the classpath

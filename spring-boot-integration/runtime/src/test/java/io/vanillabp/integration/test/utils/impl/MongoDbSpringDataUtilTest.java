@@ -50,8 +50,8 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 @SpringBootTest(classes = MongoDbSpringDataUtilTest.MongoDbTestConfiguration.class)
 class MongoDbSpringDataUtilTest {
 
-  // no wait strategy of its own: the one the container brings waits until the MAPPED port
-  // accepts a connection, while a log line only says that mongod listens inside the container
+  // no wait strategy of its own: the container's own strategy waits until the MAPPED port
+  // accepts a connection. A log line only says that mongod listens inside the container
   @Container
   static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB));
 
@@ -59,9 +59,9 @@ class MongoDbSpringDataUtilTest {
   @EnableAutoConfiguration(
       exclude = {
           SslAutoConfiguration.class, // MongoDb is not available via SSL
-          // ... and without it there are no SslBundles, which the health support wants
-          // to report on. It is an optional dependency of this
-          // module, so it is on this module's test classpath as well
+          // ... and without it there are no SslBundles, but the health support wants to
+          // report on them. The health support is an optional dependency of this module, so
+          // it is on this module's test classpath as well
           org.springframework.boot.health.autoconfigure.application.SslHealthContributorAutoConfiguration.class, WorkflowModuleAutoConfiguration.class, // see resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
           SpringBootMigrationAdapterAutoConfiguration.class // see resources/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports
       })
@@ -162,10 +162,10 @@ class MongoDbSpringDataUtilTest {
   }
 
   /**
-   * The same shape as the JPA entity of that name: what MongoDB has always read at the
-   * getter, JPA reads there now too. A class annotated at the field and at a getter of
-   * another property is not tested here, because Spring Data refuses two ID properties
-   * in one class, so only JPA can be asked which of the two wins.
+   * The same shape as the JPA entity of that name. MongoDB has always read the ID at the
+   * getter, and now JPA reads it there too. This test has no class with the annotation at the
+   * field and at a getter of another property. Spring Data refuses two ID properties in one
+   * class. So only JPA can say which of the two wins.
    */
   @Test
   public void idAnnotationAtTheGetterIsRead() {
@@ -210,7 +210,7 @@ class MongoDbSpringDataUtilTest {
       mongoDbSpringDataUtil.unproxy(entity);
       Assertions.fail("unproxy(...) should have thrown an UnsupportedOperationException");
     } catch (final UnsupportedOperationException e) {
-      // the expected outcome - MongoDB knows no proxies, so unproxying is not offered
+      // the expected outcome: MongoDB knows no proxies, so it offers no unproxying
     }
 
   }
@@ -231,8 +231,9 @@ class MongoDbSpringDataUtilTest {
   }
 
   /**
-   * What the fallback persistence does with that, which is where an
-   * application used to boot and fail at its first task instead.
+   * What the fallback persistence does with an aggregate without a repository. Here an
+   * application used to boot and then fail at its first task.
+
    */
   @Test
   public void aggregateWithoutRepositoryIsReportedWhileStarting() {

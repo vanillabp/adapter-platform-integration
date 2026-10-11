@@ -29,34 +29,33 @@ import jakarta.persistence.EntityManagerFactory;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Auto-configuration of the default {@link PhaseTwoOutbox} for JPA-based aggregate
- * persistence: the outbox VanillaBP writes itself, which is the same store and the same
- * dispatcher a Quarkus application runs
- * ({@link JdbcPhaseTwoOutboxStore}). Active whenever Spring Data JPA is on the classpath
- * and exactly one {@link EntityManagerFactory} exists - it COEXISTS with the MongoDB
- * default: each workflow aggregate is served by the outbox matching its persistence
- * (selection per aggregate, see
- * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware}), so outbox entries always
- * ride the aggregate's own transaction even in mixed-persistence applications. Disable
- * via <code>vanillabp.outbox.jdbc.enabled</code> if the default (including its table and
- * background dispatcher) is unwanted.
+ * Auto-configuration of the default {@link PhaseTwoOutbox} for aggregates persisted with
+ * JPA. VanillaBP writes this outbox itself. It is the same store and the same dispatcher a
+ * Quarkus application runs ({@link JdbcPhaseTwoOutboxStore}). It is active whenever Spring
+ * Data JPA is on the classpath and exactly one {@link EntityManagerFactory} exists. It
+ * lives SIDE BY SIDE with the MongoDB default. Each workflow aggregate is served by the
+ * outbox which matches its persistence. The choice is made per aggregate, see
+ * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware}. So outbox entries always ride
+ * the aggregate's own transaction, also in applications with mixed persistence. Switch
+ * it off with <code>vanillabp.outbox.jdbc.enabled</code> if you do not want the default,
+ * with its table and its background dispatcher.
  * <p>
- * The tables (<code>VANILLABP_PHASE_TWO_OUTBOX</code> and
- * <code>VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD</code>, overridable via
+ * The tables are <code>VANILLABP_PHASE_TWO_OUTBOX</code> and
+ * <code>VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD</code>. You can rename them with
  * <code>vanillabp.outbox.jdbc.table</code> and
- * <code>vanillabp.outbox.jdbc.payload-table</code>; a renamed outbox renames the payload
- * table with it) are created while the outbox bean is built,
- * unless <code>vanillabp.outbox.create-schema</code> is set to <code>false</code> - their
- * existence is then verified instead, and the artifact
+ * <code>vanillabp.outbox.jdbc.payload-table</code>. A renamed outbox renames the payload
+ * table with it. The tables are created while the outbox bean is built, unless
+ * <code>vanillabp.outbox.create-schema</code> is set to <code>false</code>. Then the
+ * startup only checks that they exist. The artifact
  * <code>io.vanillabp:vanillabp-schema</code> carries the statements for the migration
  * tool of the application.
  * <p>
  * An application which ran the gruelbox store before this one gets a message about what
  * that store still holds, see
  * {@link #reportWhatTheFormerStoreStillHolds(DataSource, String, VanillaBpConfigurationProperties)}.
- * That store is no longer part of VanillaBP; it lives in
- * <code>io.vanillabp:gruelbox-phase-two-outbox</code>, and an application which
- * adds that artifact gets this configuration out of the way: it registers the outbox bean
+ * That store is no longer part of VanillaBP. It lives in
+ * <code>io.vanillabp:gruelbox-phase-two-outbox</code>. An application which adds that
+ * artifact gets this configuration out of the way. The artifact registers the outbox bean
  * under the name below, and the condition on this class reads that name.
  */
 @AutoConfiguration(
@@ -70,37 +69,37 @@ import lombok.extern.slf4j.Slf4j;
     DataSource.class, PlatformTransactionManager.class
 })
 @ConditionalOnBooleanProperty(name = "vanillabp.outbox.jdbc.enabled", matchIfMissing = true)
-// a store contributed by another artifact registers the outbox bean under this name and is
-// applied before this configuration, which is how it takes the place of this default
+// a store from another artifact registers the outbox bean under this name and is applied
+// before this configuration. That is how it takes the place of this default
 @ConditionalOnMissingBean(name = JdbcPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME)
 @EnableConfigurationProperties(VanillaBpConfigurationProperties.class)
 @Slf4j
 public class JdbcPhaseTwoOutboxAutoConfiguration {
 
   /**
-   * The name of the default JPA outbox bean - used by the resolver to attribute
-   * JPA-persisted aggregates to THE default when several outbox beans exist.
+   * The name of the default JPA outbox bean. When several outbox beans exist, the resolver
+   * uses it to assign aggregates persisted with JPA to THE default.
    */
   public static final String DEFAULT_OUTBOX_BEAN_NAME = "vanillaBpJdbcPhaseTwoOutbox";
 
   /**
-   * The name of the store holding the payloads of the calls which carry one. A bean of
-   * its own so the outbox and its dispatcher use the same one, and so an application may
-   * replace it.
+   * The name of the store which holds the payloads of the calls which carry one. It is a
+   * bean of its own, so the outbox and its dispatcher use the same one. And an application
+   * may replace it.
    */
   public static final String DEFAULT_PAYLOAD_STORE_BEAN_NAME = "vanillaBpJdbcPhaseTwoPayloadStore";
 
   /**
-   * The table the gruelbox store writes, which is where an application upgrading onto this
-   * one may still have entries waiting. The name belongs to the library: it is what
-   * gruelbox defaults to and the only table its schema migration ever creates, so it is
-   * written out here rather than read from a store which this repository does not carry.
+   * The table the gruelbox store writes. An application which upgrades to this store may
+   * still have entries waiting there. The name belongs to the library. It is gruelbox's
+   * default, and the only table its schema migration ever creates. So it is written out
+   * here, and not read from a store which this repository does not carry.
    */
   private static final String FORMER_OUTBOX_TABLE_NAME = "TXNO_OUTBOX";
 
   /**
-   * The artifact an application adds to go on running the gruelbox store, named in the
-   * message above so the remedy is one line to copy.
+   * The artifact an application adds to keep running the gruelbox store. The message
+   * above names it, so the remedy is one line to copy.
    */
   private static final String THE_ARTIFACT_CARRYING_THE_FORMER_STORE = "io.vanillabp:gruelbox-phase-two-outbox";
 
@@ -112,17 +111,17 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
   }
 
   /**
-   * Where the payload of a phase-two call which carries one is stored while its entry
-   * waits. It lies in a table of its own and the entry names it (see decision 62 in the
-   * repository's DECISIONS.md).
+   * Where the payload of a phase-two call is stored while its entry waits. It lies in a
+   * table of its own, and the entry names it (see decision 62 in the repository's
+   * DECISIONS.md).
    * <p>
-   * The connection is the one Spring binds to the running transaction, so a payload
-   * becomes visible exactly when the entry does. The table is created together with the
-   * outbox table, by the dispatcher of the outbox bean below.
+   * The connection is the one Spring binds to the running transaction. So a payload
+   * becomes visible exactly when the entry does. The dispatcher of the outbox bean below
+   * creates the table together with the outbox table.
    *
    * @param dataSource The data source the payload table lives in
-   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, naming the
-   *          table where the application configured one of its own
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree. It names the table
+   *          where the application configured one of its own
    * @return The payload store of the default JDBC outbox
    */
   @Bean(DEFAULT_PAYLOAD_STORE_BEAN_NAME)
@@ -143,18 +142,18 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
    * relational database. Spring builds it where Spring Data JPA is on the classpath, there
    * is exactly one {@link EntityManagerFactory} next to a {@link DataSource} and a
    * transaction manager, <code>vanillabp.outbox.jdbc.enabled</code> is not
-   * <code>false</code> and no other artifact took the name of this bean; an aggregate
-   * living in MongoDB is served by the MongoDB outbox beside it.
+   * <code>false</code>, and no other artifact took the name of this bean. The MongoDB
+   * outbox beside it serves an aggregate which lives in MongoDB.
    *
    * @param dataSource The data source holding the outbox table
-   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree carrying the
-   *          <code>vanillabp.outbox</code> section (registered here as well so the
-   *          outbox works in contexts without the full VanillaBP auto-configuration)
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree with the
+   *          <code>vanillabp.outbox</code> section. It is registered here as well, so the
+   *          outbox also works in contexts without the full VanillaBP auto-configuration
    * @param payloadStore Where the payload of a call which carries one is written
    * @param phaseTwoRouter Provider of the router a dispatched entry is handed to
    * @param metrics Provider of what a blocked entry is counted into
-   * @return The {@link PhaseTwoOutbox} used by the process services, dispatching on its
-   *         own poller and its own threads - no
+   * @return The {@link PhaseTwoOutbox} which the process services use. It dispatches on
+   *         its own poller and its own threads. No
    *         {@link org.springframework.scheduling.TaskScheduler} is registered or used
    */
   @Bean(DEFAULT_OUTBOX_BEAN_NAME)
@@ -173,21 +172,21 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
   }
 
   /**
-   * Says what the gruelbox store still holds, for an application which upgrades onto this
-   * one. Its entries are in a table of its own and nothing reads that table any more, so
-   * a workflow which was waiting for one of them waits forever - and nothing else would
-   * say so.
+   * Says what the gruelbox store still holds, for an application which upgrades to this
+   * one. Its entries are in a table of its own, and nothing reads that table any more. So
+   * a workflow which was waiting for one of them waits forever, and nothing else would say
+   * so.
    * <p>
-   * Two ways out, and the message names both: drain the entries with the version which
-   * still dispatched them, or keep running gruelbox by adding the artifact which carries
-   * that store. A warning and not a failure, because the entries may as well be the remains
-   * of an application which left that store behind long ago.
+   * There are two ways out, and the message names both. Either drain the entries with the
+   * version which still dispatched them. Or keep running gruelbox by adding the artifact
+   * which carries that store. It is a warning and not a failure, because the entries may
+   * just be the remains of an application which left that store behind long ago.
    *
    * @param dataSource The data source the tables live in
-   * @param tableName The table this store writes into, named in the message so the two
+   * @param tableName The table this store writes into. The message names it, so the two
    *          are not mixed up
-   * @param vanillaBpProperties The bound tree, which carries the collection the whole
-   *          start reports into
+   * @param vanillaBpProperties The bound tree. It carries the collection the whole start
+   *          reports into
    */
   private static void reportWhatTheFormerStoreStillHolds(
       final DataSource dataSource,
@@ -244,8 +243,8 @@ public class JdbcPhaseTwoOutboxAutoConfiguration {
         }
       }
     } catch (final SQLException e) {
-      // a table of that name which is not gruelbox' one - the application knows its
-      // database, and a boot must not end over a question nobody asked
+      // a table of that name which is not gruelbox's. The application knows its database,
+      // and a boot must not end over a question nobody asked
       log.debug("Could not read the table '{}' of the former gruelbox store", FORMER_OUTBOX_TABLE_NAME, e);
       return 0;
     }

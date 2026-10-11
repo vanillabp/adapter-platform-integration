@@ -14,26 +14,26 @@ import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The payload store of the MongoDB-based outbox on Spring Boot: one document per
+ * The payload store of the MongoDB-based outbox on Spring Boot. It holds one document per
  * phase-two call which carries a payload, in a collection of its own
  * (<code>vanillabp.outbox.mongo.payload-collection</code>).
  * <p>
- * The bytes are a field of that document rather than a file in GridFS, which is what
- * bounds a payload at what MongoDB holds in one document, 16 MB. VanillaBP bounds it
- * far below that ({@link PhaseTwoCall#MAX_PAYLOAD_SIZE}), so the same payload is
- * storable whichever store an application runs.
+ * The bytes are a field of that document, not a file in GridFS. So a payload is bounded
+ * by what MongoDB holds in one document, 16 MB. VanillaBP bounds it far below that
+ * ({@link PhaseTwoCall#MAX_PAYLOAD_SIZE}). So the same payload can be stored, whichever
+ * store an application runs.
  * <p>
- * The write goes through the same {@link MongoTemplate} the outbox entry goes through,
- * so it takes part in the running MongoDB transaction where the deployment is a replica
- * set. Without one the write is immediate and a rollback can leave a document behind,
- * which is what {@link #removeOrphansOlderThan(Instant, int)} is for.
+ * The write goes through the same {@link MongoTemplate} as the outbox entry. So it takes
+ * part in the running MongoDB transaction where the deployment is a replica set. Without
+ * a replica set, the write happens at once, and a rollback can leave a document behind.
+ * {@link #removeOrphansOlderThan(Instant, int)} is there for that.
  */
 @Slf4j
 public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
 
   /**
-   * The field the lookup writes the entries naming a payload into. It exists for the
-   * length of the pipeline and is never stored, and it is spelled once because the stage
+   * The field into which the lookup writes the entries that name a payload. It only exists
+   * while the pipeline runs and is never stored. It is spelled once, because the stage
    * which fills it and the stage which reads it have to agree.
    */
   private static final String NAMING_ENTRIES = "namingEntries";
@@ -41,24 +41,25 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   private final MongoTemplate mongoTemplate;
 
   /**
-   * The collection the payload documents live in - one per outbox, for the reason the
-   * outbox itself has one.
+   * The collection the payload documents live in. There is one per outbox, for the same
+   * reason the outbox itself has one.
    */
   private final String collection;
 
   /**
-   * The collection the outbox entries live in. The housekeeping joins it, so the question
-   * which payloads are still named is answered in the database rather than by a set of
-   * references travelling through the application.
+   * The collection the outbox entries live in. The housekeeping joins it. So the database
+   * answers which payloads are still named. No set of references has to travel through the
+   * application.
    */
   private final String entryCollection;
 
   /**
-   * Built by the dispatcher of the outbox this store belongs to, which is what makes the
-   * two agree on the collection.
+   * Built by the dispatcher of the outbox this store belongs to. That way the two agree on
+   * the collection.
    *
-   * @param mongoTemplate The template the payloads are written and read through - the same
-   *          one the entries use, so a payload becomes visible exactly when its entry does
+   * @param mongoTemplate The template the payloads are written and read through. The
+   *          entries use the same one, so a payload becomes visible exactly when its entry
+   *          does
    * @param collection The collection the payload documents go into
    * @param entryCollection The collection the outbox entries lie in, joined by the
    *          housekeeping
@@ -105,8 +106,8 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
     try {
       mongoTemplate.remove(Query.query(Criteria.where("_id").is(reference)), collection);
     } catch (final RuntimeException e) {
-      // the entry it belonged to was dispatched, which is what counts - the document is
-      // removed by the housekeeping instead, one retention period later
+      // the entry it belonged to was dispatched, and that is what counts. The housekeeping
+      // removes the document instead, one retention period later
       log.warn("Could not remove the payload '{}'", reference, e);
     }
 
@@ -115,12 +116,12 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   /**
    * {@inheritDoc}
    * <p>
-   * The entries are joined in the database: the pipeline reads the payloads which are old
-   * enough, looks each of them up among the entries and keeps the ones nothing found. Only
-   * the ids of those come back, at most as many as asked for, and they go into one
-   * <code>deleteMany</code>. The lookup reads the sparse index over the reference inside an
-   * entry's arguments, which is what makes it a lookup rather than a scan (see decision 76
-   * in the repository's DECISIONS.md).
+   * The entries are joined in the database. The pipeline reads the payloads which are old
+   * enough. It looks up each of them among the entries, and keeps the ones for which
+   * nothing was found. Only their ids come back, at most as many as asked for. They go
+   * into one <code>deleteMany</code>. The lookup reads the sparse index over the reference
+   * inside an entry's arguments. That makes it a lookup and not a scan (see decision 76 in
+   * the repository's DECISIONS.md).
    */
   @Override
   public int removeOrphansOlderThan(
@@ -148,8 +149,8 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   }
 
   /**
-   * The payloads which are old enough to go and which no entry names any more, read in one
-   * pipeline.
+   * The payloads which are old enough to go and which no entry names any more. They are
+   * read in one pipeline.
    *
    * @param threshold Payloads written before this moment are candidates
    * @param maxEntries The most references to bring back
@@ -182,10 +183,10 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
   }
 
   /**
-   * Says that bytes were thrown away, at DEBUG and only when there were any. An orphan is a
-   * payload whose outbox entry never reached the collection, so nothing was lost by removing it,
-   * and the normal count is zero. Somebody who finds payloads growing wants to see this line, and
-   * nobody else does.
+   * Says that bytes were thrown away, at DEBUG, and only when there were any. An orphan is
+   * a payload whose outbox entry never reached the collection. So nothing was lost by
+   * removing it, and the normal count is zero. Somebody who finds payloads growing wants to
+   * see this line, and nobody else does.
    *
    * @param removed How many payloads went
    */

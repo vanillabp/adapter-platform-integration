@@ -55,21 +55,21 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackgroundOutput;
 
 /**
- * A dispatch which fails while the node is being stopped, and cannot write down that it
+ * A dispatch which fails while the node is being stopped, and which cannot write down that it
  * failed either.
  * <p>
- * The mark path of this store has been guarded since the store was written: what MongoDB
- * throws while an entry is marked done ends as a report. The failure path was not, and a
- * stop is exactly when it matters - the entry's next write runs into an interrupted
- * thread, MongoDB answers "Interrupted waiting for lock", and the exception leaves the
- * runnable of a lane. What an operator then reads is "Exception in thread
- * vanillabp-outbox-dispatch-1" and a stack trace with nothing around it, on a shutdown
- * where nothing is wrong.
+ * The mark path of this store has been guarded since the store was written. What MongoDB
+ * throws while an entry is marked done ends as a report. The failure path was not guarded,
+ * and a stop is exactly when it matters. The entry's next write runs into an interrupted
+ * thread. MongoDB answers "Interrupted waiting for lock", and the exception leaves the
+ * runnable of a lane. An operator then reads "Exception in thread
+ * vanillabp-outbox-dispatch-1" and a stack trace without any context. And this happens on a
+ * shutdown where nothing is wrong.
  * <p>
- * The one write of this story is made to fail by a spy over the real template, and only
- * that write: an interruption cannot be produced by timing without making the test depend
- * on which of the driver's waits happens to be reached. Everything else - the entry, the
- * claim, the lanes, the poller - is the real store on a real MongoDB.
+ * A spy over the real template makes the one write of this story fail, and only that write.
+ * Timing cannot produce an interruption reliably. The test would then depend on which wait
+ * of the driver it happens to reach. Everything else is the real store on a real MongoDB:
+ * the entry, the claim, the lanes and the poller.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -92,8 +92,8 @@ public class AMongoDispatchInterruptedWhileStoppingTest {
 
   private static final String AGGREGATE = "42";
 
-  // no wait strategy of its own: the one the container brings waits until the MAPPED port
-  // accepts a connection, while a log line only says that mongod listens inside the container
+  // no wait strategy of its own: the container's own strategy waits until the MAPPED port
+  // accepts a connection. A log line only says that mongod listens inside the container
   @Container
   static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB));
 
@@ -101,8 +101,8 @@ public class AMongoDispatchInterruptedWhileStoppingTest {
   private MigrationProcessService<Object> theNode;
 
   /**
-   * What the driver answers a thread which was interrupted while it waited for a
-   * connection. Spring Data wraps it, which is the shape the log of 2026-09-24 carried.
+   * What the driver answers to a thread which was interrupted while it waited for a
+   * connection. Spring Data wraps it. The log of 2026-09-24 showed it in this shape.
    */
   private static class InterruptedWhileWriting extends UncategorizedDataAccessException {
 
@@ -119,8 +119,8 @@ public class AMongoDispatchInterruptedWhileStoppingTest {
   private final CountDownLatch theDispatchWasTried = new CountDownLatch(1);
 
   /**
-   * Set once the dispatch failed, so only the write which follows a failed dispatch is the
-   * one made to fail. The claim, the renewal and the test's own writes go to the database.
+   * Set once the dispatch failed. So only the write after a failed dispatch fails. The claim,
+   * the renewal and the test's own writes reach the database.
    */
   private final AtomicBoolean theDispatchFailed = new AtomicBoolean();
 
@@ -135,7 +135,7 @@ public class AMongoDispatchInterruptedWhileStoppingTest {
   private MongoClient mongoClient;
 
   /**
-   * What left the thread of a lane, which is what this story is about.
+   * What left the thread of a lane. This story is about exactly that.
    */
   private final java.util.List<Throwable> outOfALaneThread = java.util.Collections
       .synchronizedList(new java.util.ArrayList<>());
@@ -201,7 +201,8 @@ public class AMongoDispatchInterruptedWhileStoppingTest {
     }
 
     final var line = lineAbout(entry, "because this node is stopping");
-    // a stop is the ordinary case, so it is said the way a stop is said elsewhere
+    // a stop is the normal case, so the line reads like a stop reads elsewhere
+
     assertEquals(Level.INFO, line.getLevel());
     assertTrue(line.getFormattedMessage().contains("was interrupted"), line.getFormattedMessage());
     assertTrue(

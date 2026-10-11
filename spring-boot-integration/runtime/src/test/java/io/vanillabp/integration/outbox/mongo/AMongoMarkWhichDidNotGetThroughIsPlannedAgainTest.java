@@ -50,18 +50,18 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackgroundOutput;
 
 /**
- * What happens when the dispatch got through and the write which says so did not.
+ * What happens when the dispatch got through but the write which says so did not.
  * <p>
- * That write runs after the renewal of the lease was let go, so it stands outside the attempt
- * and outside the lane's own error handling. An exception there used to leave the thread of
- * the lane without a word, and the entry lay claimed until its lease ran out: the operation
- * had reached the BPMS and nothing in the log said what had become of it. It is reported and
- * planned again instead, the way any attempt which did not get through is.
+ * That write runs after the renewal of the lease has stopped. So it is outside the attempt and
+ * outside the lane's own error handling. An exception there used to leave the thread of the
+ * lane without a word. The entry stayed claimed until its lease ran out. The operation had
+ * reached the BPMS, and nothing in the log said what had become of it. Now the failure is
+ * reported and the entry is planned again, like any other attempt which did not get through.
  * <p>
- * The failing write is a real one, not a double: the unique index over <code>dedupKey</code>
- * is what a dispatched entry writes its own id into, so an entry whose id another document
- * already holds there cannot be marked. That is the same error a store hands back when two
- * nodes race, and it needs nothing mocked.
+ * The failing write is a real one, not a test double. A dispatched entry writes its own id
+ * into <code>dedupKey</code>, which has a unique index. If another document already holds the
+ * id there, the entry cannot be marked. A store gives the same error when two nodes race, and
+ * the test needs no mock for it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -83,13 +83,13 @@ public class AMongoMarkWhichDidNotGetThroughIsPlannedAgainTest {
   private static final String AGGREGATE = "42";
 
   /**
-   * How long the entry waits before the next attempt, which is the distance after the first
-   * failure. Long enough that exactly one attempt happens while this test looks.
+   * How long the entry waits after the first failure before the next attempt. It is long
+   * enough that exactly one attempt happens while this test looks.
    */
   private static final Duration BACKOFF = Duration.ofSeconds(30);
 
-  // no wait strategy of its own: the one the container brings waits until the MAPPED port
-  // accepts a connection, while a log line only says that mongod listens inside the container
+  // no wait strategy of its own: the container's own strategy waits until the MAPPED port
+  // accepts a connection. A log line only says that mongod listens inside the container
   @Container
   static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB));
 
@@ -112,8 +112,8 @@ public class AMongoMarkWhichDidNotGetThroughIsPlannedAgainTest {
     mongoClient = MongoClients.create(mongoDb.getConnectionString());
     mongoTemplate = new MongoTemplate(new SimpleMongoClientDatabaseFactory(mongoClient, DATABASE));
     mongoTemplate.getCollection(COLLECTION).deleteMany(new Document());
-    // the index a running application creates with the collection, and the reason the mark of
-    // this test cannot get through
+    // a running application creates this index with the collection. It is the reason why the
+    // mark of this test cannot get through
     mongoTemplate
         .indexOps(COLLECTION)
         .createIndex(new Index()
@@ -150,8 +150,8 @@ public class AMongoMarkWhichDidNotGetThroughIsPlannedAgainTest {
   }
 
   /**
-   * One bean, as the dispatcher is handed it. A running application gets these from its
-   * container; a test which builds the dispatcher itself has to say what they answer.
+   * One bean, in the form the dispatcher gets it. A running application gets these providers
+   * from its container. A test which builds the dispatcher itself has to say what they answer.
    *
    * @param <T> What the provider stands for
    * @param bean The bean to hand out
@@ -196,9 +196,10 @@ public class AMongoMarkWhichDidNotGetThroughIsPlannedAgainTest {
   }
 
   /**
-   * Writes the entry to be dispatched, and next to it a dispatched entry which already holds
-   * that entry's id as its <code>dedupKey</code>. The mark of the first one therefore cannot
-   * be written.
+   * Writes the entry to be dispatched. Next to it, it writes a dispatched entry which already
+   * holds that entry's id as its <code>dedupKey</code>. So the mark of the first one cannot be
+   * written.
+
    *
    * @return The id of the entry to be dispatched
    */

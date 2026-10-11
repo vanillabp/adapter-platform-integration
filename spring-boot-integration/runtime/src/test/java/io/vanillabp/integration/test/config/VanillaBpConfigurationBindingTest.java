@@ -34,13 +34,17 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Tests the direct binding of the user-facing <code>vanillabp.*</code> tree onto the
- * core model ({@link MigrationAdapterProperties}) - the tree is modeled exactly once,
- * in the core. Also covers the Spring-specific parts kept in the platform: the
- * "adapters found in classpath" check, the case-insensitive
- * <code>deployment-failure</code> enum conversion with a guiding failure, the
- * environment-variable misbinding validation and the coexistence of an adapter-owned
- * overlay class bound to the same <code>vanillabp</code> prefix.
+ * Tests how the user-facing <code>vanillabp.*</code> tree binds directly onto the core model
+ * ({@link MigrationAdapterProperties}). The tree is modeled exactly once, in the core. The
+ * test also covers the Spring-specific parts which stay in the platform:
+ * <ul>
+ * <li>the "adapters found in classpath" check,</li>
+ * <li>the case-insensitive conversion of <code>deployment-failure</code> into its enum, with a
+ * guiding failure,</li>
+ * <li>the check for environment variables which bind to the wrong place, and</li>
+ * <li>an overlay class of an adapter, bound to the same <code>vanillabp</code> prefix next to
+ * the core model.</li>
+ * </ul>
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class VanillaBpConfigurationBindingTest {
@@ -51,9 +55,8 @@ public class VanillaBpConfigurationBindingTest {
           AutoConfigurations.of(SpringBootMigrationAdapterAutoConfiguration.class));
 
   /**
-   * Provides the classpath facts (workflow modules, adapters found) which are
-   * normally determined by scanning - the binding under test is independent of the
-   * scanning.
+   * Provides the classpath facts (workflow modules, adapters found). Usually a scan finds
+   * them. The binding under test does not depend on the scan.
    */
   @Configuration
   static class ClasspathFactsConfiguration {
@@ -80,9 +83,9 @@ public class VanillaBpConfigurationBindingTest {
   }
 
   /**
-   * An adapter-owned overlay of the shared <code>vanillabp.*</code> tree carrying
-   * adapter-specific keys unknown to the core model - the reference shape of the
-   * overlay pattern BPMS adapters use for their connection settings.
+   * An overlay of the shared <code>vanillabp.*</code> tree, owned by an adapter. It holds
+   * adapter-specific keys which the core model does not know. BPMS adapters use this overlay
+   * pattern for their connection settings, and this class shows its reference shape.
    */
   @Getter
   @Setter
@@ -287,8 +290,8 @@ public class VanillaBpConfigurationBindingTest {
   @DisplayName("An environment variable overriding a configured id is accepted")
   public void environmentVariableOverridingConfiguredIdIsAccepted() {
 
-    // the raw (environment-variable shaped) key is visible to the misbinding
-    // validation like a variable of the systemEnvironment property source
+    // the check for misbound keys sees the raw key, shaped like an environment variable, the
+    // same way as a variable of the systemEnvironment property source
     contextRunner
         .withPropertyValues(
             "vanillabp.resources-location=classpath*:vanillabp-processes",
@@ -340,8 +343,8 @@ public class VanillaBpConfigurationBindingTest {
         .run(context -> {
 
           assertNotNull(context.getStartupFailure());
-          // the binder really wrote all four keys into the task's adapter section, which
-          // is why all four are named back
+          // the binder really wrote all four keys into the task's adapter section. That is
+          // why the message names all four
           assertEquals(
               """
                   A setting about a whole BPMN process is read at the workflow, at the workflow module and at the adapter, but it is configured at:
@@ -364,9 +367,9 @@ public class VanillaBpConfigurationBindingTest {
   @DisplayName("The line a message hands over for a job type with a colon binds as it is printed")
   public void theProtectedLineOfImplementedExternallyBinds() {
 
-    // the message prints one line per platform for a name with a dot or a colon; the Spring
-    // Boot one is read here the way a properties file reads it, which is what a developer
-    // pastes it into
+    // for a name with a dot or a colon, the message prints one line per platform. A developer
+    // pastes the Spring Boot line into a properties file. So the test reads it the way a
+    // properties file does
     final var printed = io.vanillabp.integration.adapter.spi.workflowtask.ImplementedExternally
         .propertyLine("test-module", "MyProcess", "io.camunda:http-json:1");
     final var springBootLine = printed
@@ -536,8 +539,8 @@ public class VanillaBpConfigurationBindingTest {
             "vanillabp.adapters.test.type=dummy",
             "vanillabp.adapters.test.deployment-failure=warn",
             "vanillabp.workflow-modules.test-module.prioritized-adapters=test",
-            // adapter-specific keys unknown to the core model - must not break
-            // the platform binding and have to reach the overlay typed
+            // adapter-specific keys which the core model does not know. They must not break
+            // the platform binding, and they have to reach the overlay with their types
             "vanillabp.adapters.test.rest-address=http://localhost:26500",
             "vanillabp.adapters.test.job-timeout=PT5M")
         .run(context -> {
@@ -560,10 +563,10 @@ public class VanillaBpConfigurationBindingTest {
   @DisplayName("An adapter section consisting of nothing but the id configures that adapter")
   public void bareAdapterIdIsBoundAndDefaultsToItsType() {
 
-    // 'withPropertyValues' cannot express a key WITHOUT children, so the YAML is
-    // loaded as a property source - which is exactly the shape a real application
-    // uses (and the shape Quarkus' binding drops, see
-    // QuarkusMigrationAdapterTransformer.QUARKUS_EMPTY_SECTION_NOTE)
+    // 'withPropertyValues' cannot express a key WITHOUT children. So the test loads the YAML
+    // as a property source. A real application uses exactly this shape. Quarkus' binding
+    // drops this shape, see QuarkusMigrationAdapterTransformer.QUARKUS_EMPTY_SECTION_NOTE
+
     contextRunner
         .withInitializer(VanillaBpConfigurationBindingTest::loadBareAdapterIdYaml)
         .run(context -> {

@@ -23,9 +23,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
 
 /**
- * Which runner serves an aggregate on Spring Boot, and what the platform says
- * about the transaction covering its store. The persistence technology is handed in, so the
- * verdicts are pinned without a database.
+ * Which runner serves an aggregate on Spring Boot, and what the platform says about the
+ * transaction which covers its store. The test hands in the persistence technology, so it
+ * fixes the verdicts without a database.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SpringTransactionRunnerResolverTest {
@@ -40,8 +40,8 @@ public class SpringTransactionRunnerResolverTest {
   }
 
   /**
-   * A relational transaction manager, without the infrastructure a real one would want: what
-   * the resolver looks at is the type, and "not a MongoTransactionManager" is the point.
+   * A relational transaction manager, without the infrastructure a real one would need. The
+   * resolver only looks at the type, and the point is "not a MongoTransactionManager".
    */
   private static class RelationalTransactionManager implements PlatformTransactionManager {
 
@@ -107,8 +107,8 @@ public class SpringTransactionRunnerResolverTest {
   }
 
   /**
-   * A context with the given beans, plus a platform runner built from the given manager
-   * (<code>null</code> meaning "this application has none").
+   * A context with the given beans, plus a platform runner built from the given manager.
+   * <code>null</code> means "this application has none".
    */
   private SpringTransactionRunnerResolver resolver(
       final PlatformTransactionManager manager,
@@ -249,7 +249,7 @@ public class SpringTransactionRunnerResolverTest {
     assertTrue(coverage.message().contains("MongoTransactionManager"), coverage.message());
     assertTrue(coverage.message().contains("replica set"), coverage.message());
     assertTrue(coverage.message().contains("TransactionRunnerAware"), coverage.message());
-    // the case which cannot be configured away at all belongs into the same message
+    // the same message also names the case which no configuration can fix
     assertTrue(coverage.message().contains("embedded Camunda 7"), coverage.message());
 
   }
@@ -258,7 +258,7 @@ public class SpringTransactionRunnerResolverTest {
   @DisplayName("A JPA aggregate with only a MongoDB manager cannot be covered either")
   public void jpaAggregateWithMongoManagerOnlyIsUncoverable() {
 
-    // a mock keeps the real type as its superclass, which is what the resolver looks at
+    // a mock keeps the real type as its superclass, and the resolver looks at that type
     final var mongoManager = org.mockito.Mockito
         .mock(org.springframework.data.mongodb.MongoTransactionManager.class);
     final var testee = resolver(mongoManager, Technology.JPA, java.util.Map.of());
@@ -278,8 +278,9 @@ public class SpringTransactionRunnerResolverTest {
         .mock(org.springframework.data.mongodb.MongoTransactionManager.class);
     final var testee = resolver(mongoManager, Technology.MONGO, java.util.Map.of());
 
-    // the replica-set probe finds no MongoTemplate in this context and does not invent a
-    // verdict it cannot support
+    // the replica-set probe finds no MongoTemplate in this context. So it does not make up
+    // a verdict it cannot back
+
     assertEquals(
         TransactionCoverage.Verdict.COVERED,
         testee.coverageOf(OrderAggregate.class).verdict());

@@ -120,8 +120,8 @@ class JpaSpringDataUtilTest {
   }
 
   /**
-   * JPA allows the ID annotation at the getter, and MongoDB reads it there, so the two
-   * persistences have to answer the same name for the same aggregate.
+   * JPA allows the ID annotation at the getter, and MongoDB reads it there. So both
+   * persistence technologies have to answer the same name for the same aggregate.
    */
   @Test
   public void idAnnotationAtTheGetterIsRead() {
@@ -218,8 +218,9 @@ class JpaSpringDataUtilTest {
   }
 
   /**
-   * What the fallback persistence does with that, which is where an
-   * application used to boot and fail at its first task instead.
+   * What the fallback persistence does with an aggregate without a repository. Here an
+   * application used to boot and then fail at its first task.
+
    */
   @Test
   public void aggregateWithoutRepositoryIsReportedWhileStarting() {

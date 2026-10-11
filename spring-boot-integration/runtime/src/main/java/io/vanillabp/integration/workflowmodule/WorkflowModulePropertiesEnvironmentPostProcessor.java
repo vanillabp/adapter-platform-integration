@@ -31,11 +31,11 @@ import org.springframework.core.io.support.ResourcePatternUtils;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleConfigFiles;
 
 /**
- * An {@link EnvironmentPostProcessor} that loads workflow module-specific
- * YAML and properties files into the Spring {@link ConfigurableEnvironment}.
+ * An {@link EnvironmentPostProcessor} which loads the YAML and properties files of each
+ * workflow module into the Spring {@link ConfigurableEnvironment}.
  *
- * <p>For each workflow module discovered via {@code META-INF/workflow-module}
- * classpath resources, the following files are loaded (if present):
+ * <p>Each workflow module is found by its {@code META-INF/workflow-module} classpath
+ * resource. For each one, these files are loaded if they are there:
  * <ul>
  *   <li>{@code {moduleId}.yaml} / {@code {moduleId}.yml}</li>
  *   <li>{@code {moduleId}.properties}</li>
@@ -51,42 +51,39 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowModuleConfigFil
  *   <li>{@code {moduleId}/{filename}}: workflow module subdirectory</li>
  *   <li>{@code {moduleId}/config/{filename}}: config inside workflow module subdirectory</li>
  * </ol>
- * This allows workflow modules packaged as separate Maven/Gradle modules to
- * place their configuration files in a module-specific subdirectory, avoiding
- * classpath conflicts with other modules.
+ * So a workflow module which is packaged as a separate Maven or Gradle module can put its
+ * configuration files in a subdirectory of its own. Then they do not clash with the
+ * files of other modules on the classpath.
  *
- * <p>A workflow module ships <b>defaults</b>: its files are appended at the very
- * end of the environment, below every source the application brings - system
- * properties, environment variables, {@code application.yaml} and
- * {@code application.properties} wherever they live, an external configuration
- * file, {@code defaultProperties}. Whatever the application configures wins,
- * whichever file it uses. Among the module's own files the order is unchanged:
- * profile-specific variants beat base variants, and YAML beats
- * {@code .properties} for the same base name. Quarkus answers the same way
- * (see {@code WorkflowModuleBuildStepProcessor}).
+ * <p>A workflow module ships <b>defaults</b>. Its files are added at the very end of the
+ * environment, below every source the application brings: system properties,
+ * environment variables, {@code application.yaml} and {@code application.properties}
+ * wherever they live, an external configuration file, {@code defaultProperties}.
+ * Whatever the application configures wins, whichever file it uses. Among the module's
+ * own files the order stays the same: profile-specific variants beat base variants, and
+ * YAML beats {@code .properties} for the same base name. Quarkus does the same (see
+ * {@code WorkflowModuleBuildStepProcessor}).
  *
- * <p>Appending instead of inserting after a named source is deliberate. An
- * application may bring config data sources this integration cannot know about
- * ({@code spring.config.import}, {@code spring.config.additional-location}, a
- * source contributed by another {@link EnvironmentPostProcessor}), and matching
- * the name of one known source would put the module's files above all of them.
- * The end of the list is the only position which stays correct whatever the
- * application brings.
+ * <p>The files are added at the end on purpose, and not after a named source. An
+ * application may bring config data sources which this integration cannot know about
+ * ({@code spring.config.import}, {@code spring.config.additional-location}, a source
+ * added by another {@link EnvironmentPostProcessor}). Matching the name of one known
+ * source would put the module's files above all of those. The end of the list is the
+ * only position which stays correct, whatever the application brings.
  *
- * <p>A file named after a profile is read here also where the file without the
- * profile is missing. Quarkus reads it only where the two lie next to each other, so
- * such a file is named at startup together with the file which would make Quarkus read
- * it (see decision 61 in the repository's DECISIONS.md).
+ * <p>Here, a file named after a profile is read even where the file without the profile
+ * is missing. Quarkus only reads it where the two lie next to each other. So at startup,
+ * such a file is named together with the file which would make Quarkus read it (see
+ * decision 61 in the repository's DECISIONS.md).
  *
  * <p>The four locations are the ones {@link WorkflowModuleConfigFiles} names, and Quarkus
- * reads the same four. They are styles rather than a ranking, so a file belongs in exactly
- * one of them: the same file found in two of them ends the boot rather than let one of the
- * two win (see decision 65 in the repository's DECISIONS.md).
+ * reads the same four. They are styles, not a ranking. So a file belongs in exactly one
+ * of them. If the same file is found in two of them, the boot ends, and neither of the
+ * two wins (see decision 65 in the repository's DECISIONS.md).
  *
- * <p><b>Limitation:</b> Multi-document YAML using
- * {@code spring.config.activate.on-profile} is not supported inside workflow
- * module config files. Profile-specific values are placed in files using
- * the profile file-name suffix (e.g. {@code {moduleId}-{profile}.yaml}).
+ * <p><b>Limitation:</b> Multi-document YAML with {@code spring.config.activate.on-profile}
+ * is not supported in the config files of a workflow module. Put profile-specific values
+ * in files with the profile suffix in their name (e.g. {@code {moduleId}-{profile}.yaml}).
  */
 public class WorkflowModulePropertiesEnvironmentPostProcessor implements EnvironmentPostProcessor, Ordered {
 
@@ -96,16 +93,17 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
   private final YamlPropertySourceLoader yamlLoader = new YamlPropertySourceLoader();
 
   /**
-   * An environment post processor runs before the logging system is up, so its lines are
-   * collected and replayed once it is. Spring Boot hands the factory to the constructor.
+   * An environment post processor runs before the logging system is up. So its lines are
+   * collected and written once the logging system is ready. Spring Boot hands the factory
+   * to the constructor.
    */
   private final Log log;
 
   /**
    * Built by Spring Boot, which reads this class from
-   * <code>META-INF/spring.factories</code> and passes the factory it finds in the
+   * <code>META-INF/spring.factories</code>. It passes the factory it finds in the
    * signature. An environment post processor is created long before the application
-   * context, so nothing may be injected here and nothing may be logged directly.
+   * context. So nothing may be injected here, and nothing may be logged directly.
    *
    * @param logFactory Builds the log which keeps its lines until the logging system is up
    */
@@ -117,9 +115,8 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
   }
 
   /**
-   * Run after {@link ConfigDataEnvironmentPostProcessor} so that
-   * {@code application.yaml} is already loaded and active profiles
-   * are known.
+   * Runs after {@link ConfigDataEnvironmentPostProcessor}. Then {@code application.yaml}
+   * is loaded already, and the active profiles are known.
    */
   @Override
   public int getOrder() {
@@ -160,10 +157,9 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
       }
       final var plainFiles = configFiles(resolver, moduleId, null);
 
-      // append below every source the application brings: adding in the order
-      // collected above keeps the priority order among the module's own files,
-      // and the end of the list needs no assumption about what the application
-      // put into its environment
+      // add below every source the application brings. Adding in the order collected
+      // above keeps the priority order among the module's own files. And the end of the
+      // list needs no guess about what the application put into its environment
       Stream
           .concat(profileFiles.stream(), plainFiles.stream())
           .flatMap(ConfigFile::load)
@@ -186,12 +182,12 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
    * Reports the files of a workflow module which this application reads and a Quarkus
    * application would not.
    * <p>
-   * SmallRye, and with it Quarkus, loads {@code id-{profile}.yaml} only where {@code id.yaml}
-   * lies in the same place, while Spring Boot reads every file it finds by name. A workflow
-   * module is a library and ends up on either platform, so a module which ships a file for one
-   * profile and nothing else works here and quietly ships nothing there. Saying it where the
-   * module is built is the cheapest place to learn it (see decision 61 in the repository's
-   * DECISIONS.md).
+   * SmallRye, and with it Quarkus, loads {@code id-{profile}.yaml} only where
+   * {@code id.yaml} lies in the same place. Spring Boot reads every file it finds by name.
+   * A workflow module is a library and may end up on either platform. Say a module ships a
+   * file for one profile and nothing else. It works here, and on Quarkus it silently
+   * configures nothing. The cheapest place to learn that is where the module is built
+   * (see decision 61 in the repository's DECISIONS.md).
    *
    * @param profileFiles The profile-specific files of one workflow module found in the classpath
    * @param plainFiles The files without a profile of the same workflow module
@@ -226,8 +222,8 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
   }
 
   /**
-   * Sorts the files of one workflow module into the places they were found at, so that a
-   * file shipped twice can be seen.
+   * Sorts the files of one workflow module by the places they were found at. That way a
+   * file which is shipped twice shows up.
    *
    * @param configFiles The files of one workflow module found in the classpath
    * @return The places each of them was found at, keyed by the file's name
@@ -238,8 +234,8 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
     final var placesPerFilename = new TreeMap<String, Set<String>>();
     configFiles
         .forEach(configFile -> placesPerFilename
-            // a location found through two prefixes of the same module is one place, which
-            // is what a module whose ID is "config" produces
+            // a location found through two prefixes of the same module is one place. A
+            // module whose ID is "config" produces exactly that
             .computeIfAbsent(configFile.filename(), name -> new TreeSet<>())
             .add(configFile.location()));
     return placesPerFilename;
@@ -247,8 +243,8 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
   }
 
   /**
-   * Find the files of a given module ID and optional profile, ordered by
-   * priority (highest first): YAML before .properties.
+   * Finds the files of a given module ID and optional profile, ordered by priority
+   * (highest first): YAML before .properties.
    */
   private List<ConfigFile> configFiles(
       final ResourcePatternResolver resolver,
@@ -267,8 +263,8 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
   }
 
   /**
-   * Find all files matching the given base name for the given loader, in each of the
-   * four places a workflow module may put a file.
+   * Finds all files which match the given base name for the given loader, in each of the
+   * four places where a workflow module may put a file.
    */
   private List<ConfigFile> findResources(
       final ResourcePatternResolver resolver,
@@ -301,9 +297,8 @@ public class WorkflowModulePropertiesEnvironmentPostProcessor implements Environ
 
   /**
    * A configuration file of a workflow module found in the classpath, together with the
-   * loader which reads its extension. Two files are read by the same loader when they are
-   * both YAML or both {@code .properties}, and only such a pair counts for the rule Quarkus
-   * applies.
+   * loader which reads its extension. Two files have the same loader when both are YAML
+   * or both are {@code .properties}. Only such a pair counts for the rule Quarkus applies.
    *
    * @param moduleId The ID of the workflow module the file belongs to
    * @param location The classpath location the file was found at

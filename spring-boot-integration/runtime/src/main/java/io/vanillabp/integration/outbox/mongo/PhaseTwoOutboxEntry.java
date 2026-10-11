@@ -7,45 +7,46 @@ import org.springframework.data.annotation.Id;
 
 /**
  * A single entry of the MongoDB-based phase-two outbox, stored in the configured
- * collection (<code>vanillabp.outbox.mongo.collection</code>). The entry persists the fields of a
- * {@link io.vanillabp.integration.spi.PhaseTwoCall} - the workflow
- * aggregate's ID in its serialized (String) form; conversion back to the aggregate's
- * ID type happens in the core's router at dispatch time.
+ * collection (<code>vanillabp.outbox.mongo.collection</code>). The entry stores the fields
+ * of a {@link io.vanillabp.integration.spi.PhaseTwoCall}. The workflow aggregate's ID is
+ * kept in its serialized (String) form. The core's router converts it back to the
+ * aggregate's ID type at dispatch time.
  * <p>
- * The {@link #idempotencyKey} carries the call's idempotency key (if present) and stays
- * readable for whoever looks at the collection during support. What deduplicates is
- * {@link #dedupKey}, enforced unique by an index on the collection: it holds that same
- * key while the entry waits for its dispatch and the entry's own id from the moment it
- * was dispatched, so the uniqueness spans the operations which are still planned - the
- * storage-level deduplication of the outbox contract. The {@link #status} lifecycle is
- * {@link #STATUS_OPEN} → {@link #STATUS_DONE} (successful dispatch; deleted
- * asynchronously after the configured retention) or {@link #STATUS_BLOCKED} (too many
- * failed attempts; manual cleanup required). {@link #lastFailure} says why the last attempt
- * did not get through, so a blocked entry names its reason without the log.
+ * The {@link #idempotencyKey} carries the call's idempotency key, if there is one. It
+ * stays readable for whoever looks at the collection during support. What deduplicates
+ * is {@link #dedupKey}, which an index on the collection keeps unique. While the entry
+ * waits for its dispatch, it holds that same key. From the moment the entry was
+ * dispatched, it holds the entry's own id. So the uniqueness spans the operations which
+ * are still planned. That is the deduplication of the outbox contract, at the storage
+ * level. The {@link #status} goes from {@link #STATUS_OPEN} to {@link #STATUS_DONE}
+ * (successful dispatch, deleted in the background after the configured retention) or to
+ * {@link #STATUS_BLOCKED} (too many failed attempts, somebody has to clean up by hand).
+ * {@link #lastFailure} says why the last attempt did not get through. So a blocked entry
+ * names its reason without the log.
  */
 public class PhaseTwoOutboxEntry {
 
   /**
    * An entry which is still waiting for its dispatch. Its {@link #dedupKey} is the
-   * idempotency key, so a second call planning the same operation is discarded while this
-   * entry stands.
+   * idempotency key. So while this entry stands, a second call which plans the same
+   * operation is discarded.
    */
   public static final String STATUS_OPEN = "OPEN";
 
   /**
    * An entry which reached the BPMS. It is kept for <code>vanillabp.outbox.retention</code>
-   * and deleted afterwards, so support can still read what was dispatched, and its
-   * {@link #dedupKey} is its own id by then - the deduplication ends where the dispatch is
-   * over (see decision 22 in the repository's DECISIONS.md).
+   * and deleted afterwards, so support can still read what was dispatched. By then its
+   * {@link #dedupKey} is its own id. The deduplication ends where the dispatch is over
+   * (see decision 22 in the repository's DECISIONS.md).
    */
   public static final String STATUS_DONE = "DONE";
 
   /**
-   * An entry which used up <code>vanillabp.outbox.block-after-attempts</code> attempts, which
-   * waited longer than <code>vanillabp.outbox.wait-for-visibility-at-most</code> for its BPMS,
-   * or whose failure the adapter called permanent. It waits for a person: no poll takes it
-   * again and no retention deletes it, which is why it is the one status somebody has to
-   * clean up by hand.
+   * An entry which used up <code>vanillabp.outbox.block-after-attempts</code> attempts,
+   * which waited longer than <code>vanillabp.outbox.wait-for-visibility-at-most</code> for
+   * its BPMS, or whose failure the adapter called permanent. It waits for a person. No poll
+   * takes it again, and no retention deletes it. That is why it is the one status somebody
+   * has to clean up by hand.
    */
   public static final String STATUS_BLOCKED = "BLOCKED";
 
@@ -79,8 +80,8 @@ public class PhaseTwoOutboxEntry {
   private String aggregateId;
 
   /**
-   * The ID of the BPMS adapter elected at scheduling time (may be
-   * <code>null</code> for future probing operations).
+   * The ID of the BPMS adapter elected at scheduling time. It may be <code>null</code> for
+   * future probing operations.
    */
   private String adapterId;
 
@@ -90,16 +91,17 @@ public class PhaseTwoOutboxEntry {
   private Map<String, String> args;
 
   /**
-   * The call's idempotency key; <code>null</code> if the operation must not be
-   * deduplicated. Descriptive only - it is never used to look an entry up.
+   * The call's idempotency key, <code>null</code> if the operation must not be
+   * deduplicated. It only describes the entry. It is never used to look an entry up.
    */
   private String idempotencyKey;
 
   /**
-   * What the unique index spans: the idempotency key while the entry waits for its
-   * dispatch, the entry's own {@link #id} once it was dispatched or where the operation
-   * must not be deduplicated at all. Never <code>null</code>, so a database treating
-   * two nulls as equal cannot refuse the second keyless entry.
+   * What the unique index spans. While the entry waits for its dispatch, it is the
+   * idempotency key. Once the entry was dispatched, or where the operation must not be
+   * deduplicated at all, it is the entry's own {@link #id}. It is never <code>null</code>.
+   * So a database which treats two nulls as equal cannot refuse the second entry without a
+   * key.
    */
   private String dedupKey;
 
@@ -115,10 +117,10 @@ public class PhaseTwoOutboxEntry {
   private Instant createdAt;
 
   /**
-   * How many dispatch attempts of this entry ENDED, whatever they ended with. Not how often
-   * it was claimed: an entry being dispatched right now has counted nothing yet, which is
-   * what keeps <code>vanillabp.outbox.block-after-attempts</code> from blocking an entry for
-   * being slow.
+   * How many dispatch attempts of this entry ENDED, whatever they ended with. It is not how
+   * often the entry was claimed. An entry which is being dispatched right now has counted
+   * nothing yet. That keeps <code>vanillabp.outbox.block-after-attempts</code> from
+   * blocking an entry for being slow.
    */
   private int attempts;
 
@@ -129,45 +131,45 @@ public class PhaseTwoOutboxEntry {
   private Instant nextAttemptAt;
 
   /**
-   * When the dispatch reached the BPMS, which the retention deletes by.
-   * <code>null</code> while the entry is still open.
+   * When the dispatch reached the BPMS. The retention deletes by it. <code>null</code>
+   * while the entry is still open.
    */
   private Instant doneAt;
 
   /**
-   * Which node is dispatching this entry, <code>null</code> for an entry nobody holds. It
-   * is what a renewal of the lease matches on, so a node whose lease ran out and was taken
-   * over renews nothing.
+   * Which node is dispatching this entry, <code>null</code> for an entry nobody holds. A
+   * renewal of the lease matches on it. So a node whose lease ran out and was taken over
+   * renews nothing.
    */
   private String leasedBy;
 
   /**
    * How long the claim on this entry lasts. No poll takes an entry whose lease has not run
-   * out, and a running dispatch pushes the moment along for as long as it runs (see
+   * out. A running dispatch pushes the moment along for as long as it runs (see
    * {@link io.vanillabp.integration.adapter.migration.outbox.DispatchLease}).
    * <code>null</code> for an entry nobody holds.
    */
   private Instant leasedUntil;
 
   /**
-   * Why the last attempt of this entry did not get through, <code>null</code> where it went
-   * through or where no attempt ended yet. Written together with whatever ended the attempt
-   * - the next due time or the block - and built by
-   * {@link io.vanillabp.integration.adapter.migration.outbox.LastFailure}, so it reads the
-   * same as the column of the JDBC table.
+   * Why the last attempt of this entry did not get through. <code>null</code> where it went
+   * through, or where no attempt ended yet. It is written together with whatever ended the
+   * attempt: the next due time or the block.
+   * {@link io.vanillabp.integration.adapter.migration.outbox.LastFailure} builds it, so it
+   * reads the same as the column of the JDBC table.
    */
   private String lastFailure;
 
   /**
-   * What Spring Data starts from when it reads an entry of the collection: it builds the
-   * empty entry and fills the fields afterwards. The outbox writing an entry uses the
-   * constructor taking every field.
+   * What Spring Data starts from when it reads an entry of the collection. It builds the
+   * empty entry and fills the fields afterwards. The outbox which writes an entry uses the
+   * constructor which takes every field.
    */
   public PhaseTwoOutboxEntry() {
   }
 
   /**
-   * What the outbox writing an entry uses: every field is known at that moment.
+   * What the outbox uses to write an entry. Every field is known at that moment.
    *
    * @param id The entry id
    * @param workflowModuleId The workflow module id

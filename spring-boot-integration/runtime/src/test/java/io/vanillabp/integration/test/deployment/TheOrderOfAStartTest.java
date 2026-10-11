@@ -25,18 +25,18 @@ import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * What a platform integration owes the core when it starts an application: deploy the
- * resources, run the checks which need a deployed adapter, then close the start.
+ * What a platform integration owes the core when it starts an application. It deploys the
+ * resources. It runs the checks which need a deployed adapter. Then it closes the start.
  * <p>
- * The third step is the one nothing else would notice. An integration which never calls
- * {@link DeploymentService#endOfStartup()} boots an application which looks healthy: no
- * block of what the start found, and the reasons not to start sit collected in memory
- * instead of ending the boot. This test is what says so for Spring Boot, and
- * <code>TheOrderOfAStartTest</code> of the Quarkus integration says it there.
+ * Nothing else would notice a missing third step. Take an integration which never calls
+ * {@link DeploymentService#endOfStartup()}. It boots an application which looks healthy.
+ * There is no block of what the start found. The reasons not to start stay collected in
+ * memory, and they do not end the boot. This test catches that for Spring Boot.
+ * <code>TheOrderOfAStartTest</code> of the Quarkus integration catches it there.
  * <p>
- * Where the third step falls differs per platform, and only the order is pinned here.
- * Spring Boot closes its start with the deployment, so that a context which is only
- * refreshed gets the block too, and starts the workflow processing later, on
+ * The moment of the third step differs per platform, so this test fixes only the order.
+ * Spring Boot closes its start together with the deployment. So a context which is only
+ * refreshed gets the block too. Spring Boot starts the workflow processing later, on
  * <code>ApplicationReadyEvent</code>.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -86,9 +86,10 @@ public class TheOrderOfAStartTest {
     testee.start();
     testee.startProcessingOfWorkflows();
 
-    // the Spring Boot order, and the reason the two platforms do not write the same
-    // block: what the start of the workflow processing notices arrives here after the
-    // block was written, so it is logged where it was found
+    // the Spring Boot order. It is the reason why the two platforms do not write the same
+    // block. Here, what the start of the workflow processing notices arrives after the block
+    // was written. So it is logged where it was found
+
     final InOrder aStart = Mockito.inOrder(deploymentService);
     aStart.verify(deploymentService).endOfStartup();
     aStart.verify(deploymentService).startWorkflowProcessing(eq(List.of("test-module")));

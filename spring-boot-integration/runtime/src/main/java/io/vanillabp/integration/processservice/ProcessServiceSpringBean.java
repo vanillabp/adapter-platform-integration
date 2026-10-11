@@ -23,26 +23,26 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * The bean an application injects as {@link io.vanillabp.spi.process.ProcessService}, one
- * per workflow aggregate class. It is registered by {@link ProcessServiceBeanRegistrar};
- * an application never builds one itself and does not name this class anywhere.
+ * per workflow aggregate class. {@link ProcessServiceBeanRegistrar} registers it. An
+ * application never builds one itself and does not name this class anywhere.
  * <p>
  * Almost nothing happens here. Every operation is handed to the
- * {@link MigrationProcessService} this bean holds, which is platform-neutral and does the
- * work: it elects the adapter, asks its questions inside the caller's transaction (see
- * decision 3 in the repository's DECISIONS.md) and writes the outbox entry which acts
- * after the commit (see decision 2 in the repository's DECISIONS.md). The Quarkus
- * integration holds the same object and hands it the same calls.
+ * {@link MigrationProcessService} this bean holds. That service does not know the platform,
+ * and it does the work. It elects the adapter. It asks its questions inside the caller's
+ * transaction (see decision 3 in the repository's DECISIONS.md). And it writes the outbox
+ * entry which acts after the commit (see decision 2 in the repository's DECISIONS.md). The
+ * Quarkus integration holds the same object and hands it the same calls.
  * <p>
- * What this class adds is what only Spring can answer. Before every operation which moves
- * a workflow it checks that a transaction is open, because the aggregate and the outbox
- * entry have to be written together. The question goes to the runner serving this
- * aggregate rather than to Spring, so an application storing its aggregates outside
- * Spring's transactions is not refused a call it can perfectly well make (see decision 11
- * in the repository's DECISIONS.md). The read-only viewer and history calls carry no such
- * check, because they persist nothing.
+ * This class adds what only Spring can answer. Before every operation which moves a
+ * workflow, it checks that a transaction is open. The aggregate and the outbox entry have
+ * to be written together. The question goes to the runner which serves this aggregate, not
+ * to Spring. So an application which stores its aggregates outside Spring's transactions
+ * is not refused a call it can very well make (see decision 11 in the repository's
+ * DECISIONS.md). The read-only viewer and history calls carry no such check, because they
+ * persist nothing.
  * <p>
- * The other half is registration: the bean announces itself at the phase-two router while
- * it is built, so the entries written for its workflow module and BPMN process find their
+ * The other half is registration. The bean announces itself at the phase-two router while
+ * it is built. So the entries written for its workflow module and BPMN process find their
  * way back here after the commit.
  *
  * @param <A> The workflow aggregate class this service serves
@@ -54,22 +54,21 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
   private final MigrationProcessService<A> migrationProcessService;
 
   /**
-   * The process service of EVERY BPMN process id the workflow service classes of this
-   * aggregate declare, the primary one first - set by the
-   * {@link ProcessServiceBeanRegistrar}, which is the only place seeing all declaring classes
-   * at once.
+   * The process service of EVERY BPMN process id which the workflow service classes of this
+   * aggregate declare, the primary one first. The {@link ProcessServiceBeanRegistrar} sets
+   * it. That is the only place which sees all declaring classes at once.
    * <p>
-   * Everything configurable per workflow is configurable for a secondary or declared-only id
-   * too (its prioritized adapters, its outbox, what its leftovers were persisted under), and
-   * each of those services asks its own questions. So the startup validations run over this
-   * list rather than over the primary service alone - the id a rename leaves behind is exactly
-   * the one whose leftovers nobody would otherwise look at.
+   * Everything which can be configured per workflow can also be configured for a secondary
+   * or declared-only id: its prioritized adapters, its outbox, and what its leftovers were
+   * persisted under. Each of those services asks its own questions. So the startup
+   * validations run over this list, not over the primary service alone. The id which a
+   * rename leaves behind is exactly the one whose leftovers nobody would look at otherwise.
    */
   private List<MigrationProcessService<A>> processServicesOfDeclaredIds;
 
   /**
-   * Creates the bean without a transaction-runner resolver - kept for tests; the bean
-   * registrar always passes one. Without a resolver the transaction check falls back to
+   * Creates the bean without a transaction-runner resolver. It is kept for tests. The bean
+   * registrar always passes one. Without a resolver, the transaction check falls back to
    * Spring's own answer.
    *
    * @param workflowModuleId The id of the workflow module this process belongs to
@@ -81,12 +80,12 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
    * @param aggregatePersistenceAware Loads and saves the aggregate, the most specific one
    *     the application brings for this class
    * @param migratableProcessServices The process service of every adapter this application
-   *     loaded, in no particular order - which of them the election asks, and in which
-   *     order, is decided by the configured prioritized adapters
+   *     loaded, in no particular order. The configured prioritized adapters decide which of
+   *     them the election asks, and in which order
    * @param phaseTwoOutboxResolver Says which outbox rides this aggregate's transaction
    * @param phaseTwoRouter Where this bean registers itself as the target of its own
    *     phase-two entries, or <code>null</code> where nothing dispatches
-   * @param workflowAdapterCache Remembers which adapter a workflow was last seen at, so
+   * @param workflowAdapterCache Remembers at which adapter a workflow was last seen. So
    *     the election does not start at the top every time
    * @param taskDeliveryLogResolver Says which delivery log rides this aggregate's
    *     transaction
@@ -110,10 +109,10 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
 
   /**
    * The constructor the bean registrar calls, from the lazy supplier of the bean. Every
-   * collaborator is resolved at that moment rather than while the bean definitions are
-   * read, so neither the persistence infrastructure nor an adapter is created too early.
+   * collaborator is looked up at that moment, not while the bean definitions are read. So
+   * neither the persistence infrastructure nor an adapter is created too early.
    * <p>
-   * The bean registers itself at the router here, which is why the router is a parameter
+   * The bean registers itself at the router here. That is why the router is a parameter,
    * and not something this bean looks up later.
    *
    * @param workflowModuleId The id of the workflow module this process belongs to
@@ -125,18 +124,18 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
    * @param aggregatePersistenceAware Loads and saves the aggregate, the most specific one
    *     the application brings for this class
    * @param migratableProcessServices The process service of every adapter this application
-   *     loaded, in no particular order - which of them the election asks, and in which
-   *     order, is decided by the configured prioritized adapters
+   *     loaded, in no particular order. The configured prioritized adapters decide which of
+   *     them the election asks, and in which order
    * @param phaseTwoOutboxResolver Says which outbox rides this aggregate's transaction
    * @param phaseTwoRouter Where this bean registers itself as the target of its own
    *     phase-two entries, or <code>null</code> where nothing dispatches
-   * @param workflowAdapterCache Remembers which adapter a workflow was last seen at, so
+   * @param workflowAdapterCache Remembers at which adapter a workflow was last seen. So
    *     the election does not start at the top every time
    * @param taskDeliveryLogResolver Says which delivery log rides this aggregate's
    *     transaction
-   * @param transactionRunnerResolver Says which transaction this aggregate is written
-   *     through, and is what the transaction check asks (see decision 11 in the
-   *     repository's DECISIONS.md)
+   * @param transactionRunnerResolver Says through which transaction this aggregate is
+   *     written. The transaction check asks it (see decision 11 in the repository's
+   *     DECISIONS.md)
    */
   public ProcessServiceSpringBean(
       final String workflowModuleId,
@@ -162,8 +161,8 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
         .transactionRunnerResolver(transactionRunnerResolver)
         .build();
 
-    // register as phase-two dispatch target: outbox entries for this workflow
-    // module/BPMN process are routed here after the local transaction was committed
+    // register as phase-two dispatch target. Outbox entries for this workflow module and
+    // BPMN process are routed here after the local transaction was committed
     if (phaseTwoRouter != null) {
       phaseTwoRouter.register(migrationProcessService);
     }
@@ -171,10 +170,10 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
   }
 
   /**
-   * Hands this bean the services of the ids it does not serve itself. Called by
-   * {@link ProcessServiceBeanRegistrar} while it builds the bean, because that is the only
-   * place which sees all classes declaring this aggregate at once. An empty collection
-   * leaves the bean answering with its primary service alone.
+   * Hands this bean the services of the ids it does not serve itself.
+   * {@link ProcessServiceBeanRegistrar} calls it while it builds the bean, because that is
+   * the only place which sees all classes declaring this aggregate at once. With an empty
+   * collection, the bean answers with its primary service alone.
    *
    * @param processServicesOfDeclaredIds The process services of every declared BPMN process
    *          id, the primary one first
@@ -189,12 +188,12 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
   }
 
   /**
-   * What the startup validations walk. They run over every declared id rather than over
-   * the primary one alone, because the id a rename left behind is exactly the one whose
-   * leftovers nobody would otherwise look at.
+   * What the startup validations walk. They run over every declared id, not over the
+   * primary one alone. The id which a rename left behind is exactly the one whose
+   * leftovers nobody would look at otherwise.
    *
-   * @return The process services of every declared BPMN process id, the primary one first;
-   *         the primary one alone where nothing was set (a test constructing this bean)
+   * @return The process services of every declared BPMN process id, the primary one first.
+   *         The primary one alone where nothing was set (a test which builds this bean)
    */
   public List<MigrationProcessService<A>> getProcessServicesOfDeclaredIds() {
 
@@ -224,11 +223,11 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
 
   /**
    * The primary BPMN process id of this aggregate: the process
-   * {@link #startWorkflow(Object)} starts. A workflow service may declare more ids, and
-   * those are served through {@link #getProcessServicesOfDeclaredIds()} rather than here.
+   * {@link #startWorkflow(Object)} starts. A workflow service may declare more ids. Those
+   * are served through {@link #getProcessServicesOfDeclaredIds()}, not here.
    *
-   * @return The BPMN process id, in its plain form - the scoped form a BPMS sees is built
-   *     at the adapter boundary and never reaches this bean
+   * @return The BPMN process id, in its plain form. The scoped form which a BPMS sees is
+   *     built at the adapter boundary and never reaches this bean
    */
   public String getBpmnProcessId() {
 
@@ -237,8 +236,8 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
   }
 
   /**
-   * The aggregate class this bean serves. It is what the bean is injected by, so it is
-   * also how anything holding a list of process services picks the right one.
+   * The aggregate class this bean serves. The bean is injected by it. So anything which
+   * holds a list of process services also uses it to pick the right one.
    *
    * @return The workflow aggregate class
    */
@@ -399,8 +398,8 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
   }
 
   /**
-   * The viewer/history API is READ-ONLY: no transaction is required (nothing is
-   * persisted, the aggregate is only asked for its ID) - see
+   * The viewer and history API is READ-ONLY. No transaction is required: nothing is
+   * persisted, and the aggregate is only asked for its ID. See
    * {@link MigrationProcessService#getProcessDefinitions(Object, String)}.
    */
   @Override
@@ -445,10 +444,10 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
   }
 
   /**
-   * Whether nothing is open the aggregate could be persisted in. The question goes to the
-   * runner serving this aggregate: an application storing its aggregates in a
-   * system Spring does not manage has its own unit of work, and Spring's answer would be
-   * wrong for it. Without a resolver (tests) Spring answers.
+   * Whether nothing is open in which the aggregate could be persisted. The question goes to
+   * the runner which serves this aggregate. An application which stores its aggregates in
+   * a system that Spring does not manage has its own unit of work. Spring's answer would be
+   * wrong for it. Without a resolver (tests), Spring answers.
    */
   private boolean noTransactionIsActive() {
 

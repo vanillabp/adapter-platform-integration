@@ -34,57 +34,57 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Dispatches committed-but-unprocessed entries of the MongoDB-based phase-two outbox
- * through the core's {@link PhaseTwoRouter}:
+ * Dispatches the entries of the MongoDB-based phase-two outbox which were committed but
+ * not processed yet. It hands them to the core's {@link PhaseTwoRouter}:
  * <ul>
- * <li>right after a commit (triggered by {@link MongoPhaseTwoOutbox}) and</li>
- * <li>by a poller (crash recovery and retries) started on
- * {@link ApplicationReadyEvent}, which sleeps until the earliest entry it still owes
- * something to is due rather than polling on a rhythm - bounded by
- * <code>vanillabp.outbox.poll-interval</code> for work another node wrote down before it
- * died (see {@link DueEntryPoller}).</li>
+ * <li>right after a commit (triggered by {@link MongoPhaseTwoOutbox}), and</li>
+ * <li>by a poller (crash recovery and retries) started on {@link ApplicationReadyEvent}.
+ * The poller does not poll on a rhythm. It sleeps until the earliest entry it still owes
+ * something is due. For work which another node wrote down before it died, the sleep is
+ * bounded by <code>vanillabp.outbox.poll-interval</code> (see {@link DueEntryPoller}).</li>
  * </ul>
- * Due entries (status {@link PhaseTwoOutboxEntry#STATUS_OPEN}) are claimed atomically
- * (find-and-modify writing <code>leasedBy</code> and <code>leasedUntil</code>, the lease
- * lasting one <code>vanillabp.outbox.attempt-frequency</code>), so multiple instances do not
- * dispatch the same entry concurrently. <strong>A running dispatch renews its lease</strong>
- * ({@link DispatchLease}), so an entry travelling longer than that distance stays the claim
- * of the node carrying it instead of being taken by the next poll; a node which dies stops
- * renewing and another one takes the entry over once the lease ran out. Every write which
- * says how an attempt ended names the holder of the lease, so a node which lost its entry
- * writes nothing over what the node holding it wrote. A dispatch which
- * FAILS writes the next attempt itself, at the growing distance of
+ * Due entries (status {@link PhaseTwoOutboxEntry#STATUS_OPEN}) are claimed atomically.
+ * A find-and-modify writes <code>leasedBy</code> and <code>leasedUntil</code>, and the
+ * lease lasts one <code>vanillabp.outbox.attempt-frequency</code>. So several instances do
+ * not dispatch the same entry at the same time. <strong>A running dispatch renews its
+ * lease</strong> ({@link DispatchLease}). So an entry which travels longer than that stays
+ * with the node which carries it, and the next poll does not take it. A node which dies
+ * stops renewing, and another node takes the entry over once the lease ran out. Every
+ * write which says how an attempt ended names the holder of the lease. So a node which
+ * lost its entry writes nothing over what the node holding it wrote.
+ * <p>
+ * A dispatch which FAILS writes the next attempt itself. The distance to it grows as
  * {@link io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties#attemptDelay(int)}
- * - doubling per attempt up to <code>vanillabp.outbox.max-attempt-frequency</code>. On successful dispatch the entry is marked
- * {@link PhaseTwoOutboxEntry#STATUS_DONE} - it stays in the collection for support to
- * read, its <code>dedupKey</code> is replaced by its own id so a repetition of the same
- * operation can be planned again, and it is deleted asynchronously once
- * <code>vanillabp.outbox.retention</code> passed. After
- * <code>vanillabp.outbox.block-after-attempts</code> failed attempts an entry is
- * marked {@link PhaseTwoOutboxEntry#STATUS_BLOCKED} and waits for a person, see
+ * says. It doubles per attempt, up to <code>vanillabp.outbox.max-attempt-frequency</code>.
+ * After a successful dispatch, the entry is marked {@link PhaseTwoOutboxEntry#STATUS_DONE}.
+ * It stays in the collection for support to read. Its <code>dedupKey</code> is replaced by
+ * its own id, so a repetition of the same operation can be planned again. It is deleted
+ * in the background once <code>vanillabp.outbox.retention</code> passed. After
+ * <code>vanillabp.outbox.block-after-attempts</code> failed attempts, an entry is marked
+ * {@link PhaseTwoOutboxEntry#STATUS_BLOCKED} and waits for a person, see
  * {@link PhaseTwoOutboxProperties#BLOCKED_ENTRIES_GUIDE}.
  * <p>
- * <strong>An entry says why its last attempt did not get through.</strong> Every write which
- * ends an attempt sets <code>lastFailure</code>: the reason where the attempt failed or was
- * answered with "not yet", nothing where it went through. The text is built by
- * {@link io.vanillabp.integration.adapter.migration.outbox.LastFailure}, so it reads the same
- * as the column of the JDBC table.
+ * <strong>An entry says why its last attempt did not get through.</strong> Every write
+ * which ends an attempt sets <code>lastFailure</code>. It holds the reason where the attempt
+ * failed or was answered with "not yet", and nothing where it went through.
+ * {@link io.vanillabp.integration.adapter.migration.outbox.LastFailure} builds the text, so
+ * it reads the same as the column of the JDBC table.
  * <p>
  * <strong>Waiting for a read model is not an attempt.</strong> A dispatch which the adapter
  * answers with {@link io.vanillabp.integration.spi.PhaseTwoRetryLater} is written back with
- * the window the adapter named, and <code>attempts</code> stays as it was. What ends that
- * wait is time: once <code>vanillabp.outbox.wait-for-visibility-at-most</code> passed since
- * the entry was written, the entry is blocked (see decision 113 in the repository's
+ * the window the adapter named, and <code>attempts</code> stays as it was. Time ends that
+ * wait. Once <code>vanillabp.outbox.wait-for-visibility-at-most</code> passed since the
+ * entry was written, the entry is blocked (see decision 113 in the repository's
  * DECISIONS.md).
  * <p>
  * <strong><code>attempts</code> counts attempts, not claims.</strong> The field is written
- * when an attempt ENDED, together with what became of the entry, so a dispatch which takes
+ * when an attempt ENDED, together with what became of the entry. So a dispatch which takes
  * its time uses up no attempt budget.
  * <p>
- * The poller runs on a private single-thread daemon executor - no
- * {@link org.springframework.scheduling.TaskScheduler} bean is registered or used, so
- * an application's own scheduling setup (e.g. <code>&#64;EnableScheduling</code>)
- * stays unaffected.
+ * The poller runs on a private single-thread daemon executor. No
+ * {@link org.springframework.scheduling.TaskScheduler} bean is registered or used. So an
+ * application's own scheduling setup (e.g. <code>&#64;EnableScheduling</code>) is not
+ * affected.
  */
 @Slf4j
 public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
@@ -96,14 +96,14 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   private final PhaseTwoOutboxProperties properties;
 
   /**
-   * The collection polled for outbox entries - the same one its
-   * {@link MongoPhaseTwoOutbox} writes to.
+   * The collection which is polled for outbox entries. Its {@link MongoPhaseTwoOutbox}
+   * writes to the same one.
    */
   private final String collection;
 
   /**
-   * What a blocked entry is counted into. A provider and not the bean itself, because
-   * Micrometer is optional and the application may bring no metrics at all.
+   * What a blocked entry is counted into. It is a provider and not the bean itself,
+   * because Micrometer is optional, and the application may bring no metrics at all.
    */
   private final ObjectProvider<VanillaBpMetrics> metrics;
 
@@ -127,7 +127,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   private final MongoPhaseTwoPayloadStore payloadStore;
 
   /**
-   * Where this node says that it is house-keeping this store tonight, so no other node
+   * Where this node says that it is house-keeping this store tonight. So no other node
    * measures its work at the same time.
    */
   private final MongoHousekeepingLease housekeepingLease;
@@ -139,7 +139,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   /**
    * Builds the dispatcher together with its payload store, its lease and its poller. The
-   * poller does not run yet: it is started once workflow processing did, so nothing is
+   * poller does not run yet. It starts once workflow processing has started. So nothing is
    * carried to a BPMS which has not seen the models.
    *
    * @param mongoTemplate The template writing and reading the entries
@@ -176,15 +176,15 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * When this store owes something: the due time of the earliest entry waiting for its
+   * When this store owes something: the due time of the earliest entry which waits for its
    * dispatch, or the moment the oldest dispatched entry may be deleted, whichever comes
-   * first. A BLOCKED entry is in neither set - it waits for a person rather than for a
-   * clock, so it must not keep the poller awake.
+   * first. A BLOCKED entry is in neither set. It waits for a person, not for a clock, so it
+   * must not keep the poller awake.
    * <p>
-   * An entry being dispatched right now answers with the end of its lease and not with
-   * "due": the claim and every renewal push <code>nextAttemptAt</code> along with
-   * <code>leasedUntil</code>. Without that the poller would be told "due now" for as long as
-   * the dispatch runs and would ask again at its shortest sleep.
+   * An entry which is being dispatched right now answers with the end of its lease, not
+   * with "due". The claim and every renewal push <code>nextAttemptAt</code> along with
+   * <code>leasedUntil</code>. Without that, the poller would be told "due now" for as long
+   * as the dispatch runs, and it would ask again at its shortest sleep.
    *
    * @return The earliest of the two moments, or <code>null</code> where the collection
    *         holds neither
@@ -219,9 +219,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * The smallest value of one field among the documents a query matches, read as one
-   * document rather than as an aggregation, so the sort is served by the index this store creates
-   * over the status and that field.
+   * The smallest value of one field among the documents a query matches. It is read as one
+   * document and not as an aggregation. So the index which this store creates over the
+   * status and that field serves the sort.
    *
    * @param query What to look at
    * @param field The field to order by and to read
@@ -245,10 +245,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Starts the poller. The first run is executed immediately, dispatching
-   * committed-but-unprocessed entries of a previously crashed instance. The listener
-   * order guarantees that workflow processing started BEFORE any recovered entry is
-   * dispatched (see
+   * Starts the poller. The first run starts at once. It dispatches the entries which a
+   * crashed instance committed but did not process. The listener order makes sure that
+   * workflow processing started BEFORE any recovered entry is dispatched (see
    * {@link io.vanillabp.integration.deployment.SpringBootDeploymentService#OUTBOX_DISPATCHER_LISTENER_ORDER}).
    */
   @Order(SpringBootDeploymentService.OUTBOX_DISPATCHER_LISTENER_ORDER)
@@ -261,9 +260,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Stops the poller, the lanes and the renewal of the leases. What a lane was still holding
-   * stays OPEN in the collection and keeps its lease until it runs out, so another node takes
-   * the entry then.
+   * Stops the poller, the lanes and the renewal of the leases. What a lane was still
+   * holding stays OPEN in the collection. It keeps its lease until the lease runs out, and
+   * then another node takes the entry.
    */
   @PreDestroy
   public void stopPolling() {
@@ -276,8 +275,8 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Pulls the next poll forward to now (used right after a commit, where the entry just
-   * written wants to go out at once).
+   * Pulls the next poll forward to now. It is used right after a commit, where the entry
+   * which was just written should go out at once.
    */
   public void triggerPoll() {
 
@@ -289,13 +288,13 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * Claims all due entries and hands each of them to the lane of its aggregate, then deletes
    * DONE entries whose retention passed. Exceptions are caught to keep the poller alive.
    * <p>
-   * The claim is what this thread does and the dispatch is what a lane does, and the order
-   * matters: an entry is claimed before it is handed over, so the claim of the next poll -
-   * here or on another node - finds it leased and leaves it alone.
+   * This thread does the claim, and a lane does the dispatch. The order matters. An entry
+   * is claimed before it is handed over. So the claim of the next poll, here or on another
+   * node, finds it leased and leaves it alone.
    * <p>
    * A lane whose queue is full makes this thread wait. Waiting is the back pressure of a
-   * backlog which arrives faster than it leaves, and it is what keeps the backlog in the
-   * collection, where it can be read.
+   * backlog which arrives faster than it leaves. It keeps the backlog in the collection,
+   * where it can be read.
    */
   private void poll() {
 
@@ -312,14 +311,14 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
             .orOperator(
                 Criteria.where("leasedUntil").is(null),
                 Criteria.where("leasedUntil").lte(now)));
-        // the oldest entry first, which is what the lanes need: they keep the order they are
-        // handed the entries of one aggregate in, and a claim in whatever order the collection
-        // happens to answer in would hand them over the wrong way round. Served by the index
-        // over the status and that moment
+        // the oldest entry first, because the lanes need that. They keep the order in which
+        // they get the entries of one aggregate. A claim in whatever order the collection
+        // happens to answer would hand them over the wrong way round. The index over the
+        // status and that moment serves the sort
         due.with(Sort.by(Sort.Direction.ASC, "createdAt"));
-        // claim the entry atomically: this node's name and the end of the lease, so other
-        // instances skip it while the dispatch runs and renews. A free lease is what makes
-        // an entry available, never the number of attempts, which says what ENDED
+        // claim the entry atomically: this node's name and the end of the lease. So other
+        // instances skip it while the dispatch runs and renews. Only a free lease makes an
+        // entry available, never the number of attempts, which says what ENDED
         final var leaseEnds = lease.endsAt();
         final var claim = new Update()
             .set("leasedBy", lease.owner())
@@ -339,13 +338,13 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Pushes the lease of an entry this node is dispatching along, in a write of its own, once
-   * per tick of {@link DispatchLease}.
+   * Pushes along the lease of an entry which this node is dispatching. It is a write of
+   * its own, once per tick of {@link DispatchLease}.
    *
    * @param entryId The entry being dispatched
    * @param leaseEnd How long the lease is to last now
-   * @return Whether this node still holds the entry - <code>false</code> where the write
-   *         matched no document, which is the entry being gone or held by somebody else
+   * @return Whether this node still holds the entry. <code>false</code> where the write
+   *         matched no document: the entry is gone, or somebody else holds it
    */
   private boolean renewLease(
       final String entryId,
@@ -368,8 +367,8 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
               collection)
           .getMatchedCount() == 1;
     } catch (final RuntimeException e) {
-      // a collection which cannot be asked says nothing about who holds the entry, so the
-      // renewal keeps trying rather than giving it up over one hiccup
+      // a collection which cannot be asked says nothing about who holds the entry. So the
+      // renewal keeps trying, and does not give the entry up over one hiccup
       log.warn("Could not renew the lease of the phase-two outbox entry '{}' - trying again", entryId, e);
       return true;
     }
@@ -377,12 +376,13 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Hands the entry the poll has just claimed to the lane of its aggregate, with the renewal
-   * of its lease already running.
+   * Hands the entry which the poll has just claimed to the lane of its aggregate. The
+   * renewal of its lease is already running.
    * <p>
-   * The renewal starts here and not where the lane picks the entry up, because between the two
-   * the entry waits in the lane's queue. A wait longer than the lease would let another node
-   * claim an entry this one is about to dispatch, and both would carry the operation out.
+   * The renewal starts here and not where the lane picks the entry up. Between the two, the
+   * entry waits in the lane's queue. A wait longer than the lease would let another node
+   * claim an entry which this one is about to dispatch. Then both would carry the operation
+   * out.
    *
    * @param entry The entry this node has just claimed
    */
@@ -401,9 +401,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * What an entry is ordered by: its workflow aggregate. An entry which names none - a
-   * broadcast signal does not - is ordered by its BPMN process instead, so two signals of one
-   * process still leave in the order they were planned.
+   * What an entry is ordered by: its workflow aggregate. An entry which names none, like a
+   * broadcast signal, is ordered by its BPMN process instead. So two signals of one process
+   * still leave in the order they were planned.
    *
    * @param entry The entry about to be dispatched
    * @return The key deciding which lane dispatches it
@@ -422,10 +422,10 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * success the entry is marked DONE; on failure it stays claimed and is retried
    * after the configured backoff, until it is blocked.
    * <p>
-   * The renewal ends here, before the write which says how the attempt ended. That write needs
-   * a lease which has not run out, which the last renewal gave it, and not one which is still
-   * growing - and a renewal outliving the write would find the entry no longer OPEN and report
-   * a lease it never lost.
+   * The renewal ends here, before the write which says how the attempt ended. That write
+   * needs a lease which has not run out, and the last renewal gave it one. It does not need
+   * a lease which is still growing. And a renewal which outlives the write would find the
+   * entry no longer OPEN, and it would report a lease it never lost.
    *
    * @param entry The claimed entry (holding the state before it was claimed)
    * @param held The renewal which started with the claim, closed when this attempt is over
@@ -435,15 +435,15 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final DispatchLease.Held held) {
 
     final String payloadReference;
-    // everything the attempt does is inside, so the renewal is let go whichever way the
-    // attempt ends - reading the arguments of the entry included
+    // everything the attempt does is inside, including reading the arguments of the
+    // entry. So the renewal is let go, whichever way the attempt ends
     try (held) {
-      // an entry which was taken before is one whose dispatch may have reached the BPMS
-      // already (recovered/retried): the router then runs
-      // the START re-dispatch mitigation. The operation travels as its persisted
-      // name and is resolved by the router's operation registry
-      // the one extra read this form costs, and only for an entry which names a
-      // payload: a lookup by _id, once per dispatch attempt
+      // the dispatch of an entry which was taken before may have reached the BPMS already
+      // (recovered or retried). Then the router runs the START re-dispatch mitigation. The
+      // operation travels as its persisted name, and the router's operation registry
+      // resolves it.
+      // The payload costs one extra read, and only for an entry which names a payload: a
+      // lookup by _id, once per dispatch attempt
       payloadReference = entry.getArgs() == null
           ? null
           : entry.getArgs().get(PhaseTwoCall.ARG_PAYLOAD_REFERENCE);
@@ -465,10 +465,10 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     final var markedDone = new Update()
         .set("status", PhaseTwoOutboxEntry.STATUS_DONE)
         .set("doneAt", Instant.now())
-        // the deduplication window ends with the dispatch: the entry's own id
-        // takes the place of the key, which stays readable in idempotencyKey
+        // the deduplication window ends with the dispatch. The entry's own id takes the
+        // place of the key. The key stays readable in idempotencyKey
         .set("dedupKey", entry.getId())
-        // the attempt is counted where it ended, and the lease given back
+        // the attempt is counted where it ended, and the lease is given back
         .inc("attempts", 1)
         .unset("leasedBy")
         .unset("leasedUntil")
@@ -476,22 +476,22 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         .unset("lastFailure");
     try {
       if (!writeAsTheHolder(entry, markedDone)) {
-        // the entry belongs to another node, and so do its bytes: that node may still be
-        // dispatching and would find a payload which is gone
+        // the entry belongs to another node, and so do its bytes. That node may still be
+        // dispatching, and it would find a payload which is gone
         return;
       }
     } catch (final RuntimeException e) {
       // the dispatch got through and the mark did not, so the entry says nothing about what
-      // happened. It is planned again, which repeats the operation - the at-least-once the
-      // contract names. Said out loud through the same report a failed dispatch uses,
-      // because a mark lost in silence leaves an operation looking undone with nobody to ask
+      // happened. It is planned again, which repeats the operation. That is the
+      // at-least-once which the contract names. It is said out loud, through the same
+      // report a failed dispatch uses. A mark lost in silence leaves an operation which
+      // looks undone, with nobody to ask
       reportFailedDispatch(entry, e);
       return;
     }
-    // the entry is dispatched, so its bytes have done their work. Removed AFTER the
-    // entry was marked, never before: a crash in between leaves a document the
-    // housekeeping deletes, while the other order would leave an entry whose payload
-    // is gone
+    // the entry is dispatched, so its bytes have done their work. They are removed AFTER
+    // the entry was marked, never before. A crash in between leaves a document which the
+    // housekeeping deletes. The other order would leave an entry whose payload is gone
     if (payloadReference != null) {
       payloadStore.remove(payloadReference);
     }
@@ -499,14 +499,14 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Writes down what a failed dispatch means for the entry, and keeps a write which cannot
-   * get through inside this lane.
+   * Writes down what a failed dispatch means for the entry. A write which cannot get
+   * through stays inside this lane.
    * <p>
-   * The mark path is guarded the same way: what the store throws there ends as a report
-   * rather than as an exception leaving the runnable of a lane, where it would be printed
-   * as "Exception in thread vanillabp-outbox-dispatch-1" with a stack trace nobody can
-   * place. The failure path used to be the one which was not guarded, and a shutdown
-   * during a dispatch is exactly when it is not.
+   * The mark path is guarded the same way. What the store throws there ends as a report.
+   * It does not end as an exception which leaves the runnable of a lane. There it would be
+   * printed as "Exception in thread vanillabp-outbox-dispatch-1", with a stack trace nobody
+   * can place. The failure path used to be the one which was not guarded. A shutdown during
+   * a dispatch is exactly when that matters.
    *
    * @param entry The entry whose dispatch failed
    * @param e What the dispatch threw
@@ -524,17 +524,18 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Says that how an attempt ended was not written down, and says which of the two cases it
-   * is.
+   * Says that how an attempt ended was not written down, and says which of the two cases
+   * it is.
    * <p>
-   * Nothing is lost either way: the entry stays as it was, keeps its lease, and the next
-   * node to pick it up dispatches it again once that lease runs out - the at-least-once the
-   * contract names. What differs is who has to do something. A node being STOPPED is the
-   * ordinary case of {@code JdbcPhaseTwoOutboxDispatcher#reportTheEntryNoLaneTook} and is
-   * said at INFO, because a stack trace there sends an operator looking for a fault where a
-   * deployment was. Everything else keeps the sharpness it had.
+   * Nothing is lost either way. The entry stays as it was and keeps its lease. The next
+   * node to pick it up dispatches it again once that lease runs out. That is the
+   * at-least-once which the contract names. What differs is who has to do something. A
+   * node which is being STOPPED is the ordinary case of
+   * {@code JdbcPhaseTwoOutboxDispatcher#reportTheEntryNoLaneTook}. It is said at INFO,
+   * because a stack trace there sends an operator to look for a fault where there was only
+   * a deployment. Everything else stays as sharp as it was.
    * <p>
-   * The interrupt flag is set again before the line is written: the work of this lane is
+   * The interrupt flag is set again before the line is written. The work of this lane is
    * over, and whoever asks the thread next has to see that it was interrupted.
    *
    * @param entry The entry this attempt ran on
@@ -571,9 +572,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Writes down what a failed dispatch means for the entry: blocked where repeating cannot
-   * help, where the attempts are used up or where the entry waited too long for its
-   * BPMS, and a new due time otherwise.
+   * Writes down what a failed dispatch means for the entry. It is blocked where repeating
+   * cannot help, where the attempts are used up, or where the entry waited too long for its
+   * BPMS. Otherwise it gets a new due time.
    *
    * @param entry The entry whose dispatch failed
    * @param e What the dispatch threw
@@ -582,8 +583,8 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final PhaseTwoOutboxEntry entry,
       final Exception e) {
 
-    // the adapter said that repeating cannot help - blocked right away
-    // instead of after the configured attempts
+    // the adapter said that repeating cannot help. So the entry is blocked right away,
+    // and not after the configured attempts
     if (PhaseTwoPermanentFailure.isPermanent(e)) {
       if (!writeAsTheHolder(entry, blockEntry(entry.getId(), LastFailure.of(e)))) {
         return;
@@ -626,8 +627,8 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           e);
       return;
     }
-    // the entry holds the attempts which ended before this one, so attemptDelay(0) is
-    // the distance after the first failure: close, because most failures are
+    // the entry holds the attempts which ended before this one. So attemptDelay(0) is the
+    // distance after the first failure. It is short, because most failures are
     // momentary
     final var retryIn = properties.attemptDelay(entry.getAttempts());
     if (!writeAsTheHolder(entry, dueAgainAt(Instant.now().plus(retryIn), LastFailure.of(e)))) {
@@ -650,9 +651,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   /**
    * Writes down that the BPMS of the entry does not report its workflow yet. The entry
-   * waits the window the adapter named instead of the configured backoff, and the attempt
-   * is not counted, because a read model which is behind is no failure of the entry. What
-   * ends a wait which never ends is the time since the entry was written:
+   * waits for the window the adapter named, not for the configured backoff. The attempt is
+   * not counted, because a read model which is behind is no failure of the entry. A wait
+   * which would never end is ended by the time since the entry was written:
    * <code>vanillabp.outbox.wait-for-visibility-at-most</code>.
    *
    * @param entry The entry whose dispatch was answered with "not yet"
@@ -708,16 +709,16 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Writes down how an attempt ended, on the entry this node holds. The name of this node is
-   * in the condition next to the id, so a node whose lease was taken over writes nothing: the
-   * node holding the entry is carrying the same operation out, and its answer is the one the
-   * collection keeps. The most expensive write to lose that race is a block over an entry the
-   * other node has just dispatched, because somebody would be asked to repair an operation
-   * which succeeded.
+   * Writes down how an attempt ended, on the entry this node holds. The name of this node
+   * is in the condition, next to the id. So a node whose lease was taken over writes
+   * nothing. The node which holds the entry carries out the same operation, and the
+   * collection keeps its answer. The most expensive write to lose that race is a block over
+   * an entry which the other node has just dispatched. Then somebody would be asked to
+   * repair an operation which succeeded.
    *
    * @param entry The entry this attempt ran on
    * @param update What to write on it
-   * @return Whether this node still held the entry, so the write took
+   * @return Whether this node still held the entry, so that the write took effect
    */
   private boolean writeAsTheHolder(
       final PhaseTwoOutboxEntry entry,
@@ -741,13 +742,13 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Says that an attempt ended on an entry this node does not hold any more, so what it wanted
-   * to write was dropped.
+   * Says that an attempt ended on an entry which this node does not hold any more. So what
+   * it wanted to write was dropped.
    * <p>
    * The renewal said the same thing earlier, at the moment the entry changed hands. This
-   * message is the other end of it and is worth its own line: it names the operation which ran
-   * twice, and it is the proof that the second run did not overwrite what the node holding the
-   * entry wrote.
+   * message is the other end of it, and it is worth its own line. It names the operation
+   * which ran twice. And it proves that the second run did not overwrite what the node
+   * which holds the entry wrote.
    *
    * @param entry The entry which was taken over while this node dispatched it
    */
@@ -768,11 +769,11 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Whether a dispatch has had this entry before, which is what makes a START probe the BPMS
-   * it was meant for instead of starting a second workflow. An attempt which ended is
-   * counted; an attempt whose node died in the middle left its name on the entry and nothing
-   * else, and the claim answers with the document as it was BEFORE the claim, so that name is
-   * the one of the node before this one.
+   * Whether a dispatch has had this entry before. If so, a START probes the BPMS it was
+   * meant for, and does not start a second workflow. An attempt which ended is counted. An
+   * attempt whose node died in the middle left its name on the entry, and nothing else. The
+   * claim answers with the document as it was BEFORE the claim. So that name is the one of
+   * the node before this one.
    *
    * @param entry The claimed entry, as it stood before the claim
    * @return Whether an attempt ended or a holder disappeared
@@ -785,10 +786,10 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Hands the call to the core's router and reports how long its entry waited for this
-   * attempt, whether the attempt succeeded or threw. The wait is counted from the
-   * moment the entry was written, so a repeated attempt reports the whole wait of the
-   * operation and not the distance since the last try.
+   * Hands the call to the core's router. Then it reports how long its entry waited for this
+   * attempt, whether the attempt succeeded or threw. The wait is counted from the moment the
+   * entry was written. So a repeated attempt reports the whole wait of the operation, not
+   * the distance since the last try.
    *
    * @param call The call to dispatch
    * @param previouslyAttempted Whether the entry was dispatched before
@@ -813,9 +814,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * @param writtenAt When the entry was written - <code>null</code> only for a document
-   *          somebody else wrote into the collection without that field, whose attempt
-   *          is not measured rather than measured from now
+   * @param writtenAt When the entry was written. <code>null</code> only for a document
+   *          which somebody else wrote into the collection without that field. Its attempt
+   *          is not measured, rather than measured from now
    * @param outcome How the attempt ended
    */
   private void reportWait(
@@ -837,9 +838,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Counts an entry this store gave up on. The gauge of waiting entries drops at the
-   * same moment, so without this counter the only number an operator watches would move
-   * as if things had got better.
+   * Counts an entry which this store gave up on. The gauge of waiting entries drops at the
+   * same moment. So without this counter, the only number an operator watches would move as
+   * if things had got better.
    *
    * @param operation The persisted name of the operation which was lost
    * @param permanent Whether the adapter said that repeating cannot help
@@ -855,10 +856,10 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Says when an entry whose attempt did not get through is to be read again, counts that
-   * attempt and gives the lease back. All three in one write, because an entry which is due
-   * again while still leased would be waited out to the end of the lease. The reason goes
-   * into the same write, so an entry which is still being repeated says why it hangs.
+   * Says when an entry whose attempt did not get through is to be read again. It counts
+   * that attempt and gives the lease back. All three happen in one write. An entry which is
+   * due again while it is still leased would wait until the end of the lease. The reason
+   * goes into the same write. So an entry which is still being repeated says why it hangs.
    *
    * @param nextAttempt When it is to be read again
    * @param reason Why the attempt did not get through, as {@link LastFailure} words it
@@ -878,12 +879,12 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Says when the entry is to be read again after its BPMS did not report the workflow yet,
-   * and gives the lease back. It is {@link #dueAgainAt(Instant, String)} without the count: waiting
-   * for a read model is not a failed attempt, and counting it blocked entries after a few
-   * minutes of a stopped exporter. The time the entry waited is read from
-   * <code>createdAt</code> instead. The answer is written as the last failure, because it is
-   * why the entry waits.
+   * Says when the entry is to be read again after its BPMS did not report the workflow
+   * yet, and gives the lease back. It is {@link #dueAgainAt(Instant, String)} without the
+   * count. Waiting for a read model is not a failed attempt. Counting it blocked entries
+   * after a few minutes of a stopped exporter. The time the entry waited is read from
+   * <code>createdAt</code> instead. The answer is written as the last failure, because it
+   * is why the entry waits.
    *
    * @param nextAttempt When the entry is to be read again
    * @param reason The answer of the adapter, as {@link LastFailure} words it
@@ -902,14 +903,14 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Blocks an entry and releases its <code>dedupKey</code> the way a dispatched entry
-   * releases it. Easy to miss and the reason a blocked entry used to be a dead end: the
-   * key is what refuses a second schedule of the same operation, so a blocked entry
-   * which kept it would silence the very repetition the application needs - it would
-   * ask, the outbox would answer no, and that answer looks exactly like a correct
+   * Blocks an entry and releases its <code>dedupKey</code>, the same way a dispatched entry
+   * releases it. This is easy to miss, and it is why a blocked entry used to be a dead end.
+   * The key refuses a second schedule of the same operation. So a blocked entry which kept
+   * it would silence the very repetition the application needs. The application would ask,
+   * the outbox would answer no, and that answer looks exactly like a correct
    * deduplication. The document stays for whoever repairs it, and the new attempt of the
-   * operation is a document of its own. The reason goes into the same write, so whoever
-   * finds the document reads why without the log.
+   * operation is a document of its own. The reason goes into the same write. So whoever
+   * finds the document reads why, without the log.
    *
    * @param entryId The id of the entry to block
    * @param reason Why it is blocked, as {@link LastFailure} words it
@@ -923,7 +924,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         .set("status", PhaseTwoOutboxEntry.STATUS_BLOCKED)
         .set("dedupKey", entryId)
         .set("lastFailure", reason)
-        // the attempt which led here is counted, and the lease given back
+        // the attempt which led here is counted, and the lease is given back
         .inc("attempts", 1)
         .unset("leasedBy")
         .unset("leasedUntil");
@@ -957,10 +958,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   /**
    * {@inheritDoc}
    * <p>
-   * MongoDB knows no bound on a delete, so the ids of the entries which may go are read
-   * first, at most as many as asked for, and they go into one <code>deleteMany</code>.
-   * The read is served by the index over the status and the moment an entry was
-   * dispatched.
+   * MongoDB knows no limit on a delete. So the ids of the entries which may go are read
+   * first, at most as many as asked for. They go into one <code>deleteMany</code>. The
+   * index over the status and the moment an entry was dispatched serves the read.
    */
   @Override
   public int removeDispatchedEntriesOlderThan(
@@ -995,10 +995,10 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   /**
    * {@inheritDoc}
    * <p>
-   * The entries were removed first, so the payloads they named are named by nothing now
-   * and go with this call. What an entry still names - an entry which waits, and an entry
-   * which is blocked until somebody repairs it - is not removed by age at all, which the
-   * payload store asks its own entries about.
+   * The entries were removed first. So nothing names their payloads now, and they go with
+   * this call. A payload which an entry still names is not removed by age at all. Such an
+   * entry waits, or it is blocked until somebody repairs it. The payload store asks its own
+   * entries about that.
    */
   @Override
   public int removeOrphanedPayloadsOlderThan(
@@ -1024,7 +1024,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
                       .lt(threshold)),
                   collection));
     } catch (final RuntimeException e) {
-      // a number which could not be read stays a gap in the meter rather than a zero
+      // a number which could not be read stays a gap in the meter, not a zero
       log.debug("Could not count the dispatched entries of the outbox collection '{}'", collection, e);
       return OptionalLong.empty();
     }
@@ -1032,8 +1032,8 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Where the bytes of a call which carries a payload lie - what the store writing an
-   * entry writes them into, in the same transaction.
+   * Where the bytes of a call which carries a payload lie. The store which writes an entry
+   * writes them there, in the same transaction.
    *
    * @return The payload store of this outbox
    */

@@ -23,11 +23,11 @@ import io.vanillabp.integration.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.workflowmodule.WorkflowModules;
 
 /**
- * Two stores of one database pointed at the same table or collection, asked of a
- * BOOTING Spring Boot application. The rule itself is the core's
- * ({@code OutboxStoresRefuseASharedNameTest} of the migration adapter holds it); what
- * this asks is whether an application which writes those keys gets the message before
- * the first store works on the wrong place.
+ * Two stores of one database which point at the same table or collection, checked in a
+ * BOOTING Spring Boot application. The rule itself belongs to the core, and
+ * {@code OutboxStoresRefuseASharedNameTest} of the migration adapter holds it. This test asks
+ * something else. Does an application which writes those keys get the message before the
+ * first store works on the wrong place?
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OutboxStoresRefuseASharedNameTest {
@@ -42,8 +42,9 @@ public class OutboxStoresRefuseASharedNameTest {
 
   /**
    * What a scan would find in an application: one workflow module and one adapter. The
-   * configuration under test is about neither of them, and without both the boot ends
+   * configuration under test is about neither of them. But without both, the boot ends
    * before it reads the outbox section.
+
    */
   @Configuration
   static class ClasspathFactsConfiguration {

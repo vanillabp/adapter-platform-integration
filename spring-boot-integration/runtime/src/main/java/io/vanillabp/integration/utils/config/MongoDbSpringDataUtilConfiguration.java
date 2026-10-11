@@ -11,12 +11,12 @@ import io.vanillabp.integration.utils.impl.MongoDbSpringDataUtil;
 
 /**
  * Configuration of the MongoDB-based
- * {@link io.vanillabp.integration.utils.SpringDataUtil}. Usually it is activated by
- * {@link MongoDbSpringDataUtilAutoConfiguration} once a
- * {@link MongoDatabaseFactory} is available. Import this configuration explicitly
- * ({@code @Import(MongoDbSpringDataUtilConfiguration.class)}) to override the
- * default precedence, e.g. to force MongoDB-based aggregate persistence in an
- * application using both JPA and MongoDB.
+ * {@link io.vanillabp.integration.utils.SpringDataUtil}. Usually
+ * {@link MongoDbSpringDataUtilAutoConfiguration} activates it once a
+ * {@link MongoDatabaseFactory} is available. Import this configuration yourself
+ * ({@code @Import(MongoDbSpringDataUtilConfiguration.class)}) to change the default
+ * order. An example is an application which uses both JPA and MongoDB and wants
+ * MongoDB for aggregate persistence.
  */
 @Configuration
 public class MongoDbSpringDataUtilConfiguration {
@@ -30,13 +30,12 @@ public class MongoDbSpringDataUtilConfiguration {
   }
 
   /**
-   * What VanillaBP loads and saves a workflow aggregate through where the aggregate is a
-   * MongoDB document.
+   * What VanillaBP uses to load and save a workflow aggregate which is a MongoDB document.
    *
-   * @param applicationContext Where the aggregates' repositories are looked up - once per
+   * @param applicationContext Where the aggregates' repositories are looked up, once per
    *          aggregate type, and cached afterwards
-   * @param mongoDbFactory Read only where the application brings no converter: the default
-   *          converter is built from it
+   * @param mongoDbFactory Only read where the application brings no converter. Then the
+   *          default converter is built from it
    * @param mongoConverter What maps a document to its class and says which property holds
    *          the id. <code>null</code> where the application defines none, and the
    *          <code>MongoTemplate</code> default is built instead

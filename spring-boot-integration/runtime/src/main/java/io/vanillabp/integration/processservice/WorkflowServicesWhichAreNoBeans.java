@@ -23,36 +23,40 @@ import io.vanillabp.spi.service.WorkflowService;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The class which carries <code>&#64;WorkflowService</code>, declares a BPMN process nothing
- * serves, and never became a bean - a forgotten <code>&#64;Service</code>, and the reason an
- * application looks like it is doing nothing at all with a workflow service somebody wrote.
+ * The class which carries <code>&#64;WorkflowService</code>, declares a BPMN process which
+ * nothing serves, and never became a bean. Usually a <code>&#64;Service</code> was
+ * forgotten. Then an application seems to do nothing at all with a workflow service
+ * somebody wrote.
  * <p>
- * On Spring Boot a workflow service is found because it is a bean (decision 21 in the
- * repository's DECISIONS.md), which is why the discovery cannot see such a class: it walks the
- * bean definitions, and a class nobody registered a bean of has no definition to walk. Reading
- * class resources is the only way to the answer, and it is expensive - the measurement of that
- * entry is 42 816 class resources and 15.9 of 24.4 seconds of a start under
- * <code>spring-boot:run</code>. So it is done exactly once, on a boot which is already
- * reporting a BPMN process nothing claims, and never on a healthy one: no report, no scan.
+ * On Spring Boot, a workflow service is found because it is a bean (decision 21 in the
+ * repository's DECISIONS.md). That is why the discovery cannot see such a class. It walks
+ * the bean definitions, and a class of which nobody registered a bean has no definition to
+ * walk. Only reading class resources gives the answer, and that is expensive. The
+ * measurement in that entry is 42 816 class resources, and 15.9 of 24.4 seconds of a start
+ * under <code>spring-boot:run</code>. So it is done exactly once, on a boot which already
+ * reports a BPMN process which nothing claims. It never runs on a healthy boot: no report,
+ * no scan.
  *
  * <h2>What narrows the answer</h2>
  *
- * A class produces a line only where BOTH hold: it declares one of the processes being
- * reported, and its classpath root belongs to the workflow module being reported. Without the
- * second half a class which another profile brings for a DIFFERENT module fires on every boot
- * of an application which has one unclaimed process anywhere, and a warning which cries wolf is
- * read once.
+ * A class produces a line only where BOTH hold: it declares one of the processes which are
+ * reported, and its classpath root belongs to the workflow module which is reported.
+ * Without the second half, think of a class which another profile brings for a DIFFERENT
+ * module. It would fire on every boot of an application with one unclaimed process
+ * anywhere. And a warning which cries wolf is read only once.
  * <p>
- * The whole classpath is read only where the module's own root yielded nothing, because the
- * workflow services of the GLOBAL workflow module live in a root with no marker file at all. A
- * class found that way is kept only where its root carries no workflow module descriptor
- * either: a root with one belongs to that module, not to the one being reported.
+ * The whole classpath is read only where the module's own root found nothing. The reason
+ * is the GLOBAL workflow module: its workflow services live in a root with no marker file
+ * at all. A class found that way is only kept where its root carries no workflow module
+ * descriptor either. A root with a descriptor belongs to that module, not to the one which
+ * is reported.
  *
  * <h2>What the sentence may not claim</h2>
  *
- * That the class is a defect. The boot cannot tell a forgotten bean-defining annotation from a
- * class belonging to a profile which is not active or to another application - decision 21 says
- * so in as many words - so the line names both readings and lets the developer decide.
+ * That the class is a defect. The boot cannot tell a forgotten bean-defining annotation
+ * from a class which belongs to a profile that is not active, or to another application.
+ * Decision 21 says exactly that. So the line names both readings and lets the developer
+ * decide.
  */
 @Slf4j
 public class WorkflowServicesWhichAreNoBeans implements UnclaimedBpmnProcessHints {
@@ -67,13 +71,13 @@ public class WorkflowServicesWhichAreNoBeans implements UnclaimedBpmnProcessHint
 
   /**
    * Built once per application by the autoconfiguration and handed to the deployment. It
-   * reads nothing here: the scan runs at most once, on a boot which is already reporting a
-   * BPMN process nobody claims.
+   * reads nothing here. The scan runs at most once, on a boot which already reports a BPMN
+   * process which nobody claims.
    *
-   * @param resourceLoader Reads the class resources of the classpath, which is what makes
-   *     a class visible that never became a bean
-   * @param allWorkflowModules Says which classpath root belongs to which workflow module,
-   *     so a class of another module is not reported here
+   * @param resourceLoader Reads the class resources of the classpath. That makes a class
+   *     visible which never became a bean
+   * @param allWorkflowModules Says which classpath root belongs to which workflow module.
+   *     So a class of another module is not reported here
    */
   public WorkflowServicesWhichAreNoBeans(
       final ResourceLoader resourceLoader,
@@ -120,9 +124,9 @@ public class WorkflowServicesWhichAreNoBeans implements UnclaimedBpmnProcessHint
     if (!found.isEmpty()) {
       return found;
     }
-    // the global workflow module: its descriptor sits in a root of its own while its
-    // workflow services live in roots which carry no descriptor at all, so the module's
-    // root cannot lead to them and the whole classpath has to be read
+    // the global workflow module: its descriptor sits in a root of its own, and its
+    // workflow services live in roots which carry no descriptor at all. So the module's
+    // root cannot lead to them, and the whole classpath has to be read
     return classesDeclaring(
         CLASS_RESOURCES_OF_THE_CLASSPATH,
         bpmnProcessIds,
@@ -133,15 +137,15 @@ public class WorkflowServicesWhichAreNoBeans implements UnclaimedBpmnProcessHint
   }
 
   /**
-   * The classes matching the given resource pattern which declare one of the reported BPMN
-   * processes, as the lines the report appends.
+   * The classes which match the given resource pattern and declare one of the reported BPMN
+   * processes. They come as the lines the report appends.
    *
    * @param pattern The class resources to read
    * @param bpmnProcessIds The BPMN process ids nothing claims
    * @param resolver Resolves the pattern
    * @param metadata Reads a class' annotations without loading the class
-   * @param rootsWhichDisqualify Classpath roots a candidate must NOT come from - the roots of
-   *          the workflow modules, where the whole classpath is being read
+   * @param rootsWhichDisqualify Classpath roots a candidate must NOT come from. These are the
+   *          roots of the workflow modules, where the whole classpath is read
    * @return One line per class, in the order the classes were read
    */
   private List<String> classesDeclaring(
@@ -155,7 +159,7 @@ public class WorkflowServicesWhichAreNoBeans implements UnclaimedBpmnProcessHint
     try {
       classResources = resolver.getResources(pattern);
     } catch (final IOException e) {
-      // a classpath which cannot be read is not this report's business to complain about
+      // complaining about a classpath which cannot be read is not the job of this report
       log.debug("Could not read the class resources of '{}'", pattern, e);
       return List.of();
     }
@@ -200,13 +204,13 @@ public class WorkflowServicesWhichAreNoBeans implements UnclaimedBpmnProcessHint
   }
 
   /**
-   * The class behind the given resource together with the BPMN process ids its
-   * <code>&#64;WorkflowService</code> declares, or an empty entry where it carries none.
+   * The class behind the given resource, together with the BPMN process ids its
+   * <code>&#64;WorkflowService</code> declares. An empty entry where it carries none.
    * <p>
-   * The annotation is <code>&#64;Inherited</code>, so a class extending an annotated one is a
-   * workflow service too and the walk goes up the superclasses - and it is the class at the
-   * BOTTOM which names itself where the declaration names no process, because that is the class
-   * which serves (decision 32 in the repository's DECISIONS.md).
+   * The annotation is <code>&#64;Inherited</code>. So a class which extends an annotated
+   * one is a workflow service too, and the walk goes up the superclasses. Where the
+   * declaration names no process, the class at the BOTTOM names itself, because that is
+   * the class which serves (decision 32 in the repository's DECISIONS.md).
    */
   private static Map.Entry<String, List<String>> declaredProcessesOf(
       final Resource classResource,
@@ -249,7 +253,7 @@ public class WorkflowServicesWhichAreNoBeans implements UnclaimedBpmnProcessHint
 
     final var declared = new LinkedHashMap<String, Boolean>();
     final var primary = ((Map<String, Object>) workflowService.get("bpmnProcess")).get("bpmnProcessId");
-    // an empty id is the convention: the simple name of the class which serves
+    // an empty id means the convention: the simple name of the class which serves
     declared
         .put(
             (primary == null) || String.valueOf(primary).isEmpty()
@@ -272,8 +276,9 @@ public class WorkflowServicesWhichAreNoBeans implements UnclaimedBpmnProcessHint
   }
 
   /**
-   * One line per class, naming the processes it declares: the reader of this report is looking
-   * for a class to fix, and a class declaring several processes is one finding, not several.
+   * One line per class, which names the processes it declares. The reader of this report
+   * looks for a class to fix. A class which declares several processes is one finding, not
+   * several.
    */
   private static String describe(
       final String className,

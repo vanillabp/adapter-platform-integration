@@ -18,36 +18,35 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
 
 /**
- * Spring Boot implementation of the core's {@link PhaseTwoOutboxResolver}: resolves
- * the {@link PhaseTwoOutbox} used for a workflow aggregate so outbox entries always
- * ride the aggregate's own transaction (also in mixed-persistence applications).
- * Resolution order:
+ * Spring Boot implementation of the core's {@link PhaseTwoOutboxResolver}. It finds the
+ * {@link PhaseTwoOutbox} for a workflow aggregate. So outbox entries always ride the
+ * aggregate's own transaction, also in applications with mixed persistence. The order:
  * <ol>
- * <li>the most specific {@link PhaseTwoOutboxAware} bean covering the aggregate
+ * <li>the most specific {@link PhaseTwoOutboxAware} bean which covers the aggregate
  * class,</li>
- * <li>the single {@link PhaseTwoOutbox} bean if exactly one exists - unless it is a
- * platform default NOT matching the aggregate's detectable persistence technology
- * (that mismatch would break the outbox's atomicity guarantee and fails with a
- * guiding message instead),</li>
- * <li>with several outbox beans: the platform-default bean matching the persistence
- * technology managing the aggregate (JPA-managed → the JDBC default, Mongo-managed →
- * the MongoDB default). The technology is detected from the aggregate's Spring Data
- * repository type.</li>
+ * <li>the single {@link PhaseTwoOutbox} bean if exactly one exists. The exception is a
+ * platform default which does NOT match the persistence technology detected for the
+ * aggregate. That mismatch would break the outbox's atomicity guarantee, so it fails
+ * with a guiding message instead,</li>
+ * <li>with several outbox beans: the platform-default bean which matches the persistence
+ * technology of the aggregate (managed by JPA → the JDBC default, managed by MongoDB →
+ * the MongoDB default). The technology is detected from the type of the aggregate's
+ * Spring Data repository.</li>
  * </ol>
- * If no outbox can be attributed, a guiding {@link IllegalStateException} names the
- * beans found and the remedy (provide a {@link PhaseTwoOutboxAware} bean).
+ * If no outbox can be assigned, a guiding {@link IllegalStateException} names the beans
+ * found and the remedy (provide a {@link PhaseTwoOutboxAware} bean).
  * <p>
  * The delivery-log resolver next to this one walks the same three steps. The two stay
- * apart on purpose: they look up different bean types and each message names the properties
- * of its own store. A shared step-walker would have to be handed all of that, and every
- * reader of either resolver would have to open it to see what happens.
+ * apart on purpose. They look up different bean types, and each message names the
+ * properties of its own store. A shared step-walker would need all of that handed in. And
+ * every reader of either resolver would have to open it to see what happens.
  */
 public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
   /**
-   * The name the JPA default goes by. A store contributed by another artifact registers its
-   * outbox bean under this very name, and the platform's own configuration steps back where
-   * the name is taken, so there is one name whichever store an application runs.
+   * The name of the JPA default. A store from another artifact registers its outbox bean
+   * under this very name, and the platform's own configuration steps back where the name
+   * is taken. So there is one name, whichever store an application runs.
    */
   private static final Set<String> JPA_DEFAULT_OUTBOX_BEAN_NAMES = Set
       .of(JdbcPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME);
@@ -58,7 +57,7 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
   /**
    * Built once per application by the autoconfiguration. The outbox beans are looked up on
-   * every question rather than kept here, so a store which is created late is found too.
+   * every question and not kept here. So a store which is created late is found too.
    *
    * @param applicationContext The context the outbox beans and the aggregate's repository
    *     are looked up in
@@ -99,8 +98,9 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
     final var technology = persistenceTechnology.of(workflowAggregateClass);
 
-    // 2. exactly one outbox bean: use it - unless it is a platform default clearly
-    // not matching the aggregate's persistence (broken atomicity, fail guiding)
+    // 2. exactly one outbox bean: use it, unless it is a platform default which clearly
+    // does not match the aggregate's persistence. That would break the atomicity, so it
+    // fails with a guiding message
     if (outboxes.size() == 1) {
       final var entry = outboxes
           .entrySet()
@@ -117,8 +117,8 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
       return entry.getValue();
     }
 
-    // 3. several outbox beans: attribute by the persistence technology managing
-    // the aggregate - to THE platform-default bean of that technology
+    // 3. several outbox beans: choose by the persistence technology of the aggregate,
+    // and take THE platform-default bean of that technology
     final var defaultOutbox = switch (technology) {
       case JPA -> JPA_DEFAULT_OUTBOX_BEAN_NAMES
           .stream()
@@ -136,8 +136,8 @@ public class SpringPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
   /**
    * Every store this context holds: the {@link PhaseTwoOutbox} beans first, then the
-   * stores a {@link PhaseTwoOutboxAware} bean names for one aggregate. A store reached
-   * both ways appears once.
+   * stores which a {@link PhaseTwoOutboxAware} bean names for one aggregate. A store which
+   * is reached both ways appears once.
    */
   @Override
   public Collection<PhaseTwoOutbox> allStores() {

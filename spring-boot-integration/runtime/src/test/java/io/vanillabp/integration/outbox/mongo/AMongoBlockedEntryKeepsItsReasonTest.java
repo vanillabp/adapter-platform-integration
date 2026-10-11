@@ -50,11 +50,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackgroundOutput;
 
 /**
- * A blocked entry of the MongoDB store of Spring Boot names its reason in the document, in
- * the field <code>lastFailure</code>, with the same text the JDBC table keeps. Every write
- * which ends an attempt sets it: a failed attempt writes its reason, an attempt which goes
- * through removes it, and an entry opened again with the update of the wiki page keeps it
- * until its next attempt.
+ * A blocked entry of the MongoDB store of Spring Boot names its reason in the document. The
+ * field is <code>lastFailure</code>, and it has the same text as the JDBC table. Every write
+ * which ends an attempt sets it. A failed attempt writes its reason. An attempt which goes
+ * through removes it. An entry opened again with the update from the wiki page keeps it until
+ * its next attempt.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -64,14 +64,14 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 public class AMongoBlockedEntryKeepsItsReasonTest {
 
   /**
-   * The distance between attempts and the length of a claim. Short, so the attempts of a test
-   * follow each other quickly.
+   * The time between attempts and the length of a claim. It is short, so the attempts of a
+   * test follow each other quickly.
    */
   private static final Duration SHORT = Duration.ofMillis(200);
 
   /**
-   * How long a test waits for something it expects to happen. It is a guard against a machine
-   * which leaves the JVM without a turn, not a measurement of speed.
+   * How long a test waits for something it expects to happen. This guards against a busy
+   * machine which gives the JVM no time. It does not measure speed.
    */
   private static final Duration UNTIL_IT_HAPPENED = Duration.ofSeconds(30);
 
@@ -301,7 +301,8 @@ public class AMongoBlockedEntryKeepsItsReasonTest {
       throw new PhaseTwoPermanentFailure("the message 'Order paid' is not modelled", null);
     }), collection), collection, id).getString("lastFailure");
 
-    // the update the wiki page "Blocked outbox entries" gives an operator
+    // the update which the wiki page "Blocked outbox entries" gives to an operator
+
     final var opened = mongoTemplate
         .getCollection(collection)
         .updateOne(

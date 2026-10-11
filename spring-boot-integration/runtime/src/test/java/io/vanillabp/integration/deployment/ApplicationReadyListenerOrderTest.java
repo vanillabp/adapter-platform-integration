@@ -13,12 +13,12 @@ import io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Pins the {@code ApplicationReadyEvent} listener ordering contract:
- * workflow processing starts BEFORE the phase-two outbox dispatchers' pollers run
- * their first (crash-recovery) poll - so a recovered phase-two operation is never
- * dispatched before BPMN resources were deployed and workflow processing started.
- * The same invariant is enforced on Quarkus via {@code StartupEvent} observer
- * priorities.
+ * Fixes the order of the {@code ApplicationReadyEvent} listeners. Workflow processing starts
+ * BEFORE the pollers of the phase-two outbox dispatchers run their first poll, which recovers
+ * after a crash. So a recovered phase-two operation is never dispatched before the BPMN
+ * resources are deployed and workflow processing has started. On Quarkus, the priorities of
+ * the {@code StartupEvent} observers ensure the same order.
+
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ApplicationReadyListenerOrderTest {

@@ -22,39 +22,38 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Every key a VanillaBP auto-configuration decides by is a key an application is meant to
- * write, so a development environment has to propose it.
+ * A VanillaBP auto-configuration decides by some keys. An application is meant to write each
+ * of them, so a development environment has to propose them.
  * <p>
- * A condition names its key as a string and needs nothing else, which is how
- * <code>vanillabp.outbox.gruelbox.enabled</code> lived for a while: written by
- * applications, absent from the properties model and therefore missing from the
- * configuration metadata an IDE reads. This test asks the conditions which keys they read
- * and looks each one up in that metadata, so the next key which only a condition knows
- * fails here instead of in somebody's editor.
+ * A condition names its key as a string and needs nothing else. That is how
+ * <code>vanillabp.outbox.gruelbox.enabled</code> lived for a while. Applications wrote it, but
+ * it was not in the properties model. So it was missing from the configuration metadata an
+ * IDE reads. This test asks the conditions which keys they read. It looks up each key in that
+ * metadata. So the next key which only a condition knows fails here, not in somebody's editor.
  * <p>
- * The metadata is what the build produces: the annotation processor writes
- * <code>META-INF/spring-configuration-metadata.json</code> next to the classes, and the
- * keys below the sections of the core model come from
- * <code>META-INF/additional-spring-configuration-metadata.json</code>, because the
- * processor does not descend into types which arrive as a dependency.
+ * The metadata is what the build produces. The annotation processor writes
+ * <code>META-INF/spring-configuration-metadata.json</code> next to the classes. The keys below
+ * the sections of the core model come from
+ * <code>META-INF/additional-spring-configuration-metadata.json</code>. The processor does not
+ * go down into types which arrive as a dependency.
  * <p>
- * Only the metadata of VanillaBP's own artifacts answers here. Every framework jar ships a
- * file of the same name, and one of them describing a <code>vanillabp</code> key would let
- * this test pass while our own metadata says nothing, which is the weakness
- * {@link #theMetadataReadIsOursAlone()} keeps out.
+ * Only the metadata of VanillaBP's own artifacts counts here. Every framework jar ships a file
+ * of the same name. If one of them described a <code>vanillabp</code> key, this test would
+ * pass while our own metadata says nothing. {@link #theMetadataReadIsOursAlone()} rules that
+ * out.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class EveryKeyOfAConditionIsInTheMetadataTest {
 
   /**
-   * Where Spring Boot lists the auto-configurations of a module. Every jar which has one
-   * brings this file, which is why the lines are filtered by package below.
+   * Where Spring Boot lists the auto-configurations of a module. Every jar with
+   * auto-configurations brings this file. So the code below filters the lines by package.
    */
   private static final String AUTO_CONFIGURATIONS = "META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports";
 
   /**
-   * A key this module's own metadata describes, used by {@link #theMetadataReadIsOursAlone()}
-   * to prove that our file was read and not one of the framework.
+   * A key which this module's own metadata describes. {@link #theMetadataReadIsOursAlone()}
+   * uses it to prove that the test read our file and not one of the framework.
    */
   private static final String A_KEY_OF_OUR_OWN = "vanillabp.outbox.jdbc.enabled";
 
@@ -67,13 +66,13 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
 
   /**
    * The package of the auto-configurations this test is about. The classpath lists the
-   * ones of the framework in the same file.
+   * auto-configurations of the framework in the same file.
    */
   private static final String OUR_PACKAGE = "io.vanillabp.";
 
   /**
-   * Asks every condition of every VanillaBP auto-configuration which keys it reads and
-   * looks each of them up in the configuration metadata of the classpath.
+   * Asks every condition of every VanillaBP auto-configuration which keys it reads. Then it
+   * looks up each key in the configuration metadata of the classpath.
    *
    * @throws IOException If the classpath cannot be read
    */
@@ -111,10 +110,10 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
   }
 
   /**
-   * The counter-check of the test above: it answers from OUR metadata, not from whatever
-   * the classpath holds. Every framework jar ships a file of the same name, and a foreign
-   * file describing a <code>vanillabp</code> key would make the guard pass while our own
-   * metadata is silent.
+   * The counter-check of the test above. It answers from OUR metadata, not from whatever the
+   * classpath holds. Every framework jar ships a file of the same name. A foreign file which
+   * describes a <code>vanillabp</code> key would make the guard pass while our own metadata
+   * says nothing.
    *
    * @throws IOException If the classpath cannot be read
    */
@@ -159,8 +158,8 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
   }
 
   /**
-   * Loads a class without initializing it. An auto-configuration which reports a
-   * misconfiguration does so while it is built, and nothing here builds one.
+   * Loads a class without initializing it. An auto-configuration reports a misconfiguration
+   * while it is built, and nothing here builds one.
    *
    * @param className The name read from the list of auto-configurations
    * @return The class
@@ -178,8 +177,8 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
   }
 
   /**
-   * The VanillaBP keys the conditions of one auto-configuration read: those of the class
-   * itself and those of its bean methods.
+   * The VanillaBP keys which the conditions of one auto-configuration read. These are the
+   * conditions of the class itself and of its bean methods.
    *
    * @param autoConfiguration The auto-configuration to read
    * @return The keys, each written the way an application writes it
@@ -197,8 +196,8 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
   }
 
   /**
-   * Collects the keys of the two property conditions Spring Boot offers. Both carry the
-   * same attributes, so both are read the same way.
+   * Collects the keys of the two property conditions which Spring Boot offers. Both have the
+   * same attributes, so the code reads both the same way.
    *
    * @param annotations What sits on a class or on one of its methods
    * @param keys Where the keys found are collected
@@ -220,8 +219,9 @@ public class EveryKeyOfAConditionIsInTheMetadataTest {
   }
 
   /**
-   * Writes the keys of one condition the way an application writes them: a prefix stands
-   * in front of every name, and a name which is complete brings no prefix.
+   * Writes the keys of one condition the way an application writes them. A prefix goes in
+   * front of every name. A complete name comes without a prefix.
+
    *
    * @param prefix The section of the condition, empty where the names are complete
    * @param names The names the condition was given, as 'name' or as 'value'

@@ -20,16 +20,16 @@ import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 
 /**
- * The default {@link TaskDeliveryLog} for Spring Boot applications persisting their
- * workflow aggregates via JPA/JDBC: the records are written through a connection
- * {@link DataSourceUtils} binds to the Spring-managed transaction, so a record and the
- * aggregate changes of the same delivery commit together - the recording contract of
- * {@link TaskDeliveryLog}.
+ * The default {@link TaskDeliveryLog} for Spring Boot applications which persist their
+ * workflow aggregates with JPA or JDBC. The records are written through a connection
+ * which {@link DataSourceUtils} binds to the Spring-managed transaction. So a record and
+ * the aggregate changes of the same delivery commit together. That is the recording
+ * contract of {@link TaskDeliveryLog}.
  * <p>
- * Unlike the phase-two outbox this does NOT use gruelbox: gruelbox stores calls to be
- * dispatched, while a delivery record is a fact to be read back. The table
- * ({@link JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME}) is VanillaBP's own and is created
- * at startup unless <code>vanillabp.outbox.create-schema</code> is disabled.
+ * Unlike the phase-two outbox, this does NOT use gruelbox. Gruelbox stores calls which
+ * are still to be dispatched. A delivery record is a fact which is read back. The table
+ * ({@link JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME}) is VanillaBP's own. It is created at
+ * startup unless <code>vanillabp.outbox.create-schema</code> is disabled.
  */
 public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAccess {
 
@@ -46,22 +46,24 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   private final TaskDeliveryRetentionCleanup retentionCleanup;
 
   /**
-   * Builds the log, and nothing more: the table and the cleanup wait for
+   * Builds the log, and nothing more. The table and the cleanup wait for
    * {@link #start(boolean)}, because the DDL must not run while the beans are still being
    * built.
    *
-   * @param dataSource Where the table lives - the database the workflow aggregates are
-   *          persisted in, which is what lets a record and the aggregate commit together
+   * @param dataSource Where the table lives. It is the database the workflow aggregates are
+   *          persisted in. That lets a record and the aggregate commit together
    * @param tableName The table the records go into
-   * @param retention How long a record is kept. This is the window in which a redelivery is
-   *          answered from the record instead of running the <code>@WorkflowTask</code>
-   *          method again, which is why it is a setting of its own - see decision 24 in the
-   *          repository's DECISIONS.md
-   * @param workflowStartRetention How long the row about a started workflow is kept, counted from
-   *          the start. A period of its own, because that row is read for as long as somebody may
-   *          ask which workflow an aggregate belongs to, which outlasts the workflow
-   * @param workflowStartSieve What decides per row whether it may really go once that period
-   *          passed, or <code>null</code> where the application did not ask for the second sieve
+   * @param retention How long a record is kept. In this window, a redelivery is answered
+   *          from the record and the <code>@WorkflowTask</code> method does not run again.
+   *          That is why it is a setting of its own, see decision 24 in the repository's
+   *          DECISIONS.md
+   * @param workflowStartRetention How long the row about a started workflow is kept,
+   *          counted from the start. It is a period of its own. That row is read as long as
+   *          somebody may ask which workflow an aggregate belongs to, and that outlasts the
+   *          workflow
+   * @param workflowStartSieve Decides per row whether it may really go once that period
+   *          passed. <code>null</code> where the application did not ask for the second
+   *          sieve
    */
   public JdbcTaskDeliveryLog(
       final DataSource dataSource,
@@ -91,8 +93,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
     if (createSchema) {
       store.createSchemaIfNotExists();
     } else {
-      // the application creates its schema itself - then a missing table is a
-      // deployment which forgot to apply the migration, and it is said at startup
+      // the application creates its schema itself. Then a missing table means the
+      // deployment forgot to apply the migration, and the startup says so
       store.validateSchemaExists();
     }
     retentionCleanup.start();
@@ -100,10 +102,11 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * Refreshes the records of the open tasks redelivered since the last run, deletes the records
-   * whose retention period passed and then the rows about started workflows whose own period
-   * passed - run by the background cleanup and usable on demand (e.g. by tests). All of it is the
-   * store's business and happens in that order.
+   * Refreshes the records of the open tasks which were redelivered since the last run. Then
+   * it deletes the records whose retention period passed. Then it deletes the rows about
+   * started workflows whose own period passed. The background cleanup runs it, and it can
+   * be called on demand, e.g. by tests. All of it is the store's business and happens in
+   * that order.
    *
    * @return The number of rows deleted
    */
@@ -111,8 +114,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
     final var expiredDeliveries = store.deleteExpired(retention);
     if ((workflowStartRetention == null) || workflowStartRetention.isZero()) {
-      // a zero period says the rows about started workflows are kept for good, which is what an
-      // application whose aggregates live forever asks for
+      // a zero period says the rows about started workflows are kept for good. An
+      // application whose aggregates live forever asks for that
       return expiredDeliveries;
     }
     return expiredDeliveries + store.deleteExpiredWorkflowStarts(workflowStartRetention, workflowStartSieve);
@@ -129,7 +132,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * Stops the retention cleanup - called on shutdown of the application context.
+   * Stops the retention cleanup. It is called on shutdown of the application context.
    */
   public void stop() {
 
@@ -156,8 +159,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
               transaction persisting the workflow aggregate - a record committed on its own would \
               skip the @WorkflowTask method of a redelivery although nothing was persisted.""");
     }
-    // what gives the hourly cleanup something to do: a store nobody wrote to has nothing
-    // left to delete which an earlier run did not already delete
+    // this gives the hourly cleanup something to do. A store which nobody wrote to has
+    // nothing left to delete that an earlier run did not delete already
     retentionCleanup.aDeliveryWasRecorded();
     return store.record(delivery);
 
@@ -181,8 +184,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * The adapter ids the OPEN records of one BPMN process belong to - the
-   * shared store answers it with one query over the columns it indexes anyway.
+   * The adapter ids which the OPEN records of one BPMN process belong to. The shared store
+   * answers it with one query over the columns it indexes anyway.
    */
   @Override
   public Set<String> adapterIdsOfOpenTasks(
@@ -203,8 +206,9 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * The record which left one task open - read within the caller's transaction, through the
-   * connection bound to it, so it sees what that transaction has written itself.
+   * The record which left one task open. It is read within the caller's transaction,
+   * through the connection bound to it. So it sees what that transaction has written
+   * itself.
    */
   @Override
   public Optional<TaskDelivery> recordOfTask(
@@ -218,8 +222,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * The open tasks of one workflow aggregate - read within the caller's transaction,
-   * through the connection bound to it.
+   * The open tasks of one workflow aggregate. They are read within the caller's
+   * transaction, through the connection bound to it.
    */
   @Override
   public List<TaskDelivery> openTasksOfAggregate(
@@ -232,8 +236,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * The open tasks of one workflow of the BPMS - read within the caller's transaction,
-   * through the connection bound to it.
+   * The open tasks of one workflow of the BPMS. They are read within the caller's
+   * transaction, through the connection bound to it.
    */
   @Override
   public List<TaskDelivery> openTasksOfWorkflow(
@@ -270,8 +274,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   @Override
   public Connection acquire() throws SQLException {
 
-    // bound to the Spring-managed transaction if one is running (which the recording
-    // contract requires) - a plain connection of the pool otherwise, used by reads
+    // bound to the Spring-managed transaction if one is running, which the recording
+    // contract requires. Otherwise a plain connection of the pool, used by reads
     return DataSourceUtils.getConnection(dataSource);
 
   }

@@ -41,27 +41,27 @@ import io.vanillabp.spi.service.WorkflowService;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * A Spring Framework {@link BeanRegistrar} building
+ * A Spring Framework {@link BeanRegistrar} which builds
  * {@link io.vanillabp.spi.process.ProcessService} beans for each aggregate type of the
- * workflow services handed to it. Who those are is answered by
- * {@link WorkflowServiceDiscovery}, which runs while the bean definitions of the
- * application are complete and hands the classes in.
+ * workflow services handed to it. {@link WorkflowServiceDiscovery} finds those services.
+ * It runs once the bean definitions of the application are complete, and hands the
+ * classes in.
  * <p>
- * At registration time no bean is touched. Each bean is registered with a
- * generics-aware target type ({@code ProcessService<WorkflowAggregate>}), so generic
- * autowiring works, and with a lazy supplier: all dependencies (properties,
- * persistence support, adapter process services) are resolved through the
- * {@link BeanRegistry.SupplierContext} at bean-creation time. This way neither
- * Hibernate/DataSource nor adapter beans are materialized during the bean-factory
- * post-processing phase, keeping AOP proxying and
- * {@code @ConfigurationProperties} binding intact for all beans involved.
+ * At registration time, no bean is touched. Each bean is registered with a target type
+ * which knows generics ({@code ProcessService<WorkflowAggregate>}), so generic autowiring
+ * works. And each bean gets a lazy supplier. All dependencies (properties, persistence
+ * support, adapter process services) are looked up through the
+ * {@link BeanRegistry.SupplierContext} when the bean is created. So neither
+ * Hibernate/DataSource nor adapter beans are created while the bean factory is
+ * post-processed. That keeps AOP proxying and {@code @ConfigurationProperties} binding
+ * intact for all beans involved.
  */
 @Slf4j
 public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
   /**
-   * The classes annotated by {@link WorkflowService} the application registered a bean
-   * of, in the order the discovery walked the bean definitions.
+   * The classes annotated by {@link WorkflowService} of which the application registered a
+   * bean, in the order in which the discovery walked the bean definitions.
    */
   private final List<Class<?>> workflowServiceClasses;
 
@@ -74,15 +74,15 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
   /**
    * Built by {@link WorkflowServiceDiscovery} once the bean definitions of the application
-   * are complete. Both lists are read off those definitions, so they answer what THIS run
-   * brings rather than what the classpath could bring (see decision 21 in the repository's
+   * are complete. Both lists are read from those definitions. So they say what THIS run
+   * brings, not what the classpath could bring (see decision 21 in the repository's
    * DECISIONS.md).
    *
-   * @param workflowServiceClasses The classes annotated by {@link WorkflowService} this
-   *     application registered a bean of
-   * @param aggregateServiceInterfaces The service interfaces the extensions of this
-   *     application offer per workflow aggregate, one bean of each registered next to the
-   *     aggregate's process service
+   * @param workflowServiceClasses The classes annotated by {@link WorkflowService} of which
+   *     this application registered a bean
+   * @param aggregateServiceInterfaces The service interfaces which the extensions of this
+   *     application offer per workflow aggregate. One bean of each is registered next to
+   *     the aggregate's process service
    */
   public ProcessServiceBeanRegistrar(
       final List<Class<?>> workflowServiceClasses,
@@ -98,16 +98,16 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
       final BeanRegistry registry,
       final Environment environment) {
 
-    // build ProcessService<A> bean definitions: ONE injectable bean per
-    // aggregate type (the SPI's injection contract), whose primary BPMN process
-    // is picked among the classes declaring the aggregate. ALL classes declaring
-    // the aggregate and ALL their declared BPMN process IDs (bpmnProcess +
-    // secondaryBpmnProcesses) are additionally registered for phase-two routing
-    // and @WorkflowTask processing.
+    // build ProcessService<A> bean definitions: ONE injectable bean per aggregate type
+    // (the SPI's injection contract). Its primary BPMN process is picked among the
+    // classes which declare the aggregate. In addition, ALL classes which declare the
+    // aggregate, with ALL their declared BPMN process IDs (bpmnProcess +
+    // secondaryBpmnProcesses), are registered for phase-two routing and @WorkflowTask
+    // processing.
     //
-    // Both loops know which class respectively which aggregate they are on, so every
-    // failure is reported with that name - a defect nobody foresaw included, which is
-    // what this used to swallow into one message naming nothing
+    // The first loop knows its class, and the second loop knows its aggregate. So every
+    // failure is reported with that name, including a defect nobody foresaw. This used to
+    // swallow such a defect into one message which named nothing
     final var classesByAggregate = new LinkedHashMap<Class<?>, List<Class<?>>>();
     for (final var serviceClass : workflowServiceClasses) {
       try {
@@ -154,8 +154,8 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
   /**
    * The primary BPMN process ID of a workflow service class:
-   * {@code @WorkflowService.bpmnProcess().bpmnProcessId()} or, by convention, the
-   * class' simple name.
+   * {@code @WorkflowService.bpmnProcess().bpmnProcessId()}, or by convention the simple
+   * name of the class.
    */
   static String primaryBpmnProcessId(
       final Class<?> serviceClass) {
@@ -175,11 +175,11 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
    * @param serviceClasses All classes declaring this aggregate
    * @param workflowAggregateType The aggregate
    * @return The class whose primary BPMN process the process service serves
-   * @throws IllegalStateException If the classes declare different primary processes
-   *         for one aggregate - which of them {@code startWorkflow} would start
-   *         cannot be decided here (the BPMN models are read later, by the adapter,
-   *         while deploying), so the application decides it by naming one process as
-   *         the primary one and the others as secondary
+   * @throws IllegalStateException If the classes declare different primary processes for
+   *         one aggregate. Which of them {@code startWorkflow} would start cannot be
+   *         decided here, because the adapter reads the BPMN models later, while it
+   *         deploys. So the application decides it: it names one process as the primary
+   *         one and the others as secondary
    */
   static Class<?> primaryWorkflowServiceClass(
       final List<Class<?>> serviceClasses,
@@ -193,8 +193,8 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
   }
 
   /**
-   * The rule itself, with the process of a class handed in - the tests use it that
-   * way, so a fixture standing in for a workflow service needs no annotation at all.
+   * The rule itself, with the process of a class handed in. The tests use it that way. So
+   * a fixture which stands in for a workflow service needs no annotation at all.
    *
    * @param serviceClasses All classes declaring this aggregate
    * @param workflowAggregateType The aggregate
@@ -206,8 +206,8 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
       final Class<?> workflowAggregateType,
       final Function<Class<?>, String> primaryProcessOf) {
 
-    // reproducible: with several classes on one process the choice must not depend on
-    // the order the bean definitions happened to be registered in
+    // reproducible: with several classes on one process, the choice must not depend on
+    // the order in which the bean definitions happened to be registered
     final var sorted = serviceClasses
         .stream()
         .sorted(Comparator.comparing(Class::getName))
@@ -226,7 +226,7 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
   }
 
   /**
-   * The message reporting several BPMN processes declared as the primary one for a
+   * The message which reports several BPMN processes declared as the primary one for a
    * single workflow aggregate.
    *
    * @param serviceClasses The classes declaring the aggregate, sorted
@@ -265,10 +265,10 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
   /**
    * Ends the start where classes of different workflow aggregates declare the same BPMN
-   * process of one workflow module, see decision 125 in the repository's {@code DECISIONS.md}.
-   * Classes of one aggregate may share a process, their handlers are merged. Called while the
-   * first process service is built, because the workflow modules are known only then, and
-   * that is before any handler is registered.
+   * process of one workflow module, see decision 125 in the repository's
+   * {@code DECISIONS.md}. Classes of one aggregate may share a process, and their handlers
+   * are merged. It is called while the first process service is built. Only then are the
+   * workflow modules known, and that is before any handler is registered.
    *
    * @param allWorkflowModules The workflow modules, already associated with their classes
    * @param allWorkflowServiceClasses Every class annotated by {@link WorkflowService}
@@ -298,8 +298,8 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
   /**
    * All BPMN process IDs a workflow service class declares: the primary
-   * {@code bpmnProcess} plus every {@code secondaryBpmnProcesses} entry. Secondary
-   * entries have to be explicit - there is no class-name convention for them.
+   * {@code bpmnProcess} plus every {@code secondaryBpmnProcesses} entry. Secondary entries
+   * have to be explicit. There is no class-name convention for them.
    */
   static List<String> declaredBpmnProcessIds(
       final Class<?> serviceClass) {
@@ -324,10 +324,10 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
 
   /**
    * Registers the bean definition for a single
-   * {@link io.vanillabp.spi.process.ProcessService} bean: registering a definition
-   * having a lazy supplier (a promise to Spring that this bean will be available)
-   * instead of an instance avoids circular dependencies between the class annotated
-   * by {@link WorkflowService} and the ProcessService bean.
+   * {@link io.vanillabp.spi.process.ProcessService} bean. It registers a definition with a
+   * lazy supplier, not an instance. The supplier is a promise to Spring that this bean will
+   * be available. That avoids circular dependencies between the class annotated by
+   * {@link WorkflowService} and the ProcessService bean.
    */
   @SuppressWarnings({
       "unchecked", "rawtypes"
@@ -338,11 +338,11 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
       final List<Class<?>> serviceClasses,
       final Class<A> workflowAggregateType) {
 
-    // ONE ProcessService per aggregate is the SPI's injection contract, so ONE of
-    // the classes declares the process startWorkflow starts, and it is picked by a
-    // rule instead of by the order the classes were found in. Several classes
-    // declaring the SAME process are fine (handlers split across classes);
-    // different ones are ambiguous and end the boot.
+    // ONE ProcessService per aggregate is the SPI's injection contract. So ONE of the
+    // classes declares the process which startWorkflow starts. A rule picks it, not the
+    // order in which the classes were found. Several classes which declare the SAME
+    // process are fine (handlers split across classes). Different ones are ambiguous and
+    // end the boot.
     final var serviceClass = primaryWorkflowServiceClass(serviceClasses, workflowAggregateType);
     final var bpmnProcessId = primaryBpmnProcessId(serviceClass);
 
@@ -357,12 +357,12 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
         spec -> spec
             .supplier(supplierContext -> {
 
-              // associate workflow services with workflow modules (done only once;
-              // uses the application's resource loader to find the modules)
+              // associate workflow services with workflow modules. That is done only once,
+              // and it uses the application's resource loader to find the modules
               final var allWorkflowModules = supplierContext.bean(WorkflowModules.class);
               allWorkflowModules.associateWorkflowServices(allWorkflowServiceClasses);
-              // the earliest moment the workflow module of every class is known, and a
-              // BPMN process belongs to one aggregate per workflow module
+              // this is the earliest moment the workflow module of every class is known.
+              // A BPMN process belongs to one aggregate per workflow module
               refuseProcessesOfSeveralAggregates(allWorkflowModules, allWorkflowServiceClasses);
 
               final var workflowModuleId = workflowModuleOf(allWorkflowModules, serviceClass);
@@ -371,8 +371,8 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                   SpringBootMigrationAdapterAutoConfiguration.BEANNAME_MIGRATIONADAPERPROPERTIES,
                   MigrationAdapterProperties.class);
 
-              // find persistence support for the aggregate class (most specific
-              // aggregate class wins - selection shared with the core)
+              // find persistence support for the aggregate class. The most specific
+              // aggregate class wins, and the core shares that choice
               final List<AggregatePersistenceAware<?>> aggregatePersistenceAwares = supplierContext
                   .beanProvider(AggregatePersistenceAware.class)
                   .stream()
@@ -383,7 +383,8 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                       aggregatePersistenceAwares,
                       AggregatePersistenceAware::getAggregateClass,
                       workflowAggregateType)
-                  // if none found, fall back to persistence support based on Spring Data Util bean
+                  // if none is found, fall back to the persistence support of the
+                  // SpringDataUtil bean
                   .orElseGet(() -> {
                     final var springDataUtil = supplierContext
                         .beanProvider(SpringDataUtil.class)
@@ -396,10 +397,10 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                               - add spring-boot-starter-data-mongodb to classpath and configure the MongoDb connection, if you use MongoDb for persistence of aggregates
                               - add your own implementation of io.vanillabp.integration.utils.SpringDataUtil, if you use an alternative persistence""");
                     }
-                    // the workflow module travels along for the message:
-                    // an aggregate without a repository is reported while the
-                    // application starts, and naming the module is what makes the
-                    // report actionable in an application with several of them
+                    // the workflow module travels along for the message. An aggregate
+                    // without a repository is reported while the application starts. In
+                    // an application with several modules, the report only helps if it
+                    // names the module
                     return new SpringDataUtilBasedAggregatePersistenceSupport(
                         springDataUtil, workflowAggregateType, workflowModuleId);
                   });
@@ -410,31 +411,31 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                   .map(processService -> (MigratableProcessService<A>) processService)
                   .toList();
 
-              // resolves the outbox per aggregate (mixed persistence, dedicated
-              // outboxes) - invoked at startup by the platform's startup
-              // validation, never mid-bean-construction
+              // finds the outbox per aggregate (mixed persistence, dedicated outboxes).
+              // The platform's startup validation calls it at startup, never while a
+              // bean is being built
               final var phaseTwoOutboxResolver = supplierContext
                   .bean(SpringPhaseTwoOutboxResolver.class);
 
-              // the same, for the log of processed task deliveries: a record has to
-              // ride the aggregate's own transaction, so the store is picked per
-              // aggregate as well
+              // the same for the log of processed task deliveries. A record has to ride
+              // the aggregate's own transaction, so the store is picked per aggregate as
+              // well
               final var taskDeliveryLogResolver = supplierContext
                   .bean(SpringTaskDeliveryLogResolver.class);
 
-              // and the same for the transaction the work runs in: an application
-              // storing this aggregate in a system Spring does not manage contributes
+              // and the same for the transaction the work runs in. An application which
+              // stores this aggregate in a system that Spring does not manage contributes
               // its own runner
               final var transactionRunnerResolver = supplierContext
                   .bean(SpringTransactionRunnerResolver.class);
 
-              // the bean registers itself with the router as phase-two dispatch
-              // target of this workflow module/BPMN process
+              // the bean registers itself with the router as phase-two dispatch target of
+              // this workflow module and BPMN process
               final var phaseTwoRouter = supplierContext
                   .bean(PhaseTwoRouter.class);
 
-              // the election cache (in-memory default or the application's own
-              // bean, e.g. cluster-shared), counted by the application's statistics
+              // the election cache: the in-memory default or the application's own bean,
+              // e.g. one shared in a cluster. The application's statistics count it
               final var workflowAdapterCache = InstrumentedWorkflowAdapterCache
                   .instrument(
                       selectWorkflowAdapterCache(
@@ -445,8 +446,8 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                       supplierContext.bean(
                           WorkflowAdapterCacheStatistics.class));
 
-              // what deliveries of this process are counted into; absent
-              // where the application brings no metrics backend
+              // what deliveries of this process are counted into. Absent where the
+              // application brings no metrics backend
               final var metrics = SpringBootMigrationAdapterAutoConfiguration
                   .vanillaBpMetricsOf(
                       supplierContext
@@ -459,30 +460,30 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                   .getMigrationProcessService()
                   .setMetrics(metrics);
 
-              // register ALL classes declaring this aggregate under ALL their
-              // declared BPMN process IDs: @WorkflowTask handlers per (module,
-              // process) plus phase-two routing for secondary processes
+              // register ALL classes which declare this aggregate under ALL their
+              // declared BPMN process IDs: @WorkflowTask handlers per (module, process),
+              // plus phase-two routing for secondary processes
               final var taskRegistry = supplierContext.bean(WorkflowTaskRegistry.class);
-              // resolver beans (@MultiInstanceElement(resolverBean = ...)) are
-              // looked up lazily among all MultiInstanceElementResolver beans
+              // resolver beans (@MultiInstanceElement(resolverBean = ...)) are looked up
+              // lazily among all MultiInstanceElementResolver beans
               final var resolverBeans = supplierContext.beanProvider(MultiInstanceElementResolver.class);
               final Function<Class<?>, Object> beanResolver = type -> resolverBeans
                   .stream()
                   .filter(type::isInstance)
                   .findFirst()
                   .orElse(null);
-              // insertion ordered, and the primary service goes in first: the startup
-              // validations run over this list and a message about the primary id is the one
-              // a reader expects to meet first
+              // keeps the order of insertion, and the primary service goes in first. The
+              // startup validations run over this list, and a reader expects to meet a
+              // message about the primary id first
               final var processServicesByKey = new LinkedHashMap<String, MigrationProcessService<A>>();
               processServicesByKey.put(
                   "%s|%s".formatted(workflowModuleId, bpmnProcessId),
                   processServiceBean.getMigrationProcessService());
-              // What an awareness probe is asked about is the workflow module
-              // AND every BPMN process serving this aggregate there - a secondary process
-              // of the same @WorkflowService runs on the same workflow, so an instance of
-              // it is a legitimate answer. Collected while the services are registered,
-              // because this is the only place which sees all declaring classes at once.
+              // an awareness probe is asked about the workflow module AND every BPMN
+              // process which serves this aggregate there. A secondary process of the
+              // same @WorkflowService runs on the same workflow, so an instance of it is a
+              // valid answer. This is collected while the services are registered,
+              // because only this place sees all declaring classes at once.
               final var processIdsByModule = new LinkedHashMap<String, List<String>>();
               final var moduleOfProcessService = new LinkedHashMap<MigrationProcessService<A>, String>();
               moduleOfProcessService.put(processServiceBean.getMigrationProcessService(), workflowModuleId);
@@ -528,9 +529,9 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
                 }
               }
 
-              // everything configurable per workflow is configurable for a secondary or
-              // declared-only id as well, so the startup validations get every declared id
-              // rather than the primary one alone
+              // everything which can be configured per workflow can also be configured for
+              // a secondary or declared-only id. So the startup validations get every
+              // declared id, not the primary one alone
               processServiceBean.setProcessServicesOfDeclaredIds(processServicesByKey.values());
 
               // every process service of this aggregate answers for the processes of ITS
@@ -548,15 +549,14 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
   }
 
   /**
-   * Registers the per-aggregate bean of one service an extension offers - the same shape
-   * the {@code ProcessService} of that aggregate has, so an injection point naming
-   * {@code TheService<TheAggregate>} resolves.
+   * Registers the per-aggregate bean of one service which an extension offers. It has the
+   * same shape as the {@code ProcessService} of that aggregate. So an injection point which
+   * names {@code TheService<TheAggregate>} resolves.
    * <p>
-   * The bean is LAZY, which is what makes injecting it optional: an application which
-   * never asks for the service never has the extension's factory called. The factory
-   * itself is resolved when the bean is built rather than at definition time, because
-   * that is what keeps its own dependencies out of the bean-factory post-processing
-   * phase.
+   * The bean is LAZY, and that makes injecting it optional. If an application never asks
+   * for the service, the extension's factory is never called. The factory itself is
+   * looked up when the bean is built, not at definition time. That keeps its own
+   * dependencies out of the post-processing phase of the bean factory.
    */
   @SuppressWarnings({
       "unchecked", "rawtypes"
@@ -618,12 +618,12 @@ public class ProcessServiceBeanRegistrar implements BeanRegistrar {
   }
 
   /**
-   * Selects the election cache, by the rule which is asked in two places (see
+   * Selects the election cache, by the rule which two places ask (see
    * {@link WorkflowAdapterCacheSelection}).
    *
    * @param candidates All {@code WorkflowAdapterCache} beans
-   * @return The cache to use or <code>null</code> if none exists (elections then
-   *         probe every time)
+   * @return The cache to use, or <code>null</code> if none exists. Then elections probe
+   *         every time
    */
   private static WorkflowAdapterCache selectWorkflowAdapterCache(
       final List<WorkflowAdapterCache> candidates) {

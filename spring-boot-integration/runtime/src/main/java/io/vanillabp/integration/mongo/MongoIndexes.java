@@ -13,9 +13,9 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * What the MongoDB stores of this integration do with the index lists of
- * {@link MongoSchema}: create them, or report the ones an application managing its own
- * schema has not created. The Quarkus extension has a class of the same shape, and the
- * lists both of them walk are the same.
+ * {@link MongoSchema}. They create the indexes. Or, if an application manages its own
+ * schema, they report the ones it has not created. The Quarkus extension has a class of
+ * the same shape, and both walk the same lists.
  */
 @Slf4j
 public final class MongoIndexes {
@@ -24,9 +24,9 @@ public final class MongoIndexes {
   }
 
   /**
-   * Creates the indexes which are not there yet. MongoDB answers a
-   * <code>createIndex</code> of an index which is already there with its name, so two
-   * instances starting at the same moment do not collide over it.
+   * Creates the indexes which are not there yet. If an index is already there, MongoDB
+   * answers <code>createIndex</code> with its name. So two instances which start at the
+   * same moment do not collide over it.
    *
    * @param mongoTemplate The template creating them
    * @param collection The collection to create them on
@@ -84,8 +84,8 @@ public final class MongoIndexes {
 
   /**
    * What the collection carries today. A collection which does not exist yet carries
-   * nothing, and on MongoDB that is the normal state of an application which has not
-   * written its first document - so the database saying so is not an error here.
+   * nothing. On MongoDB, that is normal for an application which has not written its
+   * first document yet. So when the database says so, it is not an error here.
    *
    * @param mongoTemplate The template reading what is there
    * @param collection The collection to ask

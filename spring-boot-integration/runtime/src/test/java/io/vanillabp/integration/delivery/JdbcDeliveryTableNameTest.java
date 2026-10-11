@@ -23,13 +23,13 @@ import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An application which has naming rules for its tables renames the delivery log the way it
- * renames the outbox: <code>vanillabp.outbox.jdbc.delivery-table</code>.
+ * An application with naming rules for its tables renames the delivery log the same way as
+ * the outbox: <code>vanillabp.outbox.jdbc.delivery-table</code>.
  * <p>
- * The name is followed rather than read back: the table has to be created under the
- * configured name, the record has to land in it, and the default name must not exist at
- * all. A wiring which read the property and then wrote to the constant would pass a test
- * asserting the property and fail this one.
+ * The test follows the name through the database and does not just read it back. The table
+ * has to be created under the configured name. The record has to land in it. And the default
+ * name must not exist at all. Think of a wiring which reads the property and then writes to
+ * the constant. It would pass a test which checks the property, but it fails this one.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class JdbcDeliveryTableNameTest {
@@ -121,8 +121,7 @@ public class JdbcDeliveryTableNameTest {
   }
 
   /**
-   * @return A database of this test's own, so the tables of one test do not answer for
-   *         another
+   * @return A database of this test's own, so the tables of one test do not affect another
    */
   private static SingleConnectionDataSource h2() {
 
@@ -145,8 +144,9 @@ public class JdbcDeliveryTableNameTest {
   }
 
   /**
-   * No router: the sieve of the workflow-start rows is off unless an application asks for it, so
-   * nothing here ever looks for one.
+   * No router. The sieve of the workflow-start rows is off unless an application asks for it.
+   * So nothing here ever looks for a router.
+
    *
    * @return A provider which has nothing
    */

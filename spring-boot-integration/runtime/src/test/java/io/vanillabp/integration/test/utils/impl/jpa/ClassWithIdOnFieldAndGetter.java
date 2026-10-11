@@ -4,9 +4,10 @@ import jakarta.persistence.Id;
 import lombok.Setter;
 
 /**
- * Both places carry the annotation, which is what the order is about: the field wins.
- * The class is not a JPA entity, because Hibernate refuses to map one whose access type
- * is ambiguous, while reading the ID name is pure reflection and needs no mapping.
+ * Both places carry the annotation, and the order between them is the point: the field
+ * wins. The class is not a JPA entity. Hibernate refuses to map an entity whose access type
+ * is ambiguous. But reading the ID name is pure reflection and needs no mapping.
+
  */
 @Setter
 public class ClassWithIdOnFieldAndGetter {

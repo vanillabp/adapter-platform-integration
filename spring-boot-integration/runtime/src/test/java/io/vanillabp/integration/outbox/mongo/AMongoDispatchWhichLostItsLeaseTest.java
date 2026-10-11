@@ -55,18 +55,19 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackgroundOutput;
 
 /**
- * What happens to a dispatch of the MongoDB store whose entry was taken over while it ran.
+ * What happens to a dispatch of the MongoDB store when another node takes over its entry
+ * while it runs.
  * <p>
- * The renewal notices it - the write matches no document - and the dispatch which lost the
- * entry runs to its end. What it must NOT do is write down how that ended, because the node
- * holding the entry now is doing the same operation and its answer is the one the collection
- * keeps. A late "blocked" over a finished entry would be the worst of them: the operation
- * reached the BPMS and somebody would be asked to repair it by hand.
+ * The renewal notices it, because its write matches no document. The dispatch which lost the
+ * entry still runs to its end. But it must NOT write down how it ended. The node which holds
+ * the entry now runs the same operation, and the collection keeps that node's answer. The
+ * worst case would be a late "blocked" over a finished entry. The operation reached the BPMS,
+ * and still somebody would be asked to repair it by hand.
  * <p>
- * Two dispatchers on one database are what this needs, and one of them is robbed of its lease
- * by a write of the test, which is a node whose claim ran out while it was working. Playing
- * the second node with a mock would prove nothing here: the write which is refused is the one
- * both nodes really run.
+ * So the test needs two dispatchers on one database. A write of the test takes the lease away
+ * from one of them. This plays a node whose claim ran out while it was working. A mock for the
+ * second node would prove nothing here, because the refused write is the one both nodes really
+ * run.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -76,17 +77,16 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 public class AMongoDispatchWhichLostItsLeaseTest {
 
   /**
-   * How long a claim lasts here. Short, so the node which is robbed of its entry notices it
-   * within a tick instead of at the end of a distance chosen for production. Not shorter,
-   * because the poller of that node sleeps until its own claim runs out: everything below
-   * happens within one lease, and the node which lost the entry never gets to poll for it
-   * again.
+   * How long a claim lasts here. It is short, so the node which loses its entry notices it
+   * within one tick, and not after a time chosen for production. It is not shorter, because the
+   * poller of that node sleeps until its own claim runs out. Everything below happens within
+   * one lease, so the node which lost the entry never polls for it again.
    */
   private static final Duration LEASE = Duration.ofSeconds(3);
 
   /**
-   * How long a test waits for something it expects to happen. It is a guard against a machine
-   * which leaves the JVM without a turn, not a measurement of speed.
+   * How long a test waits for something it expects to happen. This guards against a busy
+   * machine which gives the JVM no time. It does not measure speed.
    */
   private static final Duration UNTIL_IT_HAPPENED = Duration.ofSeconds(30);
 
@@ -98,8 +98,8 @@ public class AMongoDispatchWhichLostItsLeaseTest {
 
   private static final String AGGREGATE = "42";
 
-  // no wait strategy of its own: the one the container brings waits until the MAPPED port
-  // accepts a connection, while a log line only says that mongod listens inside the container
+  // no wait strategy of its own: the container's own strategy waits until the MAPPED port
+  // accepts a connection. A log line only says that mongod listens inside the container
   @Container
   static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB));
 
@@ -110,22 +110,22 @@ public class AMongoDispatchWhichLostItsLeaseTest {
   private MigrationProcessService<Object> theNodeTakingTheEntry;
 
   /**
-   * Released by the test so the dispatch which lost its entry can end. Every test lets go of
-   * it, because that thread would otherwise wait for the whole run.
+   * The test releases it, so the dispatch which lost its entry can end. Every test releases
+   * it. Otherwise that thread would wait for the whole run.
    */
   private final CountDownLatch letTheSlowDispatchEnd = new CountDownLatch(1);
 
   /**
-   * Counted down by the slow node as its dispatch starts, so the test can take the entry away
-   * while that dispatch is really running.
+   * The slow node counts it down when its dispatch starts. So the test can take the entry away
+   * while that dispatch really runs.
    */
   private final CountDownLatch theSlowDispatchStarted = new CountDownLatch(1);
 
   private final AtomicInteger callsIntoTheAdapter = new AtomicInteger();
 
   /**
-   * What both dispatchers wrote into the log, which is where an operator reads that an entry
-   * changed hands. The two classes log it, so both are watched.
+   * What both dispatchers wrote into the log. An operator reads there that an entry changed
+   * hands. Two classes log it, so the test watches both.
    */
   private final ListAppender<ILoggingEvent> whatWasLogged = new ListAppender<>();
 
@@ -176,16 +176,16 @@ public class AMongoDispatchWhichLostItsLeaseTest {
 
     final var properties = new PhaseTwoOutboxProperties();
     properties.setAttemptFrequency(lease);
-    // the poll interval is the cap on the sleep, and a short one is what lets the second
-    // node find the entry as soon as the test released it
+    // the poll interval caps the sleep. A short one lets the second node find the entry as
+    // soon as the test has released it
     properties.setPollInterval(lease);
     return properties;
 
   }
 
   /**
-   * The node whose entry is taken away: its dispatch waits until the test lets it end, and
-   * then ends the way the test asked for.
+   * The node whose entry is taken away. Its dispatch waits until the test lets it end. Then
+   * it ends the way the test asked for.
    *
    * @param endsWith What the dispatch throws, or <code>null</code> where it succeeds
    * @return The router of that node
@@ -213,7 +213,7 @@ public class AMongoDispatchWhichLostItsLeaseTest {
   }
 
   /**
-   * The node which takes the entry over: its dispatch succeeds at once.
+   * The node which takes the entry over. Its dispatch succeeds at once.
    *
    * @return The router of that node
    */
@@ -252,8 +252,8 @@ public class AMongoDispatchWhichLostItsLeaseTest {
   }
 
   /**
-   * One bean, as the dispatcher is handed it. A running application gets these from its
-   * container; a test which builds the dispatcher itself has to say what they answer.
+   * One bean, in the form the dispatcher gets it. A running application gets these providers
+   * from its container. A test which builds the dispatcher itself has to say what they answer.
    *
    * @param <T> What the provider stands for
    * @param bean The bean to hand out
@@ -283,8 +283,8 @@ public class AMongoDispatchWhichLostItsLeaseTest {
   }
 
   /**
-   * Writes an entry the way a node which crashed left it behind: nobody holds it and it is
-   * due, so only a poll can pick it up.
+   * Writes an entry the way a crashed node leaves it behind. Nobody holds it and it is due, so
+   * only a poll can pick it up.
    *
    * @param collection The collection of this test
    * @return The entry's id
@@ -316,7 +316,7 @@ public class AMongoDispatchWhichLostItsLeaseTest {
   }
 
   /**
-   * Takes the claim off the entry, which is what a node whose lease ran out leaves behind.
+   * Takes the claim off the entry. A node whose lease ran out leaves the entry like this.
    *
    * @param collection The collection of this test
    * @param id The entry to free
@@ -368,9 +368,9 @@ public class AMongoDispatchWhichLostItsLeaseTest {
   }
 
   /**
-   * Runs the story both tests share: the first node takes the entry and holds it, the test
-   * frees the lease, the second node dispatches the entry to its end, and then the first
-   * node's dispatch is allowed to finish.
+   * Runs the story both tests share. The first node takes the entry and holds it. The test
+   * frees the lease. The second node dispatches the entry to its end. Then the test lets the
+   * first node's dispatch finish.
    *
    * @param collection The outbox collection of this test
    * @param theSlowDispatchEndsWith What the first node's dispatch throws, or
@@ -398,9 +398,9 @@ public class AMongoDispatchWhichLostItsLeaseTest {
           () -> PhaseTwoOutboxEntry.STATUS_DONE.equals(entryOf(collection, entry).status()));
       final var afterTheSecondNode = entryOf(collection, entry);
 
-      // the renewal is what notices, so the first node has to still be dispatching when it
-      // ticks. Letting its dispatch end first would cancel the tick and nothing would say
-      // that two nodes carried the operation out
+      // the renewal notices the loss, so the first node must still be dispatching when the
+      // renewal ticks. If its dispatch ended first, the tick would be canceled. Then nothing
+      // would say that two nodes ran the operation
       waitUntil(
           "the node which lost its lease never noticed",
           () -> somethingWasLoggedAbout(entry, "was lost while it was being dispatched"));
@@ -440,8 +440,8 @@ public class AMongoDispatchWhichLostItsLeaseTest {
   @DisplayName("A dispatch which lost its entry does not block an entry somebody else finished")
   public void aLostEntryIsNotBlockedByTheNodeWhichLostIt() throws Exception {
 
-    // the failure which blocks an entry with one attempt - the write which would be the most
-    // expensive of all to land on an entry the other node has just finished
+    // this failure blocks an entry after one attempt. On an entry which the other node has
+    // just finished, this write would cost the most
     final var afterTheSecondNode = theEntryChangesHands(
         "outbox-lost-entry-blocked", new PhaseTwoPermanentFailure(
             "the adapter says repeating cannot help", null));

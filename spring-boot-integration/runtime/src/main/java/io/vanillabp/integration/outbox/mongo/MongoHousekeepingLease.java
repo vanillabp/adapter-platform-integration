@@ -17,14 +17,14 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * The relational counterpart is
  * {@link io.vanillabp.integration.adapter.migration.outbox.JdbcHousekeepingLease}, and
- * what both do is the same: a claim is taken by a write nobody else's write can match,
- * and it lasts until the window is over rather than being renewed while the work runs
- * (decision 91 in the repository's DECISIONS.md). The two are written twice because the
- * platform-neutral core carries no MongoDB driver, the way the payload store of each
- * platform is written twice.
+ * both do the same. A claim is taken by a write which nobody else's write can match. It
+ * lasts until the window is over, and it is not renewed while the work runs (decision 91
+ * in the repository's DECISIONS.md). The two are written twice because the core, which
+ * does not know the platform, carries no MongoDB driver. The payload store of each
+ * platform is written twice for the same reason.
  * <p>
- * The claim is an upsert. Where the document is held by somebody else the filter matches
- * nothing and the insert runs into the document's own id, which is MongoDB saying no.
+ * The claim is an upsert. Where somebody else holds the document, the filter matches
+ * nothing, and the insert runs into the document's own id. That is MongoDB saying no.
  */
 @Slf4j
 public class MongoHousekeepingLease {
@@ -82,7 +82,7 @@ public class MongoHousekeepingLease {
       // and the upsert ran into the document's own id. That is MongoDB saying no
       return false;
     } catch (final RuntimeException e) {
-      // the database could not be asked, which here means the same: this node does not
+      // the database could not be asked. Here that means the same: this node does not
       // house-keep tonight, and the meters show the night which was missed
       log.debug("Could not claim the housekeeping of the outbox store '{}'", store, e);
       return false;
@@ -91,8 +91,8 @@ public class MongoHousekeepingLease {
   }
 
   /**
-   * Gives a claim back. A node which does not hold the store writes nothing, which is
-   * what the condition over the owner is for.
+   * Gives a claim back. A node which does not hold the store writes nothing. That is what
+   * the condition over the owner is for.
    *
    * @param store The store to release
    * @param owner The node which claimed
@@ -108,7 +108,7 @@ public class MongoHousekeepingLease {
               new Update().unset("leasedBy").unset("leasedUntil"),
               collection);
     } catch (final RuntimeException e) {
-      // the claim runs out by itself, so the next window is free either way
+      // the claim runs out by itself, so the next window is free anyway
       log.debug("Could not release the housekeeping claim of the outbox store '{}'", store, e);
     }
 

@@ -22,44 +22,41 @@ import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Manages deployment of resources using {@link DeploymentService}.
+ * Deploys the resources of the workflow modules, using {@link DeploymentService}.
  * <p>
- * The service participates in the application lifecycle as a
- * {@link SmartLifecycle}:
+ * The service takes part in the application lifecycle as a {@link SmartLifecycle}:
  * <ul>
- *   <li>{@link #start()} loads and deploys all BPMN resources - during context
- *       refresh, after all singletons were created but before the application is
- *       marked as started - and ends the start there;</li>
- *   <li>{@link #startProcessingOfWorkflows()} is triggered by
- *       {@link ApplicationReadyEvent} (i.e. only once the application is fully
- *       ready to process workflows);</li>
- *   <li>{@link #stop()} stops workflow processing of adapters/extensions and all
- *       {@link ProcessServiceSpringBean}s on graceful shutdown.</li>
+ *   <li>{@link #start()} loads and deploys all BPMN resources and then ends the start.
+ *       It runs during context refresh, after all singletons were created but before
+ *       the application is marked as started.</li>
+ *   <li>{@link ApplicationReadyEvent} triggers {@link #startProcessingOfWorkflows()}.
+ *       So it only runs once the application is fully ready to process workflows.</li>
+ *   <li>{@link #stop()} stops the workflow processing of adapters and extensions, and
+ *       all {@link ProcessServiceSpringBean}s, on graceful shutdown.</li>
  * </ul>
  * <b>Two moments, not one:</b> the end of the start and the start of the workflow
- * processing are deliberately kept apart. The end of the start writes the block of
- * everything the start noticed and throws what was refused, and it has to happen on
- * every start, which includes a context that is only refreshed and never fires
- * {@link ApplicationReadyEvent}. Handing out work to the application, on the other
- * hand, must wait until the application is ready to take it. So the first hangs on the
- * lifecycle, which runs in both worlds, and the second stays on the event.
+ * processing are kept apart on purpose. The end of the start writes the block of
+ * everything the start noticed, and it throws what was refused. That has to happen on
+ * every start, also in a context which is only refreshed and never fires
+ * {@link ApplicationReadyEvent}. Handing out work to the application is different. It
+ * must wait until the application is ready to take it. So the first hangs on the
+ * lifecycle, which runs in both cases, and the second stays on the event.
  * <p>
  * <b>Phase:</b> {@link SmartLifecycle#DEFAULT_PHASE} ({@code Integer.MAX_VALUE}) is
- * used deliberately: on shutdown, lifecycle beans are stopped in descending phase
- * order, so workflow processing stops in the very first group - before Spring
- * Boot's web server graceful shutdown ({@code SmartLifecycle.DEFAULT_PHASE - 1024})
- * and before messaging listener containers. This way no new workflow jobs are
- * processed while the infrastructure they may depend on is being torn down.
+ * chosen on purpose. On shutdown, Spring stops lifecycle beans in descending phase
+ * order. So workflow processing stops in the very first group. That is before Spring
+ * Boot's graceful shutdown of the web server ({@code SmartLifecycle.DEFAULT_PHASE - 1024})
+ * and before messaging listener containers. This way no new workflow jobs are processed
+ * while the infrastructure they may depend on is being torn down.
  */
 public class SpringBootDeploymentService implements SmartLifecycle {
 
   /**
-   * Order of the {@link ApplicationReadyEvent} listener starting workflow
-   * processing: BEFORE the phase-two outbox dispatchers' pollers
-   * ({@link #OUTBOX_DISPATCHER_LISTENER_ORDER}) - a crash-recovered phase-two
-   * operation must never be dispatched before workflow processing started (the
-   * same invariant is enforced on Quarkus via {@code StartupEvent} observer
-   * priorities).
+   * Order of the {@link ApplicationReadyEvent} listener which starts workflow
+   * processing. It runs BEFORE the pollers of the phase-two outbox dispatchers
+   * ({@link #OUTBOX_DISPATCHER_LISTENER_ORDER}). A phase-two operation recovered after a
+   * crash must never be dispatched before workflow processing started. Quarkus enforces
+   * the same rule with the priorities of its {@code StartupEvent} observers.
    */
   public static final int START_PROCESSING_LISTENER_ORDER = 0;
 
@@ -80,7 +77,7 @@ public class SpringBootDeploymentService implements SmartLifecycle {
   /**
    * Built by {@link DeploymentAutoConfiguration}, once per application.
    *
-   * @param deploymentService The core's deployment service, which does the work - this
+   * @param deploymentService The core's deployment service, which does the work. This
    *          class is the Spring lifecycle around it
    * @param allWorkflowModules The workflow modules whose resources are deployed
    * @param processServices The process service beans. They are asked which BPMN process ids
@@ -99,18 +96,18 @@ public class SpringBootDeploymentService implements SmartLifecycle {
   }
 
   /**
-   * Triggers loading of all resources of the workflow modules - their BPMN files and
-   * their decision tables - and deployment of them, and ends the start afterwards.
+   * Loads all resources of the workflow modules, their BPMN files and their decision
+   * tables, and deploys them. Then it ends the start.
    * <p>
-   * The election capability of the prioritized adapters is checked in between: an adapter
-   * only knows what its BPMS can do once it deployed, and nothing has touched a workflow
-   * yet at this point.
+   * In between, it checks the election capability of the prioritized adapters. An adapter
+   * only knows what its BPMS can do once it has deployed, and nothing has touched a
+   * workflow yet at this point.
    * <p>
-   * Ending the start here and not in {@link #startProcessingOfWorkflows()} is what makes
-   * the block and the collected refusals reach a context which is only refreshed. Every
-   * check of the platform has reported by now: they run while the beans are built and
-   * while the resources are deployed. What the start of the workflow processing notices
-   * afterwards is a late finding and goes into the log where it was found, the way
+   * The start ends here and not in {@link #startProcessingOfWorkflows()}. Only that way
+   * do the block and the collected refusals reach a context which is only refreshed. Every
+   * check of the platform has reported by now, because they run while the beans are built
+   * and while the resources are deployed. What the start of the workflow processing
+   * notices later is a late finding. It goes into the log where it was found, as
    * {@link io.vanillabp.integration.adapter.migration.startup.StartupFindings} describes
    * it.
    */
@@ -125,8 +122,8 @@ public class SpringBootDeploymentService implements SmartLifecycle {
         .stream()
         .filter(ProcessServiceSpringBean.class::isInstance)
         .map(processService -> (ProcessServiceSpringBean<?>) processService)
-        // per DECLARED BPMN process id: which adapters serve a workflow is configurable per
-        // workflow, so a secondary or declared-only id may be the one whose combination
+        // per DECLARED BPMN process id. Which adapters serve a workflow can be configured
+        // per workflow. So a secondary or declared-only id may be the one whose combination
         // cannot locate its workflows
         .flatMap(processService -> processService.getProcessServicesOfDeclaredIds().stream())
         .forEach(processService -> {
@@ -141,8 +138,8 @@ public class SpringBootDeploymentService implements SmartLifecycle {
   }
 
   /**
-   * Stops processing of workflows on graceful shutdown: adapters and extensions are
-   * notified in reverse start order, afterwards all process services are stopped.
+   * Stops processing of workflows on graceful shutdown. First adapters and extensions are
+   * told, in reverse start order. Then all process services are stopped.
    */
   @Override
   public void stop() {
@@ -178,12 +175,12 @@ public class SpringBootDeploymentService implements SmartLifecycle {
   }
 
   /**
-   * Start processing of workflows once the application started. Ordered BEFORE the
-   * phase-two outbox dispatchers' listeners (see
+   * Starts processing of workflows once the application has started. It runs BEFORE the
+   * listeners of the phase-two outbox dispatchers (see
    * {@link #START_PROCESSING_LISTENER_ORDER}).
    * <p>
-   * This waits for {@link ApplicationReadyEvent} and not for the lifecycle, because from
-   * here on the adapters hand tasks to the application: a worker must not deliver into an
+   * This waits for {@link ApplicationReadyEvent} and not for the lifecycle. From here on,
+   * the adapters hand tasks to the application. A worker must not deliver into an
    * application whose web server and listener containers are still coming up. The end of
    * the start is the earlier moment and sits in {@link #start()}.
    */
@@ -291,8 +288,8 @@ public class SpringBootDeploymentService implements SmartLifecycle {
       return null;
     }
 
-    // keep subdirectories: same-named BPMN files in different subdirectories of the
-    // resources-location must not overwrite each other in the result map
+    // keep subdirectories. BPMN files with the same name in different subdirectories of
+    // the resources-location must not overwrite each other in the result map
     final var relative = uriString.substring(index + locationPath.length())
         .replace("\\", "/");
 

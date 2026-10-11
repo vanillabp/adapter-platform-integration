@@ -44,18 +44,18 @@ public class DeploymentAutoConfiguration {
 
   /**
    * Collects the adapters' deployment services and the extensions' wiring services
-   * via {@link ObjectProvider} streams: the convention is one <i>element</i> bean
-   * per adapter/extension (never a bean of type <code>List&lt;...&gt;</code>) so
-   * multiple adapter types coexist in one application - the central migration
-   * scenario. Since {@link AdapterDeploymentService} extends
-   * {@link ExtensionWiringService}, the wiring stream contains the adapters, too;
-   * the core {@link DeploymentService} filters them out (adapters are wired
-   * explicitly by the deployment pipeline).
+   * with {@link ObjectProvider} streams. The convention is one <i>element</i> bean per
+   * adapter or extension, never a bean of type <code>List&lt;...&gt;</code>. That way
+   * several adapter types live side by side in one application, which is the central
+   * migration case. {@link AdapterDeploymentService} extends
+   * {@link ExtensionWiringService}, so the wiring stream contains the adapters, too. The
+   * core {@link DeploymentService} filters them out, because the deployment pipeline
+   * wires the adapters on its own.
    *
-   * @param allWorkflowModules The workflow modules of this application, whose resources are
-   *          deployed and whose ids everything below is done per
-   * @param properties Everything below <code>vanillabp</code> after Spring bound it, which
-   *          is what says which adapter serves a workflow
+   * @param allWorkflowModules The workflow modules of this application. Their resources are
+   *          deployed, and everything below is done per workflow module id
+   * @param properties Everything below <code>vanillabp</code> after Spring bound it. It
+   *          says which adapter serves a workflow
    * @param deploymentServiceProvider The adapters' deployment services, one bean per
    *          configured adapter
    * @param wiringServiceProvider The extensions' wiring services, one bean each, the
@@ -64,9 +64,9 @@ public class DeploymentAutoConfiguration {
    *          processing stops
    * @param workflowTaskWiring What connects a delivered task to the
    *          <code>&#64;WorkflowTask</code> method serving it
-   * @param resourceLoader How a workflow module's BPMN and DMN files are read, and how a
-   *          class carrying <code>&#64;WorkflowService</code> without being a bean is found
-   *          while a process nothing claims is reported
+   * @param resourceLoader Reads a workflow module's BPMN and DMN files. It also finds a
+   *          class which carries <code>&#64;WorkflowService</code> but is no bean, while a
+   *          process which nothing claims is reported
    * @return The lifecycle bean which deploys while the context comes up and stops workflow
    *         processing when it goes down
    */
@@ -87,15 +87,16 @@ public class DeploymentAutoConfiguration {
         .stream()
         .toList();
 
-    // the wiring interface goes in as well: what belongs to a workflow module as a
-    // whole is the core's own duty, not an adapter's - the deployed processes no
-    // @WorkflowService class claims, the versions a BPMS still holds for a process id
-    // the application only declares, the @WorkflowTask methods serving no task at all
-    // and the version tags the annotations name
-    // and one contributor to the report about a process nothing claims: on Spring Boot a
-    // workflow service is found because it is a bean, so a class carrying the annotation
-    // without one is invisible to the discovery and only a scan of class resources can name
-    // it. That scan runs where such a process is being reported and nowhere else
+    // the wiring interface goes in as well. What belongs to a workflow module as a whole
+    // is the core's duty, not an adapter's: the deployed processes which no
+    // @WorkflowService class claims, the versions a BPMS still holds for a process id the
+    // application only declares, the @WorkflowTask methods which serve no task at all, and
+    // the version tags the annotations name.
+    // One more helper goes in for the report about a process which nothing claims. On
+    // Spring Boot, a workflow service is found because it is a bean. A class which carries
+    // the annotation but is no bean is invisible to the discovery. Only a scan of class
+    // resources can name it. That scan runs where such a process is reported, and nowhere
+    // else
     final var deploymentService = new DeploymentService(
         properties, deploymentServices, wiringServices, workflowTaskWiring, new WorkflowServicesWhichAreNoBeans(
             resourceLoader, allWorkflowModules));

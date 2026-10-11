@@ -29,22 +29,21 @@ import io.vanillabp.integration.spi.TaskDeliveryLogAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Which store a workflow aggregate's outbox entries and delivery records go to. Both have
- * to be written in the transaction persisting the aggregate, so
- * guessing wrong is worse than not answering: a record committing separately breaks
- * exactly the atomicity it exists for.
+ * Which store a workflow aggregate's outbox entries and delivery records go to. Both have to
+ * be written in the transaction which persists the aggregate. So a wrong guess is worse than
+ * no answer. A record which commits separately breaks exactly the atomicity it exists for.
  * <p>
- * What this pins is the case an application with its OWN persistence runs into - no
- * Spring Data repository, so no technology to attribute by. The message it gets has to
- * name the beans found, the aggregate and the way out, because nothing else tells the
- * developer what VanillaBP could not decide.
+ * This test fixes the case of an application with its OWN persistence. It has no Spring Data
+ * repository, so there is no technology to decide by. The message it gets has to name the
+ * beans found, the aggregate and the way out. Nothing else tells the developer what VanillaBP
+ * could not decide.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class StoreAttributionTest {
 
   /**
-   * An aggregate persisted by the application itself - it has no Spring Data
-   * repository, so no persistence technology can be read off it.
+   * An aggregate which the application persists itself. It has no Spring Data repository, so
+   * nobody can tell its persistence technology.
    */
   public static class CustomlyPersistedAggregate {
 
@@ -52,7 +51,7 @@ public class StoreAttributionTest {
 
   }
 
-  /** A store of the application, carrying no release of its own. */
+  /** A store of the application, without a release of its own. */
   public static class ApplicationDeliveryLog implements TaskDeliveryLog {
 
     @Override
@@ -116,8 +115,8 @@ public class StoreAttributionTest {
     try (var context = new AnnotationConfigApplicationContext()) {
       context.refresh();
 
-      // the core turns this into its own message, listing the remedies of every
-      // platform - the resolver must not anticipate it with a wrong store
+      // the core turns this into its own message, which lists the remedies of every
+      // platform. The resolver must not get there first with a wrong store
       assertNull(new SpringPhaseTwoOutboxResolver(context).resolveFor(CustomlyPersistedAggregate.class));
     }
 
@@ -140,8 +139,8 @@ public class StoreAttributionTest {
       assertTrue(message.contains(MongoPhaseTwoOutboxAutoConfiguration.DEFAULT_OUTBOX_BEAN_NAME), message);
       assertTrue(message.contains(CustomlyPersistedAggregate.class.getName()), message);
       assertTrue(message.contains("UNKNOWN"), message);
-      // the way out has to be nameable, not describable: the interface to implement
-      // and the two properties switching the defaults
+      // the message has to name the way out, not just describe it: the interface to
+      // implement and the two properties which switch the defaults
       assertTrue(message.contains("PhaseTwoOutboxAware"), message);
       assertTrue(message.contains("vanillabp.outbox.jdbc.enabled"), message);
       assertTrue(message.contains("vanillabp.outbox.mongo.enabled"), message);
@@ -315,9 +314,10 @@ public class StoreAttributionTest {
   @DisplayName("A proxied store is reported by the class it proxies, not by the proxy")
   public void aProxiedStoreIsReportedByItsTargetClass() {
 
-    // an application may put @Transactional on its own store; the proxy Spring builds
-    // for it overrides EVERY method, the SPI defaults included - reflecting on the
-    // proxy would report a release which does not exist
+    // an application may put @Transactional on its own store. The proxy which Spring builds
+    // for it overrides EVERY method, including the SPI defaults. So reflection on the proxy
+    // would report a release which does not exist
+
     final var proxied = (TaskDeliveryLog) new ProxyFactory(new ApplicationDeliveryLog()).getProxy();
 
     try (var context = new AnnotationConfigApplicationContext()) {

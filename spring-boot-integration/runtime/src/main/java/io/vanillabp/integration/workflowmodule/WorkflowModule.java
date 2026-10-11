@@ -60,11 +60,11 @@ public class WorkflowModule {
   private final String id;
 
   /**
-   * The classpath-root prefix (external URL form) of the JAR or directory the
-   * workflow module descriptor was loaded from (the descriptor URL minus
-   * {@link #METAINF_WORKFLOWMODULE}). Used to match classes originating from the
-   * same JAR or directory, see {@link #isDeclaredInTheArtifactOf(String)} for why that
-   * is more than comparing the two strings.
+   * The classpath-root prefix, as an external URL, of the JAR or directory the workflow
+   * module descriptor was loaded from. It is the descriptor URL minus
+   * {@link #METAINF_WORKFLOWMODULE}. It is used to match classes which come from the same
+   * JAR or directory. {@link #isDeclaredInTheArtifactOf(String)} says why that is more
+   * than comparing the two strings.
    */
   private final String sourceUri;
 
@@ -75,12 +75,12 @@ public class WorkflowModule {
 
   /**
    * Built while the marker files of the classpath are read, and by the builder of this
-   * class in tests. Both values are known at that moment; the workflow services are not,
-   * and are added later by the registration which pairs classes with modules.
+   * class in tests. Both values are known at that moment. The workflow services are not
+   * known yet. The registration which pairs classes with modules adds them later.
    *
    * @param id The workflow module's id, the trimmed content of its marker file
    * @param sourceUri The classpath root the marker file came from, or <code>null</code>
-   *     where it is unknown - a module without it matches no class by origin
+   *     where it is unknown. A module without it matches no class by origin
    */
   public WorkflowModule(
       final String id,
@@ -92,9 +92,9 @@ public class WorkflowModule {
   }
 
   /**
-   * Whether this module holds the given workflow service. Asked while a process service is
-   * built, which is where the workflow module of a class has to be named - a class no
-   * module claims ends the boot there.
+   * Whether this module holds the given workflow service. It is asked while a process
+   * service is built. That is where the workflow module of a class has to be named. A
+   * class which no module claims ends the boot there.
    *
    * @param workflowService A workflow service class
    * @return Whether the workflow service class belongs to this workflow module
@@ -181,7 +181,7 @@ public class WorkflowModule {
   }
 
   /**
-   * Add the given workflow service class to the workflow module.
+   * Adds the given workflow service class to the workflow module.
    *
    * @param workflowService The workflow service class
    */
@@ -193,7 +193,7 @@ public class WorkflowModule {
   }
 
   /**
-   * Add the given workflow service classes to the workflow module.
+   * Adds the given workflow service classes to the workflow module.
    *
    * @param workflowServices The workflow service classes
    */

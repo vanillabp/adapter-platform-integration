@@ -14,15 +14,15 @@ import io.vanillabp.integration.utils.impl.JpaSpringDataUtil;
 import jakarta.persistence.EntityManagerFactory;
 
 /**
- * Auto-configuration of the JPA-based {@link SpringDataUtil}. Only active if
+ * Auto-configuration of the JPA-based {@link SpringDataUtil}. It is only active if
  * <ul>
  *   <li>Spring Data JPA is on the classpath,</li>
- *   <li>exactly one (primary) {@link EntityManagerFactory} is available (so a
- *       Mongo-only application having spring-data-jpa on the classpath is skipped
- *       cleanly) and</li>
+ *   <li>exactly one (or one primary) {@link EntityManagerFactory} is available, so a
+ *       MongoDB-only application with spring-data-jpa on the classpath is skipped
+ *       cleanly, and</li>
  *   <li>the application did not define its own {@link SpringDataUtil} bean.</li>
  * </ul>
- * If both JPA and MongoDB are configured, JPA wins deterministically (see
+ * If both JPA and MongoDB are configured, JPA always wins (see
  * {@link MongoDbSpringDataUtilAutoConfiguration}).
  */
 @AutoConfiguration(
@@ -42,16 +42,16 @@ public class JpaSpringDataUtilConfiguration {
   }
 
   /**
-   * What VanillaBP loads and saves a workflow aggregate through where the aggregate is a
-   * JPA entity. It is what makes a plain Spring Data repository enough: an application
-   * which has one for its aggregate needs no
-   * {@link io.vanillabp.integration.spi.AggregatePersistenceAware} bean of its own.
+   * What VanillaBP uses to load and save a workflow aggregate which is a JPA entity. With
+   * it, a plain Spring Data repository is enough. An application which has one for its
+   * aggregate needs no {@link io.vanillabp.integration.spi.AggregatePersistenceAware} bean
+   * of its own.
    *
-   * @param applicationContext Where the aggregates' repositories are looked up - once per
+   * @param applicationContext Where the aggregates' repositories are looked up, once per
    *          aggregate type, and cached afterwards
-   * @param jpaContext Answers which entity manager manages a given type, so an application
+   * @param jpaContext Answers which entity manager manages a given type. So an application
    *          with more than one persistence unit asks the right one
-   * @return The JPA implementation, which the application may replace by defining a
+   * @return The JPA implementation. The application may replace it by defining a
    *         {@link SpringDataUtil} bean itself
    */
   @Bean
