@@ -333,7 +333,7 @@ public class MigrationProcessService<A> {
         workflowModuleId, bpmnProcessId, workflowAggregateClass, properties, builder.taskDeliveryLogResolver);
 
     this.workflowViewer = new WorkflowViewer<>(
-        workflowModuleId, bpmnProcessId, prioritizedAdapters, adapterProcessServices, aggregatePersistenceSupport, workflowLocator, this::workflowScope);
+        workflowModuleId, bpmnProcessId, prioritizedAdapters, adapterProcessServices, aggregatePersistenceSupport, workflowLocator, this::workflowScope, this::writtenDownAbout);
 
   }
 
@@ -2437,27 +2437,41 @@ public class MigrationProcessService<A> {
           subject,
           patience);
     }
-    final var started = deliveryRecords.workflowStartRowOf(workflowAggregateId);
-    final var recordedStart = (started != null) && isAdapterOfThisWorkflow(started.adapterId())
-        ? new WorkflowLocator.RecordedStart(started.adapterId(), started.workflowId())
-        : null;
-    final String workflowId;
-    if (recordedStart != null) {
-      workflowId = recordedStart.workflowId();
-    } else if (started != null) {
-      // the row is about an adapter this workflow is not elected among any more, so its id
-      // would be handed to adapters which never knew that workflow
-      workflowId = workflowLocator.rememberedWorkflowId(workflowAggregateId);
-    } else {
-      workflowId = workflowIdOf(workflowAggregateId);
-    }
+    final var writtenDown = writtenDownAbout(workflowAggregateId);
     return workflowLocator.locate(
         adapterProcessServices,
-        adapter -> probe(operation, adapter, workflowAggregateId, args, workflowId),
+        adapter -> probe(operation, adapter, workflowAggregateId, args, writtenDown.workflowId()),
         workflowAggregateId,
         subject,
         patience,
-        recordedStart);
+        writtenDown.recordedStart());
+
+  }
+
+  /**
+   * What VanillaBP wrote down about the workflow of the given aggregate. It is read before an
+   * election of the workflow asks any adapter. The election of an operation uses it, and so does
+   * the {@link WorkflowViewer}. So a read and an operation find a young workflow the same way,
+   * also on a node whose election cache never saw it.
+   * <p>
+   * The start row comes first. Where it names an adapter this workflow is elected among, it gives
+   * the adapter and the id. Where there is no row, the id comes from {@link #workflowIdOf(Object)},
+   * which also reads the rows of open tasks.
+   */
+  private WorkflowLocator.WrittenDown writtenDownAbout(
+      final Object workflowAggregateId) {
+
+    final var started = deliveryRecords.workflowStartRowOf(workflowAggregateId);
+    if ((started != null) && isAdapterOfThisWorkflow(started.adapterId())) {
+      return new WorkflowLocator.WrittenDown(
+          new WorkflowLocator.RecordedStart(started.adapterId(), started.workflowId()), started.workflowId());
+    }
+    if (started != null) {
+      // the row is about an adapter this workflow is not elected among any more, so its id
+      // would be handed to adapters which never knew that workflow
+      return new WorkflowLocator.WrittenDown(null, workflowLocator.rememberedWorkflowId(workflowAggregateId));
+    }
+    return new WorkflowLocator.WrittenDown(null, workflowIdOf(workflowAggregateId));
 
   }
 

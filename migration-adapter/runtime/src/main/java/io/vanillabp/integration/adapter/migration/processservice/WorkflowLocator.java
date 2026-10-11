@@ -507,6 +507,21 @@ public final class WorkflowLocator {
   }
 
   /**
+   * What VanillaBP wrote down about a workflow before an election asks any adapter: the row
+   * written when the workflow started, and the BPMS' own id of the workflow. An operation and a
+   * read look this up the same way, so they elect the same adapter.
+   *
+   * @param recordedStart What the start row says, or <code>null</code> where there is no row or
+   *        it names an adapter which is not configured for this workflow
+   * @param workflowId The BPMS' own id of the workflow, handed to the probe, or
+   *        <code>null</code> where VanillaBP holds none
+   */
+  public record WrittenDown(
+                            RecordedStart recordedStart,
+                            String workflowId) {
+  }
+
+  /**
    * The hint of the given workflow, looked for under every BPMN process id this workflow
    * service serves, the own id first. The first one found wins: a workflow is one
    * workflow whichever of those processes was running when the hint was written.

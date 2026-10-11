@@ -402,9 +402,12 @@ Four pieces solve it, and the split matters:
    of two callers which wait for themselves. It has no phase two to plan, and nothing repeats it
    later. So it waits where a hint says which adapter holds the workflow. A viewer asks all day for
    the history of a workflow the application started seconds ago. The few seconds by which Camunda
-   8's exporter lags must not answer that with `WorkflowNotFoundException`. Without a hint the read
-   still fails at once. A hint which never comes true costs the window. Then the failure names the
-   adapter which was expected to answer.
+   8's exporter lags must not answer that with `WorkflowNotFoundException`. The row written when
+   the workflow started counts as a hint, as it does for an operation (decision 112). So a second
+   node, or a node after a restart, waits for a young workflow too, although its cache never saw it.
+   `TheViewerReadsTheStartRowTest` holds this. Without a hint the read still fails at once. A hint
+   which never comes true costs the window. Then the failure names the adapter which was expected
+   to answer.
 
    The election an extension asks for (`WorkflowElection#adapterIdOfWorkflow`) waits the same way,
    for the same reason: nobody repeats an extension's question either. Unlike a read it is not

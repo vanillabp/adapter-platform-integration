@@ -632,14 +632,14 @@ because they are the reason why the table below looks the way it does:
 3. a BPMS which is not available right now produces an exception, and asking it is the only honest
    way to find out.
 
-|                  The probe answers                  |                phase one does                |             the dispatch does              |                      a read does                       |
-|-----------------------------------------------------|----------------------------------------------|--------------------------------------------|--------------------------------------------------------|
-| `ACTIVE`                                            | the operation runs                           | the operation runs                         | the adapter answers                                    |
-| `COMPLETED`                                         | warned no-op                                 | the entry is consumed                      | the adapter answers (an ended workflow is viewable)    |
-| `UNKNOWN_TO_BPMS`, task operation                   | `TaskNotFoundException` at once              | the entry is consumed (the task is gone)   | -                                                      |
-| `UNKNOWN_TO_BPMS`, workflow operation, hint present | the operation is planned, the caller returns | gives the entry back, due after the window | waits out the window, then `WorkflowNotFoundException` |
-| `UNKNOWN_TO_BPMS`, no hint                          | `WorkflowNotFoundException` at once          | the entry is consumed (stale)              | `WorkflowNotFoundException` at once                    |
-| `BPMS_UNAVAILABLE`                                  | exception naming the adapter, at once        | retried twice, then the entry is repeated  | retried twice, then the exception                      |
+|                  The probe answers                  |                phase one does                |             the dispatch does              |                      a read does                       |                                                   a report does                                                   |
+|-----------------------------------------------------|----------------------------------------------|--------------------------------------------|--------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
+| `ACTIVE`                                            | the operation runs                           | the operation runs                         | the adapter answers                                    | asks nobody: the start row, or the row of an open task, names the adapter                                         |
+| `COMPLETED`                                         | warned no-op                                 | the entry is consumed                      | the adapter answers (an ended workflow is viewable)    | asks nobody: the start row names the adapter until its retention ends                                             |
+| `UNKNOWN_TO_BPMS`, task operation                   | `TaskNotFoundException` at once              | the entry is consumed (the task is gone)   | -                                                      | asks nobody: the row of the task names the adapter, or the entry goes without one                                 |
+| `UNKNOWN_TO_BPMS`, workflow operation, hint present | the operation is planned, the caller returns | gives the entry back, due after the window | waits out the window, then `WorkflowNotFoundException` | asks nobody: the entry goes without an adapter, and its dispatch elects one                                       |
+| `UNKNOWN_TO_BPMS`, no hint                          | `WorkflowNotFoundException` at once          | the entry is consumed (stale)              | `WorkflowNotFoundException` at once                    | asks nobody: the entry goes without an adapter; the dispatch tries again and blocks the entry when its time is up |
+| `BPMS_UNAVAILABLE`                                  | exception naming the adapter, at once        | retried twice, then the entry is repeated  | retried twice, then the exception                      | asks nobody: the dispatch meets it and repeats the entry                                                          |
 
 This decision first forgot the column for the read. A red blueprint nightly build pointed it out
 (story 176). The viewer of a workflow started seconds ago asked Camunda 8 while its exporter was
@@ -683,6 +683,30 @@ model. That operation is planned instead of refused at the call. Its entry is re
 blocked. It used to be an exception after ten seconds of waiting. It is a blocked entry now. The
 more common case is an ended workflow which the BPMS still knows. It keeps answering `COMPLETED` and
 stays a warned no-op.
+
+*The fourth column of the table, "a report does", and the three paragraphs below were added on
+2026-10-11. They came out of a challenge of every place where VanillaBP still waits (story 960). The
+other columns and paragraphs did not change.*
+
+A report is a call which writes an outbox entry into the transaction of the application, for
+example when an extension tells the Business Cockpit that an aggregate changed. It never asks a BPMS
+and it never waits. It does not ask the probe at all, so the column says what it does instead. It
+takes the adapter from what VanillaBP wrote down: the row written when the workflow started, the row
+of an open task, or the one adapter the application has. Where none of them names the adapter, the
+entry is written without one, and the dispatch elects it. The dispatch may ask a BPMS, but it does
+not sleep. It gives the entry back with a due time, as decision 49 says.
+
+What is looked up does not depend on the extension. Whether the call may wait depends on its kind: a
+report never waits, a read may (third column). So an extension calls
+`WorkflowElection#adapterIdOfWorkflow` and `#locationOfWorkflow` only where it reads, never where it
+reports. For a report it uses `#workflowStartOf` and `#openUserTasksOf`, which read the
+application's database and nothing else.
+
+The application's code does not need to know whether it is the first or the tenth call in its model.
+That is the reason for this column. Measured on 2026-10-11 against Camunda 8.10.0 with a stopped
+exporter: a report about a workflow started a moment ago took 0 ms and sent no request to the
+cluster, and the start row was written 21 to 83 ms after the start, before the first task was
+delivered.
 
 ### 28. An adapter is registered completely or it does not exist
 
@@ -4163,6 +4187,13 @@ What it costs, and what is accepted:
   An entry planned before that moment was recorded has none. For such an entry, a second start whose
   first attempt failed before it created anything is still skipped.
 - One read by primary key per operation on a workflow, and only where the cache has no hint.
+
+*Since 2026-10-11 a read of the viewer API reads the start row the same way, before it asks the
+adapters (story 961). Without it, a second node, a restarted node or a node whose cache forgot
+answered `WorkflowNotFoundException` at once for a running young workflow, measured against Camunda
+8.10.0 with a stopped exporter. The row counts as a hint for the read too, so the read waits for its
+adapter as decision 27 says for a read with a hint. Where there is no row, the read hands the probe
+the workflow id from the row of an open task, as an operation does.*
 
 ### 113. Waiting for a read model uses time, not attempts
 
