@@ -3617,18 +3617,18 @@ HandlerContract
     .build();
 ```
 
-|        Part of the contract        |                                                          What it decides                                                          |
-|------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
-| annotation type                    | which methods belong to the extension; repeatable annotations are supported                                                       |
-| `lookupKeys(…)`                    | the keys one occurrence names; an EMPTY list means the method's own name, `EVERY_KEY` means every element of the process          |
-| `versions(…)`                      | the process versions one occurrence names, written as `@WorkflowTask(version = …)` writes them; an EMPTY list means every version |
-| `callsCarryTheProcessVersion()`    | that the calls of this contract name the version of their BPMN process wherever the BPMS reports one                              |
+|        Part of the contract         |                                                               What it decides                                                               |
+|-------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| annotation type                     | which methods belong to the extension; repeatable annotations are supported                                                                 |
+| `lookupKeys(…)`                     | the keys one occurrence names; an EMPTY list means the method's own name, `EVERY_KEY` means every element of the process                    |
+| `versions(…)`                       | the process versions one occurrence names, written as `@WorkflowTask(version = …)` writes them; an EMPTY list means every version           |
+| `callsCarryTheProcessVersion()`     | that the calls of this contract name the version of their BPMN process wherever the BPMS reports one                                        |
 | `theDeployedVersionNeedsAMethod(…)` | that the start ends if an element which the extension reports (`elementsOfTheDeployedModel`) has methods, but none for the deployed version |
-| `coreParameters(…)`                | which of the parameters VanillaBP binds itself may stand there (`@TaskId`/`@TaskEvent` are not among them, on purpose)            |
-| `parameterBinder(…)`               | the parameters of the extension's own SPI, recognized by type or by annotation                                                    |
-| `deliversReturnValue()`            | whether what a method returns reaches the caller; without it a method has to be `void`                                            |
-| `validatingAnnotation(…)`          | what the extension checks about one occurrence of its annotation, while the scan holds the method which carries it                |
-| `neverSavesTheWorkflowAggregate()` | that no method of this annotation ever writes the aggregate, so nothing is saved and nothing is warned about                      |
+| `coreParameters(…)`                 | which of the parameters VanillaBP binds itself may stand there (`@TaskId`/`@TaskEvent` are not among them, on purpose)                      |
+| `parameterBinder(…)`                | the parameters of the extension's own SPI, recognized by type or by annotation                                                              |
+| `deliversReturnValue()`             | whether what a method returns reaches the caller; without it a method has to be `void`                                                      |
+| `validatingAnnotation(…)`           | what the extension checks about one occurrence of its annotation, while the scan holds the method which carries it                          |
+| `neverSavesTheWorkflowAggregate()`  | that no method of this annotation ever writes the aggregate, so nothing is saved and nothing is warned about                                |
 
 An invocation (`ExtensionHandlers#invoke`) names the keys it accepts, for example an element id
 and a task definition. The method which NAMES any of them runs. Where none does, the method which
