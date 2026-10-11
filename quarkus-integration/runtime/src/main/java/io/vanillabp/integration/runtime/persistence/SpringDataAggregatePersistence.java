@@ -5,14 +5,14 @@ import org.springframework.data.repository.CrudRepository;
 import jakarta.enterprise.inject.spi.CDI;
 
 /**
- * Persistence of aggregates managed by a Spring Data repository (extension
- * {@code quarkus-spring-data-jpa}), used whenever the application has a
- * {@code CrudRepository} for the aggregate, no Panache repository, no Panache active
+ * Persistence of aggregates which a Spring Data repository manages (extension
+ * {@code quarkus-spring-data-jpa}). It is used whenever the application has a
+ * {@code CrudRepository} for the aggregate, but no Panache repository, no Panache active
  * record and no {@link io.vanillabp.integration.spi.AggregatePersistenceAware} of its
  * own.
  * <p>
- * This is the same repository API the Spring Boot integration uses, so an application
- * moving between the two platforms keeps the behavior of <code>save</code>.
+ * The Spring Boot integration uses the same repository API. So an application which moves
+ * between the two platforms keeps the behavior of <code>save</code>.
  *
  * @param <A> The aggregate type
  */
@@ -23,9 +23,9 @@ public class SpringDataAggregatePersistence<A> extends DefaultAggregatePersisten
   private volatile CrudRepository<A, Object> repository;
 
   /**
-   * Called by the no-arg constructor of the subclass the build generates for one
-   * aggregate. The repository arrives as a class and is looked up in the CDI container
-   * on first use, because the bean is built before the container is there.
+   * The no-arg constructor of the subclass which the build generates for one aggregate calls
+   * it. The repository arrives as a class. It is looked up in the CDI container on first use,
+   * because the bean is created before the container is there.
    *
    * @param aggregateClass The aggregate type this instance persists
    * @param repositoryClass The <code>CrudRepository</code> the application wrote for

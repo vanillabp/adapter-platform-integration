@@ -11,9 +11,9 @@ import jakarta.enterprise.inject.spi.InjectionPoint;
 import jakarta.enterprise.util.TypeLiteral;
 
 /**
- * A {@link Instance} over a fixed list - enough for the resolvers of the platform, which only
- * stream over their candidates, ask whether one is resolvable, and read the class a bean was
- * declared as from its {@link Handle}.
+ * An {@link Instance} over a fixed list. That is enough for the resolvers of the platform.
+ * They only stream over their candidates, ask whether one is resolvable, and read from its
+ * {@link Handle} the class which a bean was declared as.
  *
  * @param <T> The bean type
  */
@@ -22,8 +22,8 @@ public final class InstanceDouble<T> implements Instance<T> {
   private final List<T> beans;
 
   /**
-   * The class each bean was declared as, in the order of {@link #beans}, or
-   * <code>null</code> to let a handle report no bean metadata at all.
+   * The class which each bean was declared as, in the order of {@link #beans}. Or
+   * <code>null</code>, so that a handle reports no bean metadata at all.
    */
   private final List<Class<?>> declaredClasses;
 
@@ -37,7 +37,7 @@ public final class InstanceDouble<T> implements Instance<T> {
   }
 
   /**
-   * Beans whose declared class is their runtime class - the normal case of a test.
+   * Beans whose declared class is their runtime class. This is the normal case of a test.
    *
    * @param <T> The bean type
    * @param beans The beans
@@ -55,12 +55,12 @@ public final class InstanceDouble<T> implements Instance<T> {
   }
 
   /**
-   * Beans whose declared class differs from their runtime class - what a CDI client proxy
-   * looks like to the resolver.
+   * Beans whose declared class differs from their runtime class. This is how a CDI client
+   * proxy looks to the resolver.
    *
    * @param <T> The bean type
    * @param beans The beans
-   * @param declaredClasses The class each bean was declared as, in the order of the beans
+   * @param declaredClasses The class which each bean was declared as, in the order of the beans
    * @return The instance
    */
   public static <T> Instance<T> ofDeclaredAs(
@@ -72,8 +72,8 @@ public final class InstanceDouble<T> implements Instance<T> {
   }
 
   /**
-   * Beans no bean metadata is available for - the fallback of the resolver has to name the
-   * runtime class then.
+   * Beans without bean metadata. Then the fallback of the resolver has to name the runtime
+   * class.
    *
    * @param <T> The bean type
    * @param beans The beans
@@ -221,8 +221,8 @@ public final class InstanceDouble<T> implements Instance<T> {
   }
 
   /**
-   * Bean metadata reporting the class a bean was declared as - the one thing the resolvers
-   * read from it.
+   * Bean metadata which reports the class that a bean was declared as. The resolvers read
+   * only this from it.
    *
    * @param <T> The bean type
    */

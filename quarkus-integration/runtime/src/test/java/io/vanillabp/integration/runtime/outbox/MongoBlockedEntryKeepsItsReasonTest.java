@@ -54,15 +54,15 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 
 /**
  * A blocked entry of the MongoDB store of Quarkus names its reason in the document, in the
- * field <code>lastFailure</code>, with the same text the JDBC table keeps. Every write which
- * ends an attempt sets it: a failed attempt writes its reason, an attempt which goes through
- * removes it, and an entry opened again with the update of the wiki page keeps it until its
- * next attempt.
+ * field <code>lastFailure</code>. It uses the same text as the JDBC table. Every write which
+ * ends an attempt sets it. A failed attempt writes its reason. An attempt which goes through
+ * removes it. An entry which is opened again with the update from the wiki page keeps it
+ * until its next attempt.
  * <p>
- * The Spring Boot store has the same test. The two dispatchers are two classes, so what is
- * asked here is whether THIS one writes the field. Like the other tests of this dispatcher it
- * sits in the package of the class, because the test fills the injection points the way the
- * container does.
+ * The Spring Boot store has the same test. The two dispatchers are two classes. So this test
+ * asks whether THIS one writes the field. Like the other tests of this dispatcher, it lives
+ * in the package of the class, because the test fills the injection points the same way as
+ * the container does.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -72,8 +72,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 public class MongoBlockedEntryKeepsItsReasonTest {
 
   /**
-   * The distance between attempts and the length of a claim. Short, so the attempts of a test
-   * follow each other quickly.
+   * The time between attempts and the length of a claim. It is short, so the attempts of a
+   * test follow each other quickly.
    */
   private static final String SHORT = "PT0.2S";
 
@@ -168,8 +168,8 @@ public class MongoBlockedEntryKeepsItsReasonTest {
   }
 
   /**
-   * The real dispatcher on the real collection, with its injection points filled the way the
-   * container fills them.
+   * The real dispatcher on the real collection. Its injection points are filled the same way
+   * as the container fills them.
    */
   private MongoPhaseTwoOutboxDispatcher dispatcherOf(
       final PhaseTwoRouter router) {
@@ -294,7 +294,7 @@ public class MongoBlockedEntryKeepsItsReasonTest {
       throw new PhaseTwoPermanentFailure("the message 'Order paid' is not modelled", null);
     })), id).getString("lastFailure");
 
-    // the update the wiki page "Blocked outbox entries" gives an operator
+    // The update which the wiki page "Blocked outbox entries" gives an operator.
     final var opened = outbox
         .updateOne(
             new Document("_id", id).append("status", "BLOCKED"),

@@ -15,13 +15,13 @@ import io.vanillabp.integration.runtime.config.WorkflowModuleSpecificYamlConfigS
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The rule the report of the build rests on, asked of SmallRye itself: a file named after
- * a profile is loaded where the file without the profile lies in the same place, and it is
- * not loaded anywhere else. Measured on 2026-09-17 against SmallRye 3.17.2, the version
- * Quarkus 3.39 brings. Should SmallRye ever pair the two differently, this test says so
- * first, and the report of
- * {@code WorkflowModuleBuildStepProcessor#reportConfigFilesWhichStayUnread} has
- * lost its reason.
+ * The rule which the report of the build rests on, asked of SmallRye itself. A file named
+ * after a profile is loaded where the file without the profile lies in the same place. It
+ * is not loaded anywhere else. Measured on 2026-09-17 against SmallRye 3.17.2, the version
+ * which Quarkus 3.39 brings. If SmallRye ever pairs the two in another way, this test says
+ * so first. Then the report of
+ * {@code WorkflowModuleBuildStepProcessor#reportConfigFilesWhichStayUnread} has lost its
+ * reason.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowModuleProfileFileNeedsItsPlainFileTest {

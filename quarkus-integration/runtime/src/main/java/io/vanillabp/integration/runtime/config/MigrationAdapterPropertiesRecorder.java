@@ -17,17 +17,17 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 public class MigrationAdapterPropertiesRecorder {
 
   /**
-   * Built by Quarkus while it records the build steps. A recorder keeps no state: it
-   * carries what the build found out into the starting application, and Quarkus decides
-   * when its methods run.
+   * Quarkus creates it while it records the build steps. A recorder keeps no state. It
+   * carries what the build found out into the starting application. Quarkus decides when its
+   * methods run.
    */
   public MigrationAdapterPropertiesRecorder() {
   }
 
   /**
-   * Supplier for {@link MigrationAdapterProperties} runtime object.
+   * Supplier for the {@link MigrationAdapterProperties} runtime object.
    *
-   * @param capabilities Capabilities of the projects all extensions available
+   * @param capabilities The capabilities of all extensions of the project
    * @param workflowModulesFound Information about all workflow modules found in the project
    * @param adaptersFound Names of all adapters found in the project's classpath
    * @return The {@link MigrationAdapterProperties} object
@@ -37,7 +37,6 @@ public class MigrationAdapterPropertiesRecorder {
       final Collection<WorkflowModule> workflowModulesFound,
       final Collection<String> adaptersFound) {
 
-    // fetch properties as a mapped object
     final var config = (SmallRyeConfig) ConfigProvider.getConfig();
     final var properties = config.getConfigMapping(QuarkusMigrationAdapterProperties.class);
 

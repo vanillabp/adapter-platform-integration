@@ -24,9 +24,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.enterprise.inject.Instance;
 
 /**
- * Which runner serves an aggregate on Quarkus. The platform's own runner is always
- * usable here (JTA is a hard dependency of this extension), so what the resolution has to get
- * right is the order and the ambiguity.
+ * Which runner serves an aggregate on Quarkus. The platform's own runner can always be used
+ * here, because JTA is a hard dependency of this extension. So the resolution has to get the
+ * order and the ambiguity right.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class QuarkusTransactionRunnerResolverTest {
@@ -38,8 +38,8 @@ public class QuarkusTransactionRunnerResolverTest {
   }
 
   /**
-   * A runner an application wrote, and the client proxy the bean container puts in front
-   * of it (its name is what the message used to carry).
+   * A runner which an application wrote, and the client proxy which the bean container puts
+   * in front of it. The message used to show the name of the proxy.
    */
   private static class UnitOfWork implements TransactionRunner {
 
@@ -146,9 +146,10 @@ public class QuarkusTransactionRunnerResolverTest {
   @DisplayName("The platform's own runner is a bean, and is not mistaken for one of the application")
   public void thePlatformsOwnBeanIsNotTheApplicationsAnswer() {
 
-    // TransactionRunnerProducer produces it, so it shows up among the runner beans of
-    // the application. Taking it for one would report the coverage of an aggregate as
-    // the application's business, and the MongoDB verdict below would never be written
+    // TransactionRunnerProducer produces it, so it shows up among the runner beans of the
+    // application. If we took it for one of them, the coverage of an aggregate would
+    // count as the application's business. Then the MongoDB verdict below would never be
+    // written.
     final var testee = resolver(List.of(), List.of(PLATFORM_RUNNER));
 
     assertSame(PLATFORM_RUNNER, testee.resolveFor(OrderAggregate.class));
@@ -266,7 +267,7 @@ public class QuarkusTransactionRunnerResolverTest {
     assertTrue(
         testee.describeResolutionFor(OrderAggregate.class).contains("JTA"),
         testee.describeResolutionFor(OrderAggregate.class));
-    // no aggregate persistence to judge, so no verdict is invented
+    // There is no aggregate persistence to judge, so no verdict is made up.
     assertEquals(
         TransactionCoverage.Verdict.UNKNOWN,
         testee.coverageOf(OrderAggregate.class).verdict());
@@ -285,7 +286,7 @@ public class QuarkusTransactionRunnerResolverTest {
         List.of(awareFor(HasWorkflowState.class, awareRunner)),
         List.of(APPLICATION_RUNNER));
     assertSame(awareRunner, withAware.resolveFor(OrderAggregate.class));
-    // the application owns the transaction, so the platform says nothing about it
+    // The application owns the transaction, so the platform says nothing about it.
     assertEquals(
         TransactionCoverage.Verdict.UNKNOWN,
         withAware.coverageOf(OrderAggregate.class).verdict());
@@ -304,7 +305,8 @@ public class QuarkusTransactionRunnerResolverTest {
                 awareFor(OrderAggregate.class, aggregateSpecific)),
         List.of());
 
-    // the bean naming the aggregate itself is closer than the one naming its interface
+    // The bean which names the aggregate itself is closer than the one which names its
+    // interface.
     assertSame(aggregateSpecific, testee.resolveFor(OrderAggregate.class));
 
     final var tied = resolver(
@@ -335,16 +337,16 @@ public class QuarkusTransactionRunnerResolverTest {
   }
 
   /**
-   * An aggregate MongoDB Panache manages - the only case in which the platform knows what
-   * the JTA transaction reaches, and therefore the only one it judges.
+   * An aggregate which MongoDB Panache manages. Only in this case does the platform know what
+   * the JTA transaction reaches. So it is the only case which the platform judges.
    */
   private static class ShipmentAggregate {
   }
 
   /**
-   * What an application without the MongoDB client extension has: no probe at all, which is
-   * the whole point - nothing on the way to the verdict names a MongoDB type,
-   * so a native image of such an application links.
+   * What an application without the MongoDB client extension has: no probe at all. That is
+   * the whole point. Nothing on the way to the verdict names a MongoDB type. So a native
+   * image of such an application links.
    */
   private static Instance<MongoDeploymentProbe> noProbe() {
 

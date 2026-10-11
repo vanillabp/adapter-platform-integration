@@ -24,9 +24,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * mapper onto the core model - because an adapter registering its beans per configured
  * engine, and an extension registering one bridge per engine, ask it here.
  * <p>
- * The migration setup is the case worth the test: the new BPMS configured, the old one
- * merely named in the order. It is where the Spring Boot helper once lost the old
- * adapter's beans, and Quarkus never had a helper at all.
+ * The migration setup is the case worth the test: the new BPMS is configured, and the old
+ * one is only named in the order. In this case the Spring Boot helper once lost the beans
+ * of the old adapter, and Quarkus never had a helper at all.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class QuarkusAdapterIdsOfTypeTest {

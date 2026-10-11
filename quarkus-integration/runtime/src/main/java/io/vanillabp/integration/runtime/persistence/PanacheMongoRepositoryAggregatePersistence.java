@@ -4,13 +4,13 @@ import io.quarkus.mongodb.panache.PanacheMongoRepositoryBase;
 import jakarta.enterprise.inject.spi.CDI;
 
 /**
- * Persistence of aggregates managed by a MongoDB Panache repository
- * ({@code PanacheMongoRepository} or {@code PanacheMongoRepositoryBase}), used
+ * Persistence of aggregates which a MongoDB Panache repository manages
+ * ({@code PanacheMongoRepository} or {@code PanacheMongoRepositoryBase}). It is used
  * whenever the application has such a repository for the aggregate and no
  * {@link io.vanillabp.integration.spi.AggregatePersistenceAware} of its own.
  * <p>
- * MongoDB has no session, so storing is <code>persistOrUpdate</code>: the document is
- * inserted or replaced, whichever applies, and the caller keeps its instance.
+ * MongoDB has no session, so storing means <code>persistOrUpdate</code>. The document is
+ * inserted or replaced, whichever applies. The caller keeps its instance.
  *
  * @param <A> The aggregate type
  */
@@ -21,9 +21,9 @@ public class PanacheMongoRepositoryAggregatePersistence<A> extends DefaultAggreg
   private volatile PanacheMongoRepositoryBase<A, Object> repository;
 
   /**
-   * Called by the no-arg constructor of the subclass the build generates for one
-   * aggregate. The repository arrives as a class and is looked up in the CDI container
-   * on first use, because the bean is built before the container is there.
+   * The no-arg constructor of the subclass which the build generates for one aggregate calls
+   * it. The repository arrives as a class. It is looked up in the CDI container on first use,
+   * because the bean is created before the container is there.
    *
    * @param aggregateClass The aggregate type this instance persists
    * @param repositoryClass The repository the application wrote for that aggregate

@@ -11,10 +11,9 @@ import io.vanillabp.integration.runtime.workflowtask.QuarkusTransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Which failures Quarkus reports as "somebody else changed the workflow aggregate".
- * Under JTA the conflict arrives wrapped twice, so what is asserted here is
- * the walk along the causes; no transaction is needed for it, which is why the runner is
- * built without a registry.
+ * Which failures Quarkus reports as "somebody else changed the workflow aggregate". Under
+ * JTA, the conflict arrives wrapped twice. So this test asserts the walk along the causes.
+ * It needs no transaction for that. That is why the runner is created without a registry.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class QuarkusConcurrentModificationTest {

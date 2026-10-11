@@ -13,36 +13,35 @@ import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
 import jakarta.enterprise.inject.Instance;
 
 /**
- * Quarkus implementation of the core's {@link PhaseTwoOutboxResolver}: resolves the
- * {@link PhaseTwoOutbox} used for a workflow aggregate so outbox entries always ride
- * the aggregate's own transaction. Resolution order:
+ * The Quarkus implementation of the core's {@link PhaseTwoOutboxResolver}. It resolves the
+ * {@link PhaseTwoOutbox} for a workflow aggregate. So outbox entries are always written in
+ * the aggregate's own transaction. The order of resolution:
  * <ol>
- * <li>the most specific {@link PhaseTwoOutboxAware} bean covering the aggregate
+ * <li>the most specific {@link PhaseTwoOutboxAware} bean which covers the aggregate
  * class,</li>
- * <li>the single active {@link PhaseTwoOutbox} bean if exactly one exists (defaults
- * which are deactivated - <code>vanillabp.outbox.jdbc.enabled</code> /
- * <code>vanillabp.outbox.mongo.enabled</code> - or unusable - no datasource/MongoDB
- * client configured - are not considered), unless it is the platform default of the
- * other technology: an entry written next to the aggregate instead of into its
- * transaction breaks the atomicity this outbox promises, so that ends the boot,</li>
- * <li>with several active outbox beans the platform default matching the technology
- * which manages the aggregate ({@link QuarkusPersistenceTechnology}, read off the
- * persistence VanillaBP resolved for it).</li>
+ * <li>the single active {@link PhaseTwoOutbox} bean, if there is exactly one. Defaults
+ * which are switched off (<code>vanillabp.outbox.jdbc.enabled</code>,
+ * <code>vanillabp.outbox.mongo.enabled</code>) or cannot be used (no datasource or MongoDB
+ * client configured) do not count. The single bean is not used if it is the platform
+ * default of the other technology. An entry written next to the aggregate, and not into its
+ * transaction, breaks the atomicity which this outbox promises. So that ends the boot,</li>
+ * <li>with several active outbox beans, the platform default which matches the technology
+ * that manages the aggregate ({@link QuarkusPersistenceTechnology}, read from the
+ * persistence which VanillaBP resolved for it).</li>
  * </ol>
- * An application therefore writes a {@link PhaseTwoOutboxAware} bean for two reasons
- * only: it brought the aggregate's persistence itself, so the technology cannot be
- * read off it, or it wants a store of its own for this aggregate. Anything else is
- * attributed by the platform.
+ * So an application writes a {@link PhaseTwoOutboxAware} bean for only two reasons. It
+ * brought the aggregate's persistence itself, so the technology cannot be read from it. Or
+ * it wants a store of its own for this aggregate. The platform assigns everything else.
  * <p>
- * Which default serves which technology, and whether it is usable at all, is asked through
- * {@link PlatformDefaultStore} rather than by naming the implementations: the MongoDB ones
- * exist only where the MongoDB client extension does, and a native image resolves every
+ * Which default serves which technology, and whether it can be used at all, is asked
+ * through {@link PlatformDefaultStore}. The implementations are not named. The MongoDB ones
+ * exist only where the MongoDB client extension does. And a native image resolves every
  * referenced method while it is built.
  * <p>
- * The delivery-log resolver next to this one walks the same three steps, and the two stay
- * apart on purpose: they look up different bean types, they answer with different stores,
- * and each message names the properties of its own store. A shared step-walker would have
- * to be handed all of that, and every reader of either resolver would have to open it to
+ * The delivery-log resolver next to this one walks the same three steps. The two stay apart
+ * on purpose. They look up different bean types, they answer with different stores, and
+ * each message names the properties of its own store. A shared helper for the steps would
+ * need all of that as input. And every reader of either resolver would have to open it to
  * see what happens.
  */
 public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
@@ -58,14 +57,14 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
   private final boolean mongoOutboxEnabled;
 
   /**
-   * Built by {@link PhaseTwoOutboxResolverProducer}, once per application. The two switches
-   * arrive as booleans rather than as a configuration object, so this class stays testable
+   * {@link PhaseTwoOutboxResolverProducer} creates it, once per application. The two switches
+   * arrive as booleans and not as a configuration object. So this class can be tested
    * without a Quarkus configuration (see {@code QuarkusStoreAttributionTest}).
    *
    * @param phaseTwoOutboxAwares What the application says about its aggregates, if anything
    * @param phaseTwoOutboxes Every outbox bean of the application, the platform defaults
    *          included
-   * @param persistenceTechnology What an aggregate's technology is read off
+   * @param persistenceTechnology Where an aggregate's technology is read from
    * @param jdbcOutboxEnabled Whether <code>vanillabp.outbox.jdbc.enabled</code> was left on
    * @param mongoOutboxEnabled Whether <code>vanillabp.outbox.mongo.enabled</code> was left on
    */
@@ -103,7 +102,7 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
           .getPhaseTwoOutbox();
     }
 
-    // 2./3. attribute by the technology managing the aggregate
+    // 2. and 3.: choose by the technology which manages the aggregate
     final var outboxes = phaseTwoOutboxes
         .stream()
         .filter(this::isActive)
@@ -114,8 +113,8 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
 
     final var technology = persistenceTechnology.of(workflowAggregateClass);
 
-    // 2. exactly one outbox: use it - unless it is the platform default of the other
-    // technology, which would write the entry outside the aggregate's transaction
+    // 2. Exactly one outbox: use it. But not if it is the platform default of the other
+    // technology, because that would write the entry outside the aggregate's transaction.
     if (outboxes.size() == 1) {
       final var outbox = outboxes.getFirst();
       if (mismatches(outbox, technology)) {
@@ -125,7 +124,7 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
       return outbox;
     }
 
-    // 3. several outboxes: the platform default of the aggregate's technology
+    // 3. Several outboxes: the platform default of the aggregate's technology.
     return outboxes
         .stream()
         .filter(outbox -> matches(outbox, technology))
@@ -136,11 +135,10 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
   }
 
   /**
-   * Every store this application holds: the active {@link PhaseTwoOutbox} beans first,
-   * then the stores a {@link PhaseTwoOutboxAware} bean names for one aggregate. A store
-   * reached both ways appears once, and a platform default which is switched off or has
-   * nothing to write to is left out, because it is a store the resolver would never hand
-   * out either.
+   * Every store which this application holds: first the active {@link PhaseTwoOutbox}
+   * beans, then the stores which a {@link PhaseTwoOutboxAware} bean names for one aggregate.
+   * A store which is found both ways shows up once. A platform default which is switched off
+   * or has nothing to write to is left out. The resolver would never hand it out either.
    */
   @Override
   public Collection<PhaseTwoOutbox> allStores() {
@@ -164,9 +162,9 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
   }
 
   /**
-   * Whether an outbox is the platform default serving the given technology. An outbox
-   * of the application matches nothing: only its own
-   * {@link PhaseTwoOutboxAware} bean says which aggregates it serves.
+   * Whether an outbox is the platform default which serves the given technology. An outbox
+   * of the application matches nothing. Only its own {@link PhaseTwoOutboxAware} bean says
+   * which aggregates it serves.
    */
   private static boolean matches(
       final PhaseTwoOutbox outbox,
@@ -177,8 +175,8 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
   }
 
   /**
-   * Whether an outbox is the platform default of the OTHER technology - the one case in
-   * which a single outbox bean must not be used.
+   * Whether an outbox is the platform default of the OTHER technology. This is the one case
+   * in which a single outbox bean must not be used.
    */
   private static boolean mismatches(
       final PhaseTwoOutbox outbox,
@@ -222,9 +220,9 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
   }
 
   /**
-   * Whether the given outbox is active: the platform defaults may be deactivated by
-   * configuration (their dispatchers then stay inactive, too) - a deactivated
-   * default must not be selected.
+   * Whether the given outbox is active. The configuration may switch the platform defaults
+   * off. Then their dispatchers stay inactive too. A default which is switched off must not
+   * be chosen.
    *
    * @param outbox The outbox bean
    * @return Whether the outbox may be selected
@@ -240,7 +238,7 @@ public class QuarkusPhaseTwoOutboxResolver implements PhaseTwoOutboxResolver {
   }
 
   /**
-   * Whether the default serving a technology was left switched on
+   * Whether the default which serves a technology was left switched on
    * (<code>vanillabp.outbox.jdbc.enabled</code> /
    * <code>vanillabp.outbox.mongo.enabled</code>).
    */

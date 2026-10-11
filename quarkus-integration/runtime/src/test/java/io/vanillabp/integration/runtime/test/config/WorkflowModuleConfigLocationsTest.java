@@ -16,9 +16,9 @@ import io.vanillabp.integration.runtime.config.WorkflowModuleSpecificYamlConfigS
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Each of the four places a workflow module may put its configuration file, asked of the
- * config source providers themselves. Spring Boot reads the same four, so a workflow
- * module keeps its style whichever platform it ends up on.
+ * Each of the four places where a workflow module may put its configuration file, asked of
+ * the config source providers themselves. Spring Boot reads the same four. So a workflow
+ * module keeps its style on whatever platform it ends up.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowModuleConfigLocationsTest {

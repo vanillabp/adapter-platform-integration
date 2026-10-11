@@ -15,10 +15,10 @@ import io.vanillabp.integration.adapter.migration.mongo.MongoSchema;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * What the MongoDB stores of this extension do with the index lists of
- * {@link MongoSchema}: create them, or report the ones an application managing its own
- * schema has not created. The Spring Boot integration has a class of the same shape, and
- * the lists both of them walk are the same.
+ * What the MongoDB stores of this extension do with the index lists of {@link MongoSchema}.
+ * They create the indexes. Or, if the application manages its own schema, they report the
+ * ones it has not created. The Spring Boot integration has a class of the same shape, and
+ * both use the same lists.
  */
 @Slf4j
 public final class MongoIndexes {
@@ -27,9 +27,9 @@ public final class MongoIndexes {
   }
 
   /**
-   * Creates the indexes which are not there yet. MongoDB answers a
-   * <code>createIndex</code> of an index which is already there with its name, so two
-   * instances starting at the same moment do not collide over it.
+   * Creates the indexes which are not there yet. If an index is already there, MongoDB
+   * answers <code>createIndex</code> with its name. So two instances which start at the
+   * same moment do not collide over it.
    *
    * @param collection The collection to create them on
    * @param needed What the store reads by
@@ -46,8 +46,8 @@ public final class MongoIndexes {
    * Warns about every index the collection is missing, with the statement which creates
    * it.
    *
-   * @param collection The collection to look at, which the message names as the
-   *          application spelled it
+   * @param collection The collection to look at. The message names it as the application
+   *          spelled it
    * @param needed What the store reads by
    */
   public static void reportMissingOn(
@@ -89,9 +89,9 @@ public final class MongoIndexes {
   }
 
   /**
-   * What the collection carries today. A collection which does not exist yet carries
-   * nothing, and on MongoDB that is the normal state of an application which has not
-   * written its first document - so the database saying so is not an error here.
+   * What the collection has today. A collection which does not exist yet has nothing. On
+   * MongoDB, that is normal for an application which has not written its first document. So
+   * if the database says so, this is not an error here.
    *
    * @param collection The collection to ask
    * @return The indexes it carries, without MongoDB's own one over the document id

@@ -17,11 +17,11 @@ import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePo
 /**
  * Properties common to all adapters.
  * <p>
- * The config root uses phase {@link ConfigPhase#RUN_TIME} because parts of the
- * configuration originate from workflow-module-specific config files which are
- * added by generated config builders to the static-init/runtime config only —
- * they are not visible to the build-time configuration. Additionally, VanillaBP
- * configuration (e.g. adapter endpoints) must be overridable per environment.
+ * The config root uses the phase {@link ConfigPhase#RUN_TIME}. Parts of the configuration
+ * come from the config files of the workflow modules. Generated config builders add them
+ * only to the static-init and runtime configuration. The build-time configuration does not
+ * see them. Also, it must be possible to override VanillaBP configuration (e.g. adapter
+ * endpoints) per environment.
  */
 @StaticInitSafe
 @ConfigRoot(phase = ConfigPhase.RUN_TIME)
@@ -29,16 +29,16 @@ import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePo
 public interface QuarkusMigrationAdapterProperties {
 
   /**
-   * The root of every key VanillaBP reads. It is the prefix of this config mapping, so
-   * an application writes <code>vanillabp.adapters.&lt;id&gt;.*</code> for one adapter,
-   * and it is spelled into the messages which name the key a reader would write, so the
-   * message and the mapping cannot drift apart.
+   * The root of every key which VanillaBP reads. It is the prefix of this config mapping. So
+   * an application writes <code>vanillabp.adapters.&lt;id&gt;.*</code> for one adapter. The
+   * messages which name a key use this constant too. So the messages and the mapping cannot
+   * drift apart.
    */
   String PREFIX = "vanillabp";
 
   /**
-   * Return the list of adapters, ordered by priority. New workflows will be started
-   * using the first adapter. Other actions will target the BPMS the workflow is running in.
+   * The list of adapters, ordered by priority. New workflows are started with the first
+   * adapter. Other actions go to the BPMS which the workflow is running in.
    * <p>
    * Each item has to be a key in the map of {@link QuarkusMigrationAdapterProperties#adapters}.
    *
@@ -47,29 +47,29 @@ public interface QuarkusMigrationAdapterProperties {
   Optional<List<String>> prioritizedAdapters();
 
   /**
-   * Adapter ids this application USED to have and deliberately does not configure any
-   * more - the last step of a BPMS migration. VanillaBP persists the adapter
-   * id of an outbox entry and of every delivery record, so an id which such an entry
-   * still waits for and which nobody serves is reported at startup: it means the id was
-   * RENAMED, which loses workflows, or that it was removed too early. Naming it here says
-   * that it is the second case, and turns the message into a DEBUG line.
+   * Adapter ids which this application USED to have and on purpose does not configure any
+   * more. This is the last step of a BPMS migration. VanillaBP stores the adapter id of an
+   * outbox entry and of every delivery record. An entry may still wait for an id which
+   * nobody serves. This is reported at startup. It means that the id was RENAMED, which
+   * loses workflows, or that it was removed too early. Naming the id here says that it is
+   * the second case. Then the message becomes a DEBUG line.
    *
    * @return The adapter ids retired deliberately
    */
   Optional<List<String>> retiredAdapters();
 
   /**
-   * Bound although it is refused here: the permission to share a whole workflow
-   * aggregate belongs to the single workflow, and a line written at this level is
-   * answered by the core with a message saying where it belongs.
+   * Bound, although it is refused here. The permission to share a whole workflow aggregate
+   * belongs to the single workflow. If a line is written at this level, the core answers
+   * with a message which says where it belongs.
    *
    * @return The misplaced permission, if somebody wrote one
    */
   Optional<Boolean> allowFullSyncWithBpms();
 
   /**
-   * Whether the expressions of every BPMN model of this application are meant as they
-   * are, the least specific of the three levels the core reads this at.
+   * Whether the expressions of every BPMN model of this application are meant as they are.
+   * This is the least specific of the three levels where the core reads this.
    *
    * @return The answer of this level, an empty Optional leaving it to the level above
    */
@@ -84,9 +84,9 @@ public interface QuarkusMigrationAdapterProperties {
   Optional<List<String>> declaredTaskParams();
 
   /**
-   * Whether something other than this application serves the tasks this level covers
-   * (<code>implemented-externally</code>), so they need no <code>&#64;WorkflowTask</code>
-   * method. Resolved over eight positions, the most specific one winning (see
+   * Whether something other than this application serves the tasks which this level covers
+   * (<code>implemented-externally</code>). Then they need no <code>&#64;WorkflowTask</code>
+   * method. It is resolved over eight positions, and the most specific one wins (see
    * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#implementedExternally}).
    *
    * @return The value written at this level
@@ -94,21 +94,21 @@ public interface QuarkusMigrationAdapterProperties {
   Optional<Boolean> implementedExternally();
 
   /**
-   * Where to load VanillaBP BPMN files from, which are NOT specific to any adapter.
-   * An empty Optional arrives as <code>null</code> in the core model, which then derives
-   * the location from what the classpath says rather than asking for it (see decision 8
-   * in the repository's DECISIONS.md).
+   * Where to load the VanillaBP BPMN files from which are NOT specific to any adapter. An
+   * empty Optional arrives as <code>null</code> in the core model. The core then takes the
+   * location from what the classpath says and does not ask for it (see decision 8 in the
+   * repository's DECISIONS.md).
    *
    * @return The location, or an empty Optional to leave it to the convention
    */
   Optional<String> resourcesLocation();
 
   /**
-   * The configuration of all adapters known. The key can be an adapter's identifier
-   * or a custom identifier. In case of a custom identifier the {@link AdapterConfiguration#type()}
-   * property has to point to the adapter identifier the custom adapter is derived from.
-   * In case of a non-custom adapter identifier the {@link AdapterConfiguration#type()}
-   * property has to be undefined.
+   * The configuration of all known adapters. The key can be an adapter's identifier or a
+   * custom identifier. For a custom identifier, the {@link AdapterConfiguration#type()}
+   * property has to name the adapter identifier which the custom adapter is derived from.
+   * For an adapter's own identifier, the {@link AdapterConfiguration#type()} property has
+   * to stay unset.
    *
    * @return All adapters configured.
    */
@@ -117,29 +117,28 @@ public interface QuarkusMigrationAdapterProperties {
   /**
    * The properties of all workflow modules. The key is the workflow module's id.
    *
-   * @return The section per workflow module, empty where the application configures
-   *         none - the core adds a section for every module the build found on the
-   *         classpath, so a module which needs nothing configured needs no section
+   * @return The section per workflow module, empty where the application configures none.
+   *         The core adds a section for every module which the build found on the
+   *         classpath. So a module which needs no configuration needs no section
    */
   Map<String, WorkflowModuleProperties> workflowModules();
 
   /**
    * The settings of the extensions of this application, keyed by extension id. What the
-   * keys below an extension mean is that extension's own business - VanillaBP owns the
-   * location and the resolution against the overrides per workflow module
+   * keys below an extension mean is up to that extension. VanillaBP owns the place and the
+   * resolution against the overrides per workflow module
    * ({@link WorkflowModuleProperties#extensions()}), per workflow
    * ({@link WorkflowProperties#extensions()}) and per task
-   * ({@link TaskProperties#extensions()}), each of which may be written for one adapter
-   * as well ({@link AdapterConfiguration#extensions()} and
-   * {@link AdapterProperties#extensions()}). That makes the eight positions of decision 53
-   * in the repository's DECISIONS.md.
+   * ({@link TaskProperties#extensions()}). Each of them may also be written for one adapter
+   * ({@link AdapterConfiguration#extensions()} and {@link AdapterProperties#extensions()}).
+   * That makes the eight positions of decision 53 in the repository's DECISIONS.md.
    *
    * @return The settings per extension
    */
   Map<String, Map<String, String>> extensions();
 
   /**
-   * The configuration of the phase-two outbox used for two-phase workflow starts
+   * The configuration of the phase-two outbox, which two-phase workflow starts use
    * (see {@link io.vanillabp.integration.spi.PhaseTwoOutbox}).
    *
    * @return The outbox configuration
@@ -147,7 +146,7 @@ public interface QuarkusMigrationAdapterProperties {
   PhaseTwoOutboxProperties outbox();
 
   /**
-   * The configuration of the election cache consulted for operations on existing
+   * The configuration of the election cache. It is asked for operations on existing
    * workflows (see {@link io.vanillabp.integration.spi.WorkflowAdapterCache}).
    *
    * @return The election cache's configuration
@@ -184,68 +183,67 @@ public interface QuarkusMigrationAdapterProperties {
   MetricsProperties metrics();
 
   /**
-   * The adapter configuration. The properties in detail are defined by the
-   * respective VanillaBP adapter Quarkus extension.
+   * The adapter configuration. The VanillaBP Quarkus extension of each adapter defines the
+   * properties in detail.
    */
   interface AdapterConfiguration {
 
     /**
-     * The adapter's type in case of a custom adapter identifier or an empty Optional in case
-     * of a non-custom adapter identifier.
+     * The adapter's type for a custom adapter identifier, or an empty Optional for the
+     * adapter's own identifier.
      *
      * @return The adapter's type
      */
     Optional<String> type();
 
     /**
-     * How to treat a failing deployment of BPMS resources for this adapter:
-     * <code>fail</code> (default) aborts booting of the application;
-     * <code>warn</code> logs the failure of a NON-first-priority adapter and the
-     * application still starts (a failure of the first-priority adapter always
-     * fails the boot). The value is converted case-insensitively; an invalid value
-     * fails the configuration naming the allowed values.
+     * What to do when the deployment of BPMS resources fails for this adapter.
+     * <code>fail</code> (the default) stops the boot of the application. <code>warn</code>
+     * logs the failure of an adapter which is NOT the first priority, and the application
+     * still starts. A failure of the first-priority adapter always fails the boot. Upper and
+     * lower case do not matter. An invalid value fails the configuration with a message
+     * which names the allowed values.
      *
      * @return The deployment-failure policy
      */
     Optional<DeploymentFailurePolicy> deploymentFailure();
 
     /**
-     * Bound although it is refused here: the permission to share a whole workflow
-     * aggregate belongs to the single workflow, and a line written at this level is
-     * answered by the core with a message saying where it belongs.
+     * Bound, although it is refused here. The permission to share a whole workflow aggregate
+     * belongs to the single workflow. If a line is written at this level, the core answers
+     * with a message which says where it belongs.
      *
      * @return The misplaced permission, if somebody wrote one
      */
     Optional<Boolean> allowFullSyncWithBpms();
 
     /**
-     * Where to load BPMN files from, which are specific to the adapter. This
-     * section is the least specific level of the most-specific-wins resolution of
-     * adapter-scoped properties, so it carries the same per-level keys as the
-     * workflow-module, workflow and task levels.
+     * Where to load the BPMN files from which are specific to the adapter. Adapter-scoped
+     * properties are resolved by "the most specific wins". This section is the least
+     * specific level of it. So it has the same keys per level as the workflow module, the
+     * workflow and the task levels.
      *
      * @return The location, or an empty Optional to leave it to the convention (see
-     *         decision 8 in the repository's DECISIONS.md). Which locations a
-     *         deployment searches, and in which order, is answered by
+     *         decision 8 in the repository's DECISIONS.md). Which locations a deployment
+     *         searches, and in which order, is answered by
      *         {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#getAdapterResourcesLocationsFor(String, String)}
      */
     Optional<String> resourcesLocation();
 
     /**
-     * How the identifiers of a workflow module are kept apart from those of other
-     * workflow modules (<code>none</code>, <code>by-adapter</code>,
-     * <code>use-prefix</code>; see
-     * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance}). Adapter-scoped:
-     * the most specific configured value wins (workflow &gt; workflow module &gt;
-     * adapter), the default is <code>by-adapter</code>.
+     * How the identifiers of a workflow module are kept apart from those of other workflow
+     * modules (<code>none</code>, <code>by-adapter</code>, <code>use-prefix</code>; see
+     * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance}). It is scoped per
+     * adapter. The most specific configured value wins (workflow &gt; workflow module &gt;
+     * adapter). The default is <code>by-adapter</code>.
      *
      * @return The name-clash-avoidance mode
      */
     Optional<io.vanillabp.integration.adapter.spi.NameClashAvoidance> nameClashAvoidance();
 
     /**
-     * Whether a task definition is scoped by the BPMN process ID in addition to the
-     * workflow module ID (only relevant for <code>use-prefix</code>). Defaults to
+     * Whether a task definition is scoped by the BPMN process ID as well as by the workflow
+     * module ID. This matters only for <code>use-prefix</code>. Defaults to
      * <code>true</code>.
      *
      * @return Whether task definitions are scoped per BPMN process
@@ -253,21 +251,20 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Boolean> prefixTaskDefinitionsPerProcess();
 
     /**
-     * Whether VanillaBP remembers the task deliveries of this BPMS, so a repeated
-     * delivery reports the recorded outcome again instead of running the
-     * <code>&#64;WorkflowTask</code> method a second time (see
-     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). Defaults to
-     * <code>true</code> and takes effect only for a BPMS which may repeat a delivery
-     * at all.
+     * Whether VanillaBP remembers the task deliveries of this BPMS. Then a repeated delivery
+     * reports the recorded outcome again and does not run the <code>&#64;WorkflowTask</code>
+     * method a second time (see {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
+     * Defaults to <code>true</code>. It has an effect only for a BPMS which may repeat a
+     * delivery at all.
      *
      * @return Whether deliveries are deduplicated
      */
     Optional<Boolean> deduplicateDeliveries();
 
     /**
-     * Whether something other than this application serves the tasks this level covers
-     * (<code>implemented-externally</code>), so they need no <code>&#64;WorkflowTask</code>
-     * method. Resolved over eight positions, the most specific one winning (see
+     * Whether something other than this application serves the tasks which this level covers
+     * (<code>implemented-externally</code>). Then they need no <code>&#64;WorkflowTask</code>
+     * method. It is resolved over eight positions, and the most specific one wins (see
      * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#implementedExternally}).
      *
      * @return The value written at this level
@@ -275,11 +272,11 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Boolean> implementedExternally();
 
     /**
-     * The versions of a BPMN process this application does not serve any more, each
-     * written in the grammar of the <code>version</code> attribute of
-     * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
-     * <code>1-3</code>, <code>v1.0..v2.0</code>, a version tag). Adapter-scoped: the
-     * most specific configured level wins (workflow &gt; workflow module &gt; adapter).
+     * The versions of a BPMN process which this application does not serve any more. Each is
+     * written like the <code>version</code> attribute of <code>&#64;WorkflowTask</code> and
+     * its sibling annotations (<code>&lt;4</code>, <code>1-3</code>, <code>v1.0..v2.0</code>,
+     * a version tag). It is scoped per adapter. The most specific configured level wins
+     * (workflow &gt; workflow module &gt; adapter).
      *
      * @return The outfaded versions
      */
@@ -294,10 +291,10 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse();
 
     /**
-     * What an extension is configured with FOR THIS ADAPTER, keyed by extension id. An
-     * extension hangs on every configured adapter separately, so two adapters of the same
-     * BPMS type may be told different things, and what an adapter is told beats what the
-     * same level says in general.
+     * The settings of an extension FOR THIS ADAPTER, keyed by extension id. An extension is
+     * configured for every configured adapter on its own. So two adapters of the same BPMS
+     * type may get different settings. And what an adapter gets wins over what the same
+     * level says in general.
      *
      * @return The extension settings of this adapter
      */
@@ -306,50 +303,48 @@ public interface QuarkusMigrationAdapterProperties {
   }
 
   /**
-   * The adapter properties of a level of the most-specific-wins resolution of
-   * adapter-scoped properties (workflow module, workflow or task).
+   * The adapter properties of one level (workflow module, workflow or task). Adapter-scoped
+   * properties are resolved over these levels, and the most specific one wins.
    */
   interface AdapterProperties {
 
     /**
-     * Bound although it is refused here: the permission to share a whole workflow
-     * aggregate belongs to the single workflow, and a line written at this level is
-     * answered by the core with a message saying where it belongs.
+     * Bound, although it is refused here. The permission to share a whole workflow aggregate
+     * belongs to the single workflow. If a line is written at this level, the core answers
+     * with a message which says where it belongs.
      *
      * @return The misplaced permission, if somebody wrote one
      */
     Optional<Boolean> allowFullSyncWithBpms();
 
     /**
-     * Where to load BPMN files from, which are specific to the adapter. Optional:
-     * an adapter section of a level may carry only adapter-specific keys (the
-     * missing resources location is validated with a guiding message by the core
-     * where it is actually required). This interface serves the workflow module, the
-     * workflow and the task alike, and the core answers a location written below the
-     * workflow module with a message naming the keys it belongs at (see decision 80
-     * in the repository's DECISIONS.md).
+     * Where to load the BPMN files from which are specific to the adapter. It is optional,
+     * because an adapter section of a level may have only adapter-specific keys. Where the
+     * resources location is really needed, the core checks it and gives a guiding message.
+     * This interface serves the workflow module, the workflow and the task alike. If a
+     * location is written below the workflow module, the core answers with a message which
+     * names the keys where it belongs (see decision 80 in the repository's DECISIONS.md).
      *
-     * @return The location this level sets, or an empty Optional where it says nothing
-     *         about it. The deployment reads it at the workflow module, see
+     * @return The location which this level sets, or an empty Optional where it says
+     *         nothing about it. The deployment reads it at the workflow module, see
      *         {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#getAdapterResourcesLocationsFor(String, String)}
      */
     Optional<String> resourcesLocation();
 
     /**
-     * How the identifiers of a workflow module are kept apart from those of other
-     * workflow modules (<code>none</code>, <code>by-adapter</code>,
-     * <code>use-prefix</code>; see
-     * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance}). Adapter-scoped:
-     * the most specific configured value wins (workflow &gt; workflow module &gt;
-     * adapter), the default is <code>by-adapter</code>.
+     * How the identifiers of a workflow module are kept apart from those of other workflow
+     * modules (<code>none</code>, <code>by-adapter</code>, <code>use-prefix</code>; see
+     * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance}). It is scoped per
+     * adapter. The most specific configured value wins (workflow &gt; workflow module &gt;
+     * adapter). The default is <code>by-adapter</code>.
      *
      * @return The name-clash-avoidance mode
      */
     Optional<io.vanillabp.integration.adapter.spi.NameClashAvoidance> nameClashAvoidance();
 
     /**
-     * Whether a task definition is scoped by the BPMN process ID in addition to the
-     * workflow module ID (only relevant for <code>use-prefix</code>). Defaults to
+     * Whether a task definition is scoped by the BPMN process ID as well as by the workflow
+     * module ID. This matters only for <code>use-prefix</code>. Defaults to
      * <code>true</code>.
      *
      * @return Whether task definitions are scoped per BPMN process
@@ -357,21 +352,20 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Boolean> prefixTaskDefinitionsPerProcess();
 
     /**
-     * Whether VanillaBP remembers the task deliveries of this BPMS, so a repeated
-     * delivery reports the recorded outcome again instead of running the
-     * <code>&#64;WorkflowTask</code> method a second time (see
-     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). Defaults to
-     * <code>true</code> and takes effect only for a BPMS which may repeat a delivery
-     * at all.
+     * Whether VanillaBP remembers the task deliveries of this BPMS. Then a repeated delivery
+     * reports the recorded outcome again and does not run the <code>&#64;WorkflowTask</code>
+     * method a second time (see {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
+     * Defaults to <code>true</code>. It has an effect only for a BPMS which may repeat a
+     * delivery at all.
      *
      * @return Whether deliveries are deduplicated
      */
     Optional<Boolean> deduplicateDeliveries();
 
     /**
-     * Whether something other than this application serves the tasks this level covers
-     * (<code>implemented-externally</code>), so they need no <code>&#64;WorkflowTask</code>
-     * method. Resolved over eight positions, the most specific one winning (see
+     * Whether something other than this application serves the tasks which this level covers
+     * (<code>implemented-externally</code>). Then they need no <code>&#64;WorkflowTask</code>
+     * method. It is resolved over eight positions, and the most specific one wins (see
      * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#implementedExternally}).
      *
      * @return The value written at this level
@@ -379,11 +373,11 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Boolean> implementedExternally();
 
     /**
-     * The versions of a BPMN process this application does not serve any more, each
-     * written in the grammar of the <code>version</code> attribute of
-     * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
-     * <code>1-3</code>, <code>v1.0..v2.0</code>, a version tag). Adapter-scoped: the
-     * most specific configured level wins (workflow &gt; workflow module &gt; adapter).
+     * The versions of a BPMN process which this application does not serve any more. Each is
+     * written like the <code>version</code> attribute of <code>&#64;WorkflowTask</code> and
+     * its sibling annotations (<code>&lt;4</code>, <code>1-3</code>, <code>v1.0..v2.0</code>,
+     * a version tag). It is scoped per adapter. The most specific configured level wins
+     * (workflow &gt; workflow module &gt; adapter).
      *
      * @return The outfaded versions
      */
@@ -398,10 +392,10 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse();
 
     /**
-     * What an extension is configured with FOR THIS ADAPTER, keyed by extension id. An
-     * extension hangs on every configured adapter separately, so two adapters of the same
-     * BPMS type may be told different things, and what an adapter is told beats what the
-     * same level says in general.
+     * The settings of an extension FOR THIS ADAPTER, keyed by extension id. An extension is
+     * configured for every configured adapter on its own. So two adapters of the same BPMS
+     * type may get different settings. And what an adapter gets wins over what the same
+     * level says in general.
      *
      * @return The extension settings of this adapter
      */
@@ -415,9 +409,9 @@ public interface QuarkusMigrationAdapterProperties {
   interface PhaseTwoOutboxProperties {
 
     /**
-     * The fixed delay between two background polls for committed-but-unprocessed
-     * outbox entries. Polling is required for crash recovery and retries; right after
-     * a commit the entry is dispatched immediately (independently of this delay).
+     * The fixed delay between two polls in the background for outbox entries which are
+     * committed but not processed. Polling is needed for crash recovery and retries. Right
+     * after a commit, the entry is dispatched at once, whatever this delay is.
      *
      * @return The poll interval
      */
@@ -425,8 +419,8 @@ public interface QuarkusMigrationAdapterProperties {
     Duration pollInterval();
 
     /**
-     * The distance to the FIRST retry after a failed dispatch. Every further attempt
-     * doubles it until <code>max-attempt-frequency</code> is reached.
+     * The time until the FIRST retry after a failed dispatch. Every further attempt doubles
+     * it until it reaches <code>max-attempt-frequency</code>.
      *
      * @return The retry backoff
      */
@@ -434,8 +428,8 @@ public interface QuarkusMigrationAdapterProperties {
     Duration attemptFrequency();
 
     /**
-     * The longest distance the growing backoff reaches, so a BPMS which comes back is
-     * noticed within it however long it was away.
+     * The longest time which the growing backoff reaches. So a BPMS which comes back is
+     * noticed within this time, however long it was away.
      *
      * @return The cap of the retry backoff
      */
@@ -443,11 +437,10 @@ public interface QuarkusMigrationAdapterProperties {
     Duration maxAttemptFrequency();
 
     /**
-     * After how many failed attempts an entry is blocked (not retried any longer).
-     * With the two defaults above, fifty attempts span an outage of about four hours,
-     * so what ends up blocked is an entry which is broken rather than one whose BPMS
-     * was away for a while. Blocked entries have to be fixed manually (e.g. by
-     * cleaning up the outbox table).
+     * After how many failed attempts an entry is blocked and not retried any more. With the
+     * two defaults above, fifty attempts cover an outage of about four hours. So an entry
+     * which ends up blocked is broken. It is not one whose BPMS was away for a while.
+     * Blocked entries have to be fixed by hand (e.g. by cleaning up the outbox table).
      *
      * @return The maximum number of attempts
      */
@@ -455,21 +448,22 @@ public interface QuarkusMigrationAdapterProperties {
     int blockAfterAttempts();
 
     /**
-     * How long an entry may wait for a BPMS which does not report its workflow yet, counted
-     * from the moment the entry was written. Waiting like this uses no attempts, and the
-     * entry is blocked once this time passed. Not set by default, which means the time the
-     * attempts above take with the growing backoff, about four hours with the defaults.
+     * How long an entry may wait for a BPMS which does not report its workflow yet. It is
+     * counted from the moment the entry was written. Waiting like this uses no attempts. The
+     * entry is blocked once this time has passed. It is not set by default. Then it is the
+     * time which the attempts above take with the growing backoff, about four hours with the
+     * defaults.
      *
      * @return How long an entry may wait for its BPMS, empty for the time the attempts take
      */
     Optional<Duration> waitForVisibilityAtMost();
 
     /**
-     * How many entries the JDBC outbox dispatches at the same time. The workflow
-     * aggregate decides which thread takes an entry, so two operations of one workflow
-     * keep the order they were written in while operations of different workflows travel
-     * at the same time. Four of them, which is small on purpose: every dispatch costs a
-     * database connection and a call to the BPMS.
+     * How many entries the JDBC outbox dispatches at the same time. The workflow aggregate
+     * decides which thread takes an entry. So two operations of one workflow keep the order
+     * in which they were written. Operations of different workflows travel at the same time.
+     * The default is four, which is small on purpose. Every dispatch costs a database
+     * connection and a call to the BPMS.
      *
      * @return The number of dispatch threads
      */
@@ -477,9 +471,8 @@ public interface QuarkusMigrationAdapterProperties {
     int dispatchThreads();
 
     /**
-     * Whether the table used to store outbox entries is created automatically.
-     * Disable this if the database schema is managed manually (e.g. by Flyway or
-     * Liquibase).
+     * Whether the table for outbox entries is created automatically. Switch this off if the
+     * database schema is managed by hand or by a tool (e.g. Flyway or Liquibase).
      *
      * @return Whether to create the outbox table automatically
      */
@@ -487,9 +480,9 @@ public interface QuarkusMigrationAdapterProperties {
     boolean createSchema();
 
     /**
-     * How long successfully dispatched entries (marked as DONE) are retained before
-     * they are deleted asynchronously. Retained entries keep the deduplication
-     * window of the idempotency contract open beyond dispatch.
+     * How long entries which were dispatched successfully (marked as DONE) are kept before
+     * they are deleted in the background. Kept entries hold the deduplication window of the
+     * idempotency contract open after the dispatch.
      *
      * @return The retention period of DONE entries
      */
@@ -497,7 +490,7 @@ public interface QuarkusMigrationAdapterProperties {
     Duration retention();
 
     /**
-     * When the outbox house-keeps and in which time zone.
+     * When the outbox does its housekeeping, and in which time zone.
      *
      * @return The housekeeping configuration
      */
@@ -520,16 +513,16 @@ public interface QuarkusMigrationAdapterProperties {
   }
 
   /**
-   * When the outbox removes the entries whose retention passed and the payloads no entry
-   * names any more (<code>vanillabp.outbox.housekeeping.*</code>). Both used to run at
-   * the end of every poll; they run in a window at night now, and inside that window the
-   * outbox works off as much as fits.
+   * When the outbox removes the entries whose retention has passed, and the payloads which
+   * no entry names any more (<code>vanillabp.outbox.housekeeping.*</code>). Both used to run
+   * at the end of every poll. Now they run in a window at night. Inside that window, the
+   * outbox does as much as fits.
    */
   interface HousekeepingProperties {
 
     /**
      * When the window opens, in the zone below. A window whose end lies before its start
-     * crosses midnight, so <code>23:00</code> to <code>01:00</code> is two hours.
+     * crosses midnight. So <code>23:00</code> to <code>01:00</code> is two hours.
      *
      * @return The local time the window opens at
      */
@@ -537,8 +530,8 @@ public interface QuarkusMigrationAdapterProperties {
     LocalTime start();
 
     /**
-     * When the window closes. It is a deadline and not a promise: a batch which is
-     * running when the window closes runs to its end, and the next one does not start.
+     * When the window closes. It is a deadline and not a promise. A batch which is running
+     * when the window closes runs to its end. The next one does not start.
      *
      * @return The local time the window closes at
      */
@@ -546,10 +539,10 @@ public interface QuarkusMigrationAdapterProperties {
     LocalTime end();
 
     /**
-     * The zone the two times above are read in, written the way <code>ZoneId</code>
-     * spells one, for example <code>Europe/Vienna</code>. Unset means the zone of the
-     * JVM - and a JVM standing on UTC without this key is warned at the startup, because
-     * "four in the morning" would then mean four UTC.
+     * The zone in which the two times above are read. Write it the way <code>ZoneId</code>
+     * spells one, for example <code>Europe/Vienna</code>. Unset means the zone of the JVM.
+     * If the JVM runs on UTC and this key is missing, the startup warns. Then "four in the
+     * morning" would mean four UTC.
      *
      * @return The zone of the window
      */
@@ -558,16 +551,16 @@ public interface QuarkusMigrationAdapterProperties {
   }
 
   /**
-   * The configuration of the JDBC/Agroal-based default outbox. Both default
-   * outboxes (JDBC and MongoDB) may be active in the same application - each
-   * workflow aggregate is served by the outbox matching its persistence.
+   * The configuration of the default outbox based on JDBC and Agroal. Both default outboxes
+   * (JDBC and MongoDB) may be active in the same application. Each workflow aggregate is
+   * served by the outbox which matches its persistence.
    */
   interface JdbcOutboxProperties {
 
     /**
-     * Whether the JDBC-based default outbox is active when a datasource is
-     * available. Disable it if the application defines its own PhaseTwoOutbox bean
-     * and the default (including its table and background dispatcher) is unwanted.
+     * Whether the default outbox based on JDBC is active when a datasource is there. Switch
+     * it off if the application defines its own PhaseTwoOutbox bean and does not want the
+     * default, with its table and its dispatcher in the background.
      *
      * @return Whether the JDBC default outbox is active
      */
@@ -576,18 +569,17 @@ public interface QuarkusMigrationAdapterProperties {
 
     /**
      * The name of the table storing outbox entries (default
-     * <code>VANILLABP_PHASE_TWO_OUTBOX</code>). Every outbox instance needs its own
-     * table - two dispatchers polling the same table would compete and
-     * double-dispatch.
+     * <code>VANILLABP_PHASE_TWO_OUTBOX</code>). Every outbox instance needs its own table.
+     * Two dispatchers which poll the same table would compete and dispatch twice.
      *
      * @return The outbox table name
      */
     Optional<String> table();
 
     /**
-     * The name of the table storing the payloads of phase-two calls which carry one.
-     * One table per outbox, for the reason the outbox itself has one. Unset means the
-     * name of the outbox table plus <code>_PAYLOAD</code>, so an application which
+     * The name of the table which stores the payloads of phase-two calls that have one.
+     * There is one table per outbox, for the same reason as the outbox has its own. Unset
+     * means the name of the outbox table plus <code>_PAYLOAD</code>. So an application which
      * renames the outbox renames the payloads with it.
      *
      * @return The payload table name
@@ -595,23 +587,23 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<String> payloadTable();
 
     /**
-     * The name of the table storing the records of processed task deliveries (default
-     * <code>VANILLABP_TASK_DELIVERY</code>). The name lies in this section because the
-     * store settings of the delivery log are the outbox' ones. Unlike the payload table
-     * it does not follow a renamed outbox: it is a store of its own. An application which
-     * sets it applies the same name to <code>io.vanillabp:vanillabp-schema</code>.
+     * The name of the table which stores the records of processed task deliveries (default
+     * <code>VANILLABP_TASK_DELIVERY</code>). The name is in this section, because the
+     * delivery log uses the store settings of the outbox. Unlike the payload table, it does
+     * not follow a renamed outbox, because it is a store of its own. An application which
+     * sets it uses the same name for <code>io.vanillabp:vanillabp-schema</code>.
      *
      * @return The delivery table name
      */
     Optional<String> deliveryTable();
 
     /**
-     * The name of the table the nightly housekeeping takes its lease in (default
-     * <code>VANILLABP_HOUSEKEEPING</code>) - one row per store, holding who is
-     * house-keeping it and until when, so only one node of a cluster measures its own
-     * work. Like the delivery table it does not follow a renamed outbox: it carries a row
-     * per store rather than belonging to one. An application which sets it applies the
-     * same name to <code>io.vanillabp:vanillabp-schema</code>.
+     * The name of the table in which the nightly housekeeping takes its lease (default
+     * <code>VANILLABP_HOUSEKEEPING</code>). It has one row per store. The row says who does
+     * the housekeeping of that store and until when. So only one node of a cluster measures
+     * its own work. Like the delivery table, it does not follow a renamed outbox. It has a
+     * row per store and does not belong to one. An application which sets it uses the same
+     * name for <code>io.vanillabp:vanillabp-schema</code>.
      *
      * @return The housekeeping table name
      */
@@ -620,17 +612,16 @@ public interface QuarkusMigrationAdapterProperties {
   }
 
   /**
-   * The configuration of the MongoDB-based default outbox. Both default outboxes
-   * (JDBC and MongoDB) may be active in the same application - each workflow
-   * aggregate is served by the outbox matching its persistence.
+   * The configuration of the default outbox based on MongoDB. Both default outboxes (JDBC
+   * and MongoDB) may be active in the same application. Each workflow aggregate is served by
+   * the outbox which matches its persistence.
    */
   interface MongoOutboxProperties {
 
     /**
-     * Whether the MongoDB-based default outbox is active when a MongoDB client is
-     * available. Disable it if the application defines its own PhaseTwoOutbox bean
-     * and the default (including its collection and background dispatcher) is
-     * unwanted.
+     * Whether the default outbox based on MongoDB is active when a MongoDB client is there.
+     * Switch it off if the application defines its own PhaseTwoOutbox bean and does not
+     * want the default, with its collection and its dispatcher in the background.
      *
      * @return Whether the MongoDB default outbox is active
      */
@@ -638,9 +629,9 @@ public interface QuarkusMigrationAdapterProperties {
     boolean enabled();
 
     /**
-     * The name of the collection storing outbox entries. Every outbox instance
-     * needs its own collection - two dispatchers polling the same collection would
-     * compete and double-dispatch.
+     * The name of the collection which stores outbox entries. Every outbox instance needs
+     * its own collection. Two dispatchers which poll the same collection would compete and
+     * dispatch twice.
      *
      * @return The outbox collection name
      */
@@ -648,22 +639,22 @@ public interface QuarkusMigrationAdapterProperties {
     String collection();
 
     /**
-     * The name of the collection storing the payloads of phase-two calls which carry
-     * one. One collection per outbox, for the reason the outbox itself has one. Unset
-     * means the name of the outbox collection plus <code>-payloads</code>, so an
-     * application which renames the outbox renames the payloads with it. The core
-     * resolves it, which is why there is no <code>@WithDefault</code> here.
+     * The name of the collection which stores the payloads of phase-two calls that have one.
+     * There is one collection per outbox, for the same reason as the outbox has its own.
+     * Unset means the name of the outbox collection plus <code>-payloads</code>. So an
+     * application which renames the outbox renames the payloads with it. The core resolves
+     * the name. That is why there is no <code>@WithDefault</code> here.
      *
      * @return The payload collection name
      */
     Optional<String> payloadCollection();
 
     /**
-     * The name of the collection storing the records of processed task deliveries. It
-     * lives in this section because the store settings of the delivery log are the
-     * outbox' ones; what the log owns alone is
-     * <code>vanillabp.delivery.retention</code>. Keep it apart from the two collections
-     * above - three stores sharing one collection would read each other's documents.
+     * The name of the collection which stores the records of processed task deliveries. It
+     * is in this section, because the delivery log uses the store settings of the outbox.
+     * The only setting which the log owns alone is <code>vanillabp.delivery.retention</code>.
+     * Keep it apart from the two collections above. Three stores which share one collection
+     * would read each other's documents.
      *
      * @return The delivery-log collection name
      */
@@ -671,10 +662,10 @@ public interface QuarkusMigrationAdapterProperties {
     String deliveryCollection();
 
     /**
-     * The name of the collection the nightly housekeeping takes its lease in - one
-     * document per store, holding who is house-keeping it and until when, so only one
-     * node of a cluster measures its own work. Keep it apart from the three collections
-     * above.
+     * The name of the collection in which the nightly housekeeping takes its lease. It has
+     * one document per store. The document says who does the housekeeping of that store and
+     * until when. So only one node of a cluster measures its own work. Keep it apart from
+     * the three collections above.
      *
      * @return The housekeeping collection name
      */
@@ -684,16 +675,16 @@ public interface QuarkusMigrationAdapterProperties {
   }
 
   /**
-   * The configuration of the election cache's in-memory default implementation.
-   * Both bounds are hard on purpose - entries are hints, so losing one costs an
-   * extra probing walk but never correctness.
+   * The configuration of the default implementation of the election cache, which lives in
+   * memory. Both limits are hard on purpose. Entries are hints. So losing one costs an extra
+   * round of probing, but it never makes a result wrong.
    */
   interface WorkflowAdapterCacheProperties {
 
     /**
-     * The maximum number of entries held - the least recently used entry is dropped
-     * beyond that. Raise it if the application keeps more workflows hot than the
-     * cache holds (VanillaBP warns about it).
+     * The maximum number of entries. Beyond that, the entry which was used least recently is
+     * dropped. Raise it if the application keeps more workflows busy than the cache holds.
+     * VanillaBP warns about that.
      *
      * @return The maximum number of entries
      */
@@ -709,8 +700,8 @@ public interface QuarkusMigrationAdapterProperties {
     Duration timeToLive();
 
     /**
-     * How long the entry of a workflow which ENDED is kept - much shorter than
-     * {@link #timeToLive()}, since such an entry cannot become useful again.
+     * How long the entry of a workflow which ENDED is kept. It is much shorter than
+     * {@link #timeToLive()}, because such an entry cannot become useful again.
      *
      * @return The time-to-live of the entry of an ended workflow
      */
@@ -718,9 +709,9 @@ public interface QuarkusMigrationAdapterProperties {
     Duration endedTimeToLive();
 
     /**
-     * Whether the end of a workflow is reported for this cache's sake, so an ended
-     * workflow lets go of its entry after {@link #endedTimeToLive()}. Switching it on
-     * attaches a listener respectively a worker to every deployed process.
+     * Whether the end of a workflow is reported for this cache. Then an ended workflow lets
+     * go of its entry after {@link #endedTimeToLive()}. Switching it on adds a listener or a
+     * worker, depending on the BPMS, to every deployed process.
      *
      * @return Whether an ended workflow releases its entry early
      */
@@ -730,16 +721,16 @@ public interface QuarkusMigrationAdapterProperties {
   }
 
   /**
-   * What VanillaBP publishes as metrics. There is one setting, and it exists because
-   * reading a metric must not cost anything worth noticing.
+   * What VanillaBP publishes as metrics. There is one setting. It exists because reading a
+   * metric must not cost anything worth noticing.
    */
   interface MetricsProperties {
 
     /**
-     * How long the measurement of a gauge which has to ask somebody - the number of
-     * waiting outbox entries, for instance - is reused before it is taken again. Ten
-     * seconds is one collection interval, a little under Prometheus' default scrape;
-     * <code>PT0S</code> measures on every collection.
+     * Some gauges have to ask somebody for their value, for example the number of waiting
+     * outbox entries. This is how long such a measurement is reused before it is taken
+     * again. Ten seconds is one collection interval, a little under the default scrape of
+     * Prometheus. <code>PT0S</code> measures on every collection.
      *
      * @return The duration one measurement is held for
      */
@@ -756,9 +747,9 @@ public interface QuarkusMigrationAdapterProperties {
     /**
      * The priorities of adapters specific to a workflow module.
      *
-     * @return The order the adapters of this module are asked in, or an empty Optional
-     *         to keep the order the application configured for all modules - an empty
-     *         list is what the core reads as "this level says nothing"
+     * @return The order in which the adapters of this module are asked, or an empty
+     *         Optional to keep the order which the application configured for all modules.
+     *         The core reads an empty list as "this level says nothing"
      * @see QuarkusMigrationAdapterProperties#prioritizedAdapters()
      */
     Optional<List<String>> prioritizedAdapters();
@@ -766,8 +757,8 @@ public interface QuarkusMigrationAdapterProperties {
     /**
      * The properties of adapters specific to this workflow module.
      *
-     * @return The section per adapter id, the second least specific level an adapter
-     *         setting may be written at
+     * @return The section per adapter id. It is the second least specific level where an
+     *         adapter setting may be written
      */
     Map<String, AdapterProperties> adapters();
 
@@ -775,24 +766,24 @@ public interface QuarkusMigrationAdapterProperties {
      * The properties of workflows specific to this workflow module. The key is the
      * BPMN process ID.
      *
-     * @return The section per workflow of this module. A process ID which no deployed
-     *         BPMN carries does not stop the boot - it warns, naming the key and the
-     *         process IDs the module does have
+     * @return The section per workflow of this module. A process ID which no deployed BPMN
+     *         has does not stop the boot. It gives a warning which names the key and the
+     *         process IDs which the module does have
      */
     Map<String, WorkflowProperties> workflows();
 
     /**
-     * Bound although it is refused here: the permission to share a whole workflow
-     * aggregate belongs to the single workflow, and a line written at this level is
-     * answered by the core with a message saying where it belongs.
+     * Bound, although it is refused here. The permission to share a whole workflow aggregate
+     * belongs to the single workflow. If a line is written at this level, the core answers
+     * with a message which says where it belongs.
      *
      * @return The misplaced permission, if somebody wrote one
      */
     Optional<Boolean> allowFullSyncWithBpms();
 
     /**
-     * Whether the expressions of this module's BPMN models are meant as they are. A
-     * workflow saying nothing keeps this answer.
+     * Whether the expressions of this module's BPMN models are meant as they are. A workflow
+     * which says nothing keeps this answer.
      *
      * @return The answer of this level, an empty Optional leaving it to the level above
      */
@@ -807,9 +798,9 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<List<String>> declaredTaskParams();
 
     /**
-     * Whether something other than this application serves the tasks this level covers
-     * (<code>implemented-externally</code>), so they need no <code>&#64;WorkflowTask</code>
-     * method. Resolved over eight positions, the most specific one winning (see
+     * Whether something other than this application serves the tasks which this level covers
+     * (<code>implemented-externally</code>). Then they need no <code>&#64;WorkflowTask</code>
+     * method. It is resolved over eight positions, and the most specific one wins (see
      * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#implementedExternally}).
      *
      * @return The value written at this level
@@ -848,14 +839,15 @@ public interface QuarkusMigrationAdapterProperties {
   }
 
   /**
-   * What VanillaBP does about a workflow aggregate whose store is demonstrably not covered
-   * by the transaction it opens: refuse to start, or accept it and keep the warning.
+   * What VanillaBP does about a workflow aggregate whose store is provably not covered by the
+   * transaction which VanillaBP opens. It refuses to start, or it accepts this and keeps the
+   * warning.
    */
   interface TransactionsProperties {
 
     /**
-     * Whether writes to a store outside VanillaBP's transaction are accepted. The default
-     * is to reject them, which ends the startup with a message naming the fix.
+     * Whether writes to a store outside VanillaBP's transaction are accepted. By default they
+     * are refused. Then the startup ends with a message which names the fix.
      *
      * @return The setting, an empty Optional meaning "whatever applies globally"
      */
@@ -865,13 +857,14 @@ public interface QuarkusMigrationAdapterProperties {
 
   /**
    * What VanillaBP does about a prioritized adapter which cannot ask its BPMS whether it
-   * holds a workflow: refuse to start, or accept the routing by list order.
+   * holds a workflow. It refuses to start, or it accepts the routing by the order of the
+   * list.
    */
   interface ElectionProperties {
 
     /**
-     * Whether an adapter which has to guess is accepted next to other adapters. The
-     * default is to reject it, which ends the startup with a message naming the fix.
+     * Whether an adapter which has to guess is accepted next to other adapters. By default it
+     * is refused. Then the startup ends with a message which names the fix.
      *
      * @return The setting, an empty Optional meaning "whatever applies globally"
      */
@@ -880,23 +873,23 @@ public interface QuarkusMigrationAdapterProperties {
   }
 
   /**
-   * What VanillaBP does with the records of processed task deliveries: keep them until the
-   * retention passed, or delete them the moment their workflow ends.
+   * What VanillaBP does with the records of processed task deliveries. It keeps them until
+   * the retention has passed, or it deletes them as soon as their workflow ends.
    */
   interface DeliveryProperties {
 
     /**
      * Whether the records of a workflow are deleted when it ends. The default is
-     * <code>false</code>: switching it on makes every deployed model pay for the
-     * notification about the end of a workflow.
+     * <code>false</code>. Switching it on makes every deployed model pay for the message
+     * about the end of a workflow.
      *
      * @return The setting, an empty Optional meaning "whatever applies globally"
      */
     Optional<Boolean> releaseOnWorkflowEnd();
 
     /**
-     * How long a task may stay open before VanillaBP reports it. The default is thirty
-     * days and reporting only, see the core's
+     * How long a task may stay open before VanillaBP reports it. The default is thirty days,
+     * and VanillaBP only reports it. See the core's
      * {@link io.vanillabp.integration.adapter.migration.config.DeliveryProperties#getMaxTaskAge()}.
      *
      * @return The setting, an empty Optional meaning "whatever the next less specific
@@ -905,9 +898,9 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Duration> maxTaskAge();
 
     /**
-     * Whether a delivery looks at the other tasks VanillaBP believes are open in the same
-     * workflow of the BPMS and reports the ones which are gone as canceled. The default is
-     * <code>true</code>, see the core's
+     * Whether a delivery looks at the other tasks which VanillaBP believes are open in the
+     * same workflow of the BPMS. It reports the ones which are gone as canceled. The default
+     * is <code>true</code>, see the core's
      * {@link io.vanillabp.integration.adapter.migration.config.DeliveryProperties#getCheckOpenTasksOnDelivery()}.
      *
      * @return The setting, an empty Optional meaning "whatever the next less specific
@@ -927,8 +920,8 @@ public interface QuarkusMigrationAdapterProperties {
 
     /**
      * How long the record of a processed task delivery is kept. It is read GLOBALLY only,
-     * under <code>vanillabp.delivery.retention</code>, and defaults to
-     * <code>vanillabp.outbox.retention</code> where it is not set.
+     * under <code>vanillabp.delivery.retention</code>. Where it is not set, it is the same as
+     * <code>vanillabp.outbox.retention</code>.
      *
      * @return The setting, an empty Optional meaning "whatever the outbox retention says"
      */
@@ -936,8 +929,8 @@ public interface QuarkusMigrationAdapterProperties {
 
     /**
      * How long the row about a started workflow is kept, counted from the start. It is read
-     * GLOBALLY only, under <code>vanillabp.delivery.workflow-start-retention</code>, and defaults
-     * to thirty days, see the core's
+     * GLOBALLY only, under <code>vanillabp.delivery.workflow-start-retention</code>. The
+     * default is thirty days, see the core's
      * {@link io.vanillabp.integration.adapter.migration.config.DeliveryProperties#getWorkflowStartRetention()}.
      *
      * @return The setting, an empty Optional meaning "thirty days"
@@ -945,11 +938,11 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Duration> workflowStartRetention();
 
     /**
-     * Whether that row is kept past its period while the workflow aggregate it names still
+     * Whether that row is kept after its period while the workflow aggregate it names still
      * exists. It is read GLOBALLY only, under
-     * <code>vanillabp.delivery.keep-workflow-start-while-aggregate-exists</code>, and defaults to
-     * <code>false</code> because it costs one read of the application's own database per expired
-     * row.
+     * <code>vanillabp.delivery.keep-workflow-start-while-aggregate-exists</code>. The default
+     * is <code>false</code>, because it costs one read of the application's own database per
+     * expired row.
      *
      * @return The setting, an empty Optional meaning "no, the period decides alone"
      */
@@ -965,8 +958,8 @@ public interface QuarkusMigrationAdapterProperties {
     /**
      * The priorities of adapters specific to a workflow.
      *
-     * @return The order the adapters of this workflow are asked in, or an empty Optional
-     *         to keep the order of the workflow module respectively of the application
+     * @return The order in which the adapters of this workflow are asked, or an empty
+     *         Optional to keep the order of the workflow module, or else of the application
      * @see QuarkusMigrationAdapterProperties#prioritizedAdapters()
      */
     Optional<List<String>> prioritizedAdapters();
@@ -974,18 +967,18 @@ public interface QuarkusMigrationAdapterProperties {
     /**
      * The properties of adapters specific to this workflow.
      *
-     * @return The section per adapter id, beating what the workflow module and the
+     * @return The section per adapter id. It wins over what the workflow module and the
      *         adapter itself say about the same key
      */
     Map<String, AdapterProperties> adapters();
 
     /**
-     * The properties of the workflow's BPMN tasks. The key is the task ID (task
-     * definition). This is the most specific of the four levels a setting is resolved
-     * from, and the core asks it first
+     * The properties of the workflow's BPMN tasks. The key is the task ID (task definition).
+     * This is the most specific of the four levels which a setting is resolved from. The
+     * core asks it first
      * ({@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#resolveForAdapter},
      * see decision 7 in the repository's DECISIONS.md). The delivery settings and the
-     * settings of an extension are resolved over the same four levels - see
+     * settings of an extension are resolved over the same four levels. See
      * QuarkusMigrationAdapterPropertiesMapperTest#maxTaskAgeTravelsThroughEveryLevel.
      *
      * @return The section per task, keyed by task ID
@@ -993,25 +986,25 @@ public interface QuarkusMigrationAdapterProperties {
     Map<String, TaskProperties> tasks();
 
     /**
-     * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS. The one
-     * level this permission may be written at - it is not inherited from anywhere.
+     * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS. This is the
+     * only level where this permission may be written. It is not inherited from anywhere.
      *
      * @return The permission, an empty Optional meaning "not allowed"
      */
     Optional<Boolean> allowFullSyncWithBpms();
 
     /**
-     * Whether the expressions of this workflow's BPMN model are meant as they are - the
-     * most specific of the three levels, and the one a startup message hands out.
+     * Whether the expressions of this workflow's BPMN model are meant as they are. This is
+     * the most specific of the three levels. A startup message names this one.
      *
      * @return The answer of this level, an empty Optional leaving it to the level above
      */
     Optional<Boolean> acceptExpressionsInTheModel();
 
     /**
-     * The values of the workflow aggregate this workflow declares for the BPMS. An entry
-     * names a path in the aggregate and may name what is shared while the path does not
-     * resolve.
+     * The values of the workflow aggregate which this workflow declares for the BPMS. An
+     * entry names a path in the aggregate. It may also name what is shared while the path
+     * does not resolve.
      *
      * @return The declared values
      */
@@ -1026,9 +1019,9 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<List<String>> declaredTaskParams();
 
     /**
-     * Whether something other than this application serves the tasks this level covers
-     * (<code>implemented-externally</code>), so they need no <code>&#64;WorkflowTask</code>
-     * method. Resolved over eight positions, the most specific one winning (see
+     * Whether something other than this application serves the tasks which this level covers
+     * (<code>implemented-externally</code>). Then they need no <code>&#64;WorkflowTask</code>
+     * method. It is resolved over eight positions, and the most specific one wins (see
      * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#implementedExternally}).
      *
      * @return The value written at this level
@@ -1044,9 +1037,9 @@ public interface QuarkusMigrationAdapterProperties {
 
     /**
      * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow,
-     * keyed by extension id - what an extension is told about ONE BPMN process. A key the
-     * workflow says nothing about keeps what the workflow module or the global section
-     * says.
+     * keyed by extension id. This is what an extension gets for ONE BPMN process. A key
+     * which the workflow says nothing about keeps what the workflow module or the global
+     * section says.
      *
      * @return The extension settings of this workflow
      */
@@ -1055,22 +1048,22 @@ public interface QuarkusMigrationAdapterProperties {
   }
 
   /**
-   * The properties of a single BPMN task of a workflow - the MOST specific level of
-   * the most-specific-wins resolution of adapter-scoped properties.
+   * The properties of a single BPMN task of a workflow. Adapter-scoped properties are
+   * resolved by "the most specific wins", and this is the MOST specific level.
    */
   interface TaskProperties {
 
     /**
      * The properties of adapters specific to this task.
      *
-     * @return The section per adapter id - the most specific place a setting of one
-     *         adapter may be written at, so it beats every other level
+     * @return The section per adapter id. It is the most specific place where a setting of
+     *         one adapter may be written. So it wins over every other level
      */
     Map<String, AdapterProperties> adapters();
 
     /**
-     * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
-     * the maximum age of an open task may be set at.
+     * Overrides <code>vanillabp.delivery</code> for this task. This is the most specific level
+     * where the maximum age of an open task may be set.
      *
      * @return The delivery configuration of this task
      */
@@ -1085,9 +1078,9 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<List<String>> declaredTaskParams();
 
     /**
-     * Whether something other than this application serves the tasks this level covers
-     * (<code>implemented-externally</code>), so they need no <code>&#64;WorkflowTask</code>
-     * method. Resolved over eight positions, the most specific one winning (see
+     * Whether something other than this application serves the tasks which this level covers
+     * (<code>implemented-externally</code>). Then they need no <code>&#64;WorkflowTask</code>
+     * method. It is resolved over eight positions, and the most specific one wins (see
      * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#implementedExternally}).
      *
      * @return The value written at this level
@@ -1096,8 +1089,9 @@ public interface QuarkusMigrationAdapterProperties {
 
     /**
      * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task, keyed
-     * by extension id - the most specific level an extension setting may be written at. A
-     * key the task says nothing about keeps what the three less specific levels say.
+     * by extension id. This is the most specific level where an extension setting may be
+     * written. A key which the task says nothing about keeps what the three less specific
+     * levels say.
      *
      * @return The extension settings of this task
      */

@@ -6,24 +6,24 @@ import io.quarkus.runtime.RuntimeValue;
 import io.quarkus.runtime.annotations.Recorder;
 
 /**
- * Records the build-time collected {@link BpmsResourceIndex} as a runtime object
- * (registered as a synthetic CDI bean by the deployment build steps).
+ * Records the {@link BpmsResourceIndex}, which is collected at build time, as a runtime
+ * object. The build steps of the deployment module register it as a synthetic CDI bean.
  */
 @Recorder
 public class DeploymentRecorder {
 
   /**
-   * Quarkus builds the recorder while it builds the application and hands it to the build
-   * step which indexed the resources. What that step calls here is not executed but written
-   * into the bytecode of the boot, and it runs when the application starts.
+   * Quarkus creates the recorder while it builds the application. It hands the recorder to
+   * the build step which indexed the resources. What that step calls here does not run then.
+   * It is written into the bytecode of the boot and runs when the application starts.
    */
   public DeploymentRecorder() {
   }
 
   /**
-   * Hands the index of the build over to the runtime. Both lists are recorded as bytecode,
-   * so they carry plain strings: a build-time object which knows how to read a resource
-   * could not be written into the boot, and the paths can.
+   * Hands the index of the build over to the runtime. Both lists are recorded as bytecode, so
+   * they hold plain strings. A build-time object which knows how to read a resource could not
+   * be written into the boot. The paths can.
    *
    * @param workflowModuleIds The IDs of all workflow modules found at build time
    * @param resourcePaths All indexed resource paths (relative to the classpath root)

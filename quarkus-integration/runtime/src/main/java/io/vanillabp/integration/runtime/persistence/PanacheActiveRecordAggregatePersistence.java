@@ -3,25 +3,25 @@ package io.vanillabp.integration.runtime.persistence;
 import io.quarkus.hibernate.orm.panache.Panache;
 
 /**
- * Persistence of aggregates using the Hibernate ORM Panache active record pattern
- * (the aggregate extends {@code PanacheEntity} or {@code PanacheEntityBase}), used
- * whenever the application has no Panache repository and no
+ * Persistence of aggregates which use the active record pattern of Hibernate ORM Panache.
+ * There, the aggregate extends {@code PanacheEntity} or {@code PanacheEntityBase}. It is
+ * used whenever the application has no Panache repository and no
  * {@link io.vanillabp.integration.spi.AggregatePersistenceAware} of its own for the
  * aggregate.
  * <p>
- * The entity manager of the aggregate's persistence unit is used directly
- * ({@link Panache#getEntityManager(Class)}) instead of the static
- * <code>findById</code>/<code>persist</code> methods Panache generates onto the
- * entity: those would have to be called by reflection, and the entity manager is the
- * documented way to reach the same session.
+ * It uses the entity manager of the aggregate's persistence unit directly
+ * ({@link Panache#getEntityManager(Class)}). It does not use the static
+ * <code>findById</code> and <code>persist</code> methods which Panache generates onto the
+ * entity. Those would have to be called by reflection. The entity manager is the documented
+ * way to reach the same session.
  *
  * @param <A> The aggregate type
  */
 public class PanacheActiveRecordAggregatePersistence<A> extends DefaultAggregatePersistence<A> {
 
   /**
-   * Called by the no-arg constructor of the subclass the build generates for one
-   * aggregate.
+   * The no-arg constructor of the subclass which the build generates for one aggregate calls
+   * it.
    *
    * @param aggregateClass The aggregate type, which is also the Panache entity
    */

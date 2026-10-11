@@ -6,20 +6,20 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * Quarkus implementation of the adapter-facing {@link PreCommitRegistrar}.
+ * The Quarkus implementation of {@link PreCommitRegistrar}, which adapters use.
  * <p>
- * It resolves the transaction runner of the workflow aggregate first, so a phase-one check
- * hooks into the unit of work VanillaBP actually uses - which may be one the
- * APPLICATION contributed. The resolution is the same one the process services use, the
- * bean of {@link TransactionRunnerProducer} rather than a resolver of its own, and it
- * caches per aggregate class.
+ * It first resolves the transaction runner of the workflow aggregate. So a phase-one check
+ * hooks into the unit of work which VanillaBP really uses. This may be one which the
+ * APPLICATION added. The resolution is the same one which the process services use. It is
+ * the bean of {@link TransactionRunnerProducer}, not a resolver of its own, and it caches
+ * per aggregate class.
  */
 @ApplicationScoped
 public class QuarkusPreCommitRegistrar implements PreCommitRegistrar {
 
   /**
-   * Built by the CDI container, which the platform's build step told about this class. An
-   * adapter receives the bean among its collaborators and never builds one - see decision 28
+   * The CDI container creates it, because the platform's build step told it about this class.
+   * An adapter gets the bean among its collaborators and never creates one. See decision 28
    * in the repository's DECISIONS.md.
    */
   public QuarkusPreCommitRegistrar() {

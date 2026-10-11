@@ -14,33 +14,27 @@ import io.smallrye.config.source.yaml.YamlConfigSourceLoader;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleConfigFiles;
 
 /**
- * A config source provider loading config files named by a workflow module ID.
- * The super class is responsible for determining profile-based variants.
+ * A config source provider which loads the config files named after a workflow module ID. The
+ * super class finds the variants per profile.
  *
- * <p>Files are searched at the four places a workflow module may put them,
- * which {@link WorkflowModuleConfigFiles} names and the Spring Boot integration
- * searches as well. A module packaged as its own Maven or Gradle module can
- * therefore keep its configuration next to its other resources, and a module
- * which prefers a {@code config} directory can do that instead.
+ * <p>Files are searched at the four places where a workflow module may put them.
+ * {@link WorkflowModuleConfigFiles} names these places, and the Spring Boot integration
+ * searches them too. So a module packaged as its own Maven or Gradle module can keep its
+ * configuration next to its other resources. A module which prefers a {@code config}
+ * directory can use that instead.
  */
 @StaticInitSafe
 public class WorkflowModuleSpecificYamlConfigSourceProvider extends YamlConfigSourceLoader implements ConfigSourceProvider {
 
-  /**
-   * The workflow module ID
-   */
   private final String workflowModuleId;
 
-  /**
-   * The ordinal/priority
-   */
   private final int ordinal;
 
   /**
-   * Built once per workflow module by the config builder which knows the modules of
-   * this application.
+   * The config builder which knows the modules of this application creates one per workflow
+   * module.
    *
-   * @param workflowModuleId The module whose file this provider looks for - the file is
+   * @param workflowModuleId The module whose file this provider looks for. The file is
    *          named after the module
    * @param ordinal Where the values of that file rank against the other configuration
    *          sources
@@ -55,8 +49,8 @@ public class WorkflowModuleSpecificYamlConfigSourceProvider extends YamlConfigSo
   }
 
   /**
-   * Determine all config sources for all known file extensions, at each of the
-   * four places a workflow module may put a file.
+   * Finds all config sources for all known file extensions, at each of the four places where
+   * a workflow module may put a file.
    *
    * @param classLoader
    *            the class loader, which should be used for discovery and resource loading purposes
@@ -80,7 +74,8 @@ public class WorkflowModuleSpecificYamlConfigSourceProvider extends YamlConfigSo
   }
 
   /**
-   * Do not support files since workflow module properties have to placed in a workflow module.
+   * Files on the file system are not supported. Workflow module properties have to be placed
+   * in a workflow module.
    *
    * @param uri the {@link URI} to load the {@link ConfigSource}.
    * @param ordinal the ordinal of the {@link ConfigSource}.
@@ -96,7 +91,8 @@ public class WorkflowModuleSpecificYamlConfigSourceProvider extends YamlConfigSo
   }
 
   /**
-   * Made public to be used by WorkflowModuleBuildStepProcessor when it collects the files to watch and to embed into a native image.
+   * Public, because WorkflowModuleBuildStepProcessor uses it. It collects the files to watch
+   * and to embed into a native image.
    *
    * @return The file extensions supported
    */

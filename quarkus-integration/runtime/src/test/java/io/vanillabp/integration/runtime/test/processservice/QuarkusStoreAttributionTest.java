@@ -29,14 +29,14 @@ import io.vanillabp.integration.spi.TaskDeliveryLogAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An application with two persistences does not attribute its stores itself. Both
- * defaults are registered as soon as a data source and a MongoDB client are configured, and
- * which of them serves an aggregate is read off the persistence VanillaBP resolved for that
+ * An application with two persistences does not assign its stores itself. Both defaults
+ * are registered as soon as a data source and a MongoDB client are configured. Which of them
+ * serves an aggregate is read from the persistence which VanillaBP resolved for that
  * aggregate.
  * <p>
- * The doubles below extend the platform defaults instead of implementing the interfaces,
- * because that is what the resolvers recognise - and it is what the container hands them: a
- * client proxy is a subclass, too.
+ * The doubles below extend the platform defaults and do not implement the interfaces. That
+ * is what the resolvers recognise. And it is what the container hands them, because a client
+ * proxy is a subclass too.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class QuarkusStoreAttributionTest {
@@ -47,7 +47,7 @@ public class QuarkusStoreAttributionTest {
   private static class ShipmentAggregate {
   }
 
-  /** An aggregate the application persists itself, so no technology can be read off it. */
+  /** An aggregate which the application persists itself, so no technology can be read. */
   private static class LedgerAggregate {
   }
 
@@ -96,7 +96,7 @@ public class QuarkusStoreAttributionTest {
 
   };
 
-  /** The persistences of an application storing one aggregate per technology. */
+  /** The persistences of an application which stores one aggregate per technology. */
   private static QuarkusPersistenceTechnology mixedPersistences() {
 
     return new QuarkusPersistenceTechnology(
@@ -216,7 +216,7 @@ public class QuarkusStoreAttributionTest {
         failure.getMessage().contains(PhaseTwoOutboxAware.class.getName()),
         failure.getMessage());
 
-    // a single default is used for it, as before: nothing says it is the wrong one
+    // A single default is used for it, as before. Nothing says that it is the wrong one.
     assertSame(
         JDBC_OUTBOX,
         outboxResolver(List.of(), List.of(JDBC_OUTBOX)).resolveFor(LedgerAggregate.class));
@@ -257,7 +257,7 @@ public class QuarkusStoreAttributionTest {
     assertTrue(stores.contains(MONGO_OUTBOX), stores::toString);
     assertTrue(stores.contains(dedicated), stores::toString);
 
-    // an application without any store gets an empty list rather than a failure
+    // An application without any store gets an empty list, not a failure.
     assertTrue(outboxResolver(List.of(), List.of()).allStores().isEmpty());
 
   }

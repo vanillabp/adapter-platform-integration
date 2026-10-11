@@ -48,49 +48,51 @@ import jakarta.transaction.TransactionSynchronizationRegistry;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The default {@link TaskDeliveryLog} for Quarkus applications using MongoDB (extension
- * <code>quarkus-mongodb-client</code>) for aggregate persistence. The records live in
- * the collection <code>vanillabp.outbox.mongo.delivery-collection</code> names, of the
- * database <code>quarkus.mongodb.database</code>, and are keyed by the delivery key (the
- * document's <code>_id</code>), so uniqueness comes for free.
+ * The default {@link TaskDeliveryLog} for Quarkus applications which use MongoDB (extension
+ * <code>quarkus-mongodb-client</code>) to persist aggregates. The records live in the
+ * collection which <code>vanillabp.outbox.mongo.delivery-collection</code> names, in the
+ * database <code>quarkus.mongodb.database</code>. Their key is the delivery key (the
+ * document's <code>_id</code>). So they are unique without any extra work.
  * <p>
- * <strong>One transaction where MongoDB Panache provides a session:</strong> the
- * record is written through the <code>ClientSession</code> Panache bound to the running JTA
- * transaction, so it commits with the aggregate and a rollback takes it with it.
+ * <strong>One transaction where MongoDB Panache provides a session:</strong> the record is
+ * written through the <code>ClientSession</code> which Panache bound to the running JTA
+ * transaction. So it commits with the aggregate, and a rollback removes it too.
  * <p>
- * <strong>Best-effort window (no MongoDB transaction):</strong> Without such a session the
- * record is written IMMEDIATELY instead of with the commit - the same window the MongoDB
- * outbox documents. A record whose transaction rolls back would skip a redelivery of
- * work which never happened, therefore the record is deleted best-effort when the
- * transaction ends in anything but a commit. Only a crash between writing the record and
- * that rollback leaves one behind, and its delivery is then reported as done although the
- * aggregate never changed.
+ * <strong>A best-effort window (no MongoDB transaction):</strong> Without such a session, the
+ * record is written AT ONCE and not with the commit. The MongoDB outbox documents the same
+ * window. A record whose transaction rolls back would skip a repeated delivery of work which
+ * never happened. So the record is deleted, as far as possible, when the transaction ends in
+ * anything but a commit. Only a crash between writing the record and that rollback leaves a
+ * record behind. Its delivery is then reported as done, although the aggregate never
+ * changed.
  */
 @ApplicationScoped
 @Slf4j
 public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultStore {
 
   /**
-   * The outcome of a delivery which left its task open - the only records the questions
-   * about open tasks are interested in.
+   * The outcome of a delivery which left its task open. The questions about open tasks look
+   * only at these records.
    */
   private static final String COMPLETION_PENDING = WorkflowTaskOutcome.Kind.COMPLETION_PENDING
       .name();
 
   /**
-   * The kind of document which says where a workflow runs. Every question about open work demands
-   * that a document is NOT this, rather than that it is a delivery: MongoDB has no statement which
-   * fills a field of the documents which are already there, and <code>$ne</code> matches a document
-   * whose field is absent while <code>$eq</code> does not. The relational store asks the other way
-   * round, because the ALTER which adds its column fills it.
+   * The kind of document which says where a workflow runs. Every question about open work asks
+   * for documents which are NOT of this kind. It does not ask for documents which are
+   * deliveries. MongoDB has no statement which fills a field of the documents which are already
+   * there. And <code>$ne</code> matches a document whose field is missing, but <code>$eq</code>
+   * does not. The relational store asks the other way round, because the ALTER which adds its
+   * column also fills it.
    */
   private static final String WORKFLOW_START = io.vanillabp.integration.spi.DeliveryRecordKind.WORKFLOW_START
       .name();
 
   /**
-   * How many documents about started workflows one sieved run looks at. The sieve costs one read
-   * of the application's own database per document, so a run has an upper bound; the next hourly
-   * run continues, because what it kept is kept and what it deleted is gone.
+   * How many documents about started workflows one run with the sieve looks at. The sieve costs
+   * one read of the application's own database per document. So a run has an upper limit. The
+   * next hourly run goes on from there, because what a run kept is kept and what it deleted is
+   * gone.
    */
   private static final int WORKFLOW_STARTS_SIEVED_PER_RUN = 1000;
 
@@ -98,9 +100,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   Instance<MongoClient> mongoClient;
 
   /**
-   * Where the process services are collected, asked by the sieve of the workflow-start documents
-   * and only where the application switched that sieve on. An {@link Instance} and not the bean
-   * itself, because the router is built from the process-service beans.
+   * Where the process services are collected. The sieve of the workflow-start documents asks
+   * it, and only where the application switched that sieve on. It is an {@link Instance} and
+   * not the bean itself, because the router is built from the process-service beans.
    */
   @Inject
   Instance<io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter> phaseTwoRouter;
@@ -121,8 +123,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   private volatile OpenTaskTouches touches;
 
   /**
-   * Built by the CDI container. The extension registers this bean whether or not the
-   * application has a MongoDB client, so nothing may be read or opened here -
+   * The CDI container creates it. The extension registers this bean whether or not the
+   * application has a MongoDB client. So nothing may be read or opened here.
    * {@link #isAvailable()} decides later whether the bean is used at all.
    */
   public MongoTaskDeliveryLog() {
@@ -136,8 +138,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * Whether this default log is usable: the extension registers the bean at build time,
-   * but without a MongoDB client it cannot store anything.
+   * Whether this default log can be used. The extension registers the bean at build time.
+   * But without a MongoDB client, it cannot store anything.
    *
    * @return Whether a MongoDB client is available
    */
@@ -168,11 +170,10 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * The collection the records live in: what
-   * <code>vanillabp.outbox.mongo.delivery-collection</code> says. Read through the lazily
-   * loaded configuration above, because this bean must not touch the
-   * <code>vanillabp.*</code> tree before the adapter extensions registered their
-   * overlays.
+   * The collection which the records live in: what
+   * <code>vanillabp.outbox.mongo.delivery-collection</code> says. It is read through the
+   * lazily loaded configuration above. This bean must not touch the <code>vanillabp.*</code>
+   * tree before the adapter extensions registered their overlays.
    *
    * @return The name of the delivery-log collection
    */
@@ -185,9 +186,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * The block of open tasks whose records are refreshed in one round trip. Built on first
-   * use and not at construction, because it is named after the collection and that name
-   * comes from the configuration this bean reads lazily.
+   * The block of open tasks whose records are refreshed in one round trip. It is created on
+   * first use and not with this bean. It is named after the collection, and that name comes
+   * from the configuration which this bean reads lazily.
    *
    * @return The block, the same one for every caller
    */
@@ -201,13 +202,13 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * How long a record is kept: <code>vanillabp.delivery.retention</code> where the
-   * application sets it, and <code>vanillabp.outbox.retention</code> otherwise, which is
-   * where the number lived before the two windows were told apart. Loaded lazily like the
-   * outbox configuration next to it.
+   * How long a record is kept. It is <code>vanillabp.delivery.retention</code> where the
+   * application sets it, and <code>vanillabp.outbox.retention</code> otherwise. The number
+   * lived there before the two windows were told apart. It is loaded lazily, like the outbox
+   * configuration next to it.
    *
-   * Public because it answers the first question a support case about a handler running
-   * twice asks, and because it is what the tests of this wiring assert.
+   * Public, because it answers the first question of a support case about a handler which
+   * ran twice. And the tests of this wiring assert it.
    *
    * @return The retention of delivery records
    */
@@ -230,8 +231,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * Creates the indexes this log reads by, or names the missing ones where the
-   * application manages its schema itself, and starts the cleanup.
+   * Creates the indexes which this log reads by. Where the application manages its schema
+   * itself, it names the missing ones instead. Then it starts the cleanup.
    *
    * @param event The startup event observed
    */
@@ -246,13 +247,13 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       log.debug("'vanillabp.outbox.mongo.enabled' is false - the MongoDB-based task delivery log stays inactive");
       return;
     }
-    // what each of them is read by is described once, in the core, because the Spring Boot
-    // integration creates the same ones
+    // What each index is read by is described once, in the core, because the Spring Boot
+    // integration creates the same ones.
     if (getProperties().isCreateSchema()) {
       MongoIndexes.createOn(deliveryCollection(), MongoSchema.DELIVERY_INDEXES);
     } else {
-      // the collection itself needs no check: MongoDB creates one with the first document,
-      // so what an application managing its own schema owes are the indexes
+      // The collection itself needs no check. MongoDB creates it with the first document.
+      // So an application which manages its own schema only owes the indexes.
       MongoIndexes.reportMissingOn(deliveryCollection(), MongoSchema.DELIVERY_INDEXES);
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
@@ -262,10 +263,10 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * Refreshes the records of the open tasks redelivered since the last run and deletes the
-   * records nobody has seen for the retention period - run by the background cleanup and
-   * usable on demand (e.g. by tests). Refreshing first is what keeps the record of a task
-   * which is still being redelivered.
+   * Refreshes the records of the open tasks which were delivered again since the last run.
+   * Then it deletes the records which nobody has seen for the retention period. The cleanup in
+   * the background runs it, and others (e.g. tests) may call it when they need it. Refreshing
+   * first keeps the record of a task which is still being delivered again.
    *
    * @return The number of records deleted
    */
@@ -285,14 +286,14 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * Deletes the documents about started workflows whose own period passed - a period of its own,
-   * because such a document is read for as long as somebody may ask which workflow an aggregate
-   * belongs to, which outlasts the workflow itself.
+   * Deletes the documents about started workflows whose own period has passed. They have a
+   * period of their own. Such a document is read as long as somebody may ask which workflow an
+   * aggregate belongs to, and that is longer than the workflow lives.
    * <p>
-   * Without a sieve this is one delete. With one, the expired documents are read first and the
-   * sieve is asked per document, which costs a read of the application's own database each time
-   * (see {@link io.vanillabp.integration.spi.WorkflowStartSieve}). A document the sieve keeps stays
-   * where it is and is offered again at the next run.
+   * Without a sieve, this is one delete. With a sieve, the expired documents are read first,
+   * and the sieve is asked per document. Each time, this costs a read of the application's own
+   * database (see {@link io.vanillabp.integration.spi.WorkflowStartSieve}). A document which
+   * the sieve keeps stays where it is. The next run offers it again.
    *
    * @return The number of documents deleted
    */
@@ -300,7 +301,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
     final var retention = getWorkflowStartRetention();
     if (retention.isZero()) {
-      // a zero period says the documents about started workflows are kept for good
+      // A zero period says that the documents about started workflows are kept forever.
       return 0;
     }
     final var expired = new Document(
@@ -331,11 +332,11 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * How long the document about a started workflow is kept, counted from the start:
-   * <code>vanillabp.delivery.workflow-start-retention</code>, thirty days where nobody says
+   * How long the document about a started workflow is kept, counted from the start. It is
+   * <code>vanillabp.delivery.workflow-start-retention</code>, or thirty days where nobody says
    * anything.
    *
-   * Public because it is what the tests of this wiring assert.
+   * Public, because the tests of this wiring assert it.
    *
    * @return The period a workflow-start document is kept
    */
@@ -350,7 +351,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * What decides per document whether it may really go once that period passed, and
+   * What decides per document whether it may really go once that period has passed. It is
    * <code>null</code> where the application did not ask for the second sieve
    * (<code>vanillabp.delivery.keep-workflow-start-while-aggregate-exists</code>).
    *
@@ -370,9 +371,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * The <code>vanillabp.delivery</code> section of the whole application, as the core reads it.
-   * The two settings about the documents of started workflows are read there and nowhere else,
-   * like the retention beside them.
+   * The <code>vanillabp.delivery</code> section of the whole application, as the core reads
+   * it. The two settings about the documents of started workflows are read there and nowhere
+   * else, like the retention next to them.
    *
    * @return The bound section
    */
@@ -390,8 +391,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
 
   /**
-   * Tells the retention cleanup that this store was written to, so its next hourly run has
-   * something to delete. Null-safe, because the cleanup is built when the store starts and
+   * Tells the retention cleanup that this store was written to. So its next hourly run has
+   * something to delete. It is null-safe. The cleanup is created when the store starts, and
    * a store which never started was never written to either.
    */
   private void aDeliveryWasRecorded() {
@@ -413,9 +414,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * Moves <code>lastSeenAt</code> of one block of records, in one round trip. A key whose
-   * record was deleted meanwhile matches nothing, which is the right answer: the record is
-   * gone and the next redelivery writes a new one.
+   * Moves <code>lastSeenAt</code> of one block of records forward, in one round trip. A key
+   * whose record was deleted in the meantime matches nothing. That is the right answer. The
+   * record is gone, and the next repeated delivery writes a new one.
    *
    * @param deliveryKeys The keys of one block
    */
@@ -448,8 +449,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   public Optional<TaskDelivery> recordedDelivery(
       final String deliveryKey) {
 
-    // read through the session of the running transaction where there is one, so the
-    // answer is consistent with what this transaction wrote
+    // Read through the session of the running transaction where there is one. So the
+    // answer fits what this transaction wrote.
     final var session = MongoSessions
         .activeSession(txRegistry);
     final var collection = deliveryCollection();
@@ -470,13 +471,12 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   public boolean record(
       final TaskDelivery delivery) {
 
-    // what gives the hourly cleanup something to do: a store nobody wrote to has nothing
-    // left to delete which an earlier run did not already delete
+    // This gives the hourly cleanup something to do. If nobody wrote to a store, an
+    // earlier run already deleted everything there is to delete.
     aDeliveryWasRecorded();
     final var collection = deliveryCollection();
-    // the session of the running transaction where MongoDB Panache provides one: the
-    // record then commits with the aggregate instead of being written immediately
-    //
+    // The session of the running transaction, where MongoDB Panache provides one. Then
+    // the record commits with the aggregate and is not written at once.
     final var session = MongoSessions
         .activeSession(txRegistry);
     final var recordedAt = Date.from(delivery.recordedAt() == null
@@ -484,36 +484,37 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         : delivery.recordedAt());
     final var record = new Document()
         .append("_id", delivery.deliveryKey())
-        // the delivering adapter as a field of its own: the delivery key
-        // carries it too, but hashed once the key grows too long
+        // The delivering adapter as a field of its own. The delivery key has it too, but
+        // only as a hash once the key grows too long.
         .append("adapterId", delivery.adapterId())
         .append("workflowModuleId", delivery.workflowModuleId())
         .append("bpmnProcessId", delivery.bpmnProcessId())
         .append("aggregateId", delivery.workflowAggregateId())
-        // the workflow of the BPMS: nothing VanillaBP reads, and what an operator addresses
-        // this instance by in the engine's own tooling
+        // The workflow of the BPMS. VanillaBP does not read it. An operator uses it to find
+        // this instance in the engine's own tools.
         .append("workflowId", delivery.workflowId())
         .append("taskDefinition", delivery.taskDefinition())
-        // the element of the model, which is what an extension addresses this task by
+        // The element of the model. An extension uses it to address this task.
         .append("bpmnElementId", delivery.bpmnElementId())
-        // the task the delivery was about: what lets the election answer from this record
-        // which adapter holds that task instead of asking every configured BPMS
+        // The task which the delivery was about. With it, the election can answer from this
+        // record which adapter holds that task. It does not have to ask every BPMS.
         .append("taskId", delivery.taskId())
-        // which kind of task that id is the id of, so VanillaBP can say which method asks
-        // for that kind of key when a caller named the id of the other kind
+        // Which kind of task this id belongs to. So VanillaBP can say which method asks for
+        // that kind of key when a caller passed the id of the other kind.
         .append("taskKind", delivery.taskKind())
-        // what the document is about: a task delivery, or the start of a workflow
+        // What the document is about: a task delivery or the start of a workflow.
         .append("recordKind", delivery.recordKind())
         .append("processVersion", delivery.processVersion())
         .append("outcome", delivery.outcome())
         .append("bpmnErrorCode", delivery.bpmnErrorCode())
         .append("bpmnErrorName", delivery.bpmnErrorName())
         .append("recordedAt", recordedAt)
-        // the record was seen the moment it was written; a redelivery of a task which
-        // stays open moves lastSeenAt and leaves recordedAt where it is
+        // The record was seen at the moment it was written. A repeated delivery of a task
+        // which stays open moves lastSeenAt and leaves recordedAt where it is.
         .append("lastSeenAt", recordedAt);
-    // a duplicate-key error inside a MongoDB transaction would abort it entirely, so the
-    // common duplicate is read instead - the unique document ID stays the backstop
+    // A duplicate-key error inside a MongoDB transaction would abort the whole
+    // transaction. So we read to find the usual duplicate. The unique document ID stays
+    // the last line of defense.
     if ((session != null) && (collection
         .find(session, new Document("_id", delivery.deliveryKey()))
         .first() != null)) {
@@ -531,7 +532,7 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         collection.insertOne(record);
       }
     } catch (final MongoWriteException e) {
-      // 11000 = duplicate key: another node recorded the same delivery concurrently
+      // 11000 = duplicate key: another node recorded the same delivery at the same time.
       if (e.getError().getCode() == 11000) {
         log.debug(
             "Task delivery '{}' of BPMN process '{}' of workflow module '{}' was recorded already",
@@ -543,10 +544,10 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       throw e;
     }
 
-    // without a session MongoDB does not take part in the JTA transaction, so the record
-    // is already written - remove it again if the transaction does not commit, otherwise a
-    // redelivery of the rolled-back work would be skipped. With a session the abort of the
-    // MongoDB transaction takes the record with it.
+    // Without a session, MongoDB does not take part in the JTA transaction. So the record
+    // is already written. Remove it again if the transaction does not commit. Otherwise a
+    // repeated delivery of the rolled-back work would be skipped. With a session, the
+    // abort of the MongoDB transaction removes the record too.
     if ((session == null) && (txRegistry.getTransactionKey() != null)) {
       txRegistry.registerInterposedSynchronization(new Synchronization() {
         @Override
@@ -579,11 +580,11 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * The record which left one task open, whether or not it has been closed since - what the
-   * BPMS election of a task operation reads instead of asking a BPMS (see
-   * {@link TaskDeliveryLog#recordOfTask}). Read through the session of the running
-   * transaction where there is one, and sorted so the most recent record answers where a
-   * task was delivered more than once.
+   * The record which left one task open, whether or not the task has been closed since. The
+   * BPMS election of a task operation reads it instead of asking a BPMS (see
+   * {@link TaskDeliveryLog#recordOfTask}). It is read through the session of the running
+   * transaction where there is one. It is sorted, so the newest record answers where a task
+   * was delivered more than once.
    */
   @Override
   public Optional<TaskDelivery> recordOfTask(
@@ -618,10 +619,11 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
   /**
    * The open tasks of one workflow aggregate (see
-   * {@link TaskDeliveryLog#openTasksOfAggregate}), oldest first: the outcome which left the
-   * task to the application, and no moment saying its completion reached the BPMS. Read
-   * through the session of the running transaction where there is one, and served by the
-   * index over <code>aggregateId</code> the startup creates.
+   * {@link TaskDeliveryLog#openTasksOfAggregate}), oldest first. These are records with the
+   * outcome which left the task to the application, and without a moment which says that its
+   * completion reached the BPMS. They are read through the session of the running transaction
+   * where there is one. The index over <code>aggregateId</code>, which the startup creates,
+   * serves the query.
    */
   @Override
   public List<TaskDelivery> openTasksOfAggregate(
@@ -651,9 +653,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
   /**
    * The open tasks of one workflow of the BPMS (see
-   * {@link TaskDeliveryLog#openTasksOfWorkflow}), oldest first. Read through the session of
-   * the running transaction where there is one, and served by the index over
-   * <code>workflowId</code> the startup creates.
+   * {@link TaskDeliveryLog#openTasksOfWorkflow}), oldest first. They are read through the
+   * session of the running transaction where there is one. The index over
+   * <code>workflowId</code>, which the startup creates, serves the query.
    */
   @Override
   public List<TaskDelivery> openTasksOfWorkflow(
@@ -680,13 +682,13 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * Writes down that one task is over. The filter demands an absent
-   * <code>taskClosedAt</code>, so a repeated dispatch does not move the moment the task was
-   * closed.
+   * Writes down that one task is over. The filter asks for a missing
+   * <code>taskClosedAt</code>. So a repeated dispatch does not move the moment when the task
+   * was closed.
    * <p>
-   * <code>updateMany</code> and not <code>updateOne</code>: a task may carry more than one
-   * record, and a record left open keeps the task alive for everything which reads the open
-   * work (see {@link TaskDeliveryLog#markTaskClosed} and decision 72 in the repository's
+   * <code>updateMany</code> and not <code>updateOne</code>: a task may have more than one
+   * record. A record which is left open keeps the task alive for everything which reads the
+   * open work (see {@link TaskDeliveryLog#markTaskClosed} and decision 72 in the repository's
    * DECISIONS.md).
    */
   @Override
@@ -713,16 +715,16 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * Writes the document about the start of a workflow, replacing the one of an earlier workflow of
-   * the same aggregate (see {@link TaskDeliveryLog#recordWorkflowStart}).
+   * Writes the document about the start of a workflow. It replaces the document of an earlier
+   * workflow of the same aggregate (see {@link TaskDeliveryLog#recordWorkflowStart}).
    * <p>
-   * The insert comes first, because the ordinary case is that there is no document. Only where it
-   * finds one does the update run, bounded to a document which is a start and whose workflow id
-   * differs, so a start dispatched twice writes nothing. The version moves with the id: one of the
-   * workflow which ended says nothing about the one which runs now. A document which names this
-   * workflow already may still get the version it lacks, and nothing else. The updates go through
-   * the session of the running transaction where MongoDB Panache provides one, like every other
-   * write here.
+   * The insert comes first, because usually there is no document. Only where it finds one
+   * does the update run. The update is limited to a document which is a start and has a
+   * different workflow id. So a start which is dispatched twice writes nothing. The version
+   * moves with the id. The version of the workflow which ended says nothing about the one which
+   * runs now. A document which already names this workflow may still get the version it is
+   * missing, and nothing else. The updates go through the session of the running transaction
+   * where MongoDB Panache provides one, like every other write here.
    *
    * @param workflowStart The row to write
    * @return Whether the store now holds this workflow's id or its version for the first time
@@ -755,8 +757,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
     if ((result.getModifiedCount() > 0) || (workflowStart.processVersion() == null)) {
       return result.getModifiedCount() > 0;
     }
-    // the same workflow reported a second time, by the BPMS where the adapter started it or the
-    // other way round, and only one of the two may have known the version
+    // The same workflow is reported a second time: by the BPMS where the adapter started
+    // it, or the other way round. Only one of the two may have known the version.
     final var sameWorkflowWithoutAVersion = new Document("_id", workflowStart.deliveryKey())
         .append("recordKind", WORKFLOW_START)
         .append("workflowId", workflowStart.workflowId())
@@ -804,8 +806,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   }
 
   /**
-   * The adapter ids the OPEN records of one BPMN process belong to: asked once
-   * per BPMN process at startup.
+   * The adapter ids which the OPEN records of one BPMN process belong to. It is asked once per
+   * BPMN process at startup.
    */
   @Override
   public Set<String> adapterIdsOfOpenTasks(
@@ -846,17 +848,17 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
       final Instant recordedBefore) {
 
     final var collection = deliveryCollection();
-    // through the session of the running transaction where MongoDB Panache provides one:
-    // the deletion then commits with the end notification instead of being written
-    // immediately
+    // Through the session of the running transaction, where MongoDB Panache provides one.
+    // Then the deletion commits with the message about the end, and is not written at
+    // once.
     final var session = MongoSessions
         .activeSession(txRegistry);
     final var filter = new Document()
         .append("workflowModuleId", workflowModuleId)
         .append("bpmnProcessId", bpmnProcessId)
         .append("aggregateId", workflowAggregateId)
-        // the row about the start of that workflow is NOT released: changes to the aggregate keep
-        // arriving after its workflow ended, and each of them may want to name the workflow
+        // The row about the start of that workflow is NOT released. Changes to the aggregate
+        // keep arriving after its workflow ended, and each of them may want to name it.
         .append("recordKind", new Document("$ne", WORKFLOW_START))
         .append("recordedAt", new Document("$lt", Date.from(recordedBefore)));
     final var result = session != null

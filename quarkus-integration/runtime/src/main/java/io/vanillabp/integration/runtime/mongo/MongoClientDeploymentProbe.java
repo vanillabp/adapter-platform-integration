@@ -10,12 +10,12 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
 /**
- * Asks the MongoDB deployment of the application whether it is a replica set, by running the
- * <code>hello</code> command against it.
+ * Asks the MongoDB deployment of the application whether it is a replica set. It runs the
+ * <code>hello</code> command for that.
  * <p>
- * The one place naming a MongoDB type on the way to the coverage verdict. It is
+ * It is the one place on the way to the coverage verdict which names a MongoDB type. It is
  * registered as a bean only where the <code>quarkus-mongodb-client</code> extension is
- * present, so an application without MongoDB never links it - which is what lets such an
+ * there. So an application without MongoDB never links it. This is what lets such an
  * application be built as a native image.
  */
 @Singleton
@@ -25,9 +25,9 @@ public class MongoClientDeploymentProbe implements MongoDeploymentProbe {
   Instance<MongoClient> mongoClients;
 
   /**
-   * Built by the CDI container, and only where the MongoDB extension is present. The
-   * client itself may still be missing, which is why it is injected as an
-   * {@link Instance} and asked for before it is used.
+   * The CDI container creates it, and only where the MongoDB extension is there. The client
+   * itself may still be missing. So it is injected as an {@link Instance}, and we check that
+   * it is there before we use it.
    */
   public MongoClientDeploymentProbe() {
   }

@@ -17,68 +17,67 @@ import jakarta.inject.Singleton;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 
 /**
- * Produces the transaction of VanillaBP on Quarkus as CDI beans, the one place this
- * application builds them: the platform's own {@link QuarkusTransactionRunner} and the
- * {@link TransactionRunnerResolver} saying which runner a workflow aggregate is written
- * through.
+ * Produces the transaction of VanillaBP on Quarkus as CDI beans. This is the one place
+ * where this application builds them: the platform's own {@link QuarkusTransactionRunner}
+ * and the {@link TransactionRunnerResolver}. The resolver says through which runner a
+ * workflow aggregate is written.
  * <p>
- * <b>What an extension injects is the resolver, never a runner.</b> Something writing
- * next to a workflow aggregate has to write it in the transaction of that aggregate, and
- * which transaction that is is not the extension's answer: the application may have
- * contributed a {@link TransactionRunnerAware} bean for the aggregate or a runner
- * serving all of them, and a runner of the extension's own would commit its entry
- * separately from the workflow it belongs to. So the extension asks
- * {@link TransactionRunnerResolver#resolveFor(Class)} per aggregate class, exactly as the
- * process services do, and the platform's own runner is what it gets where the
- * application contributed nothing. The Spring Boot integration offers the resolver as
- * <code>vanillaBpTransactionRunnerResolver</code> for the same reason, and the contract
- * is the same on both platforms.
+ * <b>An extension injects the resolver, never a runner.</b> Whatever writes next to a
+ * workflow aggregate has to write in the transaction of that aggregate. The extension
+ * cannot know which transaction that is. The application may have added a
+ * {@link TransactionRunnerAware} bean for the aggregate, or a runner which serves all of
+ * them. A runner of the extension's own would commit its entry apart from the workflow it
+ * belongs to. So the extension asks {@link TransactionRunnerResolver#resolveFor(Class)} per
+ * aggregate class, exactly as the process services do. Where the application added
+ * nothing, it gets the platform's own runner. The Spring Boot integration offers the
+ * resolver as <code>vanillaBpTransactionRunnerResolver</code> for the same reason. The
+ * contract is the same on both platforms.
  * <p>
- * <b>Why {@link Typed}.</b> CDI derives the types of a bean from every supertype of what
- * a producer returns, so this bean would carry {@link TransactionRunner} among its types
- * whatever the return type says, and an application contributing a runner bean of its own
- * would make every <code>&#64;Inject TransactionRunner</code> ambiguous - inside the
- * platform and in every extension which believed it could inject one.
+ * <b>Why {@link Typed}.</b> CDI takes the types of a bean from every supertype of what a
+ * producer returns. So this bean would have {@link TransactionRunner} among its types,
+ * whatever the return type says. Then an application which adds a runner bean of its own
+ * would make every <code>&#64;Inject TransactionRunner</code> ambiguous. This would happen
+ * inside the platform and in every extension which thought it could inject one.
  * {@code @Typed(QuarkusTransactionRunner.class)} cuts the bean's types down to that class
- * (plus <code>Object</code>): the platform injects it by its concrete class, an
- * application's runner stays the only bean of the SPI type, and an extension is left with
+ * (plus <code>Object</code>). The platform injects it by its concrete class. An
+ * application's runner stays the only bean of the SPI type. And an extension is left with
  * the resolver, which is the answer it wanted anyway.
  */
 @ApplicationScoped
 public class TransactionRunnerProducer {
 
   /**
-   * Built by the CDI container, which the platform's build step told about this class. The one
-   * runner both producer methods work with is built afterwards, by {@code buildPlatformRunner},
-   * because the registry it needs is injected first.
+   * The CDI container creates it, because the platform's build step told it about this class.
+   * The one runner which both producer methods work with is created later, by
+   * {@code buildPlatformRunner}. The reason: the registry it needs is injected first.
    */
   public TransactionRunnerProducer() {
   }
 
   /**
-   * Application-provided attributions of aggregates to transaction runners.
+   * What the application says about which transaction runner serves which aggregate.
    */
   @Inject
   @Any
   Instance<TransactionRunnerAware<?>> transactionRunnerAwares;
 
   /**
-   * Every runner bean of the application - the platform's own among them, which the
-   * resolver tells apart by identity.
+   * Every runner bean of the application. The platform's own is among them, and the
+   * resolver tells it apart by identity.
    */
   @Inject
   @Any
   Instance<TransactionRunner> transactionRunners;
 
   /**
-   * The persistences of the application, which the coverage verdict is read off.
+   * The persistences of the application. The coverage verdict is read from them.
    */
   @Inject
   @Any
   Instance<AggregatePersistenceAware<?>> aggregatePersistences;
 
   /**
-   * Unsatisfied in an application without the MongoDB client extension - see
+   * Unsatisfied in an application without the MongoDB client extension. See
    * {@link MongoDeploymentProbe}.
    */
   @Inject
@@ -88,10 +87,10 @@ public class TransactionRunnerProducer {
   TransactionSynchronizationRegistry transactionRegistry;
 
   /**
-   * Built once for this producer, so both producer methods hand out the SAME runner -
-   * the resolver recognizes the platform's runner by identity, and it also answers
-   * whether the transaction it opened was marked rollback-only, which belongs to the
-   * instance which opened it.
+   * Created once for this producer. So both producer methods hand out the SAME runner. The
+   * resolver recognizes the platform's runner by identity. The runner also answers whether
+   * the transaction it opened was marked rollback-only, and that belongs to the instance
+   * which opened it.
    */
   private QuarkusTransactionRunner platformRunner;
 
@@ -103,15 +102,15 @@ public class TransactionRunnerProducer {
   }
 
   /**
-   * The bean is a {@link Singleton} rather than a normal scope on purpose: a
-   * pseudo-scoped bean is handed out unproxied, which is what lets
-   * {@link QuarkusTransactionRunnerResolver} tell the platform's runner from an
-   * application's by identity. A normal scope would put a client proxy in front of it and
-   * that comparison would silently stop matching, so the resolution of an application
-   * which brought its own runner is held by {@code ApplicationOwnedStoresTest}.
+   * The bean is a {@link Singleton} and not in a normal scope on purpose. A pseudo-scoped
+   * bean is handed out without a proxy. That lets {@link QuarkusTransactionRunnerResolver}
+   * tell the platform's runner from an application's by identity. A normal scope would put a
+   * client proxy in front of it, and the comparison would stop matching without a word. So
+   * {@code ApplicationOwnedStoresTest} holds the resolution of an application which brought
+   * its own runner.
    *
-   * @return The platform's runner: JTA, plus the request context Panache and Hibernate
-   *         need on the threads an adapter delivers on
+   * @return The platform's runner: JTA, plus the request context which Panache and
+   *         Hibernate need on the threads where an adapter delivers
    */
   @Produces
   @Singleton
@@ -125,8 +124,8 @@ public class TransactionRunnerProducer {
 
   /**
    * Builds the resolver of this application. A new instance per injection point would be a
-   * second cache of the same resolutions, so the bean is a {@link Singleton} like the runner
-   * it is built with.
+   * second cache of the same resolutions. So the bean is a {@link Singleton}, like the
+   * runner it is built with.
    *
    * @return The resolver, injectable by extensions and used by the process services,
    *         the pre-commit registrar and the startup validation

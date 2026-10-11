@@ -31,23 +31,23 @@ import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The guard which used to be the compiler. MapStruct generated
+ * The guard which the compiler used to be. MapStruct generated
  * {@link QuarkusMigrationAdapterPropertiesMapper} with {@code unmappedSourcePolicy} and
- * {@code unmappedTargetPolicy} on ERROR, so a property added to only one of the two sides
- * broke the build on the spot. The mapper is written by hand since story 639 (see
- * decision 81 in the repository's DECISIONS.md), and hand-written code says nothing at
- * all when a property is forgotten.
+ * {@code unmappedTargetPolicy} on ERROR. So a property which was added to only one of the two
+ * sides broke the build at once. Since story 639, the mapper is written by hand (see
+ * decision 81 in the repository's DECISIONS.md). And hand-written code says nothing at all
+ * when a property is forgotten.
  * <p>
  * So this test says it instead. It builds a stand-in for the SmallRye
- * {@code @ConfigMapping} interface which answers every accessor with a made-up value and
- * writes down that it was asked, maps it twice with two sets of values which differ in
- * every single leaf, and then demands two things. Every accessor of the interface was
- * read at least once, so a new key cannot be bound and dropped. And every field of the
- * core model came out different in the two runs, so a field nobody writes, or a field
- * written from a constant instead of from the configuration, is reported by name.
+ * {@code @ConfigMapping} interface. The stand-in answers every accessor with a made-up value
+ * and writes down that it was asked. The test maps it twice, with two sets of values which
+ * differ in every single leaf. Then it demands two things. Every accessor of the interface
+ * was read at least once, so a new key cannot be bound and dropped. And every field of the
+ * core model came out different in the two runs. So a field which nobody writes, or a field
+ * written from a constant and not from the configuration, is reported by name.
  * <p>
- * {@link QuarkusMigrationAdapterPropertiesMapperTest} stands next to it and pins what the
- * values mean: the unwrapping of an {@code Optional}, the empty-list default, the null
+ * {@link QuarkusMigrationAdapterPropertiesMapperTest} stands next to it and holds what the
+ * values mean: the unwrapping of an {@code Optional}, the empty-list default, and the null
  * which lets the core walk one level further.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -56,9 +56,9 @@ public class QuarkusMigrationAdapterPropertiesMapperGuardTest {
   /**
    * The fields of the core model which the mapper deliberately leaves alone, named
    * {@code SimpleClassName.fieldName}. Two of them are filled while the application
-   * starts, the other three are back-references the core links once the whole tree
-   * stands. Anything else missing from the mapping is a mistake, which is the point of
-   * this test.
+   * starts. The other three are back-references, which the core links once the whole tree
+   * stands. Anything else which is missing from the mapping is a mistake. That is the point
+   * of this test.
    */
   private static final Set<String> FIELDS_THE_MAPPER_LEAVES_TO_THE_CORE = Set
       .of(
@@ -69,13 +69,13 @@ public class QuarkusMigrationAdapterPropertiesMapperGuardTest {
           "WorkflowAdapterProperties.workflowModule");
 
   /**
-   * Where the core model lives. A field whose type sits in this package and is no enum is
-   * a section of its own, so the check walks into it instead of comparing it.
+   * Where the core model lives. A field whose type is in this package and is no enum is a
+   * section of its own. So the check walks into it and does not compare it.
    */
   private static final String CORE_MODEL_PACKAGE = "io.vanillabp.integration.adapter.migration.config.";
 
   /**
-   * The single key every map of sections is filled with. Both runs use it, so the two
+   * The single key which every map of sections is filled with. Both runs use it. So the two
    * results can be compared section by section.
    */
   private static final String THE_ONE_KEY = "one";
@@ -127,8 +127,8 @@ public class QuarkusMigrationAdapterPropertiesMapperGuardTest {
 
   /**
    * Walks two mapped sections side by side and demands that each of their fields came out
-   * different. The two runs were fed values which differ everywhere, so a field which is
-   * equal in both is a field the mapper never touched.
+   * different. The two runs got values which differ everywhere. So a field which is equal in
+   * both is a field which the mapper never touched.
    *
    * @param first The section mapped from the first set of values
    * @param second The section mapped from the second set of values
@@ -161,9 +161,8 @@ public class QuarkusMigrationAdapterPropertiesMapperGuardTest {
   }
 
   /**
-   * Compares one value of the first run against the same value of the second run. A
-   * section is walked into, a map of sections entry by entry, and everything else has to
-   * differ.
+   * Compares one value of the first run with the same value of the second run. It walks into
+   * a section, and into a map of sections entry by entry. Everything else has to differ.
    *
    * @param first The value of the first run
    * @param second The value of the second run
@@ -209,9 +208,9 @@ public class QuarkusMigrationAdapterPropertiesMapperGuardTest {
   }
 
   /**
-   * The fields one section of the core model carries, its inherited ones included. What
-   * the compiler or a tool added is left out: only a field somebody declared is a field
-   * somebody can forget to map.
+   * The fields of one section of the core model, its inherited ones included. What the
+   * compiler or a tool added is left out. Only a field which somebody declared is a field
+   * which somebody can forget to map.
    *
    * @param section The class of the mapped section
    * @return Its fields, from the class itself upwards
@@ -233,8 +232,8 @@ public class QuarkusMigrationAdapterPropertiesMapperGuardTest {
   }
 
   /**
-   * Whether a value is a section of the core model, which is walked into rather than
-   * compared. An enum of that package is a value like any other.
+   * Whether a value is a section of the core model. A section is walked into, not compared.
+   * An enum of that package is a value like any other.
    *
    * @param type The runtime type of the value
    * @return Whether the check has to walk into it
@@ -247,9 +246,9 @@ public class QuarkusMigrationAdapterPropertiesMapperGuardTest {
   }
 
   /**
-   * Whether a map holds sections of the core model. The maps of adapters, workflow
-   * modules, workflows and tasks do; the extension settings hold plain strings and are
-   * compared as they are.
+   * Whether a map holds sections of the core model. The maps of adapters, workflow modules,
+   * workflows and tasks do. The extension settings hold plain strings and are compared as
+   * they are.
    *
    * @param map The mapped map
    * @return Whether its entries are sections
@@ -279,8 +278,8 @@ public class QuarkusMigrationAdapterPropertiesMapperGuardTest {
   }
 
   /**
-   * Adds every section this type leads to, itself included, and follows the return types
-   * of its accessors. A type argument counts as well, which is how the sections behind a
+   * Adds every section which this type leads to, itself included. It follows the return
+   * types of its accessors. A type argument counts as well. That is how the sections behind a
    * map are found.
    *
    * @param type The type to look at
@@ -346,8 +345,8 @@ public class QuarkusMigrationAdapterPropertiesMapperGuardTest {
 
   /**
    * A stand-in for a section of the SmallRye interface. It answers every accessor with a
-   * value made from the seed, so two seeds give two configurations which differ in every
-   * leaf, and it writes down every accessor it was asked for.
+   * value made from the seed. So two seeds give two configurations which differ in every
+   * leaf. And it writes down every accessor which it was asked for.
    *
    * @param <T> The section type
    * @param section The interface to stand in for
@@ -389,8 +388,8 @@ public class QuarkusMigrationAdapterPropertiesMapperGuardTest {
   }
 
   /**
-   * One made-up value of the given type, different for every seed. A type this method
-   * does not know fails the test on purpose: a new kind of property has to be taught here
+   * One made-up value of the given type, different for every seed. A type which this method
+   * does not know fails the test on purpose. A new kind of property has to be taught here
    * before the check can claim to cover it.
    *
    * @param type The type the accessor returns

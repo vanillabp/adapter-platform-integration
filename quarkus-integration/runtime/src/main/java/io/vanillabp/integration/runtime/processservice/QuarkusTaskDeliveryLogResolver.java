@@ -9,23 +9,23 @@ import io.vanillabp.integration.spi.TaskDeliveryLogAware;
 import jakarta.enterprise.inject.Instance;
 
 /**
- * Quarkus implementation of the core's {@link TaskDeliveryLogResolver}: resolves the
- * {@link TaskDeliveryLog} used for a workflow aggregate so a delivery record always rides
- * the aggregate's own transaction. It mirrors {@link QuarkusPhaseTwoOutboxResolver}: the
- * most specific {@link TaskDeliveryLogAware} bean of the application wins, otherwise the
- * platform default matching the technology which manages the aggregate
- * ({@link QuarkusPersistenceTechnology}), and a single default clearly not matching it
- * ends the boot rather than writing records next to the aggregate.
+ * The Quarkus implementation of the core's {@link TaskDeliveryLogResolver}. It resolves the
+ * {@link TaskDeliveryLog} for a workflow aggregate. So a delivery record is always written
+ * in the aggregate's own transaction. It works like {@link QuarkusPhaseTwoOutboxResolver}.
+ * The most specific {@link TaskDeliveryLogAware} bean of the application wins. Otherwise
+ * the platform default wins which matches the technology that manages the aggregate
+ * ({@link QuarkusPersistenceTechnology}). A single default which clearly does not match
+ * ends the boot. It does not write records next to the aggregate.
  * <p>
- * Which default serves which technology, and whether it is usable at all, is asked through
- * {@link PlatformDefaultStore} rather than by naming the implementations: the MongoDB ones
- * exist only where the MongoDB client extension does, and a native image resolves every
+ * Which default serves which technology, and whether it can be used at all, is asked
+ * through {@link PlatformDefaultStore}. The implementations are not named. The MongoDB ones
+ * exist only where the MongoDB client extension does. And a native image resolves every
  * referenced method while it is built.
  * <p>
- * The outbox resolver next to this one walks the same three steps, and the two stay apart on
- * purpose: they look up different bean types, they answer with different stores, and each
- * message names the properties of its own store. A shared step-walker would have to be
- * handed all of that, and every reader of either resolver would have to open it to see
+ * The outbox resolver next to this one walks the same three steps. The two stay apart on
+ * purpose. They look up different bean types, they answer with different stores, and each
+ * message names the properties of its own store. A shared helper for the steps would need
+ * all of that as input. And every reader of either resolver would have to open it to see
  * what happens.
  */
 public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
@@ -41,15 +41,15 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
   private final boolean mongoLogEnabled;
 
   /**
-   * Built by {@link TaskDeliveryLogResolverProducer}, once per application. The two switches
-   * arrive as booleans rather than as a configuration object, so this class stays testable
-   * without a Quarkus configuration (see {@code QuarkusStoreAttributionTest}).
+   * {@link TaskDeliveryLogResolverProducer} creates it, once per application. The two
+   * switches arrive as booleans and not as a configuration object. So this class can be
+   * tested without a Quarkus configuration (see {@code QuarkusStoreAttributionTest}).
    *
    * @param taskDeliveryLogAwares What the application says about its aggregates, if anything
    * @param taskDeliveryLogs Every delivery log bean of the application, the platform defaults
    *          included
-   * @param persistenceTechnology What an aggregate's technology is read off
-   * @param jdbcLogEnabled Whether <code>vanillabp.outbox.jdbc.enabled</code> was left on - the
+   * @param persistenceTechnology Where an aggregate's technology is read from
+   * @param jdbcLogEnabled Whether <code>vanillabp.outbox.jdbc.enabled</code> was left on. The
    *          log shares the switches of the outbox
    * @param mongoLogEnabled Whether <code>vanillabp.outbox.mongo.enabled</code> was left on
    */
@@ -87,7 +87,7 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
           .getTaskDeliveryLog();
     }
 
-    // 2./3. attribute by the technology managing the aggregate
+    // 2. and 3.: choose by the technology which manages the aggregate
     final var logs = taskDeliveryLogs
         .stream()
         .filter(this::isActive)
@@ -98,8 +98,9 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
 
     final var technology = persistenceTechnology.of(workflowAggregateClass);
 
-    // 2. exactly one log: use it - unless it is the platform default of the other
-    // technology, which would record the delivery outside the aggregate's transaction
+    // 2. Exactly one log: use it. But not if it is the platform default of the other
+    // technology, because that would record the delivery outside the aggregate's
+    // transaction.
     if (logs.size() == 1) {
       final var deliveryLog = logs.getFirst();
       if (mismatches(deliveryLog, technology)) {
@@ -109,7 +110,7 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
       return deliveryLog;
     }
 
-    // 3. several logs: the platform default of the aggregate's technology
+    // 3. Several logs: the platform default of the aggregate's technology.
     return logs
         .stream()
         .filter(deliveryLog -> matches(deliveryLog, technology))
@@ -120,9 +121,9 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
   }
 
   /**
-   * Whether a log is the platform default serving the given technology. A log of the
-   * application matches nothing: only its own {@link TaskDeliveryLogAware} bean says
-   * which aggregates it serves.
+   * Whether a log is the platform default which serves the given technology. A log of the
+   * application matches nothing. Only its own {@link TaskDeliveryLogAware} bean says which
+   * aggregates it serves.
    */
   private static boolean matches(
       final TaskDeliveryLog deliveryLog,
@@ -133,8 +134,8 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
   }
 
   /**
-   * Whether a log is the platform default of the OTHER technology - the one case in which
-   * a single log bean must not be used.
+   * Whether a log is the platform default of the OTHER technology. This is the one case in
+   * which a single log bean must not be used.
    */
   private static boolean mismatches(
       final TaskDeliveryLog deliveryLog,
@@ -169,9 +170,9 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
   }
 
   /**
-   * Unwraps the CDI client proxy of a store: the proxy overrides every method of the bean
-   * class, the SPI's default doing nothing included, so reflecting on it would report a
-   * release which does not exist.
+   * Unwraps the CDI client proxy of a store. The proxy overrides every method of the bean
+   * class, also the SPI's default which does nothing. So reflection on the proxy would
+   * report a release which does not exist.
    */
   @Override
   public Class<?> storeClassOf(
@@ -193,9 +194,9 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
   }
 
   /**
-   * Whether the given log is active: the platform defaults may be deactivated by
-   * configuration or be unusable (no datasource, no MongoDB client) - such a default
-   * must not be selected.
+   * Whether the given log is active. The configuration may switch the platform defaults off,
+   * or they cannot be used (no datasource, no MongoDB client). Such a default must not be
+   * chosen.
    *
    * @param deliveryLog The log bean
    * @return Whether the log may be selected
@@ -211,8 +212,8 @@ public class QuarkusTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
   }
 
   /**
-   * Whether the default serving a technology was left switched on - the log shares the
-   * outbox' switches (<code>vanillabp.outbox.jdbc.enabled</code> /
+   * Whether the default which serves a technology was left switched on. The log shares the
+   * switches of the outbox (<code>vanillabp.outbox.jdbc.enabled</code> /
    * <code>vanillabp.outbox.mongo.enabled</code>).
    */
   private boolean isEnabled(

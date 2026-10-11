@@ -64,25 +64,25 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackgroundOutput;
 
 /**
- * A dispatch which fails while the node is being stopped, and cannot write down that it
- * failed either - the Quarkus half of it.
+ * A dispatch which fails while the node is being stopped, and which cannot write down that
+ * it failed either. This is the Quarkus half of it.
  * <p>
- * The Spring Boot store has the same test, and the two are not one test run twice: the
- * dispatchers are two classes, and what is asked here is whether THIS one keeps a failed
- * write inside its lane. An operator of a Quarkus application otherwise reads "Exception in
- * thread vanillabp-outbox-dispatch-1" and a stack trace with nothing around it, on a
- * shutdown where nothing is wrong.
+ * The Spring Boot store has the same test, but the two are not one test run twice. The
+ * dispatchers are two classes. This test asks whether THIS one keeps a failed write inside
+ * its lane. Otherwise an operator of a Quarkus application reads "Exception in thread
+ * vanillabp-outbox-dispatch-1" and a stack trace with nothing around it, on a shutdown where
+ * nothing is wrong.
  * <p>
- * The one write of this story is made to fail by a spy over the real collection, and only
- * that write: an interruption cannot be produced by timing without making the test depend on
- * which of the driver's waits happens to be reached. Everything else - the entry, the claim,
- * the lanes, the poller - is the real store on a real MongoDB. The dispatcher of this
- * platform reads its configuration from the config of the running application, so the test
- * registers one of its own for as long as it runs.
+ * A spy over the real collection makes the one write of this story fail, and only that
+ * write. Timing cannot produce an interruption unless the test depends on which of the
+ * driver's waits is reached. Everything else is the real store on a real MongoDB: the entry,
+ * the claim, the lanes, the poller. The dispatcher of this platform reads its configuration
+ * from the config of the running application. So the test registers a config of its own for
+ * as long as it runs.
  * <p>
- * The class sits in the package of the dispatcher and not with the other tests of this
- * module: the container fills the dispatcher's injection points, and the test does the same
- * thing, which only a neighbour of the class can do.
+ * The class lives in the package of the dispatcher, not with the other tests of this
+ * module. The container fills the dispatcher's injection points, and the test does the same.
+ * Only a neighbour of the class can do that.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -114,8 +114,8 @@ public class MongoDispatchInterruptedWhileStoppingTest {
   private final CountDownLatch theDispatchWasTried = new CountDownLatch(1);
 
   /**
-   * Set once the dispatch failed, so only the write which follows a failed dispatch is the
-   * one made to fail. The claim, the renewal and the test's own writes go to the database.
+   * Set once the dispatch failed. So only the write which follows a failed dispatch is made
+   * to fail. The claim, the renewal and the test's own writes go to the database.
    */
   private final AtomicBoolean theDispatchFailed = new AtomicBoolean();
 
@@ -134,7 +134,7 @@ public class MongoDispatchInterruptedWhileStoppingTest {
   private SmallRyeConfig config;
 
   /**
-   * What left the thread of a lane, which is what this story is about.
+   * What left the thread of a lane. This story is about that.
    */
   private final List<Throwable> outOfALaneThread = Collections.synchronizedList(new ArrayList<>());
 
@@ -164,8 +164,8 @@ public class MongoDispatchInterruptedWhileStoppingTest {
         .instance()
         .registerConfig(config, Thread.currentThread().getContextClassLoader());
 
-    // Quarkus logs through the JBoss LogManager, so what the dispatcher says is collected
-    // where that log manager hands it over
+    // Quarkus logs through the JBoss LogManager. So what the dispatcher says is collected
+    // where that log manager hands it over.
     whatWasLogged.clear();
     collectWhatIsSaid = new Handler() {
 
@@ -232,7 +232,7 @@ public class MongoDispatchInterruptedWhileStoppingTest {
     }
 
     final var line = lineAbout(entry, "because this node is stopping");
-    // a stop is the ordinary case, so it is said the way a stop is said elsewhere
+    // A stop is the ordinary case, so it is logged the way a stop is logged elsewhere.
     assertEquals(Level.INFO, line.getLevel());
     assertTrue(line.getMessage().contains("was interrupted"), line.getMessage());
     assertTrue(
@@ -275,12 +275,12 @@ public class MongoDispatchInterruptedWhileStoppingTest {
   }
 
   /**
-   * The real dispatcher on the real collection, with the one write which follows a failed
-   * dispatch answered the way the driver answers a thread which was interrupted while it
+   * The real dispatcher on the real collection. The one write which follows a failed
+   * dispatch is answered the way the driver answers a thread which was interrupted while it
    * waited.
    *
-   * @return The dispatcher, with its injection points filled the way the container fills
-   *         them
+   * @return The dispatcher, with its injection points filled the same way as the container
+   *         fills them
    */
   private MongoPhaseTwoOutboxDispatcher aDispatcherWhoseNextWriteIsInterrupted() {
 
@@ -293,9 +293,9 @@ public class MongoDispatchInterruptedWhileStoppingTest {
   }
 
   /**
-   * The application's MongoDB client, with the outbox collection answering one write the way
-   * an interrupted thread is answered. Everything else is the real client on the real
-   * database, the payload collection included.
+   * The application's MongoDB client. The outbox collection answers one write the way an
+   * interrupted thread is answered. Everything else is the real client on the real database,
+   * the payload collection included.
    *
    * @return The client the dispatcher works on
    */
@@ -332,8 +332,9 @@ public class MongoDispatchInterruptedWhileStoppingTest {
   }
 
   /**
-   * The line the dispatcher wrote about one entry, or <code>null</code> while it has not
-   * written it yet. The id of the entry travels as a parameter of the line, so both are read.
+   * The line which the dispatcher wrote about one entry, or <code>null</code> while it has
+   * not written it yet. The id of the entry travels as a parameter of the line, so both are
+   * read.
    *
    * @param entry The entry the line has to name
    * @param phrase What the line has to say

@@ -4,14 +4,14 @@ import io.quarkus.hibernate.orm.panache.PanacheRepositoryBase;
 import jakarta.enterprise.inject.spi.CDI;
 
 /**
- * Persistence of aggregates managed by a Hibernate ORM Panache repository
- * ({@code PanacheRepository} or {@code PanacheRepositoryBase}), used whenever the
+ * Persistence of aggregates which a Hibernate ORM Panache repository manages
+ * ({@code PanacheRepository} or {@code PanacheRepositoryBase}). It is used whenever the
  * application has such a repository for the aggregate and no
  * {@link io.vanillabp.integration.spi.AggregatePersistenceAware} of its own.
  * <p>
- * The repository bean is resolved on first use instead of being injected: the
- * subclass generated per aggregate has a no-arg constructor (build-time generated
- * bytecode) and the repository must not be touched before the CDI container is up.
+ * The repository bean is looked up on first use. It is not injected. The subclass generated
+ * per aggregate has a no-arg constructor, in bytecode generated at build time. And the
+ * repository must not be used before the CDI container is up.
  *
  * @param <A> The aggregate type
  */
@@ -22,9 +22,9 @@ public class PanacheRepositoryAggregatePersistence<A> extends DefaultAggregatePe
   private volatile PanacheRepositoryBase<A, Object> repository;
 
   /**
-   * Called by the no-arg constructor of the subclass the build generates for one
-   * aggregate. The repository arrives as a class and is looked up in the CDI container
-   * on first use, because the bean is built before the container is there.
+   * The no-arg constructor of the subclass which the build generates for one aggregate calls
+   * it. The repository arrives as a class. It is looked up in the CDI container on first use,
+   * because the bean is created before the container is there.
    *
    * @param aggregateClass The aggregate type this instance persists
    * @param repositoryClass The repository the application wrote for that aggregate

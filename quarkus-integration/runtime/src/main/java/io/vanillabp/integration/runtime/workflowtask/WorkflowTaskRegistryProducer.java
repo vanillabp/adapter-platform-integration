@@ -7,36 +7,37 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 
 /**
- * Produces the core-owned {@link WorkflowTaskRegistry} (the adapter-facing
- * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker}):
- * the generated process-service beans register every workflow service class under
- * all BPMN process IDs it declares; adapters validate the wiring during
- * <code>wireBpmn</code> and dispatch task invocations at runtime. Registered by the
- * platform's build step independently of any adapter.
+ * Produces the {@link WorkflowTaskRegistry} which the core owns. Adapters see it as
+ * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker}. The
+ * generated process-service beans register every workflow service class under all BPMN
+ * process IDs it declares. Adapters check the wiring during <code>wireBpmn</code> and hand
+ * task invocations to it at runtime. The platform's build step registers this class, with or
+ * without any adapter.
  */
 @ApplicationScoped
 public class WorkflowTaskRegistryProducer {
 
   /**
-   * Built by the CDI container, which the platform's build step told about this class. The
-   * sync model below is built with it, so every bean produced here shares the one instance.
+   * The CDI container creates it, because the platform's build step told it about this class.
+   * The sync model below belongs to this object. So every bean produced here shares the one
+   * instance.
    */
   public WorkflowTaskRegistryProducer() {
   }
 
   /**
-   * The one sync-model instance of the application - handed to adapters as
-   * {@link io.vanillabp.integration.adapter.spi.WorkflowAggregateSync} AND to the
-   * registry (which validates the model of every registered workflow-aggregate
-   * class at startup and answers the shared values of aggregates an adapter does
-   * not hold).
+   * The one sync model of the application. Adapters get it as
+   * {@link io.vanillabp.integration.adapter.spi.WorkflowAggregateSync}. The registry gets it
+   * too. At startup, the registry checks the model of every registered workflow aggregate
+   * class. And it answers the shared values of aggregates which an adapter does not hold.
    */
   private io.vanillabp.integration.adapter.migration.sync.AggregateSyncSupport aggregateSync;
 
   /**
-   * The one sync model, built on the first ask. It reports what it finds about an
-   * aggregate class into the collection the configuration carries, and the configuration
-   * arrives as a parameter of a producer method rather than beside the field.
+   * Returns the one sync model and creates it on the first call. It reports what it finds
+   * about an aggregate class into the collection of the configuration. The configuration
+   * arrives as a parameter of a producer method, not as a field. That is why the model is not
+   * created together with this object.
    *
    * @param properties The VanillaBP configuration
    * @return The sync model of this application
@@ -54,20 +55,20 @@ public class WorkflowTaskRegistryProducer {
 
   /**
    * Builds the one registry of the application. The platform's runner goes in as the
-   * FALLBACK: a delivery runs in the transaction the process service of its workflow aggregate
-   * resolved, and this one serves where that resolution answers nothing - see decision 11 in
-   * the repository's DECISIONS.md.
+   * FALLBACK. A delivery runs in the transaction which the process service of its workflow
+   * aggregate resolved. The platform's runner serves where that resolution has no answer. See
+   * decision 11 in the repository's DECISIONS.md.
    *
    * @param platformTransactionRunner The platform's own runner, the bean of
-   *          {@link io.vanillabp.integration.runtime.processservice.TransactionRunnerProducer}
-   *          - it also reads the state of the transaction a
-   *          <code>&#64;WorkflowTask</code> handler runs in (a rollback-only mark set
-   *          by a transaction annotation of the application)
+   *          {@link io.vanillabp.integration.runtime.processservice.TransactionRunnerProducer}.
+   *          It also reads the state of the transaction a <code>&#64;WorkflowTask</code>
+   *          handler runs in (a rollback-only mark set by a transaction annotation of the
+   *          application)
    * @param springTransactionSupport Whether Spring's <code>&#64;Transactional</code> has
    *          an effect on this application, decided at build time
    * @param properties The VanillaBP configuration
-   * @param scoping The core's name-clash-avoidance support, which judges the identifiers of
-   *          the versions a BPMS still holds
+   * @param scoping The core's name-clash-avoidance support. It judges the identifiers of the
+   *          versions which a BPMS still holds
    * @return The registry
    */
   @Produces
@@ -87,10 +88,10 @@ public class WorkflowTaskRegistryProducer {
 
 
   /**
-   * The handler methods of the extensions - an extension registers its own annotation
-   * here and invokes the methods carrying it. It is the registry's own object rather
-   * than a second one, because the methods are scanned from the same registration call
-   * the <code>&#64;WorkflowTask</code> methods are.
+   * The handler methods of the extensions. An extension registers its own annotation here
+   * and invokes the methods which carry it. This is the registry's own object, not a second
+   * one. The reason: the methods are found in the same registration call as the
+   * <code>&#64;WorkflowTask</code> methods.
    *
    * @param workflowTaskRegistry The registry owning it
    * @return The extension-facing handler service
@@ -106,15 +107,15 @@ public class WorkflowTaskRegistryProducer {
   }
 
   /**
-   * The core-owned name-clash-avoidance model: resolves the mode per
-   * workflow module/workflow and adapter and composes the identifiers a BPMS sees.
+   * The name-clash-avoidance model which the core owns. It resolves the mode per workflow
+   * module or workflow and per adapter. And it builds the identifiers which a BPMS sees.
    * <p>
-   * The adapters' deployment services are looked up LAZILY (they receive this bean, so
-   * they cannot be injected here): the mode applying without configuration is the
-   * adapter's own, and an unscoped workflow module is reported by the adapter itself.
-   * Both bean shapes of the platform contract are accepted - element beans and beans
-   * of type <code>List&lt;AdapterDeploymentService&lt;Object, Object&gt;&gt;</code>
-   * (one instance per configured adapter id), see
+   * The deployment services of the adapters are looked up LAZILY. They get this bean, so they
+   * cannot be injected here. Without configuration, the adapter's own mode applies, and the
+   * adapter itself reports a workflow module without scoping. Both bean shapes of the platform
+   * contract work: element beans and beans of type
+   * <code>List&lt;AdapterDeploymentService&lt;Object, Object&gt;&gt;</code> (one instance per
+   * configured adapter id). See
    * {@link io.vanillabp.integration.runtime.deployment.VanillaBpDeploymentRunner}.
    *
    * @param properties The VanillaBP configuration
@@ -148,10 +149,10 @@ public class WorkflowTaskRegistryProducer {
   /**
    * Where an adapter says what it found while the application starts.
    * <p>
-   * It is the collection the checks of the core report into as well, so an adapter's
-   * finding stands in the same block as the platform's. The collection hangs on the
-   * configuration, because that is what every check already holds; this bean is the way
-   * to it for everything which does not.
+   * The checks of the core report into the same collection. So an adapter's finding shows up
+   * in the same block as the platform's. The collection belongs to the configuration, because
+   * every check already holds the configuration. This bean is the way to the collection for
+   * everything which does not.
    *
    * @param properties The VanillaBP configuration, which carries the collection
    * @return Where a startup check of an adapter reports
@@ -167,9 +168,9 @@ public class WorkflowTaskRegistryProducer {
   }
 
   /**
-   * The core-owned sync model: turns a workflow aggregate into the
-   * values shared with the BPMS, honoring
-   * {@code @SyncWithBPMS}/{@code @NoSyncWithBPMS} and the adapter's default.
+   * The sync model which the core owns. It turns a workflow aggregate into the values shared
+   * with the BPMS. It follows {@code @SyncWithBPMS}, {@code @NoSyncWithBPMS} and the adapter's
+   * default.
    *
    * @param properties The VanillaBP configuration
    * @return The sync support
