@@ -15,59 +15,61 @@ import javax.xml.parsers.DocumentBuilderFactory;
 import org.w3c.dom.Element;
 
 /**
- * What the POMs of a repository hand an application, read back out of the files the
- * build publishes.
+ * What the POMs of a repository hand an application, read back from the files the build
+ * publishes.
  * <p>
- * Two things are asserted on those files, and both are invisible to the build which
- * writes them. {@link #handAnApplicationNoToolOfTheBuild(Set)} is about which jars reach
- * an application, {@link #handAnApplicationNoPropertyInsteadOfAValue()} is about whether
- * a version in the file is a version at all.
+ * Two things are checked on those files, and the build which writes them sees neither.
+ * {@link #handAnApplicationNoToolOfTheBuild(Set)} checks which jars reach an
+ * application. {@link #handAnApplicationNoPropertyInsteadOfAValue()} checks whether a
+ * version in the file is a real version.
  * <p>
- * A build uses tools which only translate the source: Lombok, MapStruct's processor,
- * the annotation processors of Spring Boot and Quarkus. Each one is read while javac
- * runs and has nothing left to do once the class file exists. An application asked for
- * a workflow engine, not for them, and every jar it did not ask for is one more thing to
- * scan and to ship. The scope which says that is {@code provided}: it puts the jar on
- * our own compile path and hands it to nobody.
+ * A build uses tools which only translate the source: Lombok, MapStruct's processor, the
+ * annotation processors of Spring Boot and Quarkus. javac reads each one, and once the
+ * class file exists the tool has nothing left to do. An application asked for a workflow
+ * engine, not for these tools. Every jar it did not ask for is one more thing to scan and
+ * to ship. The scope for such a tool is {@code provided}. It puts the jar on our own
+ * compile path and hands it to nobody.
  * <p>
- * Who calls this: every VanillaBP repository which publishes artifacts, from a test
- * class of its own with a name of its own. They all can make this mistake, and they make
- * it in the same way, so the check lives here instead of in a test class each repository
- * copies. A copy drifts, and the value of this check is that it still runs in two years.
+ * Who calls this: every VanillaBP repository which publishes artifacts, from a test class
+ * of its own, with a name of its own. All of them can make this mistake, and they make it
+ * the same way. So the check lives here, not in a test class which each repository
+ * copies. A copy drifts. This check is only worth something if it still runs in two
+ * years.
  * <p>
- * The caller brings two things. The first is the name of the file its modules publish,
- * which differs per repository and is explained below. The second is the list of its own
+ * The caller brings two things. The first is the name of the file its modules publish.
+ * It differs per repository and is explained below. The second is the list of its own
  * tools, each as {@code groupId:artifactId}. That list is not built in, because only the
- * repository knows what a tool of its build is. {@code org.mapstruct:mapstruct} for
- * example runs with the application, since {@code Mappers.getMapper(...)} is called
- * there; the tool is {@code org.mapstruct:mapstruct-processor} alone. A built-in list
- * would be wrong at the first dependency somebody else brings.
+ * repository knows what a tool of its build is. For example,
+ * {@code org.mapstruct:mapstruct} runs with the application, because
+ * {@code Mappers.getMapper(...)} is called there. Only
+ * {@code org.mapstruct:mapstruct-processor} is the tool. A built-in list would be wrong
+ * with the first dependency somebody else brings.
  * <p>
- * Which file counts is the caller's answer too. A repository which publishes its sources
- * as they are names {@link #THE_SOURCE_POM}. A repository which publishes through the
- * flatten plugin names {@link #THE_FLATTENED_POM}, and then the check reads what an
- * application really resolves. That is worth more than it sounds. In the flattened file
- * a scope which stands only in a {@code dependencyManagement} is already resolved into
- * the declaration, test dependencies are gone and the profiles are applied. So the
- * flattened file shows both forms of the mistake at once, while the source file shows
- * neither of them. Where a module writes no flattened file its source POM is read, since
- * that is what such a module publishes: the flatten plugin leaves a module of packaging
- * {@code pom} alone.
+ * The caller also says which file counts. A repository which publishes its sources as
+ * they are names {@link #THE_SOURCE_POM}. A repository which publishes through the
+ * flatten plugin names {@link #THE_FLATTENED_POM}. Then the check reads what an
+ * application really resolves. That is worth more than it sounds. In the flattened file,
+ * a scope which stands only in a {@code dependencyManagement} is already copied into the
+ * declaration, test dependencies are gone, and the profiles are applied. So the
+ * flattened file shows both forms of the mistake at once. The source file shows neither.
+ * Where a module writes no flattened file, its source POM is read, because that is what
+ * such a module publishes. The flatten plugin leaves a module of packaging {@code pom}
+ * alone.
  * <p>
  * A failure reports two things separately. A declaration which reaches an application is
- * a defect in that module. An {@code optional} entry in a {@code dependencyManagement}
- * is a promise which is never kept, because Maven copies a managed version, scope and
- * exclusions into a declaration but not that flag. The two need different repairs, and a
- * reader who gets only one sentence repairs the wrong place. That is how Lombok stayed
- * at compile scope in the platform for as long as it did. The flag sat in the root POM,
- * the modules declared Lombok bare, and every application whose own BOM names Lombok,
- * which the Spring Boot BOM and the Quarkus BOM both do, resolved it and shipped it.
+ * a defect in that module. An {@code optional} entry in a {@code dependencyManagement} is
+ * a promise which is never kept. Maven copies a managed version, scope and exclusions
+ * into a declaration, but not that flag. The two need different repairs. A reader who
+ * gets only one sentence repairs the wrong place. That is how Lombok stayed at compile
+ * scope in the platform for so long. The flag sat in the root POM, and the modules
+ * declared Lombok without it. Every application whose own BOM names Lombok resolved it
+ * and shipped it. The Spring Boot BOM and the Quarkus BOM both name it.
  * <p>
- * The dependencies are read along {@code project/dependencies/dependency} because a POM
- * repeats the name {@code dependency}. A plugin has dependencies of its own, and those
- * run inside Maven and reach no application. Asking the document for every element of
- * that name counts them as if the module had declared them, which is a finding nobody
- * can act on.
+ * The dependencies are read along {@code project/dependencies/dependency}, because a POM
+ * uses the name {@code dependency} in more than one place. A plugin has dependencies of
+ * its own. They run inside Maven and reach no application. Asking the document for every
+ * element of that name would count them as if the module had declared them. Nobody could
+ * act on such a finding.
  */
 public final class PublishedPoms {
 
@@ -79,14 +81,14 @@ public final class PublishedPoms {
 
   /**
    * The scopes which keep a dependency away from an application. A declaration without a
-   * scope is none of them: it means {@code compile}.
+   * scope has none of them. It means {@code compile}.
    */
   private static final Set<String> SCOPES_WHICH_REACH_NO_APPLICATION = Set
       .of("provided", "test");
 
   /**
    * The names a POM may use without defining them. They are the coordinates of the file
-   * itself, which Maven fills from the file, so they arrive wherever the file does.
+   * itself. Maven fills them from the file, so they arrive wherever the file does.
    */
   private static final Set<String> THE_COORDINATES_OF_THE_FILE_ITSELF = Set
       .of("project.version", "project.groupId", "project.artifactId");
@@ -110,16 +112,16 @@ public final class PublishedPoms {
   /**
    * The published POMs of the repository the running test belongs to.
    * <p>
-   * The repository root is searched for rather than passed in, so the test also runs
-   * from an IDE and from a git worktree: it is the highest directory above the module
-   * running the test which still holds a {@code pom.xml}.
+   * The repository root is searched for, not passed in. So the test also runs from an IDE
+   * and from a git worktree. The root is the highest directory above the test's module
+   * which still holds a {@code pom.xml}.
    *
    * @param fileEachModulePublishes {@link #THE_SOURCE_POM} or {@link #THE_FLATTENED_POM},
    *          whichever this repository publishes
    * @return The published POMs, ready to be asked what they hand an application
    * @throws AssertionError If the test does not run in a module of a repository, or if
    *           the named file is nowhere. A test which passes because it read nothing is
-   *           worse than no test at all.
+   *           worse than no test.
    */
   public static PublishedPoms ofTheRepositoryUnderTest(
       final String fileEachModulePublishes) {
@@ -129,9 +131,9 @@ public final class PublishedPoms {
   }
 
   /**
-   * The published POMs below a directory which is named rather than searched for. The
-   * tests of this class work this way, and so does a repository whose root cannot be
-   * found by walking up from the module which runs the test.
+   * The published POMs below a directory which the caller names. The tests of this class
+   * work this way. So does a repository whose root cannot be found by walking up from the
+   * module which runs the test.
    *
    * @param repositoryRoot The directory the modules lie in
    * @param fileEachModulePublishes {@link #THE_SOURCE_POM} or {@link #THE_FLATTENED_POM},
@@ -154,8 +156,8 @@ public final class PublishedPoms {
         published.add(file);
         modulesWhichWroteTheFile++;
       } else {
-        // a module of packaging 'pom' publishes its source POM, because the flatten
-        // plugin skips such a module
+        // A module of packaging 'pom' publishes its source POM, because the flatten
+        // plugin skips such a module.
         published.add(module);
       }
     }
@@ -172,31 +174,30 @@ public final class PublishedPoms {
   }
 
   /**
-   * Asserts that no published POM of the repository hands an application a tool which
-   * only translates the source, and that no {@code dependencyManagement} promises a tool
-   * an {@code optional} which Maven ignores.
+   * Asserts two things. No published POM of the repository hands an application a tool
+   * which only translates the source. And no {@code dependencyManagement} marks a tool
+   * {@code optional}, a flag which Maven ignores there.
    * <p>
-   * A declaration passes when its scope keeps it away from an application, which is
-   * {@code provided} or {@code test}, or when the declaration itself says
-   * {@code optional}. The flag counts here and not in the {@code dependencyManagement},
-   * which is the whole difference between the two messages this may throw.
+   * A declaration passes when its scope keeps it away from an application
+   * ({@code provided} or {@code test}), or when the declaration itself says
+   * {@code optional}. The flag counts here, not in the {@code dependencyManagement}. That
+   * is the whole difference between the two messages this may throw.
    * <p>
-   * The list holds for the whole repository, while a finding falls per module. A tool
-   * which is not in the list is therefore invisible here, in every module at once, and
-   * a tool which is in it is checked in every module the same way. A module which is
-   * itself a library of test tools needs the second half of that to bend: it uses the
-   * tool in {@code src/main/java} and hands it on at compile scope on purpose. That is
-   * what {@code business-cockpit} did on 2026-09-22, and this check said nothing only
-   * because {@code test-utils} was no tool of that build's list.
+   * The list holds for the whole repository, but a finding is per module. So a tool which
+   * is not in the list is invisible here, in every module at once. A tool which is in the
+   * list is checked the same way in every module. A module which is itself a library of
+   * test tools needs an exception to that second rule. It uses the tool in
+   * {@code src/main/java} and hands it on at compile scope on purpose.
+   * {@code business-cockpit} did that on 2026-09-22. This check only said nothing because
+   * {@code test-utils} was not in the tool list of that build.
    * <p>
-   * A repository which keeps a tool right everywhere and passes it on in exactly one
-   * module cannot say so today. It would have to drop the tool from the list and lose
-   * the check for it everywhere else. The way out is an exception which names module and
-   * tool together, and the module is named by its {@code groupId:artifactId} rather than
-   * by the path of its POM. The coordinates stand in the file this check already reads
-   * and they survive a move in the directory tree. In a flattened file the
-   * {@code groupId} is sometimes only inherited from the parent, and whoever reads the
-   * coordinates has to take that case along.
+   * Today, a repository cannot keep a tool correct everywhere and pass it on in exactly
+   * one module. It would have to drop the tool from the list and lose the check for it
+   * everywhere else. The way out is an exception which names module and tool together.
+   * The module would be named by its {@code groupId:artifactId}, not by the path of its
+   * POM. The coordinates stand in the file this check already reads, and they survive a
+   * move in the directory tree. In a flattened file the {@code groupId} is sometimes only
+   * inherited from the parent. Whoever reads the coordinates has to handle that case.
    *
    * @param toolsOfTheBuild The tools of this repository, each as
    *          {@code groupId:artifactId}, for example
@@ -219,8 +220,8 @@ public final class PublishedPoms {
           continue;
         }
         final var scope = textOfChild(declaration, "scope");
-        // the scope may be missing, and asking an immutable set whether it contains null
-        // throws instead of answering
+        // The scope may be missing. Asking an immutable set whether it contains null
+        // throws instead of answering.
         if ((scope != null) && SCOPES_WHICH_REACH_NO_APPLICATION.contains(scope)) {
           continue;
         }
@@ -281,32 +282,32 @@ public final class PublishedPoms {
    * Asserts that no published POM of the repository names a property in the version, the
    * scope or an exclusion of a dependency without carrying the value of that property.
    * <p>
-   * A module writes {@code ${liquibase.version}} and the value stands in a POM three
-   * levels above it. Our own build has that POM in the reactor, so the value arrives and
-   * the build stays green. A consumer never has our reactor. It reads the published file,
-   * and it reads the parent the file names, which for a snapshot is the NEWEST build of
-   * that snapshot and not the build this module went out with. From the day the value
-   * leaves that parent, the version a consumer sees is the name of the property.
+   * Say a module writes {@code ${liquibase.version}}, and the value stands in a POM three
+   * levels above it. Our own build has that POM in the reactor. So the value arrives and
+   * the build stays green. A consumer never has our reactor. It reads the published file
+   * and the parent the file names. For a snapshot, that parent is the NEWEST build of the
+   * snapshot, not the build this module was published with. Once the value is gone from
+   * that parent, the consumer sees the name of the property as the version.
    * <p>
    * That happened on 2026-09-27. The Quarkus runtime declared
-   * {@code org.mapstruct:mapstruct} at {@code ${mapstruct.version}}, a later commit took
-   * the property out of the aggregator POM, and every Quarkus blueprint on both engines
+   * {@code org.mapstruct:mapstruct} at {@code ${mapstruct.version}}. A later commit took
+   * the property out of the aggregator POM. Then every Quarkus blueprint on both engines
    * ended with {@code Could not find artifact org.mapstruct:mapstruct:jar:}
-   * {@code ${mapstruct.version}}. Twenty-six jobs, and no build of the platform itself
-   * had anything to say about it. Only a consumer can see this class of mistake, which is
-   * why it is asserted on the file the consumer reads.
+   * {@code ${mapstruct.version}}. Twenty-six jobs failed, and no build of the platform
+   * itself noticed. Only a consumer can see this kind of mistake. So the check reads the
+   * file the consumer reads.
    * <p>
    * A {@code dependencyManagement} is read too, although Maven ignores the managed
-   * entries of a dependency's POM. An entry of scope {@code import} is the exception: a
-   * consumer resolves it while it builds the model of our artifact, and an import it
-   * cannot resolve ends with {@code Failed to read artifact descriptor}. Measured on
-   * 2026-10-01 with a parent whose property was removed: the consumer's build stops, and
-   * it stops on our artifact rather than on the import.
+   * entries of a dependency's POM. An entry of scope {@code import} is the exception. A
+   * consumer resolves it while it builds the model of our artifact. An import it cannot
+   * resolve ends with {@code Failed to read artifact descriptor}. Measured on 2026-10-01
+   * with a parent whose property was removed: the consumer's build stops, and it stops on
+   * our artifact, not on the import.
    * <p>
    * {@code ${project.version}}, {@code ${project.groupId}} and
    * {@code ${project.artifactId}} are allowed. They are the coordinates of the file
-   * itself rather than properties somebody wrote somewhere, so the model a consumer
-   * builds out of that one file already holds them.
+   * itself, not properties somebody wrote somewhere. So the model a consumer builds from
+   * that one file already holds them.
    *
    * @throws AssertionError If a published POM leaves a consumer with a property name
    *           where a value belongs
@@ -346,9 +347,9 @@ public final class PublishedPoms {
   }
 
   /**
-   * Adds one line per property without a value in the given dependency, for the version,
-   * the scope and the two coordinates of every exclusion. Those are the places a value
-   * reaches a consumer through.
+   * Adds one line per property without a value in the given dependency. It looks at the
+   * version, the scope and the two coordinates of every exclusion. Through these places a
+   * value reaches a consumer.
    */
   private void collectPropertiesWithoutAValue(
       final Path pom,
@@ -379,7 +380,7 @@ public final class PublishedPoms {
 
   /**
    * The properties the given text asks for and the file cannot answer. A text may hold
-   * more than one of them, as {@code ${group.id}:${artifact.id}} in an exclusion does.
+   * more than one, like {@code ${group.id}:${artifact.id}} in an exclusion.
    */
   private static List<String> propertiesWithoutAValue(
       final String text,
@@ -494,8 +495,8 @@ public final class PublishedPoms {
 
   /**
    * The {@code dependency} elements below the {@code dependencies} of the given element,
-   * and nothing else. Passing the {@code project} gives what the module declares, and a
-   * plugin's own dependencies stay out because they hang below the plugin.
+   * and nothing else. Passing the {@code project} gives what the module declares. A
+   * plugin's own dependencies stay out, because they are below the plugin.
    */
   private static List<Element> dependenciesOf(
       final Element holder) {

@@ -22,8 +22,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.core.io.DefaultResourceLoader;
 
 /**
- * Utility for building Spring Boot test applications with custom classpath
- * resources. Allows adding and hiding resources without separate Maven modules.
+ * Builds Spring Boot test applications with their own classpath resources. A test can
+ * add and hide resources without a separate Maven module.
  *
  * <p>Usage example:
  * <pre>{@code
@@ -35,9 +35,8 @@ import org.springframework.core.io.DefaultResourceLoader;
  * }
  * }</pre>
  *
- * <p><b>Limitation:</b> This utility isolates resources (e.g., META-INF files,
- * BPMN, YAML), not classes. For class isolation, separate Maven test modules
- * are still required.
+ * <p><b>Limitation:</b> This keeps resources apart (for example META-INF files, BPMN,
+ * YAML), not classes. To keep classes apart, you still need separate Maven test modules.
  */
 public class SpringBootTestApplication implements AutoCloseable {
 
@@ -63,8 +62,8 @@ public class SpringBootTestApplication implements AutoCloseable {
   }
 
   /**
-   * The class loader carrying the resources of this test application. A test hands it
-   * to whatever it starts itself, where neither {@link #contextRunner()} nor
+   * The class loader with the resources of this test application. A test hands it to
+   * whatever it starts itself, where neither {@link #contextRunner()} nor
    * {@link #applicationBuilder(Class...)} fits.
    *
    * @return The loader, which serves the added resources and hides the hidden ones
@@ -90,8 +89,8 @@ public class SpringBootTestApplication implements AutoCloseable {
    * ResourceLoader that uses the custom ClassLoader.
    *
    * @param sources The configuration classes the application boots from
-   * @return The builder - what it runs reads the resources of this test application,
-   *         which is how a test asserts a boot which fails on them
+   * @return The builder. What it runs reads the resources of this test application. This
+   *         is how a test checks a start which fails because of them
    */
   public SpringApplicationBuilder applicationBuilder(
       final Class<?>... sources) {
@@ -262,7 +261,7 @@ public class SpringBootTestApplication implements AutoCloseable {
      * Hide resources whose name contains the given fragment. Hidden
      * resources will only be resolved from the temp directory.
      *
-     * @param nameFragment Every resource whose name holds this text is hidden, which is
+     * @param nameFragment Every resource whose name holds this text is hidden. This is
      *          how a test replaces a file its own module really ships
      * @return This builder
      */
@@ -273,9 +272,9 @@ public class SpringBootTestApplication implements AutoCloseable {
     }
 
     /**
-     * Builds the test application: the collected resources are written into a temporary
-     * directory and a class loader serving it is put in front of the test's own one.
-     * The result is closed to delete that directory again, so a test uses it in a
+     * Builds the test application. The collected resources are written into a temporary
+     * directory. A class loader which serves that directory is put in front of the test's
+     * own one. Closing the result deletes the directory, so a test uses it in a
      * try-with-resources block.
      *
      * @return The application, ready to boot

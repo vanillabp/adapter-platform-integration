@@ -20,22 +20,22 @@ import liquibase.resource.ClassLoaderResourceAccessor;
 
 /**
  * The tables, columns and indexes the changelog of <code>io.vanillabp:vanillabp-schema</code>
- * describes, read from the changelog itself. A test which types them out instead notices a table gone missing but never a table newly
- * arrived, and that is the miss which let the payload table of the phase-two outbox travel in this
+ * describes, read from the changelog itself. A test which types them out notices a missing table,
+ * but never a new one. That is how the payload table of the phase-two outbox was shipped in this
  * artifact for months while nothing here knew about it.
  *
  * <p>
- * Liquibase parses the master changelog, follows the include of every version and fills the
- * properties in, so the names come out as an application gets them. Hand over the properties an
- * application overrides and the names come out renamed, the same way.
+ * Liquibase parses the master changelog, follows the include of every version and fills in the
+ * properties. So the names come out as an application gets them. Pass the properties an
+ * application overrides, and the names come out renamed in the same way.
  * </p>
  */
 public class ChangelogDescription {
 
   /**
    * The master changelog of the schema artifact, the file an application includes. A module
-   * which reads it needs that artifact and Liquibase on its test classpath; this module brings
-   * neither, because every other reader of it would then get Liquibase as well.
+   * which reads it needs that artifact and Liquibase on its test classpath. This module brings
+   * neither. Otherwise every other user of this module would get Liquibase as well.
    */
   public static final String CHANGELOG = "vanillabp/schema/changelog.xml";
 
@@ -71,8 +71,8 @@ public class ChangelogDescription {
 
     try (var classpath = new ClassLoaderResourceAccessor()) {
       final var parameters = new ChangeLogParameters();
-      // a value set here wins over the <property> of the changelog, which is how an application
-      // renames a table without forking the file
+      // A value set here wins over the <property> of the changelog. This is how an application
+      // renames a table without copying the file.
       changelogProperties.forEach(parameters::set);
       ChangeLogParserFactory
           .getInstance()
@@ -123,10 +123,9 @@ public class ChangelogDescription {
   }
 
   /**
-   * Reads one change. A change this method does not know ends the test instead of being walked
-   * past: a dropColumn or a renameColumn nobody taught it about would leave it describing columns
-   * which are no longer there, and the comparison against the database would be wrong in both
-   * directions.
+   * Reads one change. A change this method does not know ends the test. It is not skipped. An
+   * unknown dropColumn or renameColumn would leave the description with columns which are no
+   * longer there. Then the comparison with the database would be wrong in both directions.
    */
   private void read(
       final String changeSetId,
@@ -151,8 +150,8 @@ public class ChangelogDescription {
                   upperCase(createIndex.getTableName()), upperCase(createIndex.getIndexName()), namesOf(
                       createIndex.getColumns())));
     } else if (change instanceof final DropIndexChange dropIndex) {
-      // an index rebuilt over other columns is dropped and created again, and what the database
-      // holds afterwards is what the second half says
+      // An index rebuilt over other columns is dropped and created again. Afterwards the
+      // database holds what the second half says.
       final var name = upperCase(dropIndex.getIndexName());
       if (!indexes.removeIf(index -> index.name().equals(name))) {
         throw new IllegalStateException(
@@ -160,8 +159,8 @@ public class ChangelogDescription {
                 .formatted(changeSetId, name));
       }
     } else if (change instanceof final DropNotNullConstraintChange dropNotNull) {
-      // what a column accepts is not what this description is about: it collects the columns per
-      // table and the indexes, and the column stays where it is
+      // This description is not about what a column accepts. It collects the columns per table
+      // and the indexes, and the column stays where it is.
       if (!columnsPerTable
           .getOrDefault(upperCase(dropNotNull.getTableName()), List.of())
           .contains(upperCase(dropNotNull.getColumnName()))) {
@@ -195,9 +194,9 @@ public class ChangelogDescription {
   }
 
   /**
-   * The databases this module is tested against fold an unquoted name to upper case, and the
-   * changelog spells every name that way already. Doing it here anyway keeps a lower-case name in
-   * a future changeset from turning into a test which fails for the wrong reason.
+   * The databases this module is tested against turn an unquoted name into upper case. The
+   * changelog already spells every name that way. Doing it here anyway means that a lower-case
+   * name in a future changeset does not make a test fail for the wrong reason.
    */
   private static String upperCase(
       final String name) {

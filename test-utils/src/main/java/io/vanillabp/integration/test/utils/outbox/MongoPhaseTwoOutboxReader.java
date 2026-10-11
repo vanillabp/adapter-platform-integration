@@ -20,21 +20,21 @@ import com.mongodb.client.model.Updates;
  * What a test wants to know about the phase-two outbox of an application on MongoDB,
  * read from the database that application writes.
  * <p>
- * The counterpart of {@link PhaseTwoOutboxReader} and the same promise: a test asks for
- * entries, their state and their attempts, and it never writes the name of a collection
- * or of a field down. The names come from the platform classes which declare them (see
- * {@link MongoPhaseTwoOutboxNames}), so a rename is followed in one file instead of in
- * every test which reads a document.
+ * The counterpart of {@link PhaseTwoOutboxReader}, with the same promise. A test asks for
+ * entries, their state and their attempts. It never writes down the name of a collection
+ * or of a field. The names come from the platform classes which declare them (see
+ * {@link MongoPhaseTwoOutboxNames}). So a rename is followed in one file, not in every
+ * test which reads a document.
  * <p>
- * Both platforms are served, because both write the same documents. A Spring Boot test
+ * It serves both platforms, because both write the same documents. A Spring Boot test
  * builds the reader over <code>mongoTemplate.getDb()</code>, a Quarkus test over
- * <code>mongoClient.getDatabase(...)</code>, and what either of them sees afterwards is
- * what that database hands out.
+ * <code>mongoClient.getDatabase(...)</code>. Either one then sees what that database
+ * hands out.
  * <p>
- * The reader reads and it writes what an operator would write, and it does neither
- * inside a session. A test which needs a read inside its own transaction asks the
- * template or the client it runs that transaction on, and a test which wants to know
- * what is committed builds the reader over a client of its own.
+ * The reader reads, and it writes what an operator would write. It does neither inside a
+ * session. A test which needs a read inside its own transaction asks the template or the
+ * client of that transaction. A test which wants to know what is committed builds the
+ * reader over a client of its own.
  */
 public final class MongoPhaseTwoOutboxReader {
 
@@ -55,8 +55,7 @@ public final class MongoPhaseTwoOutboxReader {
 
     /**
      * The entry was put aside after too many failed attempts, or after one attempt whose
-     * failure would not be fixed by repeating it. Nothing attempts it again, a person has
-     * to.
+     * failure a repeat would not fix. Nothing tries it again. A person has to.
      */
     BLOCKED
 
@@ -67,8 +66,8 @@ public final class MongoPhaseTwoOutboxReader {
    *
    * @param id The entry's own id, which is the document's <code>_id</code>
    * @param state Where the entry stands
-   * @param attempts How often a dispatch took the entry, counted when the dispatch claims
-   *          it, so an entry being dispatched right now already carries one
+   * @param attempts How often a dispatch took the entry. It is counted when the dispatch
+   *          claims the entry, so an entry being dispatched right now already has one
    * @param workflowModuleId The workflow module the call belongs to
    * @param bpmnProcessId The BPMN process the call belongs to
    * @param operation What the call does, as {@code PhaseOperation} names it
@@ -77,9 +76,9 @@ public final class MongoPhaseTwoOutboxReader {
    * @param adapterId The adapter the call was elected for
    * @param idempotencyKey The key the entry is deduplicated by, <code>null</code> for an
    *          operation which is never deduplicated
-   * @param dedupKey What the unique index spans. It carries the idempotency key while the
-   *          entry waits and the entry's own id once it was dispatched, which is how a
-   *          dispatched entry frees the key it held
+   * @param dedupKey What the unique index spans. While the entry waits, it holds the
+   *          idempotency key. Once the entry was dispatched, it holds the entry's own id.
+   *          This is how a dispatched entry frees the key it held
    * @param leasedBy The node which claimed the entry, <code>null</code> where nobody
    *          holds it
    * @param nextAttemptAt When the entry asks to be dispatched
@@ -136,7 +135,7 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * One payload document, which is where the bytes of a call lie while its entry waits.
+   * One payload document. It holds the bytes of a call while the call's entry waits.
    *
    * @param reference What the entry names the payload by, which is the document's
    *          <code>_id</code>
@@ -181,7 +180,7 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * The reader for an application which left the collections their names.
+   * The reader for an application which kept the default names of the collections.
    *
    * @param database The database of the application under test
    * @return The reader
@@ -232,9 +231,9 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * The name of the outbox collection, for the few tests which need the name itself
-   * rather than what is in it: one counts the commands a driver sent to that collection,
-   * another empties it beside collections of its own.
+   * The name of the outbox collection, for the few tests which need the name itself and
+   * not what is in it. One test counts the commands a driver sent to that collection.
+   * Another one empties it together with collections of its own.
    *
    * @return The collection the entries lie in
    */
@@ -291,8 +290,8 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * Every entry the outbox holds, waiting, dispatched and blocked alike. A dispatched
-   * entry is one of them because it stays until the retention passes.
+   * Every entry the outbox holds: waiting, dispatched and blocked ones. Dispatched
+   * entries are included, because they stay until the retention passes.
    *
    * @return The entries, in no particular order
    */
@@ -329,8 +328,8 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * The entry of one idempotency key, which is the one entry an operation may have while
-   * it waits.
+   * The entry of one idempotency key. While an operation waits, it may have only this one
+   * entry.
    *
    * @param idempotencyKey The key asked about
    * @return The entry, or nothing where no entry carries that key any more
@@ -345,8 +344,7 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * The entry of one id, which is what a test holds on to after it wrote an entry
-   * itself.
+   * The entry of one id. A test keeps the id after it wrote an entry itself.
    *
    * @param id The entry's own id
    * @return The entry, or nothing where it is gone
@@ -361,8 +359,8 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * The entries which were dispatched, for a test which wants to read one of them rather
-   * than count them.
+   * The entries which were dispatched, for a test which wants to read one of them and not
+   * only count them.
    *
    * @return The dispatched entries, in no particular order
    */
@@ -373,8 +371,8 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * Puts a lease on an entry, which is what a node holding it leaves in the document. A
-   * lease which ran out is what a node that died leaves behind.
+   * Puts a lease on an entry. A node which holds an entry leaves a lease in the document.
+   * A node which died leaves a lease which ran out.
    *
    * @param id The entry's own id
    * @param leasedBy The node holding it
@@ -400,9 +398,9 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * Does to an entry what the dispatch of ANOTHER node does to it: it claims the entry,
-   * which is what takes the lease away from the node still working on it, and then writes
-   * down that its own attempt got through.
+   * Does to an entry what the dispatch of ANOTHER node does to it. It claims the entry,
+   * and this takes the lease away from the node still working on it. Then it writes down
+   * that its own attempt got through.
    *
    * @param id The entry which changes hands
    * @param node The node taking it
@@ -439,8 +437,8 @@ public final class MongoPhaseTwoOutboxReader {
 
   /**
    * The question the poll of ANOTHER node asks: is there an entry which is due and which
-   * nobody holds? It is a read and not the claim itself, so asking changes nothing for
-   * the dispatcher under test.
+   * nobody holds? It only reads and does not claim. So asking changes nothing for the
+   * dispatcher under test.
    *
    * @return Whether another node would take an entry right now
    */
@@ -459,8 +457,8 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * How many entries wait for their dispatch. A blocked entry is not one of them: it
-   * waits for a person rather than for the next attempt.
+   * How many entries wait for their dispatch. Blocked entries do not count. They wait for
+   * a person, not for the next attempt.
    *
    * @return The number of waiting entries
    */
@@ -545,8 +543,8 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * Makes the entry of one idempotency key due, which is how a test brings back an entry
-   * a dispatch pushed into the future.
+   * Makes the entry of one idempotency key due. This is how a test brings back an entry
+   * which a dispatch pushed into the future.
    *
    * @param idempotencyKey The key of the entry
    */
@@ -562,9 +560,8 @@ public final class MongoPhaseTwoOutboxReader {
 
   /**
    * Puts every entry back into the state an operator leaves a repaired one in: waiting,
-   * without attempts, without a lease and due a minute ago. It is also what an entry
-   * another node wrote looks like from here, which is a document nothing told this node
-   * about.
+   * without attempts, without a lease, and due a minute ago. An entry written by another
+   * node looks the same from here. It is a document nobody told this node about.
    */
   public void openEveryEntryAgain() {
 
@@ -583,9 +580,9 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * Writes an entry which stays where it is: it waits, and the moment of its next attempt
-   * is the caller's to choose, so a test can put one an hour ahead and read what a store
-   * says about an entry nobody dispatches.
+   * Writes an entry which stays where it is. It waits, and the caller chooses the moment
+   * of its next attempt. So a test can put one an hour ahead and read what a store says
+   * about an entry nobody dispatches.
    *
    * @param id The entry's own id, which is also the key it deduplicates by
    * @param workflowModuleId The workflow module the call belongs to
@@ -593,8 +590,8 @@ public final class MongoPhaseTwoOutboxReader {
    * @param operation What the call does, as {@code PhaseOperation} names it
    * @param aggregateId The workflow aggregate the call belongs to
    * @param adapterId The adapter the call is meant for
-   * @param writtenAt The moment the entry counts as written, which is what its age is
-   *          measured from
+   * @param writtenAt The moment the entry counts as written. Its age is measured from
+   *          here
    * @param dueAt The moment the entry asks to be dispatched at
    */
   public void writeWaitingEntry(
@@ -612,8 +609,7 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * The same, for a test whose entry has to carry the arguments a real call would have
-   * handed over.
+   * The same, for a test whose entry has to carry the arguments of a real call.
    *
    * @param id The entry's own id, which is also the key it deduplicates by
    * @param workflowModuleId The workflow module the call belongs to
@@ -642,8 +638,8 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * The same, for a test which needs the entry to carry the key a real call would have
-   * derived rather than its own id.
+   * The same, for a test which needs the entry to carry the key a real call would derive,
+   * not its own id.
    *
    * @param id The entry's own id
    * @param workflowModuleId The workflow module the call belongs to
@@ -673,7 +669,7 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * The widest of them, which the others fill in for.
+   * The variant with all arguments. The others call it.
    *
    * @param id The entry's own id
    * @param workflowModuleId The workflow module the call belongs to
@@ -719,10 +715,10 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * Writes an entry which was dispatched already and is waiting for the retention to
-   * remove it. What a test needs it for is the key such an entry holds: a dispatched
-   * entry carries its own id as the key the unique index spans, so an entry whose id is
-   * that key cannot be marked.
+   * Writes an entry which was dispatched already and waits for the retention to remove
+   * it. A test needs it for the key such an entry holds. A dispatched entry carries its
+   * own id as the key the unique index spans. So an entry whose id is that key cannot be
+   * marked.
    *
    * @param id The entry's own id
    * @param workflowModuleId The workflow module the call belonged to
@@ -749,8 +745,8 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * The same, for an entry which carried arguments, the reference of a payload among
-   * them.
+   * The same, for an entry which carried arguments, for example the reference of a
+   * payload.
    *
    * @param id The entry's own id
    * @param workflowModuleId The workflow module the call belonged to
@@ -786,8 +782,8 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * Writes an entry the store put aside for a person. Nothing attempts it again, and no
-   * retention removes it, which is what a test about the housekeeping needs one for.
+   * Writes an entry the store put aside for a person. Nothing tries it again, and no
+   * retention removes it. A test about the housekeeping needs such an entry.
    *
    * @param id The entry's own id, which is also the key a blocked entry holds
    * @param workflowModuleId The workflow module the call belongs to
@@ -811,8 +807,8 @@ public final class MongoPhaseTwoOutboxReader {
     entryDocuments()
         .insertOne(
             entryDocument(id, workflowModuleId, bpmnProcessId, operation, aggregateId, adapterId, args)
-                // the key of a blocked entry is released the way a dispatched one
-                // releases it, so both carry their own id here
+                // A blocked entry releases its key the same way a dispatched one does.
+                // So both carry their own id here.
                 .append("dedupKey", id)
                 .append("status", blocked)
                 .append("createdAt", Date.from(writtenAt))
@@ -829,8 +825,8 @@ public final class MongoPhaseTwoOutboxReader {
    * @param bpmnProcessId The BPMN process the call belongs to
    * @param operation What the call does, as {@code PhaseOperation} names it
    * @param payload The bytes themselves
-   * @param writtenAt The moment the payload counts as written, which is what its age is
-   *          measured from
+   * @param writtenAt The moment the payload counts as written. Its age is measured from
+   *          here
    */
   public void writePayload(
       final String reference,
@@ -885,8 +881,8 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * Removes every entry and every payload, which is what a test leaves behind for the
-   * next one.
+   * Removes every entry and every payload, so a test leaves a clean outbox for the next
+   * one.
    */
   public void removeAllEntries() {
 
@@ -896,8 +892,8 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * The keys of the indexes over the outbox collection, which is what a test asks when
-   * the question is whether a read can use one.
+   * The keys of the indexes over the outbox collection. A test asks for them to find out
+   * whether a read can use an index.
    *
    * @return One document of keys per index
    */

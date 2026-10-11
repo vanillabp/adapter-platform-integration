@@ -14,26 +14,27 @@ import org.junit.jupiter.api.extension.ExtensionContext.Namespace;
 import org.junit.jupiter.api.extension.ExtensionContext.Store;
 
 /**
- * Keeps the output of a green build empty and replays the output of a red one, and hands
- * a test what was captured as a {@link CapturedOutput} parameter.
+ * Keeps the output of a green build empty and replays the output of a red one. It hands a
+ * test what was captured as a {@link CapturedOutput} parameter.
  * <p>
- * Every finished test is moved into the buffers of the class, so the two views of
- * {@link CapturedOutput} answer two different questions: what this class has printed so
- * far, and what the running test printed. Which one an assertion needs depends on whether
- * it looks for a sentence or for its absence. {@link CapturedOutput} says which is which.
+ * The output of every finished test moves into the buffers of the class. So the two views
+ * of {@link CapturedOutput} answer two different questions: what this class has printed
+ * so far, and what the running test printed. Which one an assertion needs depends on
+ * whether it looks for a sentence or for its absence. {@link CapturedOutput} says which
+ * is which.
  */
 public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallback, BeforeEachCallback, AfterEachCallback, ParameterResolver {
 
   /**
-   * Annotation to suppress output from background threads after all tests have completed.
-   * When present, output streams are redirected to a null output stream instead of being
-   * restored to the original streams. This prevents background threads (e.g., from
-   * Testcontainers or database drivers) from printing output after the test class finishes.
-   * Use on test classes together with {@code @ExtendWith(SuppressOutputExtension.class)}.
+   * Hides the output of background threads after all tests have finished. With this
+   * annotation, the output streams are not restored to the original streams. They are
+   * redirected to a stream which drops everything. So background threads, for example of
+   * Testcontainers or of database drivers, print nothing after the test class finished.
+   * Use it on test classes together with {@code @ExtendWith(SuppressOutputExtension.class)}.
    * <p>
-   * That null stream carries the console it hides, so a class running after this one in the
-   * same fork can still replay the output of a failing test to somewhere somebody reads it.
-   * See {@code SuppressOutputExtensionTest#aFailingClassIsReadableBehindASilencingClass}.
+   * That stream keeps the console it hides. So a class which runs after this one in the
+   * same fork can still replay the output of a failing test where somebody reads it. See
+   * {@code SuppressOutputExtensionTest#aFailingClassIsReadableBehindASilencingClass}.
    */
   @Target(ElementType.TYPE)
   @Retention(RetentionPolicy.RUNTIME)
@@ -60,9 +61,8 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
 
   /**
    * JUnit builds the extension for the test class it is registered on. A test neither
-   * creates it nor calls it: it writes
-   * {@code @ExtendWith(SuppressOutputExtension.class)} and takes a
-   * {@link CapturedOutput} parameter where it wants to read what was printed.
+   * creates it nor calls it. It writes {@code @ExtendWith(SuppressOutputExtension.class)}
+   * and takes a {@link CapturedOutput} parameter where it wants to read what was printed.
    */
   public SuppressOutputExtension() {
   }
@@ -83,12 +83,13 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
   }
 
   /**
-   * Configures the extension to suppress output from background threads after afterAll.
-   * Instead of restoring the original output streams, they are set to a null output stream.
+   * Makes the extension hide the output of background threads after afterAll. The original
+   * output streams are not restored. Instead, they are set to a stream which drops
+   * everything.
    * <p>
-   * Use this method when registering the extension programmatically via
-   * {@code @RegisterExtension}. For declarative usage with {@code @ExtendWith},
-   * use the {@link SuppressBackgroundOutput} annotation instead.
+   * Use this method when you register the extension in code with
+   * {@code @RegisterExtension}. With {@code @ExtendWith}, use the
+   * {@link SuppressBackgroundOutput} annotation instead.
    *
    * @return this extension instance for fluent configuration
    */
@@ -122,17 +123,17 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
   }
 
   /**
-   * Takes the output of the window between beforeAll and the first test out of the
-   * buffer the next test is about to replace.
+   * Saves the output printed between beforeAll and the first test. Without this, the next
+   * test would replace the buffer which holds it.
    * <p>
-   * A {@code @SpringBootTest} starts its application context in that window, and the
-   * lines it writes there often say why a test of the class went red. They used to be
-   * dropped, because each test starts with fresh buffers. They now go into the buffers
-   * of the class, so {@link CapturedOutput} shows them, and they are replayed in front
-   * of every failing test of the class.
+   * A {@code @SpringBootTest} starts its application context in that window. The lines it
+   * writes there often say why a test of the class went red. They used to be dropped,
+   * because each test starts with fresh buffers. Now they go into the buffers of the
+   * class. So {@link CapturedOutput} shows them, and they are replayed in front of every
+   * failing test of the class.
    * <p>
-   * Registering the extension per test method leaves the class buffers unused, so there
-   * is no such window and nothing to keep.
+   * If the extension is registered per test method, the class buffers are not used. Then
+   * there is no such window and nothing to keep.
    */
   private void keepWhatWasPrintedBeforeTheFirstTest() {
 
@@ -202,7 +203,6 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
     capturedOutput = new CapturedOutput(
         classLevelAllBuffer, allBuffer, classLevelOutBuffer, outBuffer, classLevelErrBuffer, errBuffer);
 
-    // Store CapturedOutput in context for test access
     getStore(context).put(CAPTURED_OUTPUT_KEY, capturedOutput);
 
   }
@@ -223,8 +223,8 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
     if (context.getExecutionException().isPresent()) {
       final var console = consoleBehind(originalOut);
       if (classLevel) {
-        // beforeAll or afterAll went wrong, which belongs to no single test: everything
-        // the class printed is a candidate for the reason
+        // beforeAll or afterAll went wrong. That belongs to no single test, so everything
+        // the class printed may hold the reason.
         console.println("---- Captured Output (class level) ----");
         console.println(classLevelAllBuffer.toString());
       } else {
@@ -236,8 +236,8 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
     }
 
     if (!classLevel) {
-      // what a test printed is kept by the class buffers now, and whatever is printed
-      // after the last test must not repeat the last test
+      // The class buffers now keep what a test printed. Whatever is printed after the
+      // last test must not repeat the last test.
       resetTestLevelBuffers();
     }
 
@@ -282,9 +282,10 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
   }
 
   /**
-   * Puts back exactly what was installed before this class started capturing, a stream
-   * silenced by an earlier class included: that class asked for its background threads to
-   * stay out of a green build, and it is still the one printing between the classes.
+   * Puts back exactly what was installed before this class started capturing. This
+   * includes a stream silenced by an earlier class. That class asked to keep its
+   * background threads out of a green build, and its threads still print between the
+   * classes.
    */
   private void restoreOriginalOutputStreams() {
 
@@ -301,15 +302,15 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
   }
 
   /**
-   * The console a failure is replayed to, which is not always the stream this class found
+   * The console a failure is replayed to. It is not always the stream this class found
    * installed.
    * <p>
-   * All test classes of a module share one fork, and a class annotated with
-   * {@link SuppressBackgroundOutput} deliberately leaves a stream behind which drops
-   * everything written to it. The next class finds that stream where the console used to be
-   * and would replay the reason for its red build into it, so a failing test would say
-   * nothing at all - which is why the silenced stream keeps a reference to what it hid and
-   * this method asks for it.
+   * All test classes of a module share one fork. A class annotated with
+   * {@link SuppressBackgroundOutput} leaves a stream behind on purpose, and this stream
+   * drops everything written to it. The next class finds that stream where the console
+   * used to be. It would replay the reason for its red build into it, so a failing test
+   * would say nothing at all. That is why the silenced stream keeps a reference to what it
+   * hid, and this method asks for it.
    *
    * @param stream What this class found installed when it started capturing
    * @return The stream somebody reads
@@ -324,8 +325,8 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
   }
 
   /**
-   * What a class silencing its background output leaves behind: everything written is
-   * dropped, and the console it replaced stays reachable for whoever comes next.
+   * What a class which silences its background output leaves behind. Everything written
+   * to it is dropped. The console it replaced stays reachable for whoever comes next.
    */
   private static class SilencedConsole extends PrintStream {
 
@@ -377,24 +378,23 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
   }
 
   /**
-   * Redirecting {@code System.out} is not enough for a test running under JBoss
-   * LogManager, which the Quarkus test modules install through the Surefire property
-   * {@code java.util.logging.manager}. A handler of that log manager holds the
-   * {@code System.out} it found when it was created, so everything logged through it goes
-   * to the real console no matter what this extension does afterwards. The augmentation
-   * line of a {@code QuarkusProdModeTest} and the Testcontainers lines came
-   * from there.
+   * Redirecting {@code System.out} is not enough for a test which runs under JBoss
+   * LogManager. The Quarkus test modules install it through the Surefire property
+   * {@code java.util.logging.manager}. A handler of that log manager keeps the
+   * {@code System.out} it found when it was created. So everything logged through it goes
+   * to the real console, whatever this extension does later. The augmentation line of a
+   * {@code QuarkusProdModeTest} and the Testcontainers lines came from there.
    * <p>
-   * Every stream handler reachable from the root logger is given a stream which resolves
-   * {@code System.out} at WRITE time, so it follows this extension into the capture buffer
-   * and back out when the streams are restored. Nothing has to be undone, and a failing
-   * class still replays what the application logged - which is the half a switched off
-   * console handler would have broken.
+   * So every stream handler reachable from the root logger gets a stream which looks up
+   * {@code System.out} at WRITE time. It follows this extension into the capture buffer,
+   * and back out when the streams are restored. Nothing has to be undone. A failing class
+   * still replays what the application logged. A console handler which was simply
+   * switched off would have broken that.
    * <p>
    * The walk goes through nested handlers, because Quarkus puts its console handler
-   * inside {@code QuarkusDelayedHandler} while the application boots. It runs on every
-   * capture, since handlers appear and are replaced during that boot, and it is
-   * idempotent. Where JBoss LogManager is absent, nothing happens at all.
+   * inside {@code QuarkusDelayedHandler} while the application starts. It runs on every
+   * capture, because handlers appear and are replaced during that start. Running it twice
+   * does no harm. Without JBoss LogManager, nothing happens at all.
    */
   private static void redirectJulConsoleHandlers() {
 
@@ -417,8 +417,8 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
       final int depth) {
 
     if ((handler == null) || (depth > 8)) {
-      // a handler nesting deeper than this is a cycle, and a cycle is not this
-      // extension's problem to solve
+      // A handler nested deeper than this is a cycle. Solving a cycle is not the job of
+      // this extension.
       return;
     }
     redirectIfStreamHandler(handler);
@@ -438,8 +438,8 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
           ? handlers
           : new java.util.logging.Handler[0];
     } catch (Exception e) {
-      // a handler without getHandlers(), or one refusing the call: it wraps nothing
-      // this extension could redirect
+      // A handler without getHandlers(), or one which refuses the call. It wraps nothing
+      // this extension could redirect.
       return new java.util.logging.Handler[0];
     }
 
@@ -452,7 +452,7 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
     try {
       setOutputStream = handler.getClass().getMethod("setOutputStream", OutputStream.class);
     } catch (NoSuchMethodException e) {
-      // not a stream handler: a file or a socket handler prints nowhere near the build log
+      // Not a stream handler. A file or socket handler prints nowhere near the build log.
       return;
     }
     try {
@@ -472,8 +472,8 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
   private static Object currentOutputStreamOf(
       final java.util.logging.Handler handler) {
 
-    // 'getOutputStream' is not public API of every version, and not knowing what is
-    // installed only costs one redundant redirect
+    // 'getOutputStream' is not public API in every version. Not knowing what is installed
+    // only costs one redirect too many.
     try {
       final var getOutputStream = handler.getClass().getMethod("getOutputStream");
       return getOutputStream.invoke(handler);
@@ -484,8 +484,9 @@ public class SuppressOutputExtension implements BeforeAllCallback, AfterAllCallb
   }
 
   /**
-   * Writes to whatever {@code System.out} is at the time of the write, and refuses to be
-   * closed: the handler owning it must not close a stream this extension restores.
+   * Writes to whatever {@code System.out} is at the time of the write. It refuses to be
+   * closed, because the handler which owns it must not close a stream this extension
+   * restores.
    */
   private static class CurrentSystemOut extends OutputStream {
 

@@ -32,10 +32,10 @@ import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.VanillaBp
 /**
  * The reader against a database in memory, once per outbox table it serves.
  * <p>
- * The tables are built here, in the shape the platform builds them, and they carry
- * names of this test. Which names the platform uses is not this test's question: the
- * reader takes them from the classes which declare them, and those are not on the
- * classpath of this module (see {@link PhaseTwoOutboxNames}).
+ * The tables are built here, in the shape the platform builds them, with names of this
+ * test. Which names the platform uses is not this test's question. The reader takes them
+ * from the classes which declare them, and those are not on the classpath of this module
+ * (see {@link PhaseTwoOutboxNames}).
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PhaseTwoOutboxReaderTest {
@@ -53,8 +53,8 @@ public class PhaseTwoOutboxReaderTest {
   private static final String BLOCKED_STATE = "BLOCKED";
 
   /**
-   * The two outbox tables VanillaBP writes into a relational database, each with what
-   * this test needs to build one and to put an entry into it.
+   * The two outbox tables VanillaBP writes into a relational database. Each has what this
+   * test needs to build the table and to put an entry into it.
    */
   private enum Shape {
 
@@ -149,9 +149,9 @@ public class PhaseTwoOutboxReaderTest {
                   VALUES (?, ?, ?, ?, ?)"""
                   .formatted(table.name()))) {
         insert.setString(1, id);
-        // the key VanillaBP deduplicates by, which is where the gruelbox table carries
-        // the process: operation, workflow module, process and aggregate, separated by
-        // vertical bars
+        // The key VanillaBP deduplicates by. The gruelbox table carries the process only
+        // there: operation, workflow module, process and aggregate, separated by vertical
+        // bars.
         insert.setString(2, keyOf(id, bpmnProcessId));
         insert.setBoolean(3, state == State.DISPATCHED);
         insert.setBoolean(4, state == State.BLOCKED);
@@ -162,9 +162,9 @@ public class PhaseTwoOutboxReaderTest {
     }
 
     /**
-     * The key both stores deduplicate an entry by: operation, workflow module, process
-     * and aggregate, separated by vertical bars. The entry's own id stands in for the
-     * aggregate, so two entries of one process keep two keys.
+     * The key both stores deduplicate an entry by: operation, workflow module, process and
+     * aggregate, separated by vertical bars. The entry's own id stands in for the
+     * aggregate. So two entries of one process have two keys.
      *
      * @param id The entry's own id
      * @param bpmnProcessId The process the entry belongs to
@@ -196,8 +196,8 @@ public class PhaseTwoOutboxReaderTest {
   @BeforeEach
   void aDatabaseOfItsOwn() {
 
-    // the tables are not emptied between test methods, so every method gets a database
-    // nobody else writes into
+    // The tables are not emptied between test methods. So every method gets a database
+    // nobody else writes into.
     final var database = new JdbcDataSource();
     database.setURL("jdbc:h2:mem:%s;DB_CLOSE_DELAY=-1".formatted(UUID.randomUUID()));
     dataSource = database;
@@ -450,8 +450,8 @@ public class PhaseTwoOutboxReaderTest {
 
     final var reader = readerOf(Shape.VANILLABP);
 
-    // what it does is a write, and what a test can read back is that it ran at all: the
-    // moment of the next attempt is not one this reader reports
+    // This is a write. A test can only read back that it ran at all, because this reader
+    // does not report the moment of the next attempt.
     reader.makeDueNow("START_WORKFLOW|a-module|AProcess|the-entry");
 
     assertEquals(1, reader.entries().size());
@@ -486,8 +486,8 @@ public class PhaseTwoOutboxReaderTest {
         .prepareStatement(
             "INSERT INTO %s (ID, BPMN_PROCESS_ID, STATUS, ATTEMPTS) VALUES ('an-entry', 'AProcess', 'SLEEPING', 0)"
                 .formatted(OUTBOX_OF_THIS_TEST))) {
-      // every other column is left out on purpose: what this case is about is the one
-      // value the state column holds
+      // Every other column is left out on purpose. This case is only about the value of
+      // the state column.
       insert.executeUpdate();
     }
 
@@ -520,9 +520,9 @@ public class PhaseTwoOutboxReaderTest {
 
     givenAnOutbox(Shape.VANILLABP);
 
-    // what an adapter repository looks like: the VanillaBP class which configures the
-    // gruelbox outbox is on its test classpath, the gruelbox library is not, so there is
-    // no name of a gruelbox table to ask this database about
+    // This is what an adapter repository looks like. The VanillaBP class which configures
+    // the gruelbox outbox is on its test classpath, but the gruelbox library is not. So
+    // there is no gruelbox table name to ask this database about.
     final var tableFound = PhaseTwoOutboxReader.outboxTableOf(dataSource, OUTBOX_OF_THIS_TEST, Optional.empty());
 
     assertEquals(OUTBOX_OF_THIS_TEST, tableFound);

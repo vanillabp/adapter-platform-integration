@@ -17,12 +17,12 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * The assertion is run against small repositories this test writes into a temporary
+ * The assertion runs against small repositories which this test writes into a temporary
  * directory, one per case.
  * <p>
- * The POMs are written and not checked in, because a file named {@code pom.xml} in the
- * source tree is read by every check which walks this repository. An example of the
- * mistake lying there would be reported as the mistake.
+ * The POMs are written by the test, not checked in. Every check which walks this
+ * repository reads each file named {@code pom.xml} in the source tree. An example of the
+ * mistake stored there would be reported as the mistake.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PublishedPomsTest {
@@ -713,9 +713,9 @@ public class PublishedPomsTest {
   }
 
   /**
-   * Runs something with the working directory the assertion reads set to the given
-   * directory. The property is put back afterwards, because every later test in this fork
-   * reads it too.
+   * Runs something while the working directory, which the assertion reads, is set to the
+   * given directory. The property is put back afterwards, because every later test in this
+   * fork reads it too.
    */
   private static AssertionError whileTheWorkingDirectoryIs(
       final Path directory,

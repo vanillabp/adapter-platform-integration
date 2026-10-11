@@ -29,13 +29,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 
 /**
  * What the extension promises: a green build says nothing, a red one says why. The classes
- * at the bottom are run through a launcher of their own, because both halves of that
- * promise depend on the order in which the classes and the tests of one fork run, and that
- * order is what a single test class cannot show.
+ * at the bottom run through a launcher of their own. Both halves of the promise depend on
+ * the order in which the classes and tests of one fork run. A single test class cannot
+ * show that order.
  * <p>
- * A build narrowed down with {@code -Dtest} runs those classes on their own, and their
- * failure then reads like a defect. Narrow a build down with {@code -pl} or {@code -rf}
- * instead. {@code CONTRIBUTING.md} says why the filter behaves that way.
+ * A build narrowed down with {@code -Dtest} runs those classes on their own. Their failure
+ * then looks like a defect. Narrow a build down with {@code -pl} or {@code -rf} instead.
+ * {@code CONTRIBUTING.md} says why the filter behaves that way.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SuppressOutputExtensionTest {
@@ -100,7 +100,7 @@ public class SuppressOutputExtensionTest {
 
     withTheConsoleReplacedBy(console, () -> {
       final var silencingRun = run(SilencesItsBackgroundOutput.class);
-      // what a thread of that class prints once the class itself has finished
+      // what a thread of that class prints after the class itself has finished
       System.out.println(WHAT_A_BACKGROUND_THREAD_PRINTS);
       System.err.println(WHAT_A_BACKGROUND_THREAD_PRINTS);
       return silencingRun;
@@ -203,8 +203,8 @@ public class SuppressOutputExtensionTest {
   }
 
   /**
-   * Runs classes with the console replaced by a buffer, which is what makes the replay of a
-   * failing class assertable: the extension writes that replay to whatever stood in for the
+   * Runs classes with the console replaced by a buffer. This lets the test check the replay
+   * of a failing class. The extension writes that replay to whatever stood in for the
    * console when the class started capturing.
    *
    * @param console Where the replay is expected to arrive
@@ -266,7 +266,7 @@ public class SuppressOutputExtensionTest {
   }
 
   /**
-   * Stands for the test classes of the adapters which carry the annotation because their
+   * Stands for the test classes of the adapters which carry the annotation, because their
    * containers keep printing after the class has finished.
    */
   @ExtendWith(SuppressOutputExtension.class)
@@ -297,7 +297,7 @@ public class SuppressOutputExtensionTest {
   }
 
   /**
-   * A class whose application context comes up before its first test and which then goes
+   * A class whose application context starts before its first test, and which then goes
    * red.
    */
   @ExtendWith(SuppressOutputExtension.class)
@@ -315,14 +315,14 @@ public class SuppressOutputExtensionTest {
   }
 
   /**
-   * Prints where a {@code @SpringBootTest} prints the start of its application context:
-   * when the instance of the first test is built, after the suppression started for the
-   * class and before the first test begins.
+   * Prints at the moment a {@code @SpringBootTest} prints the start of its application
+   * context: when the instance of the first test is built. That is after the suppression
+   * started for the class, and before the first test begins.
    * <p>
-   * Spring itself would be the better stand-in, but the {@code spring-test} on this
-   * module's classpath needs a newer JUnit than this module builds against, and its
-   * extension fails before it starts a context. The extension under test depends on the
-   * window, not on who fills it.
+   * Spring itself would stand in better. But the {@code spring-test} on this module's
+   * classpath needs a newer JUnit than this module builds against, and its extension fails
+   * before it starts a context. The extension under test depends on the window, not on who
+   * fills it.
    */
   static class StandsInForTheSpringExtension implements TestInstancePostProcessor {
 
@@ -362,9 +362,9 @@ public class SuppressOutputExtensionTest {
   }
 
   /**
-   * Two tests where the second asks about a sentence the first one printed. It is the
-   * shape which makes an absence assertion depend on the order of the tests, so the order
-   * is fixed here rather than left to the engine.
+   * Two tests, where the second asks about a sentence the first one printed. In this shape
+   * an assertion that a sentence is absent depends on the order of the tests. So the order
+   * is fixed here and not left to the engine.
    */
   @ExtendWith(SuppressOutputExtension.class)
   @TestMethodOrder(MethodOrderer.OrderAnnotation.class)

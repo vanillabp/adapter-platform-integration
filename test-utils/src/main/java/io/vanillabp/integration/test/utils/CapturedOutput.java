@@ -3,21 +3,20 @@ package io.vanillabp.integration.test.utils;
 import java.io.ByteArrayOutputStream;
 
 /**
- * Provides access to output captured by {@link SuppressOutputExtension}.
- * Can be injected as a test method parameter when using
- * {@code @ExtendWith(SuppressOutputExtension.class)}.
+ * The output captured by {@link SuppressOutputExtension}. A test method gets it as a
+ * parameter when the class uses {@code @ExtendWith(SuppressOutputExtension.class)}.
  * <p>
  * There are two views on that output, and they answer two different questions.
  * {@link #getAll()} and its two halves show everything the test class has printed so far,
- * the tests which already ran included. {@link #getAllOfThisTest()} and its two halves
+ * including the tests which already ran. {@link #getAllOfThisTest()} and its two halves
  * show only what the running test printed.
  * <p>
- * An assertion that a sentence IS there may use either view, because a sentence printed
- * anywhere in the class is still evidence that the code under test writes it. An
- * assertion that a sentence is NOT there has to use the view of the running test.
- * Over the whole class such an assertion also speaks for every other test of that class,
- * so it passes as long as the test which prints the sentence happens to run later.
- * Nothing guarantees that order and nothing fails when it changes.
+ * An assertion that a sentence IS there may use either view. A sentence printed anywhere
+ * in the class still proves that the code under test writes it. An assertion that a
+ * sentence is NOT there has to use the view of the running test. Over the whole class,
+ * such an assertion also covers every other test of that class. So it only passes as
+ * long as the test which prints the sentence happens to run later. Nothing guarantees
+ * that order, and nothing fails when it changes.
  */
 public class CapturedOutput implements CharSequence {
 
@@ -46,7 +45,7 @@ public class CapturedOutput implements CharSequence {
   }
 
   /**
-   * Returns all output of this test class so far (stdout and stderr combined), which
+   * Returns all output of this test class so far (stdout and stderr together). This
    * includes what the tests before this one printed.
    *
    * @return Everything printed since the class started, and an empty string where
@@ -59,7 +58,7 @@ public class CapturedOutput implements CharSequence {
   }
 
   /**
-   * Returns the stdout of this test class so far, which includes what the tests before
+   * Returns the stdout of this test class so far. This includes what the tests before
    * this one printed.
    *
    * @return The stdout half of {@link #getAll()}, and an empty string where nothing
@@ -72,7 +71,7 @@ public class CapturedOutput implements CharSequence {
   }
 
   /**
-   * Returns the stderr of this test class so far, which includes what the tests before
+   * Returns the stderr of this test class so far. This includes what the tests before
    * this one printed.
    *
    * @return The stderr half of {@link #getAll()}, and an empty string where nothing

@@ -12,9 +12,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 /**
  * What the guard around a guiding message sees, and what it leaves alone.
  * <p>
- * The shapes below are the ones the repository really holds. The first is the defect the
- * guard exists for, a text block pulled onto one line with its indentation still in it;
- * the others are the spaces somebody put there on purpose.
+ * The shapes below are the ones the repository really has. The first is the defect the
+ * guard exists for: a text block pulled onto one line, with its indentation still in it.
+ * The others are spaces somebody put there on purpose.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MessageConventionsTest {

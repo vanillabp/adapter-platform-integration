@@ -8,11 +8,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
- * The promise the class name makes: one port, and the same one every time it is asked.
+ * The promise of the class name: one port, and the same one on every call.
  * <p>
  * A test which configures a port and then connects to it reads both values from here. If
- * the second call ever answered a second port, that test would configure one application
- * and talk to nothing, and its own code would not show why.
+ * the second call ever returned another port, that test would configure one application
+ * and talk to nothing. Its own code would not show why.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OneFreePortPerJvmTest {

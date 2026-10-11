@@ -25,10 +25,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 /**
  * The reader against a database in memory.
  * <p>
- * The table is built here, in the shape the platform's JDBC store builds it, and it
- * carries a name of this test. Which name the platform uses is not this test's question:
- * the reader takes it from the class which owns the table, and that class is not on the
- * classpath of this module.
+ * The table is built here, in the shape the platform's JDBC store builds it, with a name
+ * of this test. Which name the platform uses is not this test's question. The reader
+ * takes it from the class which owns the table, and that class is not on the classpath
+ * of this module.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TaskDeliveryLogReaderTest {
@@ -54,8 +54,8 @@ public class TaskDeliveryLogReaderTest {
   @BeforeEach
   void aDatabaseOfItsOwn() throws Exception {
 
-    // the log is not emptied between test methods, so every method gets a database
-    // nobody else writes into
+    // The log is not emptied between test methods. So every method gets a database nobody
+    // else writes into.
     final var database = new JdbcDataSource();
     database.setURL("jdbc:h2:mem:%s;DB_CLOSE_DELAY=-1".formatted(UUID.randomUUID()));
     dataSource = database;
@@ -101,8 +101,8 @@ public class TaskDeliveryLogReaderTest {
   @DisplayName("A task carrying two records reports both, the newest first")
   public void aTaskCarryingTwoRecordsReportsBoth() throws Exception {
 
-    // one task, delivered twice: the BPMS handed it out again after its first turn was
-    // cancelled, and the second turn ran at another element of the model
+    // One task, delivered twice. The BPMS handed it out again after its first turn was
+    // cancelled, and the second turn ran at another element of the model.
     givenADelivery("the-older-key", "the-task", "instance-4711", "TheFirstTurn", A_MOMENT, null, "TASK");
     givenADelivery(
         "the-newer-key", "the-task", "instance-4711", "TheSecondTurn", A_MOMENT.plusSeconds(60), null, "TASK");
@@ -174,8 +174,8 @@ public class TaskDeliveryLogReaderTest {
   @DisplayName("A reader is built without the class which names the table, and only a question needs it")
   public void aReaderIsBuiltWithoutTheClassWhichNamesTheTable() {
 
-    // the platform class owning the table is not on the classpath of this module, which
-    // is what makes the point: building the reader asks for no name at all
+    // The platform class which owns the table is not on the classpath of this module.
+    // That proves the point: building the reader asks for no name at all.
     final var reader = TaskDeliveryLogReader.of(dataSource);
 
     final var noSuchClass = assertThrows(IllegalStateException.class, reader::deliveryLogTableName);

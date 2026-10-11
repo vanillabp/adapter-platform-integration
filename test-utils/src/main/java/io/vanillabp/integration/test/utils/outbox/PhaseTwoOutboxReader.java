@@ -16,35 +16,33 @@ import javax.sql.DataSource;
  * application under test.
  * <p>
  * A test asks for entries, their state and their attempts. It does not ask for columns,
- * and it never writes a table name down: the names come from the platform classes which
- * declare them (see {@link PhaseTwoOutboxNames}), so a rename of the platform is
- * followed in one file instead of in every repository which tests against a BPMS.
+ * and it never writes down a table name. The names come from the platform classes which
+ * declare them (see {@link PhaseTwoOutboxNames}). So when the platform renames one, only
+ * this file follows, not every repository which tests against a BPMS.
  * <p>
- * VanillaBP writes two outbox tables into a relational database, and this reader serves
- * both. A Spring Boot application with JPA runs the outbox of the gruelbox library; a
- * Quarkus application, and a Spring Boot application without JPA, run the table
- * VanillaBP writes itself. The two keep the state of an entry in different columns,
- * which is why the reader reports it as {@link State} rather than as the value a column
- * holds.
+ * VanillaBP writes one of two outbox tables into a relational database, and this reader
+ * serves both. A Spring Boot application with JPA runs the outbox of the gruelbox
+ * library. A Quarkus application, and a Spring Boot application without JPA, run the
+ * table VanillaBP writes itself. The two keep the state of an entry in different
+ * columns. So the reader reports it as {@link State}, not as the value of a column.
  * <p>
- * The reader asks the data source it was built with for a connection, and what it sees
- * then is what that data source hands out. A Quarkus data source enlists its connection
- * in the running JTA transaction, so a test reading while its own transaction is open
- * sees what that transaction wrote. A Spring Boot data source hands out a connection of
- * its own, so the same test sees what is committed; a Spring Boot test which wants to
- * read inside its transaction builds the reader with a
- * <code>TransactionAwareDataSourceProxy</code> around it.
+ * The reader asks its data source for a connection and sees what that data source hands
+ * out. A Quarkus data source adds its connection to the running JTA transaction. So a
+ * test which reads while its own transaction is open sees what that transaction wrote. A
+ * Spring Boot data source hands out a connection of its own, so the same test sees what
+ * is committed. A Spring Boot test which wants to read inside its transaction wraps the
+ * data source of the reader in a <code>TransactionAwareDataSourceProxy</code>.
  * <p>
- * Removing entries removes the payloads beside them. An entry which carries a payload
- * keeps it in a table of its own, and a test which took the entry away without the
- * payload would leave a row nothing points at any more (see
+ * Removing entries removes their payloads too. An entry with a payload keeps it in a
+ * table of its own. A test which removed the entry without the payload would leave a row
+ * nothing points at any more (see
  * {@code PhaseTwoOutboxReaderTest#removingTheEntriesOfAProcessRemovesItsPayloads}).
  */
 public final class PhaseTwoOutboxReader {
 
   /**
-   * Where an entry stands. Both outbox tables know these three states, each in a
-   * spelling of its own, and a test reads them in this one.
+   * Where an entry stands. Both outbox tables know these three states, each table in its
+   * own spelling. A test reads them in this one.
    */
   public enum State {
 
@@ -59,9 +57,8 @@ public final class PhaseTwoOutboxReader {
     DISPATCHED,
 
     /**
-     * The entry was put aside after too many failed attempts, or after one attempt
-     * whose failure would not be fixed by repeating it. Nothing attempts it again, a
-     * person has to.
+     * The entry was put aside after too many failed attempts, or after one attempt whose
+     * failure a repeat would not fix. Nothing tries it again. A person has to.
      */
     BLOCKED
 
@@ -71,14 +68,14 @@ public final class PhaseTwoOutboxReader {
    * One entry of the outbox, with what a test asks about it.
    * <p>
    * The four names below the attempts are columns of the table VanillaBP writes itself.
-   * The gruelbox table has none of them, because gruelbox stores a call as one
-   * serialized invocation, so an entry read from it answers <code>null</code> to each of
-   * them. Its key is the one thing it does carry, under a name of its own.
+   * The gruelbox table has none of them, because gruelbox stores a call as one serialized
+   * invocation. So an entry read from it answers <code>null</code> for each of them. It
+   * only carries its key, in a column of another name.
    *
    * @param id The entry's own id, as the outbox table holds it
    * @param state Where the entry stands
-   * @param attempts How often a dispatch took the entry - counted when the dispatch
-   *          claims it, so an entry being dispatched right now already carries one
+   * @param attempts How often a dispatch took the entry. It is counted when the dispatch
+   *          claims the entry, so an entry being dispatched right now already has one
    * @param workflowModuleId The workflow module the call belongs to, <code>null</code>
    *          on the gruelbox table
    * @param bpmnProcessId The BPMN process the call belongs to, <code>null</code> on the
@@ -137,7 +134,7 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * One payload row, which is where the bytes of a call lie while its entry waits.
+   * One payload row. It holds the bytes of a call while the call's entry waits.
    *
    * @param reference What the entry names the payload by
    * @param workflowModuleId The workflow module the call belongs to
@@ -149,7 +146,7 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * One of the two outbox tables, asked the questions which differ between them.
+   * One of the two outbox tables. It answers the questions which differ between them.
    */
   sealed interface OutboxTable permits VanillaBpOutboxTable, GruelboxOutboxTable {
 
@@ -206,9 +203,9 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * What a test is told when it asks the gruelbox table to be written. Nothing here can
-   * write it: gruelbox serializes a whole invocation into one column, and a row this
-   * class built would not be a call gruelbox can dispatch.
+   * What a test is told when it asks to write into the gruelbox table. Nothing here can
+   * write it. Gruelbox serializes a whole invocation into one column. A row built by this
+   * class would not be a call gruelbox can dispatch.
    *
    * @param what The statement which was asked for
    * @return The failure to throw
@@ -228,7 +225,7 @@ public final class PhaseTwoOutboxReader {
 
   /**
    * The table VanillaBP writes itself. It holds the state in one column and the BPMN
-   * process in another, so both questions are answered by the columns they are about.
+   * process in another. So each question is answered by the column it is about.
    *
    * @param name The table
    * @param waiting What the state column holds while the entry waits
@@ -306,7 +303,7 @@ public final class PhaseTwoOutboxReader {
      * @param state What the state column holds
      * @return The state a test reads
      * @throws IllegalStateException If the column holds something this reader does not
-     *         know - which is a state the platform added without telling this class
+     *         know. That is a state the platform added without telling this class
      */
     private State stateOf(
         final String state) {
@@ -331,17 +328,16 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * The table of the gruelbox library, which a Spring Boot application with JPA runs.
-   * It keeps the state in two flags rather than in one column, and it does not hold the
-   * BPMN process in a column at all: gruelbox stores a call as a serialized invocation.
-   * So the entries of one process are found by the key VanillaBP deduplicates them by,
-   * which carries the process between two vertical bars.
+   * The table of the gruelbox library, which a Spring Boot application with JPA runs. It
+   * keeps the state in two flags, not in one column. It does not hold the BPMN process in
+   * a column at all, because gruelbox stores a call as a serialized invocation. So the
+   * entries of one process are found by the key VanillaBP deduplicates them by. That key
+   * carries the process between two vertical bars.
    * <p>
-   * Two kinds of entry are therefore not found by their process, and a test which needs
-   * them reads {@link PhaseTwoOutboxReader#entries()} instead. An operation which is
-   * never deduplicated, such as a broadcast signal, has no key at all. And a key too
-   * long for the column is stored as a hash of itself, which no longer reads as the
-   * process it was built from.
+   * So two kinds of entry are not found by their process. A test which needs them reads
+   * {@link PhaseTwoOutboxReader#entries()} instead. An operation which is never
+   * deduplicated, such as a broadcast signal, has no key at all. And a key too long for
+   * the column is stored as its hash, which no longer shows the process.
    *
    * @param name The table
    */
@@ -435,8 +431,8 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * The reader for an application whose outbox is the one of the gruelbox library,
-   * which is what a Spring Boot application with JPA runs.
+   * The reader for an application which runs the outbox of the gruelbox library. A
+   * Spring Boot application with JPA runs that one.
    *
    * @param dataSource The database of the application under test
    * @return The reader
@@ -450,8 +446,8 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * The reader for an application whose outbox is the table VanillaBP writes itself,
-   * which is what Quarkus applications and Spring Boot applications without JPA run.
+   * The reader for an application which runs the table VanillaBP writes itself. Quarkus
+   * applications and Spring Boot applications without JPA run that one.
    *
    * @param dataSource The database of the application under test
    * @return The reader
@@ -467,8 +463,8 @@ public final class PhaseTwoOutboxReader {
   /**
    * The reader for an application which gave the two tables names of its own
    * (<code>vanillabp.outbox.jdbc.table</code> and
-   * <code>vanillabp.outbox.jdbc.payload-table</code>). Only the names differ, so
-   * everything read from such a table is read the same way.
+   * <code>vanillabp.outbox.jdbc.payload-table</code>). Only the names differ, so such a
+   * table is read the same way.
    *
    * @param dataSource The database of the application under test
    * @param outboxTable The table the application configured for its entries
@@ -488,9 +484,9 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * The reader for the outbox this database holds, for a test which does not want to
-   * say which one its application runs. An application which cannot run the gruelbox
-   * outbox at all is served by the table VanillaBP writes itself, without being asked.
+   * The reader for the outbox this database holds, for a test which does not want to say
+   * which one its application runs. If the application cannot run the gruelbox outbox at
+   * all, the reader takes the table VanillaBP writes itself without asking.
    *
    * @param dataSource The database of the application under test
    * @return The reader
@@ -504,8 +500,8 @@ public final class PhaseTwoOutboxReader {
         dataSource,
         vanillaBpTable,
         PhaseTwoOutboxNames.gruelboxOutboxTableIfThisApplicationCanRunIt());
-    // the name is the whole answer: the gruelbox table is the only other one this
-    // reader looks for
+    // The name is the whole answer. The gruelbox table is the only other table this
+    // reader looks for.
     return tableInThisDatabase.equals(vanillaBpTable)
         ? ofTheVanillaBpOutbox(dataSource)
         : ofTheGruelboxOutbox(dataSource);
@@ -513,15 +509,15 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * Picks the outbox by the table which is there and answers with the name of that
-   * table. Two table names are all this question needs, so nothing else is fetched from
-   * the platform before it is answered - what the reader needs to read the table it
-   * found comes afterwards, from the factory method for that outbox. A name nobody
-   * needs must not be the reason a test fails in its setup.
+   * Picks the outbox by the table which is there, and answers with the name of that
+   * table. This question needs only two table names. So nothing else is fetched from the
+   * platform before the answer. What the reader needs to read the table comes later,
+   * from the factory method for that outbox. A name nobody needs must not make a test
+   * fail in its setup.
    * <p>
-   * Both tables in one database is a question this cannot answer: an application which
-   * creates the whole VanillaBP schema has the table of VanillaBP's own outbox even
-   * while it runs gruelbox.
+   * This cannot decide between two tables in one database. An application which creates
+   * the whole VanillaBP schema has the table of VanillaBP's own outbox, even while it
+   * runs gruelbox.
    *
    * @param dataSource The database of the application under test
    * @param vanillaBpTable The table VanillaBP writes itself
@@ -586,9 +582,9 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * The table VanillaBP's own outbox writes as long as the application does not
-   * configure a name of its own. A test which DOES configure one asks for this name to
-   * say that the default table was not created beside it.
+   * The table VanillaBP's own outbox writes when the application configures no name of
+   * its own. A test which DOES configure one asks for this name. It checks that the
+   * default table was not created as well.
    *
    * @return The table
    */
@@ -599,8 +595,7 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * The table the payloads lie in as long as the application does not configure a name
-   * of its own.
+   * The table the payloads lie in when the application configures no name of its own.
    *
    * @return The table
    */
@@ -611,7 +606,7 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * Every entry of the outbox, dispatched ones included: an entry stays in the table
+   * Every entry of the outbox, dispatched ones included. An entry stays in the table
    * until the retention passes.
    *
    * @return The entries, in no particular order
@@ -638,16 +633,16 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * How many entries wait for their dispatch. A blocked entry is not one of them: it
-   * waits for a person rather than for the next attempt.
+   * How many entries wait for their dispatch. Blocked entries do not count. They wait for
+   * a person, not for the next attempt.
    *
    * @return The number of waiting entries
    */
   public long entriesWaiting() {
 
-    // counted over the entries rather than by a statement of its own: a test database
-    // holds a handful of rows, and one statement less is one statement to keep in step
-    // with two tables
+    // Counted over the entries, not by a statement of its own. A test database holds a
+    // handful of rows. And each statement less is one less to keep in step with two
+    // tables.
     return entries()
         .stream()
         .filter(Entry::isWaiting)
@@ -656,8 +651,8 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * The payloads waiting in the table beside the entries. An application whose calls
-   * never carry one has no such table, and then there is nothing to report either.
+   * The payloads waiting in their table next to the entries. An application whose calls
+   * never carry a payload has no such table. Then there is nothing to report.
    *
    * @return The payloads, in no particular order
    */
@@ -686,8 +681,8 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * Makes the entry of one idempotency key due, which is how a test brings back an entry
-   * a dispatch pushed into the future.
+   * Makes the entry of one idempotency key due. This is how a test brings back an entry
+   * which a dispatch pushed into the future.
    *
    * @param idempotencyKey The key of the entry
    */
@@ -700,9 +695,8 @@ public final class PhaseTwoOutboxReader {
 
   /**
    * Puts every entry back into the state an operator leaves a repaired one in: waiting,
-   * without attempts, without a lease and due a minute ago. It is also what an entry
-   * another node wrote looks like from here, which is a row nothing told this node
-   * about.
+   * without attempts, without a lease, and due a minute ago. An entry written by another
+   * node looks the same from here. It is a row nobody told this node about.
    */
   public void openEveryEntryAgain() {
 
@@ -711,17 +705,17 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * Writes an entry which stays where it is: it waits, and the moment of its next
-   * attempt is the caller's to choose, so a test can put one an hour ahead and read what
-   * a store says about an entry nobody dispatches.
+   * Writes an entry which stays where it is. It waits, and the caller chooses the moment
+   * of its next attempt. So a test can put one an hour ahead and read what a store says
+   * about an entry nobody dispatches.
    *
    * @param id The entry's own id, which is also the key it deduplicates by
    * @param workflowModuleId The workflow module the call belongs to
    * @param bpmnProcessId The BPMN process the call belongs to
    * @param operation What the call does, as {@code PhaseOperation} names it
    * @param aggregateId The workflow aggregate the call belongs to
-   * @param writtenAt The moment the entry counts as written, which is what its age is
-   *          measured from
+   * @param writtenAt The moment the entry counts as written. Its age is measured from
+   *          here
    * @param dueAt The moment the entry asks to be dispatched at
    */
   public void writeWaitingEntry(
@@ -749,10 +743,10 @@ public final class PhaseTwoOutboxReader {
   /**
    * Removes the entries of one BPMN process, and the payloads they name.
    * <p>
-   * The payloads go by the process they were written for, which is a column of their
-   * own table. In the gruelbox table an entry without a key is not found by its
-   * process, so a call which is never deduplicated, such as a broadcast signal, keeps
-   * its entry here while its payload goes. A test which plans such a call calls
+   * The payloads are removed by the process they were written for. Their own table has a
+   * column for it. In the gruelbox table, an entry without a key is not found by its
+   * process. So a call which is never deduplicated, such as a broadcast signal, keeps its
+   * entry here while its payload goes. A test which plans such a call calls
    * {@link #removeAllEntries()} instead.
    *
    * @param bpmnProcessId The process whose entries go
@@ -768,8 +762,8 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * Removes every entry and every payload, which is what a test leaves behind for the
-   * next one.
+   * Removes every entry and every payload, so a test leaves a clean outbox for the next
+   * one.
    */
   public void removeAllEntries() {
 
@@ -780,7 +774,7 @@ public final class PhaseTwoOutboxReader {
 
   /**
    * Removes payload rows. An application whose calls never carry a payload has no such
-   * table, and then there is nothing to remove either.
+   * table. Then there is nothing to remove.
    *
    * @param where What narrows the delete down, empty for all rows
    * @param binding What to bind to the parameter of the condition, <code>null</code>
@@ -851,10 +845,9 @@ public final class PhaseTwoOutboxReader {
   }
 
   /**
-   * Whether the database holds a table of that name. The question is asked as a select
-   * rather than through the metadata of the driver, because a metadata lookup has to
-   * spell the name the way the database stores it, and every database stores it
-   * differently.
+   * Whether the database holds a table of that name. It asks with a select, not through
+   * the metadata of the driver. A metadata lookup has to spell the name the way the
+   * database stores it, and every database stores it differently.
    *
    * @param dataSource The database of the application under test
    * @param tableName The table asked about
