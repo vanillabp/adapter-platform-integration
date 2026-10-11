@@ -5,34 +5,35 @@ import java.util.Map;
 /**
  * What an application says about ONE workflow, which is one BPMN process of one workflow
  * module (properties section
- * <code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.*</code>, the
- * key being the plain BPMN process id).
+ * <code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.*</code>, where
+ * the key is the plain BPMN process id).
  * <p>
- * This is the third of the four levels an adapter setting may be written at, between the
- * workflow module and the single task (decision 7 in the repository's DECISIONS.md), and it
+ * This is the third of the four levels at which an adapter setting may be written, between
+ * the workflow module and the single task (decision 7 in the repository's DECISIONS.md). It
  * is the only level at which a workflow may be allowed to hand its whole aggregate to the
  * BPMS.
  */
 public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
 
   /**
-   * The BPMN process id this section is about, taken from the key the application wrote it
-   * under. Written by {@link MigrationAdapterProperties#validateAndLink()} rather than by
-   * the binder, so a section which was built by hand carries it only after that call.
+   * The BPMN process id which this section is about, taken from the key under which the
+   * application wrote it. Written by {@link MigrationAdapterProperties#validateAndLink()}
+   * rather than by the binder, so a section which was built by hand carries it only after
+   * that call.
    */
   String bpmnProcessId;
 
   /**
-   * The workflow module this workflow belongs to - the way back up, which is what lets a
+   * The workflow module to which this workflow belongs. This is the way back up, which lets a
    * message about this workflow name its module. Written by
    * {@link MigrationAdapterProperties#validateAndLink()} like the id above.
    */
   WorkflowModuleAdapterProperties workflowModule;
 
   /**
-   * The empty section a configuration binder starts from, one per configured workflow:
-   * both platforms create the object and then write the keys the application configured
-   * into it, one setter per key.
+   * The empty section from which a configuration binder starts, one per configured workflow.
+   * Both platforms create the object, and then write the keys which the application
+   * configured into it, one setter per key.
    * <p>
    * It asks the builder for the values, and that is not a detour. Every default of this class
    * is on the builder as well as on the field, and both ways into an object end here. A
@@ -51,55 +52,54 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   private Map<String, AdapterProperties> adapters = Map.of();
 
   /**
-   * The properties of the workflow's BPMN tasks. Keys are the task IDs (task
-   * definitions), and what may stand below one of them is {@link TaskAdapterProperties} -
-   * the most specific level of the four.
+   * The properties of the workflow's BPMN tasks. The keys are the task IDs (task
+   * definitions). What may stand below one of them is {@link TaskAdapterProperties}, the most
+   * specific level of the four.
    */
   private Map<String, TaskAdapterProperties> tasks = Map.of();
 
   /**
-   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow -
-   * what an extension is told about ONE BPMN process, which is the level below the
-   * workflow module. Keys are the extension ids, and a key the workflow says nothing
-   * about keeps what the workflow module or the global section says (see
+   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow. That
+   * is what an extension is told about ONE BPMN process, the level below the workflow module.
+   * The keys are the extension ids. A key about which the workflow says nothing keeps what
+   * the workflow module or the global section says (see
    * {@link MigrationAdapterProperties#resolveForExtension}).
    */
   private Map<String, Map<String, String>> extensions = Map.of();
 
   /**
-   * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS - the one
-   * place this permission may be written, see decision 66 in the repository's
-   * DECISIONS.md. An aggregate which keeps nothing back ends the startup until this
-   * stands at the workflow it is about.
+   * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS. This is the one
+   * place where this permission may be written, see decision 66 in the repository's
+   * DECISIONS.md. An aggregate which keeps nothing back ends the startup, until this stands
+   * at the workflow which it is about.
    */
   private Boolean allowFullSyncWithBpms;
 
   /**
    * Whether the expressions of this workflow's BPMN model are meant as they are
-   * (<code>accept-expressions-in-the-model</code>) - the most specific of the three
-   * levels it may be written at, and the level the startup message hands out.
+   * (<code>accept-expressions-in-the-model</code>). This is the most specific of the three
+   * levels at which it may be written, and the level which the startup message names.
    */
   private Boolean acceptExpressionsInTheModel;
 
   /**
-   * The values of the workflow aggregate this workflow declares for the BPMS
+   * The values of the workflow aggregate which this workflow declares for the BPMS
    * (<code>declared-aggregate-values</code>). An entry names a path in the aggregate:
-   * <code>amount</code> is the attribute itself, <code>shipping.*</code> is every value
-   * below <code>shipping</code>, and <code>shipping.express</code> is one value below it.
+   * <code>amount</code> is the attribute itself, <code>shipping.*</code> is every value below
+   * <code>shipping</code>, and <code>shipping.express</code> is one value below it.
    * <p>
-   * An entry says that the developer looked at the value, which is what lets a value whose
-   * type is neither a <code>boolean</code> nor a text reach the BPMS. It may also say what
-   * is shared while the path does not resolve, as in
-   * <code>shipping.express=false</code>.
+   * An entry says that the developer looked at the value. That lets a value reach the BPMS
+   * whose type is neither a <code>boolean</code> nor a text. An entry may also say what is
+   * shared while the path does not resolve, as in <code>shipping.express=false</code>.
    * <p>
-   * Read at the workflow, because the values belong to the aggregate of one workflow.
+   * It is read at the workflow, because the values belong to the aggregate of one workflow.
    */
   private java.util.List<String> declaredAggregateValues;
 
   /**
    * The <code>&#64;TaskParam</code> parameters of this workflow whose type the developer
-   * declared (<code>declared-task-params</code>), by the name the input mapping gives the
-   * value. The most specific level wins: the task, then the workflow, then the workflow
+   * declared (<code>declared-task-params</code>), by the name which the input mapping gives
+   * the value. The most specific level wins: the task, then the workflow, then the workflow
    * module, then the application.
    */
   private java.util.List<String> declaredTaskParams;
@@ -114,9 +114,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
 
   /**
    * Overrides <code>vanillabp.delivery</code> for this workflow. Only the settings which
-   * belong to a single workflow are read here - the maximum age of an open task, since
-   * one process may wait for a partner for weeks while every other one is done in
-   * minutes.
+   * belong to a single workflow are read here: the maximum age of an open task. One process
+   * may wait for a partner for weeks, while every other one is done in minutes.
    */
   private DeliveryProperties delivery;
 
@@ -131,13 +130,13 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   public abstract static class WorkflowAdapterPropertiesBuilder<C extends WorkflowAdapterProperties, B extends WorkflowAdapterProperties.WorkflowAdapterPropertiesBuilder<C, B>> extends AdaptersConfigurationProperties.AdaptersConfigurationPropertiesBuilder<C, B> {
 
     /**
-     * The BPMN process id this section is about, taken from the key the application
-     * wrote it under.
+     * The BPMN process id which this section is about, taken from the key under which the
+     * application wrote it.
      */
     private String bpmnProcessId;
 
     /**
-     * The workflow module this workflow belongs to - the way back up, which is what lets
+     * The workflow module to which this workflow belongs. This is the way back up, which lets
      * a message about this workflow name its module.
      */
     private WorkflowModuleAdapterProperties workflowModule;
@@ -155,36 +154,36 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     private Map<String, TaskAdapterProperties> tasks = Map.of();
 
     /**
-     * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow -
-     * what an extension is told about ONE BPMN process, which is the level below the workflow
+     * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow. That
+     * is what an extension is told about ONE BPMN process, the level below the workflow
      * module. The builder starts from the same value as the field.
      */
     private Map<String, Map<String, String>> extensions = Map.of();
 
     /**
-     * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS - the one
-     * place this permission may be written, see decision 66 in the repository's
+     * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS. This is the
+     * one place where this permission may be written, see decision 66 in the repository's
      * DECISIONS.md.
      */
     private Boolean allowFullSyncWithBpms;
 
     /**
      * Whether the expressions of this workflow's BPMN model are meant as they are
-     * (<code>accept-expressions-in-the-model</code>) - the most specific of the three
-     * levels it may be written at, and the level the startup message hands out.
+     * (<code>accept-expressions-in-the-model</code>). This is the most specific of the three
+     * levels at which it may be written, and the level which the startup message names.
      */
     private Boolean acceptExpressionsInTheModel;
 
     /**
-     * The values of the workflow aggregate this workflow declares for the BPMS
+     * The values of the workflow aggregate which this workflow declares for the BPMS
      * (<code>declared-aggregate-values</code>).
      */
     private java.util.List<String> declaredAggregateValues;
 
     /**
-     * The <code>&#64;TaskParam</code> parameters of this workflow whose type the
-     * developer declared (<code>declared-task-params</code>), by the name the input
-     * mapping gives the value.
+     * The <code>&#64;TaskParam</code> parameters of this workflow whose type the developer
+     * declared (<code>declared-task-params</code>), by the name which the input mapping gives
+     * the value.
      */
     private java.util.List<String> declaredTaskParams;
 
@@ -209,8 +208,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     }
 
     /**
-     * The BPMN process id this section is about, taken from the key the application
-     * wrote it under.
+     * The BPMN process id which this section is about, taken from the key under which the
+     * application wrote it.
      *
      * @param bpmnProcessId The value of {@link #bpmnProcessId}
      * @return This builder, so the calls chain
@@ -224,7 +223,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     }
 
     /**
-     * The workflow module this workflow belongs to - the way back up, which is what lets
+     * The workflow module to which this workflow belongs. This is the way back up, which lets
      * a message about this workflow name its module.
      *
      * @param workflowModule The value of {@link #workflowModule}
@@ -267,9 +266,9 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     }
 
     /**
-     * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow
-     * - what an extension is told about ONE BPMN process, which is the level below the
-     * workflow module.
+     * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow. That
+     * is what an extension is told about ONE BPMN process, the level below the workflow
+     * module.
      *
      * @param extensions The value of {@link #extensions}
      * @return This builder, so the calls chain
@@ -283,8 +282,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     }
 
     /**
-     * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS - the one
-     * place this permission may be written, see decision 66 in the repository's
+     * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS. This is the
+     * one place where this permission may be written, see decision 66 in the repository's
      * DECISIONS.md.
      *
      * @param allowFullSyncWithBpms The value of {@link #allowFullSyncWithBpms}
@@ -300,8 +299,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
 
     /**
      * Whether the expressions of this workflow's BPMN model are meant as they are
-     * (<code>accept-expressions-in-the-model</code>) - the most specific of the three
-     * levels it may be written at, and the level the startup message hands out.
+     * (<code>accept-expressions-in-the-model</code>). This is the most specific of the three
+     * levels at which it may be written, and the level which the startup message names.
      *
      * @param acceptExpressionsInTheModel The value of
      * {@link #acceptExpressionsInTheModel}
@@ -316,7 +315,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     }
 
     /**
-     * The values of the workflow aggregate this workflow declares for the BPMS
+     * The values of the workflow aggregate which this workflow declares for the BPMS
      * (<code>declared-aggregate-values</code>).
      *
      * @param declaredAggregateValues The value of {@link #declaredAggregateValues}
@@ -331,9 +330,9 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     }
 
     /**
-     * The <code>&#64;TaskParam</code> parameters of this workflow whose type the
-     * developer declared (<code>declared-task-params</code>), by the name the input
-     * mapping gives the value.
+     * The <code>&#64;TaskParam</code> parameters of this workflow whose type the developer
+     * declared (<code>declared-task-params</code>), by the name which the input mapping gives
+     * the value.
      *
      * @param declaredTaskParams The value of {@link #declaredTaskParams}
      * @return This builder, so the calls chain
@@ -521,8 +520,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   }
 
   /**
-   * The BPMN process id this section is about, taken from the key the application wrote
-   * it under.
+   * The BPMN process id which this section is about, taken from the key under which the
+   * application wrote it.
    *
    * @return The value of {@link #bpmnProcessId}
    */
@@ -533,7 +532,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   }
 
   /**
-   * The workflow module this workflow belongs to - the way back up, which is what lets a
+   * The workflow module to which this workflow belongs. This is the way back up, which lets a
    * message about this workflow name its module.
    *
    * @return The value of {@link #workflowModule}
@@ -567,9 +566,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   }
 
   /**
-   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow -
-   * what an extension is told about ONE BPMN process, which is the level below the
-   * workflow module.
+   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow. That
+   * is what an extension is told about ONE BPMN process, the level below the workflow module.
    *
    * @return The value of {@link #extensions}
    */
@@ -580,8 +578,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   }
 
   /**
-   * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS - the one
-   * place this permission may be written, see decision 66 in the repository's
+   * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS. This is the one
+   * place where this permission may be written, see decision 66 in the repository's
    * DECISIONS.md.
    *
    * @return The value of {@link #allowFullSyncWithBpms}
@@ -594,8 +592,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
 
   /**
    * Whether the expressions of this workflow's BPMN model are meant as they are
-   * (<code>accept-expressions-in-the-model</code>) - the most specific of the three
-   * levels it may be written at, and the level the startup message hands out.
+   * (<code>accept-expressions-in-the-model</code>). This is the most specific of the three
+   * levels at which it may be written, and the level which the startup message names.
    *
    * @return The value of {@link #acceptExpressionsInTheModel}
    */
@@ -606,7 +604,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   }
 
   /**
-   * The values of the workflow aggregate this workflow declares for the BPMS
+   * The values of the workflow aggregate which this workflow declares for the BPMS
    * (<code>declared-aggregate-values</code>).
    *
    * @return The value of {@link #declaredAggregateValues}
@@ -619,7 +617,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
 
   /**
    * The <code>&#64;TaskParam</code> parameters of this workflow whose type the developer
-   * declared (<code>declared-task-params</code>), by the name the input mapping gives
+   * declared (<code>declared-task-params</code>), by the name which the input mapping gives
    * the value.
    *
    * @return The value of {@link #declaredTaskParams}
@@ -656,8 +654,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   }
 
   /**
-   * The BPMN process id this section is about, taken from the key the application wrote
-   * it under.
+   * The BPMN process id which this section is about, taken from the key under which the
+   * application wrote it.
    *
    * @param bpmnProcessId The value of {@link #bpmnProcessId}
    */
@@ -669,7 +667,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   }
 
   /**
-   * The workflow module this workflow belongs to - the way back up, which is what lets a
+   * The workflow module to which this workflow belongs. This is the way back up, which lets a
    * message about this workflow name its module.
    *
    * @param workflowModule The value of {@link #workflowModule}
@@ -706,9 +704,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   }
 
   /**
-   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow -
-   * what an extension is told about ONE BPMN process, which is the level below the
-   * workflow module.
+   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow. That
+   * is what an extension is told about ONE BPMN process, the level below the workflow module.
    *
    * @param extensions The value of {@link #extensions}
    */
@@ -720,8 +717,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   }
 
   /**
-   * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS - the one
-   * place this permission may be written, see decision 66 in the repository's
+   * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS. This is the one
+   * place where this permission may be written, see decision 66 in the repository's
    * DECISIONS.md.
    *
    * @param allowFullSyncWithBpms The value of {@link #allowFullSyncWithBpms}
@@ -735,8 +732,8 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
 
   /**
    * Whether the expressions of this workflow's BPMN model are meant as they are
-   * (<code>accept-expressions-in-the-model</code>) - the most specific of the three
-   * levels it may be written at, and the level the startup message hands out.
+   * (<code>accept-expressions-in-the-model</code>). This is the most specific of the three
+   * levels at which it may be written, and the level which the startup message names.
    *
    * @param acceptExpressionsInTheModel The value of {@link #acceptExpressionsInTheModel}
    */
@@ -748,7 +745,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   }
 
   /**
-   * The values of the workflow aggregate this workflow declares for the BPMS
+   * The values of the workflow aggregate which this workflow declares for the BPMS
    * (<code>declared-aggregate-values</code>).
    *
    * @param declaredAggregateValues The value of {@link #declaredAggregateValues}
@@ -762,7 +759,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
 
   /**
    * The <code>&#64;TaskParam</code> parameters of this workflow whose type the developer
-   * declared (<code>declared-task-params</code>), by the name the input mapping gives
+   * declared (<code>declared-task-params</code>), by the name which the input mapping gives
    * the value.
    *
    * @param declaredTaskParams The value of {@link #declaredTaskParams}

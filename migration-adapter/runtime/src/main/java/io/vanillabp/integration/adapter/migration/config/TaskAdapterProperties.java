@@ -3,12 +3,10 @@ package io.vanillabp.integration.adapter.migration.config;
 import java.util.Map;
 
 /**
- * Properties of a single BPMN task of a workflow
- * (properties section
+ * The properties of a single BPMN task of a workflow (properties section
  * <code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.tasks.&lt;task&gt;.*</code>).
- * The task level is the MOST specific level of the most-specific-wins resolution of
- * adapter-scoped properties (see
- * {@link MigrationAdapterProperties#resolveForAdapter}).
+ * For adapter-scoped properties the most specific level wins, and the task level is the MOST
+ * specific one (see {@link MigrationAdapterProperties#resolveForAdapter}).
  * <p>
  * It is read where a single task is the reason for a setting: whether the deliveries of
  * that task are deduplicated (<code>deduplicate-deliveries</code> of
@@ -22,9 +20,9 @@ import java.util.Map;
 public class TaskAdapterProperties {
 
   /**
-   * The empty section a configuration binder starts from, one per task an application
-   * writes something about: both platforms create the object and then write the keys into
-   * it, one setter per key.
+   * The empty section from which a configuration binder starts, one per task about which an
+   * application writes something. Both platforms create the object, and then write the keys
+   * into it, one setter per key.
    * <p>
    * It asks the builder for the values, and that is not a detour. Every default of this class
    * is on the builder as well as on the field, and both ways into an object end here. A
@@ -43,35 +41,34 @@ public class TaskAdapterProperties {
   private Map<String, AdapterProperties> adapters = Map.of();
 
   /**
-   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task - the
-   * most specific level an extension setting may be written at. Keys are the extension
-   * ids, and a key the task says nothing about keeps what the three less specific levels
-   * say (see {@link MigrationAdapterProperties#resolveForExtension}).
+   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task. This is
+   * the most specific level at which an extension setting may be written. The keys are the
+   * extension ids. A key about which the task says nothing keeps what the three less specific
+   * levels say (see {@link MigrationAdapterProperties#resolveForExtension}).
    */
   private Map<String, Map<String, String>> extensions = Map.of();
 
   /**
-   * The <code>&#64;TaskParam</code> parameters of this task whose type the developer
-   * declared (<code>declared-task-params</code>), by the name the input mapping gives the
-   * value. This is the most specific of the four levels the declaration may be written at,
-   * and it is where it belongs: a <code>&#64;TaskParam</code> belongs to one task.
+   * The <code>&#64;TaskParam</code> parameters of this task whose type the developer declared
+   * (<code>declared-task-params</code>), by the name which the input mapping gives the value.
+   * This is the most specific of the four levels at which the declaration may be written. It
+   * belongs here, because a <code>&#64;TaskParam</code> belongs to one task.
    */
   private java.util.List<String> declaredTaskParams;
 
   /**
    * Whether something other than this application serves this task
-   * (<code>implemented-externally</code>), so it needs no <code>&#64;WorkflowTask</code>
-   * method. The task is named by its element id or by its task definition, and the
-   * element id wins where both are written. <code>null</code> means "not configured at
-   * this level" (see {@link MigrationAdapterProperties#implementedExternally}).
+   * (<code>implemented-externally</code>). Then it needs no <code>&#64;WorkflowTask</code>
+   * method. The task is named by its element id or by its task definition. The element id
+   * wins where both are written. <code>null</code> means "not configured at this level" (see
+   * {@link MigrationAdapterProperties#implementedExternally}).
    */
   private Boolean implementedExternally;
 
   /**
-   * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
-   * the maximum age of an open task may be set at, which is where it belongs: the one
-   * task waiting for a signature is the reason the whole application does not get a
-   * longer age.
+   * Overrides <code>vanillabp.delivery</code> for this task. This is the most specific level
+   * at which the maximum age of an open task may be set, and it belongs here. The one task
+   * which waits for a signature should not give the whole application a longer age.
    */
   private DeliveryProperties delivery;
 
@@ -92,33 +89,32 @@ public class TaskAdapterProperties {
     private Map<String, AdapterProperties> adapters = Map.of();
 
     /**
-     * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task - the
-     * most specific level an extension setting may be written at. The builder starts from the
-     * same value as the field.
+     * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task. This is
+     * the most specific level at which an extension setting may be written. The builder
+     * starts from the same value as the field.
      */
     private Map<String, Map<String, String>> extensions = Map.of();
 
     /**
      * The <code>&#64;TaskParam</code> parameters of this task whose type the developer
-     * declared (<code>declared-task-params</code>), by the name the input mapping gives
+     * declared (<code>declared-task-params</code>), by the name which the input mapping gives
      * the value.
      */
     private java.util.List<String> declaredTaskParams;
 
     /**
      * Whether something other than this application serves this task
-     * (<code>implemented-externally</code>), so it needs no <code>&#64;WorkflowTask</code>
-     * method. The task is named by its element id or by its task definition, and the
-     * element id wins where both are written. <code>null</code> means "not configured at
-     * this level" (see {@link MigrationAdapterProperties#implementedExternally}).
+     * (<code>implemented-externally</code>). Then it needs no <code>&#64;WorkflowTask</code>
+     * method. The task is named by its element id or by its task definition. The element id
+     * wins where both are written. <code>null</code> means "not configured at this level"
+     * (see {@link MigrationAdapterProperties#implementedExternally}).
      */
     private Boolean implementedExternally;
 
     /**
-     * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
-     * the maximum age of an open task may be set at, which is where it belongs: the one
-     * task waiting for a signature is the reason the whole application does not get a
-     * longer age.
+     * Overrides <code>vanillabp.delivery</code> for this task. This is the most specific
+     * level at which the maximum age of an open task may be set, and it belongs here. The one
+     * task which waits for a signature should not give the whole application a longer age.
      */
     private DeliveryProperties delivery;
 
@@ -144,8 +140,8 @@ public class TaskAdapterProperties {
     }
 
     /**
-     * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task -
-     * the most specific level an extension setting may be written at.
+     * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task. This is
+     * the most specific level at which an extension setting may be written.
      *
      * @param extensions The value of {@link #extensions}
      * @return This builder, so the calls chain
@@ -160,7 +156,7 @@ public class TaskAdapterProperties {
 
     /**
      * The <code>&#64;TaskParam</code> parameters of this task whose type the developer
-     * declared (<code>declared-task-params</code>), by the name the input mapping gives
+     * declared (<code>declared-task-params</code>), by the name which the input mapping gives
      * the value.
      *
      * @param declaredTaskParams The value of {@link #declaredTaskParams}
@@ -176,10 +172,10 @@ public class TaskAdapterProperties {
 
     /**
      * Whether something other than this application serves this task
-     * (<code>implemented-externally</code>), so it needs no <code>&#64;WorkflowTask</code>
-     * method. The task is named by its element id or by its task definition, and the
-     * element id wins where both are written. <code>null</code> means "not configured at
-     * this level" (see {@link MigrationAdapterProperties#implementedExternally}).
+     * (<code>implemented-externally</code>). Then it needs no <code>&#64;WorkflowTask</code>
+     * method. The task is named by its element id or by its task definition. The element id
+     * wins where both are written. <code>null</code> means "not configured at this level"
+     * (see {@link MigrationAdapterProperties#implementedExternally}).
      *
      * @param implementedExternally The value of {@link #implementedExternally}
      * @return This builder, so the calls chain
@@ -193,10 +189,9 @@ public class TaskAdapterProperties {
     }
 
     /**
-     * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
-     * the maximum age of an open task may be set at, which is where it belongs: the one
-     * task waiting for a signature is the reason the whole application does not get a
-     * longer age.
+     * Overrides <code>vanillabp.delivery</code> for this task. This is the most specific
+     * level at which the maximum age of an open task may be set, and it belongs here. The one
+     * task which waits for a signature should not give the whole application a longer age.
      *
      * @param delivery The value of {@link #delivery}
      * @return This builder, so the calls chain
@@ -333,8 +328,8 @@ public class TaskAdapterProperties {
   }
 
   /**
-   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task - the
-   * most specific level an extension setting may be written at.
+   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task. This is
+   * the most specific level at which an extension setting may be written.
    *
    * @return The value of {@link #extensions}
    */
@@ -345,9 +340,8 @@ public class TaskAdapterProperties {
   }
 
   /**
-   * The <code>&#64;TaskParam</code> parameters of this task whose type the developer
-   * declared (<code>declared-task-params</code>), by the name the input mapping gives
-   * the value.
+   * The <code>&#64;TaskParam</code> parameters of this task whose type the developer declared
+   * (<code>declared-task-params</code>), by the name which the input mapping gives the value.
    *
    * @return The value of {@link #declaredTaskParams}
    */
@@ -359,10 +353,10 @@ public class TaskAdapterProperties {
 
   /**
    * Whether something other than this application serves this task
-   * (<code>implemented-externally</code>), so it needs no <code>&#64;WorkflowTask</code>
-   * method. The task is named by its element id or by its task definition, and the
-   * element id wins where both are written. <code>null</code> means "not configured at
-   * this level" (see {@link MigrationAdapterProperties#implementedExternally}).
+   * (<code>implemented-externally</code>). Then it needs no <code>&#64;WorkflowTask</code>
+   * method. The task is named by its element id or by its task definition. The element id
+   * wins where both are written. <code>null</code> means "not configured at this level" (see
+   * {@link MigrationAdapterProperties#implementedExternally}).
    *
    * @return The value of {@link #implementedExternally}
    */
@@ -373,10 +367,9 @@ public class TaskAdapterProperties {
   }
 
   /**
-   * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
-   * the maximum age of an open task may be set at, which is where it belongs: the one
-   * task waiting for a signature is the reason the whole application does not get a
-   * longer age.
+   * Overrides <code>vanillabp.delivery</code> for this task. This is the most specific level
+   * at which the maximum age of an open task may be set, and it belongs here. The one task
+   * which waits for a signature should not give the whole application a longer age.
    *
    * @return The value of {@link #delivery}
    */
@@ -399,8 +392,8 @@ public class TaskAdapterProperties {
   }
 
   /**
-   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task - the
-   * most specific level an extension setting may be written at.
+   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this task. This is
+   * the most specific level at which an extension setting may be written.
    *
    * @param extensions The value of {@link #extensions}
    */
@@ -412,9 +405,8 @@ public class TaskAdapterProperties {
   }
 
   /**
-   * The <code>&#64;TaskParam</code> parameters of this task whose type the developer
-   * declared (<code>declared-task-params</code>), by the name the input mapping gives
-   * the value.
+   * The <code>&#64;TaskParam</code> parameters of this task whose type the developer declared
+   * (<code>declared-task-params</code>), by the name which the input mapping gives the value.
    *
    * @param declaredTaskParams The value of {@link #declaredTaskParams}
    */
@@ -427,10 +419,10 @@ public class TaskAdapterProperties {
 
   /**
    * Whether something other than this application serves this task
-   * (<code>implemented-externally</code>), so it needs no <code>&#64;WorkflowTask</code>
-   * method. The task is named by its element id or by its task definition, and the
-   * element id wins where both are written. <code>null</code> means "not configured at
-   * this level" (see {@link MigrationAdapterProperties#implementedExternally}).
+   * (<code>implemented-externally</code>). Then it needs no <code>&#64;WorkflowTask</code>
+   * method. The task is named by its element id or by its task definition. The element id
+   * wins where both are written. <code>null</code> means "not configured at this level" (see
+   * {@link MigrationAdapterProperties#implementedExternally}).
    *
    * @param implementedExternally The value of {@link #implementedExternally}
    */
@@ -442,10 +434,9 @@ public class TaskAdapterProperties {
   }
 
   /**
-   * Overrides <code>vanillabp.delivery</code> for this task - the most specific level
-   * the maximum age of an open task may be set at, which is where it belongs: the one
-   * task waiting for a signature is the reason the whole application does not get a
-   * longer age.
+   * Overrides <code>vanillabp.delivery</code> for this task. This is the most specific level
+   * at which the maximum age of an open task may be set, and it belongs here. The one task
+   * which waits for a signature should not give the whole application a longer age.
    *
    * @param delivery The value of {@link #delivery}
    */

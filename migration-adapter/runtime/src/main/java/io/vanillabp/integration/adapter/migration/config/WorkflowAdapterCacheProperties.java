@@ -3,10 +3,10 @@ package io.vanillabp.integration.adapter.migration.config;
 import java.time.Duration;
 
 /**
- * Configuration of the default election cache
+ * The configuration of the default election cache
  * ({@link io.vanillabp.integration.spi.WorkflowAdapterCache}, properties section
- * <code>vanillabp.workflow-adapter-cache</code>) - the single source of truth for
- * keys, defaults and documentation, used by both platform integrations.
+ * <code>vanillabp.workflow-adapter-cache</code>). It is the one source of truth for keys,
+ * defaults and documentation, and both platform integrations use it.
  * <p>
  * The bounds are hard on purpose: entries are hints, so losing one costs an extra
  * probing walk (and, on an eventually consistent BPMS, its visibility window) but
@@ -18,18 +18,18 @@ import java.time.Duration;
 public class WorkflowAdapterCacheProperties {
 
   /**
-   * The section an application writes these keys below:
-   * <code>vanillabp.workflow-adapter-cache</code>. Built from the prefix rather than
-   * written out, so a message names the section the way the application has to spell it.
+   * The section below which an application writes these keys:
+   * <code>vanillabp.workflow-adapter-cache</code>. It is built from the prefix and not
+   * written out. So a message names the section the way the application has to spell it.
    */
   public static final String SECTION = MigrationAdapterProperties.PREFIX
       + ".workflow-adapter-cache";
 
   /**
    * The key of {@link #maxEntries}:
-   * <code>vanillabp.workflow-adapter-cache.max-entries</code>. Named by the message
-   * {@link #validate()} throws and by the warning about a cache under eviction pressure,
-   * so both say what the reader has to write.
+   * <code>vanillabp.workflow-adapter-cache.max-entries</code>. The message which
+   * {@link #validate()} throws names it, and so does the warning about a cache under eviction
+   * pressure. So both say what the reader has to write.
    */
   public static final String MAX_ENTRIES_PROPERTY = SECTION
       + ".max-entries";
@@ -49,8 +49,8 @@ public class WorkflowAdapterCacheProperties {
       + ".ended-time-to-live";
 
   /**
-   * The default of {@link #maxEntries}: ten thousand workflows kept hot, about 3 MB of
-   * heap at roughly 300 bytes per entry.
+   * The default of {@link #maxEntries}: ten thousand workflows kept hot. That is about 3 MB
+   * of heap, at roughly 300 bytes per entry.
    */
   public static final int DEFAULT_MAX_ENTRIES = 10_000;
 
@@ -60,15 +60,15 @@ public class WorkflowAdapterCacheProperties {
   public static final Duration DEFAULT_TIME_TO_LIVE = Duration.ofHours(1);
 
   /**
-   * The default of {@link #endedTimeToLive}: five minutes. That is the window in which an
-   * operation arriving after the end of its workflow is still answered from the cache.
+   * The default of {@link #endedTimeToLive}: five minutes. In that window an operation which
+   * arrives after the end of its workflow is still answered from the cache.
    */
   public static final Duration DEFAULT_ENDED_TIME_TO_LIVE = Duration.ofMinutes(5);
 
   /**
-   * The maximum number of entries the in-memory default cache holds - the least
-   * recently used entry is dropped beyond that. Raise it if an application keeps
-   * more workflows hot than the cache holds (see the eviction-pressure warning of
+   * The maximum number of entries which the in-memory default cache holds. Beyond that, the
+   * least recently used entry is dropped. Raise it if an application keeps more workflows hot
+   * than the cache holds (see the warning about eviction pressure of
    * {@code WorkflowAdapterCacheStatistics}).
    * <p>
    * Key {@value #MAX_ENTRIES_PROPERTY}, {@value #DEFAULT_MAX_ENTRIES} by default.
@@ -76,19 +76,19 @@ public class WorkflowAdapterCacheProperties {
   private int maxEntries = DEFAULT_MAX_ENTRIES;
 
   /**
-   * How long an entry of the in-memory default cache is kept (counted from the
-   * moment it was stored). Expiry is not a defect: the hint is only a shortcut of
-   * the probing walk which re-elects and re-populates it.
+   * How long an entry of the in-memory default cache is kept, counted from the moment it was
+   * stored. Expiry is not a defect. The hint is only a shortcut of the probing walk, which
+   * elects again and fills the cache again.
    * <p>
    * Key {@value #TIME_TO_LIVE_PROPERTY}, one hour by default.
    */
   private Duration timeToLive = DEFAULT_TIME_TO_LIVE;
 
   /**
-   * How long the entry of a workflow which ENDED is kept - much shorter than
-   * {@link #timeToLive}, because such an entry cannot become useful again. It is
-   * still read while it lives, which is what keeps an operation arriving after the
-   * end a warned no-op instead of an exception (see
+   * How long the entry of a workflow which ENDED is kept. It is much shorter than
+   * {@link #timeToLive}, because such an entry cannot become useful again. It is still read
+   * while it lives. That keeps an operation which arrives after the end a warned no-op, and
+   * not an exception (see
    * {@link io.vanillabp.integration.spi.WorkflowAdapterCache#putEnded}).
    * <p>
    * Key {@value #ENDED_TIME_TO_LIVE_PROPERTY}, five minutes by default.
@@ -101,12 +101,11 @@ public class WorkflowAdapterCacheProperties {
   private Duration endedTimeToLive = DEFAULT_ENDED_TIME_TO_LIVE;
 
   /**
-   * Whether VanillaBP asks the BPMS to report the end of a workflow FOR THE CACHE's
-   * sake, so an ended workflow lets go of its entry after {@link #endedTimeToLive}
-   * instead of keeping it for a full {@link #timeToLive}. Defaults to
-   * <code>false</code>, because a BPMS reports the end only where somebody asked for
-   * it: switching this on attaches a listener respectively a worker to every deployed
-   * process of every workflow module.
+   * Whether VanillaBP asks the BPMS to report the end of a workflow FOR THE CACHE's sake.
+   * Then an ended workflow lets go of its entry after {@link #endedTimeToLive}, instead of
+   * keeping it for a full {@link #timeToLive}. The default is <code>false</code>, because a
+   * BPMS only reports the end where somebody asked for it. Switching this on attaches a
+   * listener or a worker to every deployed process of every workflow module.
    * <p>
    * It is the third consumer of that one signal, next to an application's
    * <code>&#64;WorkflowEnded</code> method and
@@ -121,8 +120,9 @@ public class WorkflowAdapterCacheProperties {
   private boolean releaseOnWorkflowEnd = false;
 
   /**
-   * The empty section a configuration binder starts from: both platforms create the object
-   * and then write the keys the application configured into it, one setter per key.
+   * The empty section from which a configuration binder starts. Both platforms create the
+   * object, and then write the keys which the application configured into it, one setter per
+   * key.
    * <p>
    * It asks the builder for the values, and that is not a detour. Every default of this class
    * is on the builder as well as on the field, and both ways into an object end here. A
@@ -137,8 +137,8 @@ public class WorkflowAdapterCacheProperties {
   }
 
   /**
-   * Validates the bounds at startup like every other property - an unconfigured
-   * application boots with the defaults.
+   * Checks the limits at startup, like every other property. An application which configures
+   * nothing boots with the defaults.
    *
    * @throws IllegalStateException Naming the offending property, its value and the
    *           default
@@ -201,27 +201,28 @@ public class WorkflowAdapterCacheProperties {
   public abstract static class WorkflowAdapterCachePropertiesBuilder<C extends WorkflowAdapterCacheProperties, B extends WorkflowAdapterCacheProperties.WorkflowAdapterCachePropertiesBuilder<C, B>> {
 
     /**
-     * The maximum number of entries the in-memory default cache holds - the least recently
-     * used entry is dropped beyond that. The builder starts from the same value as the field.
+     * The maximum number of entries which the in-memory default cache holds. Beyond that, the
+     * least recently used entry is dropped. The builder starts from the same value as the
+     * field.
      */
     private int maxEntries = DEFAULT_MAX_ENTRIES;
 
     /**
-     * How long an entry of the in-memory default cache is kept (counted from the moment it
-     * was stored). The builder starts from the same value as the field.
+     * How long an entry of the in-memory default cache is kept, counted from the moment it
+     * was stored. The builder starts from the same value as the field.
      */
     private Duration timeToLive = DEFAULT_TIME_TO_LIVE;
 
     /**
-     * How long the entry of a workflow which ENDED is kept - much shorter than
+     * How long the entry of a workflow which ENDED is kept. It is much shorter than
      * {@link #timeToLive}, because such an entry cannot become useful again. The builder
      * starts from the same value as the field.
      */
     private Duration endedTimeToLive = DEFAULT_ENDED_TIME_TO_LIVE;
 
     /**
-     * Whether VanillaBP asks the BPMS to report the end of a workflow FOR THE CACHE's sake,
-     * so an ended workflow lets go of its entry after {@link #endedTimeToLive} instead of
+     * Whether VanillaBP asks the BPMS to report the end of a workflow FOR THE CACHE's sake.
+     * Then an ended workflow lets go of its entry after {@link #endedTimeToLive}, instead of
      * keeping it for a full {@link #timeToLive}. The builder starts from the same value as
      * the field.
      */
@@ -235,8 +236,8 @@ public class WorkflowAdapterCacheProperties {
     }
 
     /**
-     * The maximum number of entries the in-memory default cache holds - the least
-     * recently used entry is dropped beyond that.
+     * The maximum number of entries which the in-memory default cache holds. Beyond that, the
+     * least recently used entry is dropped.
      *
      * @param maxEntries The value of {@link #maxEntries}
      * @return This builder, so the calls chain
@@ -250,8 +251,8 @@ public class WorkflowAdapterCacheProperties {
     }
 
     /**
-     * How long an entry of the in-memory default cache is kept (counted from the moment
-     * it was stored).
+     * How long an entry of the in-memory default cache is kept, counted from the moment it
+     * was stored.
      *
      * @param timeToLive The value of {@link #timeToLive}
      * @return This builder, so the calls chain
@@ -265,7 +266,7 @@ public class WorkflowAdapterCacheProperties {
     }
 
     /**
-     * How long the entry of a workflow which ENDED is kept - much shorter than
+     * How long the entry of a workflow which ENDED is kept. It is much shorter than
      * {@link #timeToLive}, because such an entry cannot become useful again.
      *
      * @param endedTimeToLive The value of {@link #endedTimeToLive}
@@ -280,9 +281,9 @@ public class WorkflowAdapterCacheProperties {
     }
 
     /**
-     * Whether VanillaBP asks the BPMS to report the end of a workflow FOR THE CACHE's
-     * sake, so an ended workflow lets go of its entry after {@link #endedTimeToLive}
-     * instead of keeping it for a full {@link #timeToLive}.
+     * Whether VanillaBP asks the BPMS to report the end of a workflow FOR THE CACHE's sake.
+     * Then an ended workflow lets go of its entry after {@link #endedTimeToLive}, instead of
+     * keeping it for a full {@link #timeToLive}.
      *
      * @param releaseOnWorkflowEnd The value of {@link #releaseOnWorkflowEnd}
      * @return This builder, so the calls chain
@@ -404,8 +405,8 @@ public class WorkflowAdapterCacheProperties {
   }
 
   /**
-   * The maximum number of entries the in-memory default cache holds - the least recently
-   * used entry is dropped beyond that.
+   * The maximum number of entries which the in-memory default cache holds. Beyond that, the
+   * least recently used entry is dropped.
    *
    * @return The value of {@link #maxEntries}
    */
@@ -416,8 +417,8 @@ public class WorkflowAdapterCacheProperties {
   }
 
   /**
-   * How long an entry of the in-memory default cache is kept (counted from the moment it
-   * was stored).
+   * How long an entry of the in-memory default cache is kept, counted from the moment it was
+   * stored.
    *
    * @return The value of {@link #timeToLive}
    */
@@ -428,7 +429,7 @@ public class WorkflowAdapterCacheProperties {
   }
 
   /**
-   * How long the entry of a workflow which ENDED is kept - much shorter than
+   * How long the entry of a workflow which ENDED is kept. It is much shorter than
    * {@link #timeToLive}, because such an entry cannot become useful again.
    *
    * @return The value of {@link #endedTimeToLive}
@@ -440,9 +441,9 @@ public class WorkflowAdapterCacheProperties {
   }
 
   /**
-   * Whether VanillaBP asks the BPMS to report the end of a workflow FOR THE CACHE's
-   * sake, so an ended workflow lets go of its entry after {@link #endedTimeToLive}
-   * instead of keeping it for a full {@link #timeToLive}.
+   * Whether VanillaBP asks the BPMS to report the end of a workflow FOR THE CACHE's sake.
+   * Then an ended workflow lets go of its entry after {@link #endedTimeToLive}, instead of
+   * keeping it for a full {@link #timeToLive}.
    *
    * @return The value of {@link #releaseOnWorkflowEnd}
    */
@@ -453,8 +454,8 @@ public class WorkflowAdapterCacheProperties {
   }
 
   /**
-   * The maximum number of entries the in-memory default cache holds - the least recently
-   * used entry is dropped beyond that.
+   * The maximum number of entries which the in-memory default cache holds. Beyond that, the
+   * least recently used entry is dropped.
    *
    * @param maxEntries The value of {@link #maxEntries}
    */
@@ -466,8 +467,8 @@ public class WorkflowAdapterCacheProperties {
   }
 
   /**
-   * How long an entry of the in-memory default cache is kept (counted from the moment it
-   * was stored).
+   * How long an entry of the in-memory default cache is kept, counted from the moment it was
+   * stored.
    *
    * @param timeToLive The value of {@link #timeToLive}
    */
@@ -479,7 +480,7 @@ public class WorkflowAdapterCacheProperties {
   }
 
   /**
-   * How long the entry of a workflow which ENDED is kept - much shorter than
+   * How long the entry of a workflow which ENDED is kept. It is much shorter than
    * {@link #timeToLive}, because such an entry cannot become useful again.
    *
    * @param endedTimeToLive The value of {@link #endedTimeToLive}
@@ -492,9 +493,9 @@ public class WorkflowAdapterCacheProperties {
   }
 
   /**
-   * Whether VanillaBP asks the BPMS to report the end of a workflow FOR THE CACHE's
-   * sake, so an ended workflow lets go of its entry after {@link #endedTimeToLive}
-   * instead of keeping it for a full {@link #timeToLive}.
+   * Whether VanillaBP asks the BPMS to report the end of a workflow FOR THE CACHE's sake.
+   * Then an ended workflow lets go of its entry after {@link #endedTimeToLive}, instead of
+   * keeping it for a full {@link #timeToLive}.
    *
    * @param releaseOnWorkflowEnd The value of {@link #releaseOnWorkflowEnd}
    */
