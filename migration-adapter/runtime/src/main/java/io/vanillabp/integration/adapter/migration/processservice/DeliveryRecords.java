@@ -31,60 +31,59 @@ import io.vanillabp.integration.spi.startup.StartupTopic;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * What VanillaBP remembers about the task deliveries of ONE BPMN process: a record is
- * written in the transaction which also saves the workflow aggregate, and it answers three
- * questions nothing else can answer.
+ * What VanillaBP remembers about the task deliveries of ONE BPMN process. A record is
+ * written in the transaction which also saves the workflow aggregate. It answers three
+ * questions which nothing else can answer.
  * <ul>
  * <li>Was this delivery processed before? A BPMS which never learned the result of a
- * delivery hands the task out again, and the record is what keeps the
- * <code>&#64;WorkflowTask</code> method from running a second time - the recorded outcome
- * is reported instead.</li>
- * <li>How long has a task left open by a <code>&#64;TaskId</code> handler been waiting?
- * The record was written when the handler ran, so the distance between its timestamp and
- * now IS the age of the open task.</li>
- * <li>Which BPMS holds a task the application names? The record says which adapter
- * delivered it, which saves the election one round trip per operation.</li>
+ * delivery hands the task out again. The record keeps the <code>&#64;WorkflowTask</code>
+ * method from running a second time. The recorded outcome is reported instead.</li>
+ * <li>How long has a task which a <code>&#64;TaskId</code> handler left open been waiting?
+ * The record was written when the handler ran. So the time between its timestamp and now IS
+ * the age of the open task.</li>
+ * <li>Which BPMS holds a task which the application names? The record says which adapter
+ * delivered it. That saves the election one round trip per operation.</li>
  * </ul>
- * Only the first of the three is the deduplication, and it used to decide whether the other
- * two were written down at all: an adapter which reports no delivery ID got no row, so
- * nobody could read back which BPMS held the task or which kind of id its id was. Such a
- * delivery now gets a row of its own which takes no part in the deduplication
+ * Only the first of the three is the deduplication. It used to decide whether the other two
+ * were written down at all. An adapter which reports no delivery ID got no row. So nobody
+ * could read back which BPMS held the task, or which kind of id its id was. Now such a
+ * delivery gets a row of its own, which takes no part in the deduplication
  * ({@link #identityOf(TaskInvocationContext)}).
  * <p>
- * The store behind all of this is a {@link TaskDeliveryLog} of the application, resolved
- * for the workflow aggregate. There may be none: an application whose adapters never repeat
- * a delivery needs no store, and one which has not configured a store behaves as every
- * VanillaBP before the records existed - at-least-once, with the rule to key business
- * decisions on the aggregate's state carrying the case. Every method here answers that way
- * where no store is available, and {@link #validateAtStartup(List)} says once at startup
- * what is given up.
+ * The store behind all of this is a {@link TaskDeliveryLog} of the application, resolved for
+ * the workflow aggregate. There may be none. An application whose adapters never repeat a
+ * delivery needs no store. And one which has not configured a store behaves like every
+ * VanillaBP before the records existed: at-least-once, and the rule to base business
+ * decisions on the aggregate's state covers the case. Every method here answers that way
+ * where no store is available. {@link #validateAtStartup(List)} says once at startup what
+ * is given up.
  * <p>
- * The adapters are passed in rather than held, the way {@link WorkflowLocator} takes them:
- * this collaborator is about the records, and which adapters serve a BPMN process is the
- * process service's business.
+ * The adapters are passed in and not held, the same way as {@link WorkflowLocator} takes
+ * them. This helper is about the records. Which adapters serve a BPMN process is the
+ * business of the process service.
  * <p>
- * One instance belongs to one BPMN process and WRITES under that id. The two reads about a
- * task the application names walk further: a task of a secondary process was delivered to
- * the instance of THAT id, while every {@code ProcessService} call reaches the primary one,
- * so they ask for each id the workflow service serves, the own id first
+ * One instance belongs to one BPMN process, and it WRITES under that id. The two reads about
+ * a task which the application names look further. A task of a secondary process was
+ * delivered to the instance of THAT id, but every {@code ProcessService} call reaches the
+ * primary one. So they ask for each id which the workflow service serves, the own id first
  * ({@link #setBpmnProcessIdsToReadUnder(List)}).
  */
 @Slf4j
 public final class DeliveryRecords {
 
   /**
-   * The words of the warning about a BPMN process whose adapter may deliver a task twice while
-   * no delivery log is there to notice it.
+   * The words of the warning about a BPMN process whose adapter may deliver a task twice,
+   * while no delivery log is there to notice it.
    * <p>
-   * Public so that a test of an adapter reads the words from here, see decision 105 in the
-   * repository's DECISIONS.md. A changed text then changes no adapter test, and a renamed
-   * constant breaks its build.
+   * It is public so that a test of an adapter reads the words from here (see decision 105 in
+   * the repository's DECISIONS.md). Then a changed text changes no adapter test, and a
+   * renamed constant breaks its build.
    */
   public static final String NO_DELIVERY_LOG = "no TaskDeliveryLog is available";
 
   /**
-   * How many open tasks are remembered as reported. A bound rather than a growing set:
-   * the entry is a hint, and forgetting one costs one repeated WARN.
+   * How many open tasks are remembered as reported. It is a limit and not a growing set. The
+   * entry is a hint, and forgetting one costs one repeated WARN.
    */
   private static final int REPORTED_TASK_AGES = 1000;
 
@@ -93,60 +92,61 @@ public final class DeliveryRecords {
   private final String bpmnProcessId;
 
   /**
-   * The BPMN process ids a record of this workflow may sit under, this instance's own id
-   * first. Set by the process service once the platform integration told it which
-   * processes its workflow service serves; until then the own id is the whole list.
+   * The BPMN process ids under which a record of this workflow may be, this instance's own id
+   * first. The process service sets it once the platform integration told it which processes
+   * its workflow service serves. Until then the own id is the whole list.
    */
   private volatile List<String> bpmnProcessIdsToReadUnder;
 
   private final Class<?> workflowAggregateClass;
 
   /**
-   * The bound <code>vanillabp.*</code> tree - deduplication and the maximum age of an open
-   * task are resolvable per workflow module, workflow and task.
+   * The bound <code>vanillabp.*</code> tree. Deduplication and the maximum age of an open
+   * task can be set per workflow module, workflow and task.
    */
   private final MigrationAdapterProperties properties;
 
   /**
-   * Resolves the store used for this aggregate. Provided by the platform integration; may
-   * be <code>null</code> (tests) - deliveries are then not deduplicated.
+   * Resolves the store used for this aggregate. The platform integration provides it. It may
+   * be <code>null</code> (tests). Then deliveries are not deduplicated.
    */
   private final TaskDeliveryLogResolver resolver;
 
   /**
-   * The store resolved for this aggregate, <code>null</code> until resolved (at startup via
-   * {@link #validateAtStartup(List)} or lazily as backstop).
+   * The store resolved for this aggregate. It is <code>null</code> until it is resolved, at
+   * startup in {@link #validateAtStartup(List)}, or lazily as a safety net.
    */
   private volatile TaskDeliveryLog taskDeliveryLog;
 
   /**
-   * Whether the "deliveries are not deduplicated" message was logged already - it names a
-   * configuration gap, and one line per delivery would bury it.
+   * Whether the message "deliveries are not deduplicated" was logged already. It names a
+   * gap in the configuration, and one line per delivery would bury it.
    */
   private final AtomicBoolean missingDeliveryLogReported = new AtomicBoolean();
 
   /**
-   * Where a finding of these records goes, so the whole start says it once.
+   * Where a finding of these records goes, so that the whole start says it once.
    */
   private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
 
   /**
-   * What the application counts about its deliveries, handed over by the process service
+   * What the application counts about its deliveries. The process service hands it over
    * once the platform integration knows it.
    */
   private volatile VanillaBpMetrics metrics = VanillaBpMetrics.NONE;
 
   /**
-   * What the adapters said about the versions of their BPMN processes, handed over by the
-   * registry of the workflow tasks once it registered this process. <code>null</code> until
-   * then and in a test which builds a process service on its own: nothing is said about a
-   * missing version then, and every version counts as one that may never come.
+   * What the adapters said about the versions of their BPMN processes. The registry of the
+   * workflow tasks hands it over once it registered this process. It is <code>null</code>
+   * until then, and in a test which builds a process service on its own. Then nothing is
+   * said about a missing version, and every version counts as one which may never come.
    */
   private volatile io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions processVersions;
 
   /**
-   * The adapters which were named already for writing a row without a version although they
-   * keep a catalog, so the WARN comes once per adapter of this BPMN process and not once per row.
+   * The adapters which were already named for writing a row without a version, although they
+   * keep a catalog. So the WARN comes once per adapter of this BPMN process, not once per
+   * row.
    */
   private final Set<String> adaptersReportedForAMissingVersion = java.util.concurrent.ConcurrentHashMap
       .newKeySet();
@@ -168,14 +168,14 @@ public final class DeliveryRecords {
 
   /**
    * Built by the {@link MigrationProcessService} of this BPMN process, in its constructor.
-   * The store is NOT resolved here: it is a bean of the application, and asking for it
-   * while the beans are being built would be too early, so it is resolved at the first use
-   * and kept from then on ({@link #resolveLog()}).
+   * The store is NOT resolved here. It is a bean of the application, and asking for it while
+   * the beans are being built would be too early. So it is resolved at the first use, and
+   * kept from then on ({@link #resolveLog()}).
    *
    * @param workflowModuleId The workflow module the records belong to
    * @param bpmnProcessId The BPMN process the records belong to
-   * @param workflowAggregateClass The workflow aggregate whose store holds the records -
-   *          named by the message about a missing store
+   * @param workflowAggregateClass The workflow aggregate whose store holds the records. The
+   *          message about a missing store names it
    * @param properties The bound configuration, may be <code>null</code> in tests
    * @param resolver Resolves the store for the aggregate, may be <code>null</code>
    */
@@ -200,14 +200,14 @@ public final class DeliveryRecords {
    * Where a record of this workflow may be looked for, beyond this instance's own BPMN
    * process id.
    * <p>
-   * A record is written under the id of the process which DELIVERED the task, and for a
-   * task of a secondary process that is the secondary id, while the application completes
-   * that task on the primary process service. Reading only the own id therefore found no
-   * record for such a task: the operation paid a probe of the adapter it need not have
-   * paid, and the row nobody found stayed open.
+   * A record is written under the id of the process which DELIVERED the task. For a task of
+   * a secondary process that is the secondary id. But the application completes that task on
+   * the primary process service. So reading only the own id found no record for such a
+   * task. The operation paid for a probe of the adapter which it did not need, and the row
+   * which nobody found stayed open.
    *
-   * @param bpmnProcessIds The ids to read under, the own id first; <code>null</code> or
-   *          empty restores the own id alone
+   * @param bpmnProcessIds The ids to read under, the own id first. <code>null</code> or an
+   *          empty list means the own id alone again
    */
   public void setBpmnProcessIdsToReadUnder(
       final List<String> bpmnProcessIds) {
@@ -219,9 +219,9 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Hands over what to count into, done by the process service once the platform
-   * integration told it. A <code>null</code> becomes {@link VanillaBpMetrics#NONE} rather
-   * than an error, because an application without a metrics backend is the normal case.
+   * Hands over what to count into. The process service does it once the platform
+   * integration told it. A <code>null</code> becomes {@link VanillaBpMetrics#NONE} and not an
+   * error, because an application without a metrics backend is the normal case.
    *
    * @param metrics What to count into, never <code>null</code>
    */
@@ -235,9 +235,9 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Hands over what the adapters said about the versions of their BPMN processes. It is what
-   * decides whether a row without a version is a defect worth a WARN, and what a reader of the
-   * start of a workflow is told about an empty version.
+   * Hands over what the adapters said about the versions of their BPMN processes. It decides
+   * whether a row without a version is a defect worth a WARN. And it decides what a reader of
+   * the start of a workflow is told about an empty version.
    *
    * @param processVersions What the adapters registered while they wired their BPMN
    */
@@ -249,15 +249,15 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The identity under which this delivery is remembered, or <code>null</code> where
-   * nothing at all is remembered about it
+   * The identity under which this delivery is remembered, or <code>null</code> where nothing
+   * at all is remembered about it
    * (<code>vanillabp.adapters.&lt;id&gt;.deduplicate-deliveries</code> switched off).
    * <p>
    * The property is the one case where no row is written. It says that the handlers of this
    * application are idempotent themselves, and the BPMS behind it may well repeat a
-   * delivery - every repetition would add a row naming the same task, and whoever reads the
-   * open work of a workflow would read that task as many times as the BPMS handed it out.
-   * An adapter which reports no delivery ID is the other case and gets a row: it repeats
+   * delivery. Every repetition would add a row which names the same task. Whoever reads the
+   * open work of a workflow would read that task as many times as the BPMS handed it out. An
+   * adapter which reports no delivery ID is the other case, and it gets a row. It repeats
    * nothing, so one delivery is one row (see
    * {@link TaskDeliveryKey#of(String, String, TaskInvocationContext)}).
    *
@@ -274,11 +274,10 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Whether deliveries of the given adapter are deduplicated for the given task
-   * (resolvable per workflow module, workflow and task). The default is
-   * <code>true</code>; a delivery whose adapter is not named at all is not deduplicated,
-   * since neither the configuration nor the delivery key could be attributed to a BPMS
-   * then.
+   * Whether deliveries of the given adapter are deduplicated for the given task (this can be
+   * set per workflow module, workflow and task). The default is <code>true</code>. A delivery
+   * whose adapter is not named at all is not deduplicated. Then neither the configuration nor
+   * the delivery key could be tied to a BPMS.
    *
    * @param adapterId The ID of the adapter delivering the task or <code>null</code>
    * @param taskDefinition The task definition delivered
@@ -303,7 +302,7 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The store holding the records of this aggregate, resolved once and kept.
+   * The store with the records of this aggregate, resolved once and kept.
    *
    * @return The store or <code>null</code> where the application has none
    */
@@ -317,9 +316,9 @@ public final class DeliveryRecords {
   }
 
   /**
-   * States once that deliveries of this BPMN process are not deduplicated, and how to
-   * change that. Also the answer to "why did my handler run twice" - the message is the
-   * first thing to look for then.
+   * States once that deliveries of this BPMN process are not deduplicated, and how to change
+   * that. It is also the answer to "why did my handler run twice?". The message is the first
+   * thing to look for then.
    *
    * @param adapterId The ID of an adapter which may repeat a delivery
    */
@@ -355,7 +354,7 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The outcome a repeated delivery is answered with, so the
+   * The outcome with which a repeated delivery is answered, so that the
    * <code>&#64;WorkflowTask</code> method does not run a second time.
    *
    * @param deliveryLog The store to ask
@@ -394,8 +393,8 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Remembers a processed delivery within the transaction which also persists the
-   * aggregate - the two commit together or not at all.
+   * Remembers a processed delivery, within the transaction which also persists the aggregate.
+   * The two commit together or not at all.
    *
    * @param deliveryLog The store to write to, <code>null</code> where there is none
    * @param deliveryKey The identity of the delivery
@@ -411,15 +410,15 @@ public final class DeliveryRecords {
     if (deliveryLog == null) {
       return;
     }
-    // the task travels with the record so the election of a later completion can read from
-    // it which adapter holds that task, instead of asking every configured BPMS. The
-    // element of the model and the BPMS' own id of the workflow travel with it for a
-    // reader: they are what an extension and an operator address this task by outside
-    // VanillaBP, and an adapter which names neither leaves both empty. The KIND of task is
-    // what lets VanillaBP answer a caller who named the id of the other kind, which is a
-    // mistake an application really makes. The version of the process definition travels for
-    // an extension which shows details per version: the delivery is often the first moment
-    // anybody hears it, and the BPMS reported it with the delivery anyway
+    // the task travels with the record. So the election of a later completion can read from it
+    // which adapter holds that task, instead of asking every configured BPMS. The element of
+    // the model and the BPMS' own id of the workflow travel with it for a reader. An extension
+    // and an operator address this task by them outside VanillaBP. An adapter which names
+    // neither leaves both empty. The KIND of task lets VanillaBP answer a caller who named the
+    // id of the other kind, and applications really make that mistake. The version of the
+    // process definition travels for an extension which shows details per version. The
+    // delivery is often the first moment anybody hears it, and the BPMS reported it with the
+    // delivery anyway
     final var recordWasWritten = deliveryLog.record(
         new TaskDelivery(deliveryKey, context.getAdapterId(), workflowModuleId, bpmnProcessId, context
             .getWorkflowAggregateId(), context
@@ -437,41 +436,42 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Writes down which workflow of the BPMS the aggregate of a started workflow belongs to, so
+   * Writes down to which workflow of the BPMS the aggregate of a started workflow belongs. So
    * the BPMS election and an extension can read that id without asking a BPMS.
    *
    * <h4>Why the log and not a store of its own</h4>
    *
-   * The row answers the same kind of question the row of a delivery answers - where is this
-   * workflow - and it lives in the database of the workflow aggregate for the same reason. What
-   * tells the two apart is {@link TaskDelivery#recordKind()}, and every question about open work
+   * The row answers the same kind of question as the row of a delivery: where is this
+   * workflow? And it lives in the database of the workflow aggregate for the same reason.
+   * {@link TaskDelivery#recordKind()} tells the two apart, and every question about open work
    * filters on it.
    *
    * <h4>When it is written, and when it is not</h4>
    *
-   * At the earliest moment both values are known. For a start of the application that is phase
-   * two, because a remote BPMS creates the instance after the caller's transaction committed, and
-   * the row is written in the transaction of that dispatch. So a report of a changed aggregate
-   * between the two finds no id, which is right: the instance does not exist yet either. For a
-   * workflow the BPMS started on its own it is the transaction which persists the aggregate,
-   * where the notification carries both values at once.
+   * It is written at the earliest moment when both values are known. For a start of the
+   * application that is phase two, because a remote BPMS creates the instance after the
+   * caller's transaction committed. The row is written in the transaction of that dispatch.
+   * So a report of a changed aggregate between the two finds no id. That is right, because
+   * the instance does not exist yet either. For a workflow which the BPMS started on its own,
+   * it is the transaction which persists the aggregate. There the notification carries both
+   * values at once.
    * <p>
    * Nothing is written where no store serves this aggregate, or where the adapter names no
-   * workflow - then everything stays as it was and the election probes.
+   * workflow. Then everything stays as it was, and the election probes.
    * <p>
    * The key is derived from the workflow module, the BPMN process and the aggregate
-   * ({@link io.vanillabp.integration.spi.WorkflowStartKey}), so a dispatch which runs twice
-   * writes nothing the second time instead of a second row.
+   * ({@link io.vanillabp.integration.spi.WorkflowStartKey}). So a dispatch which runs twice
+   * writes nothing the second time, instead of a second row.
    * <p>
-   * The version of the process definition is written with the id where the adapter names one. An
-   * adapter which keeps a catalog of versions and names none is told so once in a WARN,
-   * and the row is written all the same.
+   * The version of the process definition is written with the id, where the adapter names
+   * one. An adapter which keeps a catalog of versions and names none is told so once in a
+   * WARN, and the row is written all the same.
    *
    * @param adapterId The ID of the adapter which started the workflow
    * @param workflowAggregateId The workflow aggregate of the started workflow
    * @param workflowId The BPMS' own id of the started workflow, or <code>null</code>
-   * @param processVersion The version of the process definition the workflow was started on, or
-   *          <code>null</code>
+   * @param processVersion The version of the process definition on which the workflow was
+   *          started, or <code>null</code>
    */
   public void recordWorkflowStart(
       final String adapterId,
@@ -509,7 +509,7 @@ public final class DeliveryRecords {
               ? "was written down, so nobody has to ask a BPMS which of them holds it"
               : "was written down before - the row names this workflow already and nothing changed");
     } catch (final RuntimeException e) {
-      // the workflow runs, and a row nobody could write costs the probing which happened
+      // the workflow runs. A row which nobody could write costs the probing which happened
       // before this row existed. Failing the dispatch here would repeat a start which
       // succeeded
       log.warn(
@@ -526,17 +526,17 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Says once per adapter of this BPMN process that a row was written without the version of the
-   * process definition, although the adapter keeps a catalog of those versions.
+   * Says once per adapter of this BPMN process that a row was written without the version of
+   * the process definition, although the adapter keeps a catalog of those versions.
    * <p>
-   * Such an adapter counts the versions of its BPMS, so it can name the version of every workflow
-   * it runs, and a row without one is a defect of that adapter. The row is written all the same:
-   * dropping a delivery or a start over a missing piece of information would cost far more than
-   * the information is worth. A reader of the start of that workflow is told that a version may
-   * still come, because the adapter is one which reports versions.
+   * Such an adapter counts the versions of its BPMS. So it can name the version of every
+   * workflow it runs, and a row without one is a defect of that adapter. The row is written
+   * all the same. Dropping a delivery or a start because of a missing piece of information
+   * would cost far more than the information is worth. A reader of the start of that workflow
+   * is told that a version may still come, because the adapter is one which reports versions.
    * <p>
-   * An adapter which keeps no catalog is never named here. Whether its deliveries carry a version
-   * tag depends on the engine behind it, and an empty one is no defect.
+   * An adapter which keeps no catalog is never named here. Whether its deliveries carry a
+   * version tag depends on the engine behind it, and an empty one is no defect.
    *
    * @param adapterId The adapter which wrote the row
    * @param processVersion The version it named, <code>null</code> where it named none
@@ -575,15 +575,14 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Says that the handler of this task ran twice at the same time, which is the one case
-   * a record written after the work cannot prevent: a delivery starting while another
-   * one is still running finds no record yet, so both run and only the one committing
-   * first gets its record written.
+   * Says that the handler of this task ran twice at the same time. That is the one case
+   * which a record written after the work cannot prevent. A delivery which starts while
+   * another one is still running finds no record yet. So both run, and only the one which
+   * commits first gets its record written.
    * <p>
-   * The delivery which lost is the only place where the overlap becomes visible at all,
-   * so it is where it is said out loud. Nothing is rolled back: the record which stands
-   * describes work which was really done, and this delivery's own work committed just as
-   * well.
+   * The delivery which lost is the only place where the overlap becomes visible at all. So
+   * it is said out loud there. Nothing is rolled back. The record which stands describes work
+   * which was really done, and the own work of this delivery committed just as well.
    */
   private void reportHandlerRanTwiceAtTheSameTime(
       final String deliveryKey,
@@ -616,10 +615,10 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The outcome a recorded delivery is answered with. An outcome the core does not
-   * know (a record written by a newer version, or a store returning something of its
-   * own) yields an empty result: the handler runs again, which is the behaviour without
-   * any log at all, and the WARN says why.
+   * The outcome with which a recorded delivery is answered. An outcome which the core does
+   * not know gives an empty result (a record written by a newer version, or a store which
+   * returns something of its own). Then the handler runs again, which is the behaviour
+   * without any log at all, and the WARN says why.
    */
   private Optional<WorkflowTaskOutcome> recordedOutcomeOf(
       final TaskDeliveryLog deliveryLog,
@@ -650,28 +649,28 @@ public final class DeliveryRecords {
   }
 
   /**
-   * How long a task left open by a <code>&#64;TaskId</code> handler has been waiting,
-   * and whether that passed the maximum age configured for it
-   * (<code>vanillabp.delivery.max-task-age</code>, resolvable per workflow module,
+   * How long a task which a <code>&#64;TaskId</code> handler left open has been waiting, and
+   * whether that passed the maximum age configured for it
+   * (<code>vanillabp.delivery.max-task-age</code>, which can be set per workflow module,
    * workflow and task).
    * <p>
-   * This is the one place in VanillaBP which can answer the question at all. The record
-   * was written when the handler ran and it is what answers every redelivery of that
-   * task, so the distance between its timestamp and now IS the age of the open task -
-   * no clock, no scheduler and no second bookkeeping are involved, and the granularity
-   * follows whatever rhythm the BPMS redelivers in.
+   * This is the one place in VanillaBP which can answer the question at all. The record was
+   * written when the handler ran, and it answers every redelivery of that task. So the time
+   * between its timestamp and now IS the age of the open task. No clock, no scheduler and no
+   * second bookkeeping are involved. The granularity follows whatever rhythm the BPMS
+   * redelivers in.
    * <p>
-   * Reporting is one WARN per task, not one per redelivery: a task open for a year would
-   * otherwise fill the log with the same line every time its lock is renewed. The memory
-   * of what was already reported is bounded and lives in this collaborator - losing
-   * an entry costs one repeated WARN, which is why it needs nothing durable.
+   * The report is one WARN per task, not one per redelivery. Otherwise a task which is open
+   * for a year would fill the log with the same line every time its lock is renewed. The
+   * memory of what was already reported is limited, and it lives in this helper. Losing an
+   * entry costs one repeated WARN. That is why it needs nothing durable.
    * <p>
    * This is also the one place which knows that a record is still in use, whichever BPMS
-   * redelivered: the store is told so and keeps the record alive as long as
-   * redeliveries keep coming, while the timestamp this age is measured from stays where
-   * it is. The store collects the key rather than writing it here - the redelivery runs
-   * in the transaction of the workflow aggregate, and an UPDATE per renewal of every open
-   * task has no business in it.
+   * redelivered. The store is told so, and it keeps the record alive as long as redeliveries
+   * keep coming. The timestamp from which this age is measured stays where it is. The store
+   * collects the key and does not write it here. The redelivery runs in the transaction of
+   * the workflow aggregate, and an UPDATE per lock renewal of every open task does not belong
+   * there.
    *
    * @param deliveryLog The store the record came from
    * @param delivery The record answering this delivery
@@ -686,8 +685,8 @@ public final class DeliveryRecords {
     deliveryLog.stillOpen(delivery.deliveryKey());
 
     if (delivery.recordedAt() == null) {
-      // a store written before the timestamp was part of the record - the task is
-      // open, its age is simply not known
+      // a store written before the timestamp was part of the record. The task is open, only
+      // its age is not known
       return WorkflowTaskOutcome.completionPending();
     }
     final var openFor = Duration.between(delivery.recordedAt(), Instant.now());
@@ -695,9 +694,9 @@ public final class DeliveryRecords {
         ? DeliveryProperties.DEFAULT_MAX_TASK_AGE
         : properties.maxTaskAge(workflowModuleId, bpmnProcessId, context.getTaskDefinition());
     final var exceeded = !maxTaskAge.isZero() && (openFor.compareTo(maxTaskAge) > 0);
-    // a workflow which was already running before this version was deployed was open
-    // before VanillaBP ever wrote a record for it, so the record's timestamp is the
-    // moment the task was first SEEN and not the moment it was created
+    // a workflow which was already running before this version was deployed was open before
+    // VanillaBP ever wrote a record for it. So the record's timestamp is the moment the task
+    // was first SEEN, not the moment it was created
     final var lowerBound = context.predatesDeployedVersion();
     if (exceeded && reportTaskAgeOnce(delivery.deliveryKey())) {
       log.warn(
@@ -730,7 +729,7 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Whether the given task's age is reported now - <code>true</code> exactly once per
+   * Whether the age of the given task is reported now: <code>true</code> exactly once per
    * delivery key, which is once per task.
    *
    * @param deliveryKey The identity of the delivery answering this task
@@ -744,9 +743,9 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Whether an ended workflow of this BPMN process releases the records of its processed
-   * task deliveries (<code>vanillabp.delivery.release-on-workflow-end</code>, overridable
-   * per workflow module).
+   * Whether an ended workflow of this BPMN process releases the records of its processed task
+   * deliveries (<code>vanillabp.delivery.release-on-workflow-end</code>, which can be set per
+   * workflow module).
    *
    * @return Whether the records are released when a workflow ends
    */
@@ -757,16 +756,16 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Deletes the records of the processed task deliveries of ONE ended workflow. Invoked
+   * Deletes the records of the processed task deliveries of ONE ended workflow. It is called
    * within the transaction of the end notification (see
-   * {@link io.vanillabp.integration.adapter.migration.workflowend.WorkflowEndedHandlers}),
-   * so the deletion commits with it - and a notification whose transaction is rolled back
-   * leaves the records where they were, to be released by the redelivered notification or
-   * by the retention.
+   * {@link io.vanillabp.integration.adapter.migration.workflowend.WorkflowEndedHandlers}), so
+   * the deletion commits with it. A notification whose transaction is rolled back leaves the
+   * records where they were. Then the repeated notification or the retention releases
+   * them.
    *
    * @param workflowAggregateId The ID of the ended workflow's aggregate
-   * @param recordedBefore Only records written before this moment are deleted - the bound
-   *          which keeps the records of a SECOND workflow on the same aggregate
+   * @param recordedBefore Only records written before this moment are deleted. This limit
+   *          keeps the records of a SECOND workflow on the same aggregate
    * @return The number of records deleted
    */
   public int release(
@@ -777,9 +776,9 @@ public final class DeliveryRecords {
     if (deliveryLog == null) {
       return 0;
     }
-    // under every id this workflow service serves: the tasks of a called process are written
-    // down under the id of that process, and the end of a called process releases nothing,
-    // because the workflow goes on in the process which called it
+    // under every id which this workflow service serves. The tasks of a called process are
+    // written down under the id of that process. And the end of a called process releases
+    // nothing, because the workflow goes on in the process which called it
     var released = 0;
     for (final var servedId : bpmnProcessIdsToReadUnder) {
       released += deliveryLog.releaseRecordsOf(workflowModuleId, servedId, workflowAggregateId, recordedBefore);
@@ -796,18 +795,18 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Validates AT STARTUP that a store is available if any prioritized adapter may repeat a
-   * delivery ({@link MigratableProcessService#deliversTasksAtLeastOnce()}) and
-   * deduplication is switched on. Unlike the outbox this does NOT fail the boot: without a
-   * store VanillaBP behaves exactly as it did before the feature existed (at-least-once,
-   * the rule to key business decisions on the aggregate's state carries the case), so a
-   * guiding warning naming both remedies is the honest answer - and it goes into the
-   * block of the start instead of surfacing per delivery.
+   * Checks AT STARTUP that a store is available, if any prioritized adapter may repeat a
+   * delivery ({@link MigratableProcessService#deliversTasksAtLeastOnce()}) and deduplication
+   * is switched on. Unlike the outbox, this does NOT fail the boot. Without a store VanillaBP
+   * behaves exactly as before the feature existed: at-least-once, and the rule to base
+   * business decisions on the aggregate's state covers the case. So a guiding warning which
+   * names both remedies is the honest answer. It goes into the block of the start, instead of
+   * showing up per delivery.
    * <p>
-   * Nothing is resolved where no adapter can repeat a delivery: an application using an
-   * embedded BPMS only must not be pushed towards a store it does not need.
+   * Nothing is resolved where no adapter can repeat a delivery. An application which only
+   * uses an embedded BPMS must not be pushed towards a store which it does not need.
    *
-   * @param <A> The workflow-aggregate type the adapters' process services serve
+   * @param <A> The workflow-aggregate type which the adapters' process services serve
    * @param adapterProcessServices The prioritized adapters of this BPMN process
    */
   public <A> void validateAtStartup(
@@ -831,15 +830,15 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Validates AT STARTUP that the store resolved for this aggregate can do what
+   * Checks AT STARTUP that the store resolved for this aggregate can do what
    * <code>release-on-workflow-end</code> promises. A store which does not implement
    * {@link TaskDeliveryLog#releaseRecordsOf(String, String, String, Instant)} keeps its
-   * records until the retention passed - which is not wrong, but it is not what the
-   * application configured, so it is said once at startup naming the store and the
-   * property.
+   * records until the retention has passed. That is not wrong, but it is not what the
+   * application configured. So it is said once at startup, and the message names the store
+   * and the property.
    * <p>
-   * Nothing happens where the release is switched off: an application which did not ask
-   * for it must not be told about a method its store does not have.
+   * Nothing happens where the release is switched off. An application which did not ask for
+   * it must not be told about a method which its store does not have.
    */
   private void validateReleaseAtStartup() {
 
@@ -848,8 +847,8 @@ public final class DeliveryRecords {
     }
     final var deliveryLog = resolveLog();
     if (deliveryLog == null) {
-      // no store at all means no records at all - there is nothing to release, and the
-      // missing store is reported by the check for deduplication itself
+      // no store at all means no records at all. There is nothing to release, and the check
+      // for deduplication itself reports the missing store
       return;
     }
     final var storeClass = resolver != null
@@ -881,8 +880,8 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Whether the given store implements the release itself instead of inheriting the
-   * default of {@link TaskDeliveryLog} which does nothing.
+   * Whether the given store implements the release itself, instead of inheriting the default
+   * of {@link TaskDeliveryLog} which does nothing.
    *
    * @param storeClass The store's class, unwrapped by the platform integration
    * @return Whether the store releases records
@@ -891,8 +890,8 @@ public final class DeliveryRecords {
       final Class<?> storeClass) {
 
     try {
-      // resolves to the override where there is one, and to the interface's default
-      // method otherwise - which is exactly the question asked here
+      // this resolves to the override where there is one, and otherwise to the default
+      // method of the interface. That is exactly the question asked here
       final var method = storeClass
           .getMethod(
               "releaseRecordsOf",
@@ -902,16 +901,16 @@ public final class DeliveryRecords {
               Instant.class);
       return method.getDeclaringClass() != TaskDeliveryLog.class;
     } catch (final NoSuchMethodException e) {
-      // a store compiled against an older SPI: it cannot release either
+      // a store compiled against an older SPI cannot release either
       return false;
     }
 
   }
 
   /**
-   * The adapter ids the records of still-open tasks name - asked of a store which was
-   * resolved already, because an application which needs none must not be made to
-   * materialize one for a question about it.
+   * The adapter ids which the records of still open tasks name. It asks only a store which
+   * was resolved already. An application which needs none must not be made to create one for
+   * a question about it.
    *
    * @return The adapter ids, empty where nothing was resolved or the store cannot answer
    */
@@ -924,38 +923,37 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Reports AT STARTUP that the BPMS holds tasks open which VanillaBP has no record of,
-   * so their next delivery will run the <code>&#64;WorkflowTask</code> method again.
+   * Reports AT STARTUP that the BPMS holds tasks open of which VanillaBP has no record. So
+   * their next delivery will run the <code>&#64;WorkflowTask</code> method again.
    *
    * <h4>What this catches</h4>
    *
-   * The wiki promises that a repeated delivery does not run the handler a second time,
-   * and that promise rests on a record written when the handler ran. A task which was
-   * already open before this application first ran has none - which is exactly what an
-   * upgrade from version 1 leaves behind, since version 1 kept no such records at all.
-   * The window is real, it closes as those tasks are delivered once each, and without
-   * this nobody can see it: no message is produced when it happens, because from the
-   * core's point of view a delivery it has never seen is simply a new one.
+   * The wiki promises that a repeated delivery does not run the handler a second time. That
+   * promise relies on a record written when the handler ran. A task which was already open
+   * before this application first ran has no record. An upgrade from version 1 leaves exactly
+   * that behind, because version 1 kept no such records at all. The window is real. It closes
+   * as each of those tasks is delivered once. And without this nobody can see it. No message
+   * is produced when it happens, because for the core a delivery which it has never seen is
+   * simply a new one.
    *
-   * <h4>Why counting is all that is done</h4>
+   * <h4>Why it only counts</h4>
    *
-   * Nothing can be adopted. A record would have to claim that the handler ran and left
-   * the task open; a job which is activated and still there may equally be a handler
-   * which crashed halfway, no BPMS can tell the two apart, and the wrong guess skips
-   * business code which never ran. So the honest answer is the number plus the sentence
-   * that the guards in the handlers still carry the case, which is what version 1 needed
-   * anyway.
+   * Nothing can be adopted. A record would have to claim that the handler ran and left the
+   * task open. But a job which is activated and still there may just as well be a handler
+   * which crashed halfway. No BPMS can tell the two apart, and the wrong guess skips business
+   * code which never ran. So the honest answer is the number, plus the sentence that the
+   * guards in the handlers still cover the case. Version 1 needed those anyway.
    *
    * <h4>When it stays silent</h4>
    *
-   * Silent unless BOTH sides answer and both answers are interesting: a store which
-   * cannot say whether it holds open records, a BPMS which cannot count its open tasks,
-   * a store which DOES hold open records (an application which has been running), and a
-   * BPMS holding nothing open (a fresh installation) each end it. So a normal restart
+   * It is silent unless BOTH sides answer, and both answers are interesting. Each of these
+   * ends it: a store which cannot say whether it holds open records, a BPMS which cannot count
+   * its open tasks, a store which DOES hold open records (an application which has been
+   * running), and a BPMS which holds nothing open (a fresh installation). So a normal restart
    * says nothing, a first start on an empty system says nothing, and the upgrade says
    * something once per BPMN process.
    *
-   * @param <A> The workflow-aggregate type the adapters' process services serve
+   * @param <A> The workflow-aggregate type which the adapters' process services serve
    * @param adapterProcessServices The prioritized adapters of this BPMN process
    */
   public <A> void reportOpenTasksNobodyRemembers(
@@ -999,38 +997,37 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Answers from the record of this aggregate which adapter holds the task THIS CALL
-   * names, so no BPMS has to be asked for it.
+   * Answers from the record of this aggregate which adapter holds the task that THIS CALL
+   * names. So no BPMS has to be asked for it.
    * <p>
    * VanillaBP wrote that record while the handler of the task ran, in the database of the
-   * workflow aggregate: it names the adapter which delivered the task, and it says whether
+   * workflow aggregate. It names the adapter which delivered the task, and it says whether
    * the application has closed that task since. Both answers are exactly what the walk over
-   * the adapters would ask a BPMS for, one round trip per operation - on Camunda 8 the very
-   * command the adapter's phase one sends again a moment later.
+   * the adapters would ask a BPMS for, with one round trip per operation. On Camunda 8 it is
+   * the very command which the adapter's phase one sends again a moment later.
    * <p>
-   * What decides whether the record can answer is the CALL rather than the operation: a call
-   * which names a task asks about that task, however the operation is elected. Pushing a
-   * changed aggregate into the scope of a task is the case where the two differ - the values
-   * land in the workflow, and the task the call names is what says where. As long as that task
-   * is open, the BPMS holding it is the BPMS holding the workflow around it, which is why the
-   * answer stays one about a task (see decision 30 in the repository's DECISIONS.md). A task
-   * which is over says nothing about the workflow around it, so a closed record answers only
-   * the operations which end the task themselves.
+   * The CALL decides whether the record can answer, not the operation. A call which names a
+   * task asks about that task, however the operation is elected. Pushing a changed aggregate
+   * into the scope of a task is the case where the two differ. The values land in the
+   * workflow, and the task which the call names says where. As long as that task is open, the
+   * BPMS which holds it is the BPMS which holds the workflow around it. That is why the answer
+   * stays one about a task (see decision 30 in the repository's DECISIONS.md). A task which is
+   * over says nothing about the workflow around it. So a closed record only answers the
+   * operations which end the task themselves.
    * <p>
-   * The record is looked for under every BPMN process id this workflow service serves, this
-   * instance's own id first. A task of a secondary process was delivered to the instance of
-   * THAT process and its record therefore carries the secondary id, while the application
-   * completes the task on the primary process service - so a read of the own id alone found
-   * nothing for exactly the tasks a called process left open
-   * ({@link #setBpmnProcessIdsToReadUnder(List)}).
+   * The record is looked for under every BPMN process id which this workflow service serves,
+   * this instance's own id first. A task of a secondary process was delivered to the instance
+   * of THAT process. So its record has the secondary id, while the application completes the
+   * task on the primary process service. A read of the own id alone found nothing, exactly
+   * for the tasks which a called process left open ({@link #setBpmnProcessIdsToReadUnder(List)}).
    * <p>
-   * <code>null</code> means the record cannot answer, and then everything happens as it did
-   * before: no store, deliveries not deduplicated, the retention gone over the record, a BPMS
-   * which reports no delivery identity, a workflow started before this version was deployed,
-   * or an adapter which is not configured any more. That fallback is what keeps the record a
-   * hint rather than a registry.
+   * <code>null</code> means that the record cannot answer. Then everything happens as before.
+   * That is the case without a store, with deliveries not deduplicated, when the retention
+   * deleted the record, with a BPMS which reports no delivery identity, for a workflow started
+   * before this version was deployed, or for an adapter which is not configured any more.
+   * This fallback keeps the record a hint and not a registry.
    *
-   * @param <A> The workflow-aggregate type the adapters' process services serve
+   * @param <A> The workflow-aggregate type which the adapters' process services serve
    * @param operation The operation being elected for
    * @param workflowAggregateId The workflow aggregate the operation is about
    * @param args The operation's arguments, which name the task
@@ -1059,11 +1056,11 @@ public final class DeliveryRecords {
       return null;
     }
     if (namesAnotherKindOfTask(record, operation)) {
-      // the caller named a task of one kind and asks for a command of the other - the id of
-      // a user task handed to a job command, say. Electing from the record would send that
-      // command to the BPMS which really holds the task, and the BPMS would answer "no such
-      // job" at dispatch time, long after the caller was gone. So the record does not answer
-      // this election: the adapters are asked, every one of them says it knows no such task,
+      // the caller named a task of one kind, and asks for a command of the other kind (for
+      // example the id of a user task handed to a job command). Electing from the record would
+      // send that command to the BPMS which really holds the task. The BPMS would answer "no
+      // such job" at dispatch time, long after the caller was gone. So the record does not
+      // answer this election. The adapters are asked, each of them says it knows no such task,
       // and the failure says which kind the id is (see
       // MigrationProcessService#unknownToEveryBpms)
       log.debug(
@@ -1082,8 +1079,8 @@ public final class DeliveryRecords {
         .findFirst()
         .orElse(null);
     if (adapter == null) {
-      // the adapter which delivered the task is not prioritized for this workflow any more -
-      // the walk elects from the configuration as it reads now
+      // the adapter which delivered the task is no longer prioritized for this workflow. The
+      // walk elects from the configuration as it is now
       log.debug(
           "Adapter '{}' recorded for task '{}' of aggregate '{}' is not a prioritized adapter - "
               + "probing instead",
@@ -1094,10 +1091,10 @@ public final class DeliveryRecords {
     }
     final var taskIsOpen = record.taskClosedAt() == null;
     if (!taskIsOpen && !endsTheTaskItNames(operation)) {
-      // a task which is over is no statement about the workflow around it: the scope the
-      // push writes into outlives the task, and so may the workflow. Only an operation
-      // which ends the task itself may read a closed record as "there is nothing left to
-      // do here"
+      // a task which is over says nothing about the workflow around it. The scope into which
+      // the push writes outlives the task, and so may the workflow. Only an operation which
+      // ends the task itself may read a closed record as "there is nothing left to do
+      // here"
       log.debug(
           "Task '{}' of aggregate '{}' was closed at {}, which does not say whether its workflow "
               + "still runs - probing instead",
@@ -1126,22 +1123,23 @@ public final class DeliveryRecords {
 
   /**
    * Writes into the record that the application's completion or cancellation of a task
-   * reached the BPMS - here and not when the caller asked, because until this moment the
-   * task is still open and its redeliveries still renew the lock the BPMS holds on it.
+   * reached the BPMS. It does that here, and not when the caller asked. Until this moment the
+   * task is still open, and its redeliveries still renew the lock which the BPMS holds on it.
    * <p>
-   * A failure is reported and swallowed: the operation itself went through, the outbox entry
-   * is done, and repeating a dispatch which succeeded because a mark did not is the worse of
-   * the two. What is lost is one BPMS round trip on the next operation naming that task.
+   * A failure is reported and swallowed. The operation itself went through, and the outbox
+   * entry is done. Repeating a dispatch which succeeded, just because a mark did not, is the
+   * worse of the two. What is lost is one BPMS round trip on the next operation which names
+   * that task.
    * <p>
-   * Asked of the OPERATION and not of the call, unlike the election in
-   * {@link #locate(PhaseOperation, Object, Map, List)}: a call which merely names a task
-   * leaves that task open - pushing a changed aggregate into its scope completes nothing -
-   * so writing the moment of a completion there would close a record while the BPMS still
-   * hands the task out.
+   * It asks the OPERATION and not the call, unlike the election in
+   * {@link #locate(PhaseOperation, Object, Map, List)}. A call which only names a task leaves
+   * that task open. Pushing a changed aggregate into its scope completes nothing. So writing
+   * the moment of a completion there would close a record while the BPMS still hands out the
+   * task.
    * <p>
-   * The row is looked for under every BPMN process id this workflow service serves, the own
-   * id first, and the first one marked ends the search: the delivery which opened that row
-   * may have been one of a secondary process, and then the row does not carry the id the
+   * The row is looked for under every BPMN process id which this workflow service serves, the
+   * own id first. The first one marked ends the search. The delivery which opened that row
+   * may have come from a secondary process. Then the row does not have the id which the
    * application called.
    *
    * @param operation The operation which was dispatched
@@ -1181,18 +1179,18 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Writes into the record that the BPMS itself ended the task - the other half of
-   * {@link #writeDownThatTheTaskIsClosed(PhaseOperation, Object, Map, String)}, for the
-   * tasks nobody in the application asked to close.
+   * Writes into the record that the BPMS itself ended the task. This is the other half of
+   * {@link #writeDownThatTheTaskIsClosed(PhaseOperation, Object, Map, String)}, for the tasks
+   * which nobody in the application asked to close.
    * <p>
-   * Called on the DELIVERY path, inside the transaction of the delivery, and the mark is
-   * safe there for the reason it is not safe when a caller merely asks: a task the BPMS
-   * cancelled is never handed out again, so there is no lock left for a redelivery to
-   * renew. Without it the record of that task stays open until the retention deletes it,
-   * and everything which reads the open work of a workflow reads a task which is gone.
+   * It is called on the DELIVERY path, inside the transaction of the delivery. The mark is
+   * safe there, for the same reason it is not safe when a caller merely asks. A task which the
+   * BPMS cancelled is never handed out again. So there is no lock left for a redelivery to
+   * renew. Without the mark, the record of that task stays open until the retention deletes
+   * it. And everything which reads the open work of a workflow reads a task which is gone.
    * <p>
    * A failure is not swallowed. The mark and the record of this delivery are written in one
-   * transaction, and a delivery which cannot close the task it just reported cancelled would
+   * transaction. A delivery which cannot close the task it just reported as cancelled would
    * leave the store saying two different things about that task.
    *
    * @param deliveryLog The store to write to, <code>null</code> where there is none
@@ -1210,10 +1208,10 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Whether the operation ENDS the task it names, which is what an operation elected by
-   * whoever holds a task does: completing it or cancelling it. An operation elected by
-   * whoever holds the WORKFLOW may name a task as well, and then it says where its values
-   * go rather than that the task is finished.
+   * Whether the operation ENDS the task it names. An operation elected by whoever holds a
+   * task does that: it completes it or cancels it. An operation elected by whoever holds the
+   * WORKFLOW may name a task as well. Then it says where its values go, not that the task is
+   * finished.
    */
   private static boolean endsTheTaskItNames(
       final PhaseOperation operation) {
@@ -1223,13 +1221,12 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Which kind of task an operation asks a BPMS about, which is the election it is elected
-   * by: a task and a user task are two questions because their ids live in namespaces of
-   * their own.
+   * Which kind of task an operation asks a BPMS about, which is the election it uses. A task
+   * and a user task are two questions, because their ids live in namespaces of their own.
    *
    * @param operation The operation being elected for
-   * @return The kind, or <code>null</code> where the operation asks about no task at all -
-   *         which is every operation about the workflow, however it names a task
+   * @return The kind, or <code>null</code> where the operation asks about no task at all.
+   *         That is every operation about the workflow, however it names a task
    */
   public static TaskKind kindAskedAboutBy(
       final PhaseOperation operation) {
@@ -1243,12 +1240,12 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Whether the record says that the id belongs to the OTHER kind of task than the one this
-   * operation asks a BPMS about.
+   * Whether the record says that the id belongs to the OTHER kind of task than the one which
+   * this operation asks a BPMS about.
    * <p>
    * Both sides have to say something. A record written by an adapter which does not report
-   * the kind names none, and an operation about the workflow asks about no kind, so neither
-   * contradicts anything and everything stays as it was.
+   * the kind names none. And an operation about the workflow asks about no kind. Then neither
+   * contradicts anything, and everything stays as it was.
    *
    * @param record The record of the task the call names
    * @param operation The operation being elected for
@@ -1265,8 +1262,8 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The name a store keeps a kind of task under, which is the enum's own name - the way the
-   * outcome of a delivery travels into a record as well.
+   * The name under which a store keeps a kind of task: the enum's own name. The outcome of a
+   * delivery travels into a record the same way.
    *
    * @param kind The kind the delivering adapter reported, or <code>null</code>
    * @return The name, or <code>null</code> where the adapter reported none
@@ -1281,10 +1278,10 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The kind a record names, or <code>null</code> where it names nothing this version knows.
-   * A record written by a NEWER version of VanillaBP may hold a kind which did not exist
-   * yet, and a kind nobody here understands says nothing - the alternative would be to
-   * read it as a contradiction and send a caller to a method of a kind nobody knows.
+   * The kind which a record names, or <code>null</code> where it names nothing that this
+   * version knows. A record written by a NEWER version of VanillaBP may hold a kind which did
+   * not exist yet. A kind which nobody here understands says nothing. Otherwise it would count
+   * as a contradiction, and send a caller to a method of a kind which nobody knows.
    *
    * @param recordedKind The text the record holds, which may be <code>null</code>
    * @return The kind, or <code>null</code>
@@ -1305,15 +1302,16 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Which kind of task the id a call names was delivered as, read from the record of that
-   * task - what the failure of an operation no BPMS could serve says instead of listing
-   * what the id could be.
+   * The kind of task as which the id that a call names was delivered, read from the record of
+   * that task. The failure of an operation which no BPMS could serve says this, instead of
+   * listing what the id could be.
    * <p>
    * It answers <code>null</code> where nothing is known, and that is the ordinary case: an
-   * application without a store, an adapter which does not report the kind, a record the
-   * retention deleted, or a task which was never delivered under this id at all. A failure
-   * of the store is swallowed here, unlike everywhere else: a message is being built for a
-   * failure the caller already has, and replacing it with a second one would hide the first.
+   * application without a store, an adapter which does not report the kind, a record which
+   * the retention deleted, or a task which was never delivered under this id at all. A failure
+   * of the store is swallowed here, unlike everywhere else. A message is being built for a
+   * failure which the caller already has. Replacing it with a second one would hide the
+   * first.
    *
    * @param workflowAggregateId The workflow aggregate the operation is about
    * @param args The operation's arguments, which name the task
@@ -1355,8 +1353,8 @@ public final class DeliveryRecords {
   }
 
   /**
-   * How long a record is kept, which is what a caller has to know who got no sharper answer:
-   * a task completed longer ago than this has no record left to read the kind from.
+   * How long a record is kept. A caller who got no sharper answer has to know this. A task
+   * completed longer ago than this has no record left from which to read the kind.
    *
    * @return The retention, or <code>null</code> where no configuration was bound (tests)
    */
@@ -1371,19 +1369,20 @@ public final class DeliveryRecords {
   /**
    * The BPMS' own id of the workflow of the given aggregate, as far as a record knows one.
    * <p>
-   * Two reads, in this order. The row about the START of that workflow comes first, under every
-   * BPMN process id this workflow service serves: it is a lookup by key, it exists from the
-   * moment the workflow was created, and it holds the id of the workflow this aggregate IS. The
-   * OPEN records of the aggregate are the second read, which answers for a workflow started
-   * before the start row existed and for one whose start row the retention took. That read
-   * looks under this process' own id only. A task of a called process names the instance of
-   * the called process, and that instance is not the workflow of the aggregate. Either way a
-   * workflow VanillaBP heard about is named here after a restart, which the election cache
-   * cannot promise. The first row naming a workflow answers - the rows of one aggregate and one
-   * BPMN process belong to one workflow.
+   * There are two reads, in this order. The row about the START of that workflow comes first,
+   * under every BPMN process id which this workflow service serves. It is a lookup by key. It
+   * exists from the moment the workflow was created, and it holds the id of the workflow
+   * which this aggregate IS. The OPEN records of the aggregate are the second read. It answers
+   * for a workflow started before the start row existed, and for one whose start row the
+   * retention took. That read only looks under this process' own id. A task of a called
+   * process names the instance of the called process, and that instance is not the workflow
+   * of the aggregate. Either way, a workflow which VanillaBP heard about is named here after
+   * a restart. The election cache cannot promise that. The first row which names a workflow
+   * answers, because the rows of one aggregate and one BPMN process belong to one workflow.
    * <p>
-   * A hint and never an answer. It says what was true when the delivery ran, not whether the
-   * workflow still runs, and an adapter which reports no workflow id leaves nothing here.
+   * It is a hint and never an answer. It says what was true when the delivery ran, not
+   * whether the workflow still runs. An adapter which reports no workflow id leaves nothing
+   * here.
    *
    * @param workflowAggregateId The workflow aggregate the caller is asking about
    * @return The workflow's id in the BPMS, or <code>null</code> where no record knows one
@@ -1409,7 +1408,7 @@ public final class DeliveryRecords {
           return started;
         }
       }
-      // the open tasks of THIS process only: a task of a called process names the instance of
+      // the open tasks of THIS process only. A task of a called process names the instance of
       // that process, which is not the workflow of the aggregate
       final var known = deliveryLog
           .openTasksOfAggregate(workflowModuleId, bpmnProcessId, workflowAggregateId.toString())
@@ -1422,8 +1421,8 @@ public final class DeliveryRecords {
         return known;
       }
     } catch (final RuntimeException e) {
-      // a hint nobody can read is a hint nobody has: the election runs either way, one
-      // round trip slower
+      // a hint which nobody can read is a hint which nobody has. The election runs either
+      // way, one round trip slower
       log
           .debug(
               "Could not read which workflow of the BPMS aggregate '{}' (BPMN process '{}' of "
@@ -1438,16 +1437,17 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The BPMS' own id of the workflow of the given aggregate together with the version of the
-   * process definition it runs on and the adapter of the row, as far as a record knows them.
+   * The BPMS' own id of the workflow of the given aggregate, together with the version of the
+   * process definition on which it runs and the adapter of the row, as far as a record knows
+   * them.
    * <p>
    * The id comes from where {@link #workflowIdOf(Object)} takes it, in the same order. The
    * version comes from the same row. Where the start row names no version, an OPEN delivery of
-   * that same workflow may, and it is read second: the start may have been reported by an adapter
+   * that same workflow may. It is read second. The start may have been reported by an adapter
    * which did not know the version yet, while every delivery of that workflow brings it along.
-   * A version is only taken from a row of THIS BPMN process. A task of a called process belongs
-   * to the same workflow but carries the version of the called process, which says nothing about
-   * this one.
+   * A version is only taken from a row of THIS BPMN process. A task of a called process
+   * belongs to the same workflow, but it has the version of the called process, which says
+   * nothing about this one.
    *
    * @param workflowAggregateId The workflow aggregate the caller is asking about
    * @return The workflow's id and version, or <code>null</code> where no record knows the id
@@ -1472,7 +1472,7 @@ public final class DeliveryRecords {
                 ? versionOfThisProcess(started)
                 : versionOfAnOpenTask(deliveryLog, workflowAggregateId, started.workflowId()));
       }
-      // the same rule as for the id alone: an open task of a called process names an instance
+      // the same rule as for the id alone. An open task of a called process names an instance
       // which is not the workflow of the aggregate
       final var known = deliveryLog
           .openTasksOfAggregate(workflowModuleId, bpmnProcessId, workflowAggregateId.toString())
@@ -1489,7 +1489,8 @@ public final class DeliveryRecords {
                 : versionOfAnOpenTask(deliveryLog, workflowAggregateId, known.workflowId()));
       }
     } catch (final RuntimeException e) {
-      // the same as for the id alone: a record nobody can read is a record nobody has
+      // the same as for the id alone: a record which nobody can read is a record which nobody
+      // has
       log
           .debug(
               "Could not read which workflow of the BPMS aggregate '{}' (BPMN process '{}' of "
@@ -1504,14 +1505,15 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The open user tasks of the workflow of the given aggregate, read from the open records under
-   * every BPMN process id this workflow service serves, the own id first. A row of a task carries
-   * the instance the task runs in, which for a task of a called process is not the workflow of the
-   * aggregate. That one is taken from the start row, so a reader gets both.
+   * The open user tasks of the workflow of the given aggregate, read from the open records
+   * under every BPMN process id which this workflow service serves, the own id first. A row of
+   * a task has the instance in which the task runs. For a task of a called process, that is
+   * not the workflow of the aggregate. The workflow is taken from the start row, so a reader
+   * gets both.
    *
    * @param workflowAggregateId The workflow aggregate the caller is asking about
-   * @return The open user tasks, oldest delivery first; empty where there are none or the log
-   *         cannot be read
+   * @return The open user tasks, oldest delivery first. Empty where there are none, or where
+   *         the log cannot be read
    */
   public List<io.vanillabp.integration.extension.spi.election.OpenUserTask> openUserTasksOf(
       final Object workflowAggregateId) {
@@ -1535,7 +1537,7 @@ public final class DeliveryRecords {
       if (rows.isEmpty()) {
         return List.of();
       }
-      // each id list is oldest first, and a reader expects that order across all of them
+      // each list of ids is oldest first, and a reader expects that order across all of them
       rows.sort(java.util.Comparator
           .comparing(TaskDelivery::recordedAt, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder())));
       final var started = startRowOf(deliveryLog, workflowAggregateId);
@@ -1549,8 +1551,8 @@ public final class DeliveryRecords {
                   .taskDefinition(), row.bpmnElementId(), row.processVersion()))
           .toList();
     } catch (final RuntimeException e) {
-      // the same as for the id: a record nobody can read is a record nobody has, and the caller
-      // was told that an empty list may mean exactly this
+      // the same as for the id: a record which nobody can read is a record which nobody has.
+      // The caller was told that an empty list may mean exactly this
       log
           .debug(
               "Could not read the open user tasks of aggregate '{}' (BPMN process '{}' of workflow "
@@ -1565,13 +1567,13 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The row written when the workflow of the given aggregate started, and nothing else: no open
-   * task stands in for it. The adapter of that row started the workflow, and a workflow does not
-   * change its BPMS, so this is what the election reads before it asks any BPMS.
+   * The row written when the workflow of the given aggregate started, and nothing else. No
+   * open task stands in for it. The adapter of that row started the workflow, and a workflow
+   * does not change its BPMS. So the election reads this before it asks any BPMS.
    *
    * @param workflowAggregateId The workflow aggregate the caller is asking about
-   * @return The start row naming a workflow, or <code>null</code> where there is none or it
-   *         cannot be read
+   * @return The start row which names a workflow, or <code>null</code> where there is none,
+   *         or where it cannot be read
    */
   public TaskDelivery workflowStartRowOf(
       final Object workflowAggregateId) {
@@ -1586,7 +1588,8 @@ public final class DeliveryRecords {
     try {
       return startRowOf(deliveryLog, workflowAggregateId);
     } catch (final RuntimeException e) {
-      // a row nobody can read is a row nobody has: the election asks the BPMS as it did before
+      // a row which nobody can read is a row which nobody has. The election asks the BPMS as
+      // before
       log
           .debug(
               "Could not read the start of the workflow of aggregate '{}' (BPMN process '{}' of "
@@ -1602,14 +1605,16 @@ public final class DeliveryRecords {
 
   /**
    * What the delivery log says about the start of a workflow whose workflow aggregate is not
-   * stored here. The row written at the start tells the two situations of such a delivery apart:
-   * a row naming this very workflow means this application started it and its aggregate was
-   * deleted, and no row at all means another application most likely owns it.
+   * stored here. The row written at the start tells the two situations of such a delivery
+   * apart. A row which names this very workflow means that this application started it, and
+   * its aggregate was deleted. No row at all means that another application most likely owns
+   * it.
    * <p>
-   * Nothing is known where there is no log, where it cannot be read, where the delivery names no
-   * workflow to compare with, or where the row names another workflow. A task of a called process
-   * names the instance of that process rather than the workflow of the aggregate, so it ends up
-   * in the last case and the refusal names both situations, as it did before rows were written.
+   * Nothing is known where there is no log, where it cannot be read, where the delivery names
+   * no workflow to compare with, or where the row names another workflow. A task of a called
+   * process names the instance of that process and not the workflow of the aggregate. So it
+   * ends up in the last case, and the refusal names both situations, as before rows were
+   * written.
    *
    * @param workflowAggregateId The workflow aggregate id the BPMS named, as it arrived
    * @param workflowId The BPMS' own id of the workflow the delivery belongs to, or
@@ -1636,7 +1641,7 @@ public final class DeliveryRecords {
           ? DeliveryOfAnUnknownWorkflowException.StartRecord.STARTED_HERE
           : DeliveryOfAnUnknownWorkflowException.StartRecord.NOT_KNOWN;
     } catch (final RuntimeException e) {
-      // a row nobody can read says nothing, so the refusal names both situations
+      // a row which nobody can read says nothing. So the refusal names both situations
       log
           .debug(
               "Could not read the start of the workflow of aggregate '{}' (BPMN process '{}' of "
@@ -1651,15 +1656,16 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The row of the task an operation names, where the operation names one. That row was written
-   * when the adapter left the task open, and it names the BPMS' own id of the workflow the task
-   * runs in, its element and its kind. Phase two hands it to the adapter, which can then address
-   * the task without searching for it, see decision 114 in the repository's DECISIONS.md.
+   * The row of the task which an operation names, where the operation names one. That row was
+   * written when the adapter left the task open. It names the BPMS' own id of the workflow in
+   * which the task runs, its element and its kind. Phase two hands it to the adapter, which
+   * can then address the task without searching for it (see decision 114 in the repository's
+   * DECISIONS.md).
    *
    * @param workflowAggregateId The workflow aggregate the operation is about
    * @param args The arguments of the operation
-   * @return The row, or <code>null</code> where the operation names no task, there is no row or
-   *         it cannot be read
+   * @return The row, or <code>null</code> where the operation names no task, where there is
+   *         no row, or where it cannot be read
    */
   public TaskDelivery taskRowOf(
       final Object workflowAggregateId,
@@ -1676,7 +1682,7 @@ public final class DeliveryRecords {
     try {
       return recordOfTaskUnderAnyServedId(deliveryLog, workflowAggregateId.toString(), taskId);
     } catch (final RuntimeException e) {
-      // a row nobody can read is a row nobody has: the adapter searches as it did before
+      // a row which nobody can read is a row which nobody has. The adapter searches as before
       log
           .debug(
               "Could not read the row of task '{}' of aggregate '{}' (BPMN process '{}' of workflow "
@@ -1692,8 +1698,8 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The start row of the workflow of that aggregate, under every BPMN process id this workflow
-   * service serves, the own id first.
+   * The start row of the workflow of that aggregate, under every BPMN process id which this
+   * workflow service serves, the own id first.
    */
   private TaskDelivery startRowOf(
       final TaskDeliveryLog deliveryLog,
@@ -1713,7 +1719,8 @@ public final class DeliveryRecords {
   }
 
   /**
-   * What a reader is told about a workflow, including whether an empty version may still come.
+   * What a reader is told about a workflow, including whether an empty version may still
+   * come.
    */
   private io.vanillabp.integration.extension.spi.election.WorkflowStart startOf(
       final String adapterId,
@@ -1728,8 +1735,8 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The version a row names, where the row belongs to this BPMN process. A row of a called
-   * process carries the version of THAT process.
+   * The version which a row names, where the row belongs to this BPMN process. A row of a
+   * called process has the version of THAT process.
    */
   private String versionOfThisProcess(
       final TaskDelivery row) {
@@ -1742,8 +1749,8 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The version an open delivery of the given workflow names, read under this BPMN process
-   * only, or <code>null</code> where none does.
+   * The version which an open delivery of the given workflow names, read under this BPMN
+   * process only, or <code>null</code> where none does.
    */
   private String versionOfAnOpenTask(
       final TaskDeliveryLog deliveryLog,
@@ -1762,8 +1769,8 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The record of the given task, looked for under every BPMN process id this workflow
-   * service serves, the own id first. The first one found wins: a task id belongs to one
+   * The record of the given task, looked for under every BPMN process id which this workflow
+   * service serves, the own id first. The first one found wins. A task id belongs to one
    * activation of one process, so there is nothing to choose between.
    *
    * @param deliveryLog The store to ask
@@ -1789,9 +1796,9 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Marks the record of the given task closed, under whichever BPMN process id holds it.
-   * Stops at the first id whose record was marked, so a service serving one process pays
-   * exactly the one update it always paid.
+   * Marks the record of the given task closed, under whichever BPMN process id holds it. It
+   * stops at the first id whose record was marked. So a service which serves one process
+   * pays exactly the one update it always paid.
    *
    * @param deliveryLog The store to write to
    * @param workflowAggregateId The workflow aggregate in serialized form
@@ -1811,8 +1818,8 @@ public final class DeliveryRecords {
   }
 
   /**
-   * The task a call names, or <code>null</code> where it names none - the question which
-   * decides whether the record of a task can be asked at all.
+   * The task which a call names, or <code>null</code> where it names none. This decides
+   * whether the record of a task can be asked at all.
    */
   private static String theTaskNamedBy(
       final Map<String, String> args) {
