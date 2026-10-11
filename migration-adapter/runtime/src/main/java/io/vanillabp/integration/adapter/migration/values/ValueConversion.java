@@ -10,55 +10,54 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
- * Converts a value a BPMS reported (a process variable, an input mapping) into the
- * type the application expects. Shared by everything binding BPMS values to Java:
- * the parameters of a <code>&#64;WorkflowTask</code> method, the parameters of a
- * <code>&#64;WorkflowStartedByBpms</code> method and the attributes of a workflow
- * aggregate built for a BPMS-initiated start.
+ * Converts a value which a BPMS reported (a process variable, an input mapping) into the
+ * type the application expects. Everything which binds BPMS values to Java uses it: the
+ * parameters of a <code>&#64;WorkflowTask</code> method, the parameters of a
+ * <code>&#64;WorkflowStartedByBpms</code> method, and the attributes of a workflow
+ * aggregate built for a start by the BPMS.
  * <p>
- * Deliberately narrow: identity, the String and Number conversions between the
- * types a BPMS can carry, and a guiding failure for everything else. Anything
- * richer belongs to the application, which knows what its values mean.
+ * It is narrow on purpose. It does identity, the String and Number conversions between the
+ * types a BPMS can carry, and a guiding failure for everything else. Anything richer
+ * belongs to the application, which knows what its values mean.
  * <p>
  * What converts, and what is refused:
  * <ul>
- * <li>A value the target type already holds passes through, a primitive target through
- * its wrapper. <code>Object</code> therefore takes whatever the BPMS sent, which is the
- * way to see a value VanillaBP would refuse to convert.</li>
- * <li><code>null</code> passes through, and against a primitive target it fails, because
- * there is no number to write.</li>
- * <li>A number becomes any other number type, and the text of a number becomes one too.
- * Both go through the decimal form of the value, and the result is handed over only where
- * it reads back as the same number. So <code>BigDecimal("120.50")</code> becomes a
- * <code>Double</code> of <code>120.5</code>, and the same value bound to an
- * <code>int</code> fails instead of arriving as <code>120</code>.</li>
- * <li>A number becomes a <code>String</code>, and the text of one becomes a
+ * <li>A value which already fits the target type passes through. For a primitive target,
+ * the value must fit its wrapper. So <code>Object</code> takes whatever the BPMS sent. That
+ * is the way to see a value which VanillaBP would refuse to convert.</li>
+ * <li><code>null</code> passes through. For a primitive target it fails, because there is
+ * no number to write.</li>
+ * <li>A number becomes any other number type, and so does the text of a number. Both go
+ * through the decimal form of the value. The result is handed over only where it reads
+ * back as the same number. So <code>BigDecimal("120.50")</code> becomes a
+ * <code>Double</code> of <code>120.5</code>. The same value bound to an <code>int</code>
+ * fails, instead of arriving as <code>120</code>.</li>
+ * <li>A number becomes a <code>String</code>, and a text becomes a
  * <code>Boolean</code>.</li>
- * <li>The text of a value the platform shares AS text becomes that value again: an enum
- * from the name of its constant, and every type of {@link TextValueTypes} from the text
- * it travels as. This is the way back for what {@code AggregateSyncSupport} wrote on the
- * way out, so the forms read here are the forms written there and no others.</li>
- * <li>Everything else fails, naming what was bound and what it was bound to. A type of
- * the application's own is such a case: a BPMS carries plain values, and what one of the
- * application's types means is the application's to build. A {@link java.util.Calendar}
- * and a {@link java.util.Locale} fail as well although the platform writes them out as
- * text, because that text does not carry the value back; the message says which type to
- * declare instead. What was measured about those two is in decision 57 in the
- * repository's DECISIONS.md, and why a {@link java.util.Date} is no longer among them is
- * decision 58.</li>
+ * <li>The platform shares some values AS text. Their text becomes the value again: an enum
+ * from the name of its constant, and every type of {@link TextValueTypes} from the text it
+ * travels as. This is the way back for what {@code AggregateSyncSupport} wrote on the way
+ * out. So the forms read here are exactly the forms written there.</li>
+ * <li>Everything else fails, and the message names what was bound and to what. A type of
+ * the application's own is such a case. A BPMS carries plain values, and the application
+ * builds what its own types mean. A {@link java.util.Calendar} and a
+ * {@link java.util.Locale} fail as well, although the platform writes them out as text.
+ * That text does not carry the value back, and the message says which type to declare
+ * instead. Decision 57 in the repository's DECISIONS.md has what was measured about those
+ * two. Decision 58 says why a {@link java.util.Date} is no longer among them.</li>
  * </ul>
- * Why a value which does not fit fails rather than being cut down to size: the handler
- * would otherwise receive a number nobody wrote, with nothing said about it, and act on
- * it. The failure ends the invocation, so the BPMS raises its incident and somebody reads
- * the message. This is the rule of {@code AggregateIdRoundTrip} applied to a second
- * value, see decision 55 in the repository's DECISIONS.md.
+ * Why does a value which does not fit fail, instead of being cut down to size? Otherwise
+ * the handler would get a number which nobody wrote, without a word, and act on it. The
+ * failure ends the call. So the BPMS raises its incident, and somebody reads the message.
+ * This is the rule of {@code AggregateIdRoundTrip} applied to a second value. See decision
+ * 55 in the repository's DECISIONS.md.
  */
 public final class ValueConversion {
 
   /**
-   * How the decimal form of a value is read as each number type this converts into. Every
-   * one of them may lose something, which is why the caller reads the result back before
-   * it hands it over.
+   * How the decimal form of a value is read as each number type this class converts into.
+   * Each of them may lose something. That is why the caller reads the result back before it
+   * hands it over.
    */
   private static final Map<Class<?>, Function<BigDecimal, Number>> NUMBER_TYPES = Map
       .of(
@@ -75,11 +74,11 @@ public final class ValueConversion {
   }
 
   /**
-   * Converts a value supplied by a BPMS to the target type: assignable values pass
-   * through, a number and the text of a number become any other number type where the
-   * value survives, a number becomes a String and the text of one becomes a Boolean, and
-   * the text of an enum, a UUID, a <code>java.time</code> value, a Date or a TimeZone
-   * becomes that value again.
+   * Converts a value supplied by a BPMS to the target type. A value which fits passes
+   * through. A number and the text of a number become any other number type, where the value
+   * survives. A number becomes a String, and a text becomes a Boolean. The
+   * text of an enum, a UUID, a <code>java.time</code> value, a Date or a TimeZone becomes
+   * that value again.
    *
    * @param value The value reported by the BPMS (may be <code>null</code>)
    * @param targetType The type the application expects
@@ -136,12 +135,11 @@ public final class ValueConversion {
   }
 
   /**
-   * Converts a number, or the text of one, into another number type. The value travels
-   * through its decimal form rather than through <code>intValue()</code> and its
-   * siblings, because those work on the bit pattern and cut a value down without saying
-   * so. What comes out is read back as a decimal again and handed over only where it is
-   * still the same number, compared numerically, so a trailing zero the target type
-   * cannot keep is no reason to refuse.
+   * Converts a number, or the text of one, into another number type. The value goes through
+   * its decimal form and not through <code>intValue()</code> and its siblings. Those work on
+   * the bits and cut a value down without saying so. The result is read back as a decimal
+   * and handed over only where it is still the same number. The comparison is numeric, so a
+   * trailing zero which the target type cannot keep is no reason to refuse.
    *
    * @param value The number, or the text of one
    * @param target The target type, already unwrapped from a primitive
@@ -186,12 +184,11 @@ public final class ValueConversion {
   }
 
   /**
-   * @param text The text of a number, which for a Number is its own
-   *          <code>toString()</code>: the shortest text reading back as that same value,
-   *          so a <code>Float</code> of <code>0.1f</code> is <code>0.1</code> rather than
-   *          the double it widens to
-   * @return The value as a decimal, or <code>null</code> if the text is no number at all,
-   *         which infinity and not-a-number are as well
+   * @param text The text of a number. For a Number this is its own <code>toString()</code>,
+   *          the shortest text which reads back as the same value. So a <code>Float</code>
+   *          of <code>0.1f</code> is <code>0.1</code>, not the double it widens to
+   * @return The value as a decimal, or <code>null</code> if the text is no number at all.
+   *         Infinity and not-a-number are no numbers either
    */
   private static BigDecimal decimalFormOf(
       final String text) {
@@ -205,10 +202,10 @@ public final class ValueConversion {
   }
 
   /**
-   * Reads a value back from the text the way out wrote for it. The platform shares an
-   * enum as its name and a value type like a {@link UUID} or a {@link LocalDate} as the
-   * text {@link TextValueTypes} names for it, so the way back reads exactly those forms
-   * and nothing it invented. A text of another shape is refused rather than guessed at.
+   * Reads a value back from the text which the way out wrote for it. The platform shares an
+   * enum as its name. It shares a value type like a {@link UUID} or a {@link LocalDate} as
+   * the text {@link TextValueTypes} names for it. So the way back reads exactly those forms
+   * and nothing else. A text of another shape is refused, not guessed at.
    *
    * @param text The text the BPMS reported
    * @param target The target type, already unwrapped from a primitive
@@ -253,14 +250,14 @@ public final class ValueConversion {
   }
 
   /**
-   * @param text The constant's name, which is what the way out shares an enum as
+   * @param text The constant's name, because the way out shares an enum as its name
    * @param target The enum type
    * @param targetType The target type as the application declared it, named by a message
    * @param location What is being bound, named by a message
    * @return The constant of that name
-   * @throws IllegalStateException If the enum has no constant of that name, naming the
-   *           ones it has. A handler reading a name the model invented would otherwise
-   *           act on a value nobody declared, or on none at all.
+   * @throws IllegalStateException If the enum has no constant of that name. The message
+   *           names the constants it has. Otherwise a handler which reads a name the model
+   *           invented would act on a value nobody declared, or on none at all.
    */
   private static Object constantOf(
       final String text,

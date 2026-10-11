@@ -8,35 +8,35 @@ import io.vanillabp.integration.adapter.spi.workflowtask.CompensationSpec;
 import io.vanillabp.integration.spi.startup.StartupTopic;
 
 /**
- * The startup hint about two writers on one workflow aggregate: a BPMN
- * process which can hold more than one token at a time has branches writing the same
- * workflow aggregate, and without a version attribute the branch committing second
- * writes back what it read when it started - silently, since an ORM saves the whole
- * record.
+ * The startup hint about two writers of one workflow aggregate. A BPMN process which can
+ * have more than one token at a time has branches which write the same workflow aggregate.
+ * Without a version attribute, the branch which commits second writes back what it read
+ * when it started. Nobody notices, because an ORM saves the whole record.
  * <p>
- * Reading a model is the adapter's job (only it can parse its BPMN dialect), deciding
- * what the finding means is the core's: the adapter reports the elements which can put
- * a second token into a running workflow, and the core knows the aggregate class.
+ * Reading a model is the adapter's job, because only the adapter can parse its BPMN
+ * dialect. Deciding what the finding means is the core's job. The adapter reports the
+ * elements which can put a second token into a running workflow, and the core knows the
+ * aggregate class.
  * <p>
  * Which models are read is the second half of the question. The adapter reports what it
- * finds while wiring the model of THIS boot, and the core asks it again about the versions
- * the BPMS still holds with workflows running on them
- * ({@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#concurrentTokenElementsOfVersion}),
- * because an older version with a parallel gateway the new model dropped keeps forking every
- * workflow started before it. Compensation is the same finding drawn differently and arrives
- * through {@link #reportCompensation}: a throw event starting several handlers leaves the
- * workflow with a token per handler. The warning names the models it was drawn from beside its text,
- * so the box folds what belongs to one aggregate into one entry however many models lead to
- * it.
+ * finds while it wires the model of THIS boot. The core also asks it about the versions
+ * which the BPMS still holds with running workflows
+ * ({@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#concurrentTokenElementsOfVersion}).
+ * An older version may have a parallel gateway which the new model dropped. That gateway
+ * still forks every workflow started on the older version. Compensation is the same finding
+ * in a different shape and arrives through {@link #reportCompensation}. A throw event which
+ * starts several handlers leaves the workflow with one token per handler. The warning names
+ * the models it comes from next to its text. So the box folds everything about one
+ * aggregate into one entry, however many models lead to it.
  * <p>
- * A persistence which notices the collision silences the hint - it then raises an
- * exception instead of overwriting, which is what {@link AggregateWrite} reports, and
- * whether it notices is the persistence's own answer. So does an adapter which cannot read
- * its models (the Process-Engine-API): it reports nothing, and nothing is guessed from the
- * absence.
+ * A persistence which notices the collision silences the hint. It throws an exception
+ * instead of overwriting, and {@link AggregateWrite} reports that. The persistence itself
+ * answers whether it notices. An adapter which cannot read its models (the
+ * Process-Engine-API) silences the hint as well. It reports nothing, and nothing is guessed
+ * from that.
  * <p>
- * Why a model which can produce a second token is only warned about, and only where the aggregate
- * has no version attribute, is decision 14 in the repository's DECISIONS.md.
+ * Decision 14 in the repository's DECISIONS.md says why a model which can produce a second
+ * token only gets a warning, and only where the aggregate has no version attribute.
  */
 public class ConcurrentTokenCheck {
 
@@ -58,9 +58,9 @@ public class ConcurrentTokenCheck {
   }
 
   /**
-   * Reports the elements an adapter found in a BPMN process which can put a second
-   * token into a running workflow, and warns if that process' workflow aggregate has
-   * no version attribute.
+   * Reports the elements of a BPMN process which can put a second token into a running
+   * workflow, as an adapter found them. It warns if the workflow aggregate of that process
+   * has no version attribute.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -88,18 +88,18 @@ public class ConcurrentTokenCheck {
   }
 
   /**
-   * The same finding, drawn as compensation: a throw event which starts more than one
-   * handler leaves the workflow with a token per handler, and every one of them writes the
+   * The same finding in the shape of compensation. A throw event which starts more than one
+   * handler leaves the workflow with one token per handler, and each of them writes the
    * workflow aggregate.
    * <p>
-   * It is reported on its own because the shape is what a developer needs here. The flat
-   * list of elements would name the throw event and the handlers next to each other and
-   * leave the reader to work out which starts which, while the whole point is that ONE
-   * event in the model turns into several branches at once.
+   * It is reported on its own, because here the developer needs the shape. A flat list of
+   * elements would name the throw event and the handlers side by side. The reader would have
+   * to work out which starts which. But the point is that ONE event in the model turns into
+   * several branches at once.
    * <p>
-   * The text is the one every other form of this finding carries, so a process whose
-   * parallel gateway was named already folds into the same entry: the thing to change is
-   * the aggregate, and it is one thing however many places in the model lead to it.
+   * The text is the same as in every other form of this finding. So it folds into the same
+   * entry as a parallel gateway of the same process. The thing to change is the aggregate,
+   * and that is one thing however many places in the model lead to it.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -143,14 +143,14 @@ public class ConcurrentTokenCheck {
   }
 
   /**
-   * The same finding for the versions the BPMS STILL HOLDS with workflows running on them -
-   * a parallel gateway the model of this boot dropped is still forking every workflow which
-   * was started before, and those are the workflows which run longest.
+   * The same finding for the versions which the BPMS STILL HOLDS with running workflows. A
+   * parallel gateway which the model of this boot dropped still forks every workflow started
+   * before. And those are the workflows which run longest.
    * <p>
-   * Still one warning per BPMN process, whichever model carried the elements: the message is
-   * about an aggregate which cannot survive two writers, and saying it once per version an
-   * application ever deployed would bury it. Which is also why the deployed model speaks
-   * first where both would speak - it is the one a developer can still change.
+   * There is still one warning per BPMN process, whichever model had the elements. The
+   * message is about an aggregate which cannot survive two writers. Saying it once for every
+   * version an application ever deployed would bury it. For the same reason the deployed
+   * model speaks first where both would speak, because the developer can still change it.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -198,13 +198,13 @@ public class ConcurrentTokenCheck {
   }
 
   /**
-   * The warning itself, given the scope saying WHICH model can hold two tokens - the model
-   * of this boot or the versions the BPMS still holds.
+   * The warning itself. The scope says WHICH model can have two tokens: the model of this
+   * boot, or the versions the BPMS still holds.
    * <p>
-   * The scope carries what differs and the message carries the aggregate, so a process
-   * whose deployed model and whose held versions both fork becomes ONE entry of the box
-   * naming both. The message is about an aggregate which cannot survive two writers, and
-   * that is one thing to change however many models lead to it.
+   * The scope carries what differs, and the message carries the aggregate. So if both the
+   * deployed model and the held versions of a process fork, the box shows ONE entry which
+   * names both. The message is about an aggregate which cannot survive two writers. That is
+   * one thing to change, however many models lead to it.
    *
    * @param workflowAggregateClass The workflow aggregate's class
    * @param aggregateNoticesASecondWriter What the aggregate's persistence answers about
@@ -243,8 +243,8 @@ public class ConcurrentTokenCheck {
   }
 
   /**
-   * The element ids as the warning names them, all of them and in the order they were
-   * reported - a handler left out of the list would be one the reader goes looking for.
+   * The element ids as the warning names them: all of them, in the order they were
+   * reported. If a handler were missing from the list, the reader would go looking for it.
    */
   private static String named(
       final Collection<String> elementIds) {

@@ -6,33 +6,32 @@ import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
 import io.vanillabp.integration.spi.startup.StartupTopic;
 
 /**
- * The startup hint about the second writer an extension brings: a handler method of the
- * application which an extension may have VanillaBP save after it ran. It reads the
- * workflow aggregate, writes what it reported and is saved, which is one writer more on an
- * aggregate whose workflow already has one.
+ * The startup hint about the second writer which an extension brings. That writer is a
+ * handler method of the application which an extension may ask VanillaBP to save after it
+ * ran. The handler reads the workflow aggregate, writes what it reported, and gets saved.
+ * That is one more writer on an aggregate whose workflow already has one.
  * <p>
- * The same finding as {@link ConcurrentTokenCheck}, with a different second writer, so it
- * ends in the same advice and the same page of the wiki. It is kept apart because both can
- * be true of one BPMN process and each of them is worth saying once: one is about the model,
- * which a developer can change, and this one is about a dependency, which they usually
- * cannot.
+ * It is the same finding as {@link ConcurrentTokenCheck} with a different second writer.
+ * So it ends with the same advice and the same wiki page. It is kept apart because both can
+ * be true of one BPMN process, and each is worth saying once. One is about the model, which
+ * a developer can change. This one is about a dependency, which they usually cannot change.
  * <p>
- * Whether a single call really saves is the caller's decision and is made per call, so a
- * boot can only say that the handler MAY save - the price of warning about what is allowed
- * rather than about what was observed, and the alternative is to say nothing until a write
- * is already lost.
+ * The caller decides for each call whether it really saves. So a boot can only say that the
+ * handler MAY save. That is the price of warning about what is allowed and not about what
+ * happened. The alternative is to say nothing until a write is already lost.
  * <p>
- * An extension whose handlers never write says so on its contract
- * ({@code HandlerContract.Builder#neverSavesTheWorkflowAggregate}), and those handlers are
- * not reported at all: the statement is there while they are wired, which is exactly when
- * this check runs, so the warning would be about something which cannot happen. Why the
- * contract carries it rather than the call is decision 50 in the repository's DECISIONS.md.
+ * An extension whose handlers never write says so in its contract
+ * ({@code HandlerContract.Builder#neverSavesTheWorkflowAggregate}). Those handlers are not
+ * reported at all. The contract says it while the handlers are wired, and that is exactly
+ * when this check runs. So the warning would be about something which cannot happen.
+ * Decision 50 in the repository's DECISIONS.md says why the contract carries this and not
+ * the call.
  * <p>
- * Nothing is asked of a database here, which is what makes this cheap enough for a start:
- * the question goes to the persistence of the aggregate and is answered from the class.
+ * Nothing here asks a database, and that makes it cheap enough for a start. The question
+ * goes to the persistence of the aggregate, and the class answers it.
  * <p>
- * Why a second writer is warned about rather than resolved is decision 14 in the
- * repository's DECISIONS.md, and which handlers the warning reaches is decision 45.
+ * Decision 14 in the repository's DECISIONS.md says why a second writer gets a warning and
+ * is not resolved. Decision 45 says which handlers the warning covers.
  */
 public class SavingHandlerCheck {
 

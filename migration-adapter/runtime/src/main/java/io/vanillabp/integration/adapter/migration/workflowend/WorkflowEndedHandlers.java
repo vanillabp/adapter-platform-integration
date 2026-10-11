@@ -15,10 +15,10 @@ import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext;
 import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
- * The <code>&#64;WorkflowEnded</code> methods of the application per (workflow
- * module, BPMN process). Backs the adapter-facing
- * {@link io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker},
- * which the workflow-task registry implements by delegating here.
+ * The <code>&#64;WorkflowEnded</code> methods of the application, per workflow module and
+ * BPMN process. This class does the work behind the adapter-facing
+ * {@link io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker}. The
+ * workflow-task registry implements that interface and hands every call on to here.
  */
 public class WorkflowEndedHandlers {
 
@@ -32,16 +32,17 @@ public class WorkflowEndedHandlers {
   private final Map<RegistryKey, List<WorkflowEndedHandler>> handlers = new ConcurrentHashMap<>();
 
   /**
-   * What the BPMS know about the deployed versions of the BPMN processes - owned by the
+   * What the BPMS know about the deployed versions of the BPMN processes. The
    * {@link io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry}
-   * and shared, since all three annotations carry a <code>version</code> attribute.
+   * owns it and shares it, because all three annotations have a <code>version</code>
+   * attribute.
    */
   private final io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions processVersions;
 
   /**
    * Built by the workflow-task registry, once per application. The versions are the
-   * registry's own, because a <code>&#64;WorkflowEnded</code> method names its version the
-   * way a <code>&#64;WorkflowTask</code> method does and both have to read the same answer.
+   * registry's own. A <code>&#64;WorkflowEnded</code> method names its version the same way
+   * as a <code>&#64;WorkflowTask</code> method, and both have to read the same answer.
    *
    * @param processVersions What the BPMS know about the deployed versions of the BPMN
    *          processes
@@ -54,15 +55,16 @@ public class WorkflowEndedHandlers {
   }
 
   /**
-   * The &#64;WorkflowEnded methods registered for that BPMN process, each with the
-   * verdict whether its version specifications are worth keeping. A method worth keeping
-   * nowhere in its workflow module never runs, and the start says so - which of the two
-   * the registry decides, since a method is registered once per BPMN process its class
+   * The &#64;WorkflowEnded methods registered for that BPMN process. Each comes with the
+   * verdict whether its version specifications are worth keeping. A method which is worth
+   * keeping nowhere in its workflow module never runs, and the start says so. The registry
+   * decides that, because a method is registered once for each BPMN process its class
    * declares.
    * <p>
-   * What "worth keeping" means is the caller's question, and there are two of them: the
-   * versions the BPMS holds minus the ones the configuration faded out, and, where the
-   * BPMS keeps no catalog at all, whether a delivery there can meet the specification.
+   * The caller decides what "worth keeping" means, and there are two answers. One is the
+   * versions which the BPMS holds, minus the ones the configuration faded out. The other,
+   * where the BPMS keeps no list of versions at all, is whether a delivery there can match
+   * the specification.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
@@ -89,9 +91,9 @@ public class WorkflowEndedHandlers {
   }
 
   /**
-   * Scans a workflow service class and registers what it found. Called by the
-   * platform integration at startup, once per (workflow service class, declared
-   * BPMN process ID).
+   * Scans a workflow service class and registers what it found. The platform integration
+   * calls it at startup, once for each pair of workflow service class and declared BPMN
+   * process ID.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -132,9 +134,9 @@ public class WorkflowEndedHandlers {
   }
 
   /**
-   * Resolves the version tags the methods of the given workflow module name and checks
-   * the version ranges naming a tag for overlaps - those could not be placed while
-   * registering, since no BPMS had been asked about its versions at that point.
+   * Resolves the version tags which the methods of the given workflow module name. Then it
+   * checks the version ranges which name a tag for overlaps. Those could not be checked at
+   * registration, because no BPMS had been asked about its versions yet.
    *
    * @param workflowModuleId The workflow module ID
    */
@@ -186,8 +188,8 @@ public class WorkflowEndedHandlers {
         .stream()
         .filter(existing -> existing != handler)
         .filter(existing -> java.util.Objects.equals(existing.getEndEventId(), handler.getEndEventId()))
-        // overlapping version ranges are ambiguous; disjoint ones are a legitimate
-        // way to serve several process versions
+        // overlapping version ranges are ambiguous. Ranges which do not overlap are a
+        // valid way to serve several process versions
         .filter(existing -> existing.overlapsVersions(handler, resolver))
         .findFirst();
     if (duplicate.isPresent()) {
@@ -211,10 +213,9 @@ public class WorkflowEndedHandlers {
   }
 
   /**
-   * Whether a method of the application was registered for that process. The registry
-   * asks it while an adapter wires a model, and it answers for the application's methods
-   * alone - two settings want the same notification without a method, which is why the
-   * registry adds them
+   * Whether a method of the application was registered for that process. The registry asks
+   * this while an adapter wires a model. It answers for the application's methods only. Two
+   * settings want the same notification without a method, so the registry adds those itself
    * ({@code WorkflowTaskRegistry#workflowEndedHandlerExists}).
    *
    * @param workflowModuleId The workflow module ID
@@ -231,12 +232,11 @@ public class WorkflowEndedHandlers {
   }
 
   /**
-   * Tells the application that a workflow ended: loads the aggregate, calls the
-   * method and saves the aggregate, in one transaction. Where the workflow module
-   * releases the records of its processed task deliveries, that deletion runs
-   * in the same transaction - and then this runs even without a
-   * <code>&#64;WorkflowEnded</code> method, which is why the adapters attach their
-   * listener in that case as well.
+   * Tells the application that a workflow ended. It loads the aggregate, calls the method
+   * and saves the aggregate, all in one transaction. A workflow module may release the
+   * records of its processed task deliveries. Then that deletion runs in the same
+   * transaction, and this runs even without a <code>&#64;WorkflowEnded</code> method. That
+   * is why the adapters attach their listener in that case as well.
    *
    * @param <A> The workflow-aggregate type
    * @param processService The process service of the BPMN process
@@ -248,15 +248,15 @@ public class WorkflowEndedHandlers {
       final WorkflowEndedContext context,
       final TransactionRunner transactionRunner) {
 
-    // the notification proves which BPMS held this workflow - and that the workflow is
-    // over, so the hint is marked instead of refreshed: it is still read while an
-    // operation may still arrive, and it leaves the cache long before a living one
+    // the notification proves which BPMS held this workflow, and that the workflow is over.
+    // So the hint is marked as ended instead of refreshed. It is still read while an
+    // operation may arrive, and it leaves the cache long before the hint of a running one
     processService.rememberWorkflowEnded(context.getWorkflowAggregateId(), context.getAdapterId());
 
     final var releaseRecords = processService.releasesDeliveryRecordsOnWorkflowEnd();
-    // the bound of the release, taken BEFORE anything is done: an aggregate may outlive
-    // its workflow and carry a second one, whose records are written after this moment
-    // and have to survive
+    // the time limit of the release, taken BEFORE anything is done. An aggregate may outlive
+    // its workflow and get a second one. The records of that second workflow are written
+    // after this moment and have to survive
     final var recordedBefore = Instant.now();
 
     final var handler = handlerOf(processService, context);
@@ -290,8 +290,8 @@ public class WorkflowEndedHandlers {
   }
 
   /**
-   * Loads the aggregate, calls the method and saves the aggregate - the part of the end
-   * notification which belongs to the application.
+   * Loads the aggregate, calls the method and saves the aggregate. This is the part of the
+   * end notification which belongs to the application.
    */
   private static <A> void invokeHandler(
       final MigrationProcessService<A> processService,
@@ -301,8 +301,8 @@ public class WorkflowEndedHandlers {
     final var workflowAggregate = processService
         .loadWorkflowAggregate(context.getWorkflowAggregateId());
     if (workflowAggregate == null) {
-      // NOT an error: an application may delete the aggregate of a workflow which
-      // ended, and a redelivered notification would find nothing either
+      // NOT an error. An application may delete the aggregate of a workflow which ended,
+      // and a notification delivered again would find nothing either
       log
           .info(
               "The workflow aggregate '{}' of BPMN process '{}' (workflow module '{}') does not "
@@ -319,10 +319,9 @@ public class WorkflowEndedHandlers {
   }
 
   /**
-   * The <code>&#64;WorkflowEnded</code> method serving this notification, or
-   * <code>null</code> if the application has none - which is said in the log, since a
-   * method wired to the event but excluded by its version is a defect the developer has
-   * to see.
+   * The <code>&#64;WorkflowEnded</code> method which serves this notification, or
+   * <code>null</code> if the application has none. The log says so in that case. A method
+   * wired to the event but excluded by its version is a defect the developer has to see.
    */
   private <A> WorkflowEndedHandler handlerOf(
       final MigrationProcessService<A> processService,
@@ -332,9 +331,9 @@ public class WorkflowEndedHandlers {
         .get(
             new RegistryKey(processService.getWorkflowModuleId(), processService.getBpmnProcessId()));
     if (registered == null) {
-      // the adapter attached a listener although nothing is registered - possible
-      // when a deployed model outlives the workflow service which asked for it, and
-      // the normal case where the listener exists to release the delivery records
+      // the adapter attached a listener although nothing is registered. That happens when
+      // a deployed model outlives the workflow service which asked for it. It is the normal
+      // case where the listener is there to release the delivery records
       log
           .debug(
               "No @WorkflowEnded method for BPMN process '{}' of workflow module '{}' - the end of "
@@ -362,8 +361,8 @@ public class WorkflowEndedHandlers {
       return handler;
     }
 
-    // a method wired to the event but excluded by its version is worth a warning: the
-    // application asked to be notified and is not, which no log level should hide
+    // a method wired to the event but excluded by its version is worth a warning. The
+    // application asked to be notified and is not, and no log level should hide that
     final var message = "No @WorkflowEnded method of BPMN process '{}' (workflow module '{}') "
         + "serves end event '{}' of process version '{}' - the end of workflow '{}' is not "
         + "reported.{}";

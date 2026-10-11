@@ -17,27 +17,26 @@ import io.vanillabp.spi.service.WorkflowEnd;
 import io.vanillabp.spi.service.WorkflowEnded;
 
 /**
- * Scans a <code>&#64;WorkflowService</code> class for
- * <code>&#64;WorkflowEnded</code> methods and builds their handlers. Runs once at
- * startup per workflow service class; defects yield guiding exceptions naming the
- * method and the fix.
+ * Scans a <code>&#64;WorkflowService</code> class for <code>&#64;WorkflowEnded</code>
+ * methods and builds their handlers. It runs once at startup for each workflow service
+ * class. For a defect it throws an exception which names the method and the fix.
  * <p>
- * The binding surface is the smallest of all handler kinds: a workflow which ended
- * has no task and no variables worth binding, so what a method may ask for is the
- * workflow aggregate and a {@link WorkflowEnd}.
+ * Of all handler kinds, this one binds the fewest parameters. A workflow which ended has
+ * no task and no variables worth binding. So a method may ask for the workflow aggregate
+ * and a {@link WorkflowEnd}, nothing more.
  */
 public final class WorkflowEndedScanner {
 
   /**
-   * A workflow which ended has no task and no variables worth binding - the aggregate is
-   * all the core has left to offer.
+   * A workflow which ended has no task and no variables worth binding. The aggregate is all
+   * the core has left to offer.
    */
   private static final java.util.Set<CoreHandlerParameter> CORE_PARAMETERS = java.util.Set
       .of(CoreHandlerParameter.WORKFLOW_AGGREGATE);
 
   /**
-   * No parameter of such a method resolves a bean - the only kind which would is
-   * <code>&#64;MultiInstanceElement</code>, which this handler does not allow.
+   * No parameter of such a method resolves a bean. Only <code>&#64;MultiInstanceElement</code>
+   * would, and this handler does not allow it.
    */
   private static final java.util.function.Function<Class<?>, Object> NO_BEAN_RESOLVER = beanClass -> null;
 
@@ -46,8 +45,8 @@ public final class WorkflowEndedScanner {
 
   /**
    * Reads the <code>&#64;WorkflowEnded</code> methods of one workflow service class and
-   * builds a handler per method, with the parameter binders that method needs. Every
-   * public method of the class is looked at, the inherited ones included.
+   * builds one handler per method, with the parameter binders the method needs. It looks at
+   * every public method of the class, the inherited ones included.
    *
    * @param workflowServiceClass The <code>&#64;WorkflowService</code> class
    * @param workflowAggregateClass The workflow-aggregate class of that service
@@ -92,8 +91,8 @@ public final class WorkflowEndedScanner {
       final InheritedVersions inherited) {
 
     final var location = "%s#%s".formatted(workflowServiceClass.getName(), method.getName());
-    // a public method of a package-private bean class is not accessible through
-    // plain reflection - lift the check once at scan time
+    // plain reflection cannot reach a public method of a package-private bean class, so
+    // switch the access check off once, while scanning
     method.trySetAccessible();
 
     if (!method.getReturnType().equals(void.class)) {
@@ -128,8 +127,8 @@ public final class WorkflowEndedScanner {
       final Class<?> workflowAggregateClass,
       final String location) {
 
-    // the one value only this kind of handler has; the rest comes from the binders all
-    // handler kinds share
+    // the one value which only this kind of handler has. The binders which all handler
+    // kinds share do the rest
     if (parameter.getType().equals(WorkflowEnd.class)) {
       return context -> {
         final var end = context.payload(WorkflowEndedContext.class);

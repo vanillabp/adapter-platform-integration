@@ -18,128 +18,124 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidance;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 
 /**
- * THE implementation of the name-clash-avoidance model: resolving the
- * mode and composing the identifiers a BPMS sees. BPMS-neutral by design - an
- * adapter decides only WHERE to apply the results (its model, its commands).
+ * THE implementation of the name-clash-avoidance model. It resolves the mode and builds
+ * the identifiers which a BPMS sees. It does not depend on any BPMS on purpose. An adapter
+ * only decides WHERE to apply the results: in its model and in its commands.
  *
  * <h2>Resolution</h2>
  *
- * The mode is an ADAPTER-SCOPED property, so it is resolved most-specific-wins
- * across workflow &gt; workflow module &gt; adapter
- * ({@link MigrationAdapterProperties#resolveForAdapter}) - which is what allows two
- * adapter ids to carry DIFFERENT modes for the same workflow module, the basis of
- * the migration path documented on {@link NameClashAvoidance}. Without any
+ * The mode is an ADAPTER-SCOPED property. So the most specific level wins: workflow before
+ * workflow module before adapter ({@link MigrationAdapterProperties#resolveForAdapter}).
+ * That allows two adapter ids to have DIFFERENT modes for the same workflow module. The
+ * migration path described at {@link NameClashAvoidance} is built on this. Without any
  * configuration the ADAPTER's default applies
- * ({@link AdapterDeploymentService#defaultNameClashAvoidance()}):
- * {@link NameClashAvoidance#BY_ADAPTER} - VanillaBP 1's behavior - for a BPMS which
- * isolates out of the box, {@link NameClashAvoidance#NONE} for one which has to be
- * set up for it first (Camunda 8 rejects tenant ids unless multi-tenancy is enabled).
- * A resolved {@link NameClashAvoidance#NONE} is therefore reported once per workflow
- * module and adapter by the adapter's own WARN
- * ({@link AdapterDeploymentService#warnAboutUnscopedIdentifiers(String, boolean)}) -
- * it protects nothing, and only the adapter knows what its BPMS offers instead.
+ * ({@link AdapterDeploymentService#defaultNameClashAvoidance()}). That is
+ * {@link NameClashAvoidance#BY_ADAPTER}, the behavior of VanillaBP 1, for a BPMS which
+ * keeps things apart out of the box. It is {@link NameClashAvoidance#NONE} for a BPMS which
+ * has to be set up for it first. Camunda 8, for example, rejects tenant ids unless
+ * multi-tenancy is enabled. A resolved {@link NameClashAvoidance#NONE} protects nothing. So
+ * the adapter reports it with its own WARN, once per workflow module and adapter
+ * ({@link AdapterDeploymentService#warnAboutUnscopedIdentifiers(String, boolean)}). Only the
+ * adapter knows what its BPMS offers instead.
  *
- * <h2>Composition and its inverse</h2>
+ * <h2>Building identifiers and taking them apart</h2>
  *
- * Outbound identifiers are always composed from KNOWN parts, and inbound ones are
- * stripped by matching a KNOWN prefix - never by searching for the first
- * {@link NameClashAvoidanceSupport#SEPARATOR}. The separator is therefore a
- * readability choice; what protects correctness is
- * {@link #validateNoCollidingProcessIds}.
+ * Outgoing identifiers are always built from KNOWN parts. Incoming ones are taken apart by
+ * matching a KNOWN prefix, never by searching for the first
+ * {@link NameClashAvoidanceSupport#SEPARATOR}. So the separator is only chosen for
+ * readability. What keeps things correct is {@link #validateNoCollidingProcessIds}.
  *
  * <h2>Two workflow modules under one identifier</h2>
  *
- * A deployment is per workflow module, so {@link #validateNoCollidingProcessIds} is handed
- * one module at a time and the clash it exists for lives between two of them. What spans
- * them is {@link #moduleDeclaringScopedIdentifier}, the map the sibling reports already
- * fill, so the caller's collection may stay as narrow as its deployment is. The mode then
- * decides what an equal pair of strings means: under {@link NameClashAvoidance#BY_ADAPTER}
- * it is the BPMS which keeps the modules apart, the core cannot see its scopes, and the
- * adapter is asked
- * ({@link AdapterDeploymentService#ownIsolationSeparatesWorkflowModules}).
+ * Each workflow module is deployed on its own. So {@link #validateNoCollidingProcessIds}
+ * gets one module at a time, but the clash it looks for lies between two of them.
+ * {@link #moduleDeclaringScopedIdentifier} spans the modules. The sibling reports fill this
+ * map already, so the caller's collection may stay as narrow as its deployment. The mode
+ * then decides what two equal strings mean. Under {@link NameClashAvoidance#BY_ADAPTER} the
+ * BPMS keeps the modules apart. The core cannot see the scopes of the BPMS, so it asks the
+ * adapter ({@link AdapterDeploymentService#ownIsolationSeparatesWorkflowModules}).
  *
  * <h2>What the BPMS already held</h2>
  *
- * The checks above compare what this application deploys against itself, which leaves out
- * the identifiers somebody else put into the same BPMS earlier. Asking
- * about those is the adapter's work, because only it can query its BPMS, and
- * {@link #reportIdentifiersTheBpmsAlreadyHolds} is where the answer arrives. The core
- * composes the scoped form the adapter's plain identifiers end up as, resolves the mode
- * which produced it and words the warning, so a developer reads our side, their side and
- * the change which frees the name in one message. It stays a warning: the holder may be an
- * application which runs correctly.
+ * The checks above compare what this application deploys against itself. They do not see
+ * the identifiers which somebody else put into the same BPMS earlier. Asking about those is
+ * the adapter's job, because only the adapter can query its BPMS. The answer arrives at
+ * {@link #reportIdentifiersTheBpmsAlreadyHolds}. The core builds the scoped form of the
+ * adapter's plain identifiers, resolves the mode which produced it, and words the warning.
+ * So a developer reads our side, their side and the change which frees the name in one
+ * message. It stays a warning, because the holder may be an application which runs
+ * correctly.
  * <p>
- * Why this is the one place which resolves the mode and builds the scoped form is decision 9 in the
- * repository's DECISIONS.md.
+ * Decision 9 in the repository's DECISIONS.md says why this is the one place which resolves
+ * the mode and builds the scoped form.
  */
 public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
 
   private final MigrationAdapterProperties properties;
 
   /**
-   * The adapters' deployment services, resolved LAZILY: every adapter receives this
-   * service, so it has to be constructible before any adapter exists. The result is
-   * cached once it is non-empty (an empty resolution means the adapter beans were
-   * not created yet).
+   * The adapters' deployment services, resolved LAZILY. Every adapter receives this
+   * service, so it has to be built before any adapter exists. The result is cached once it
+   * is not empty. An empty result means that the adapter beans were not created yet.
    */
   private final Supplier<Collection<AdapterDeploymentService<?, ?>>> deploymentServices;
 
   private volatile Map<String, AdapterDeploymentService<?, ?>> deploymentServicesByAdapterId;
 
   /**
-   * The (workflow module, adapter) pairs already reported as unscoped - the mode is
-   * resolved on every runtime boundary, the WARN belongs to startup.
+   * The pairs of workflow module and adapter which were already reported as unscoped. The
+   * mode is resolved at every runtime boundary, but the WARN belongs to the startup.
    */
   private final Set<String> unscopedReported = ConcurrentHashMap.newKeySet();
 
   /**
-   * Which workflow module declares a scoped identifier, per adapter id and kind: filled
-   * while the modules are deployed and read again when a version a BPMS still holds turns
-   * up carrying the same name. The FIRST module which declared it keeps the entry, because
-   * what a message needs is one other side to name, and a third module colliding is then
-   * reported against the same one.
+   * Which workflow module declares a scoped identifier, per adapter id and kind. It is
+   * filled while the modules are deployed. It is read again when the BPMS still holds a
+   * version with the same name. The FIRST module which declared the name keeps the entry. A
+   * message needs one other side to name, and a third module which collides is reported
+   * against the same one.
    * <p>
-   * Three checks read this one map, and the reason is that all three ask the same question:
-   * which workflow module already reaches the BPMS under this form. A deployment is per
-   * workflow module, so none of them can answer that out of the one module it was handed;
-   * what spans the modules is the boot, and the boot is what this map outlives a single call
-   * for. {@link #validateNoCollidingProcessIds} therefore keeps its BPMN process ids here
-   * under {@link ScopedIdentifierKind#BPMN_PROCESS_ID} rather than in a memory of its own,
-   * and the kinds stay apart because the key carries the kind.
+   * Three checks read this one map, because all three ask the same question: which workflow
+   * module already reaches the BPMS under this form? Each module is deployed on its own. So
+   * none of the checks can answer from the one module it was given. The boot spans the
+   * modules, and this map lives for the whole boot. That is why
+   * {@link #validateNoCollidingProcessIds} keeps its BPMN process ids here, under
+   * {@link ScopedIdentifierKind#BPMN_PROCESS_ID}, and not in a memory of its own. The key
+   * has the kind in it, so the kinds stay apart.
    */
   private final Map<String, Declaration> moduleDeclaringScopedIdentifier = new ConcurrentHashMap<>();
 
   /**
-   * What the adapter answered about two workflow modules of one adapter id, so a module with
-   * two hundred processes colliding asks once instead of two hundred times. The answer is
-   * read off configuration which does not change while an application boots, which is what
-   * lets it be kept at all (decision 19 in the repository's DECISIONS.md bounds what a start
-   * may ask).
+   * What the adapter answered about two workflow modules of one adapter id. So a module with
+   * two hundred colliding processes asks once and not two hundred times. The answer comes
+   * from configuration which does not change while an application boots. That is why it may
+   * be kept at all. Decision 19 in the repository's DECISIONS.md limits what a start may
+   * ask.
    */
   private final Map<String, Boolean> isolationAnswers = new ConcurrentHashMap<>();
 
   /**
-   * Where a finding the start survives is left, so the whole start says it once.
+   * Where a finding goes which the start survives, so that the whole start says it once.
    */
   private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
 
   /**
-   * The workflow modules whose CURRENT models an adapter read out for
+   * The workflow modules whose CURRENT models an adapter read for
    * {@link #reportIdentifiersTheModelsDeclare}, keyed by adapter id and module.
    * <p>
-   * It is what lets a name of a held version be missed rather than merely absent: where
-   * nobody ever said what this deployment declares, every old name looks new and the check
-   * about a name nobody sends any more would report a whole model. An adapter which does
-   * not read identifiers at all therefore silences that check instead of filling it
+   * This set tells a name of a held version which is really missed from one which is just
+   * absent. If nobody ever said what this deployment declares, every old name looks new. Then
+   * the check about names which nobody sends any more would report a whole model. So an
+   * adapter which does not read identifiers at all silences that check instead of feeding it
    * (decision 38 in the repository's DECISIONS.md).
    */
   private final Set<String> modulesWhoseIdentifiersWereRead = ConcurrentHashMap.newKeySet();
 
   /**
    * Where a scoped identifier was read: the workflow module it belongs to, and the BPMN
-   * process for a kind which is scoped per process. For a BPMN process id the process is
-   * the identifier itself, which is what lets the collision check tell a process reported
-   * twice from two processes sharing one form.
+   * process for a kind which is scoped per process. For a BPMN process id the process is the
+   * identifier itself. That lets the collision check tell a process reported twice from two
+   * processes which share one form.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process, or <code>null</code> for a module-wide name
@@ -150,9 +146,9 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * Without the adapters' deployment services every adapter's default is
-   * {@link NameClashAvoidance#BY_ADAPTER} and no adapter can report an unscoped
-   * workflow module - for tests and for platforms not passing them.
+   * Without the adapters' deployment services, the default of every adapter is
+   * {@link NameClashAvoidance#BY_ADAPTER}, and no adapter can report an unscoped workflow
+   * module. This is for tests and for platforms which do not pass them.
    *
    * @param properties The VanillaBP configuration
    */
@@ -166,8 +162,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   /**
    * The full service, which is what a platform integration builds.
    * <p>
-   * An adapter's own default only applies where nothing is configured, and the configured
-   * value always wins - which is why the adapters are asked as late as possible.
+   * An adapter's own default applies only where nothing is configured. The configured value
+   * always wins. That is why the adapters are asked as late as possible.
    *
    * @param properties The VanillaBP configuration
    * @param deploymentServices The adapters' deployment services, asked for their
@@ -181,8 +177,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
     this.properties = properties;
     this.deploymentServices = deploymentServices;
     this.findings = properties == null
-        // a service built without a configuration is a test fixture, and it has no start
-        // to close either
+        // a service built without a configuration is a test fixture. It has no start to
+        // close either
         ? new io.vanillabp.integration.adapter.migration.startup.StartupFindings()
         : properties.startupFindings();
 
@@ -213,9 +209,9 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * The mode applying to the given adapter without any configuration - the adapter's
-   * own default, {@link NameClashAvoidance#BY_ADAPTER} for an adapter which is
-   * unknown here (see {@link #deploymentServices}).
+   * The mode for the given adapter when nothing is configured. That is the adapter's own
+   * default, or {@link NameClashAvoidance#BY_ADAPTER} for an adapter which is unknown here
+   * (see {@link #deploymentServices}).
    */
   private NameClashAvoidance defaultModeFor(
       final String adapterId) {
@@ -231,10 +227,10 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * Lets the adapter report the workflow module as unscoped, once per workflow module
-   * and adapter id. Resolving a mode without a workflow module (e.g. while comparing
-   * two adapter instances) reports nothing - the per-module resolutions of the
-   * deployment do.
+   * Lets the adapter report the workflow module as unscoped, once per workflow module and
+   * adapter id. Resolving a mode without a workflow module reports nothing, for example while
+   * two adapter instances are compared. The resolutions per module during the deployment do
+   * the reporting.
    */
   private void reportUnscopedIdentifiers(
       final String adapterId,
@@ -273,7 +269,7 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
           }
           byAdapterId = collected;
           if (!collected.isEmpty()) {
-            // an empty result means the adapters were not created yet - ask again
+            // an empty result means the adapters were not created yet, so ask again
             deploymentServicesByAdapterId = collected;
           }
         }
@@ -284,9 +280,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * Whether task definitions are additionally scoped by their BPMN process ID
-   * (default <code>true</code>, see
-   * {@link AdapterProperties#getPrefixTaskDefinitionsPerProcess()}).
+   * Whether task definitions are also scoped by their BPMN process ID (default
+   * <code>true</code>, see {@link AdapterProperties#getPrefixTaskDefinitionsPerProcess()}).
    */
   private boolean scopeTaskDefinitionsPerProcess(
       final String workflowModuleId,
@@ -430,9 +425,9 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * Whether {@link NameClashAvoidance#BY_ADAPTER} applies anywhere for the given
-   * adapter, i.e. whether any workflow module is kept apart by the BPMS itself:
-   * configured at some level, or the adapter's default while at least one level leaves
+   * Whether {@link NameClashAvoidance#BY_ADAPTER} applies anywhere for the given adapter. In
+   * other words, whether the BPMS itself keeps any workflow module apart. That is so where a
+   * level configures it, or where it is the adapter's default and at least one level leaves
    * the mode unconfigured.
    */
   private boolean appliesByAdapterAnywhere(
@@ -460,8 +455,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * The modes applying to the given adapter, for messages: the values configured at any
-   * level plus the adapter's default where nothing is configured.
+   * The modes which apply to the given adapter, for messages: the values configured at any
+   * level, plus the adapter's default where nothing is configured.
    */
   private String modesApplying(
       final String adapterId) {
@@ -498,7 +493,7 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
       final String bpmsDescription) {
 
     if (workflowModuleId != null) {
-      // the mode is resolvable per workflow module, so check the one being deployed
+      // the mode is resolved per workflow module, so check the module being deployed
       if (modeFor(workflowModuleId, null, adapterId) != NameClashAvoidance.BY_ADAPTER) {
         return;
       }
@@ -526,9 +521,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
     }
 
     final var levels = levelsConfiguring(adapterId, NameClashAvoidance.BY_ADAPTER);
-    // BY_ADAPTER is the DEFAULT, so an adapter of a BPMS without isolation has to
-    // report the levels where nothing is configured either - the developer has to
-    // choose actively there
+    // BY_ADAPTER is the DEFAULT. So an adapter of a BPMS without isolation also has to
+    // report the levels where nothing is configured. The developer has to choose there
     final var unconfiguredLevels = unconfiguredLevels(adapterId);
     if (levels.isEmpty() && unconfiguredLevels.isEmpty()) {
       return;
@@ -576,9 +570,9 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
               declarationKey(adapterId, ScopedIdentifierKind.BPMN_PROCESS_ID, scopedForm),
               beingDeployed);
       if ((alreadyThere == null) || alreadyThere.equals(beingDeployed)) {
-        // the first process reaching the BPMS under that form, or the same process handed
-        // over twice, which one BPMN file holding several processes and a module deployed
-        // to several adapters both produce
+        // the first process which reaches the BPMS under that form, or the same process
+        // handed over twice. One BPMN file with several processes does that, and so does a
+        // module deployed to several adapters
         continue;
       }
       if (somethingSeparates(adapterId, alreadyThere, beingDeployed)) {
@@ -603,8 +597,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
 
   /**
    * Both sides of one collision, each with the mode and the property key which produced its
-   * form: a mixed configuration is what makes two plain ids meet, and a reader who gets one
-   * mode for both sides goes looking for a line which does not decide anything.
+   * form. Two plain ids meet because of a mixed configuration. A reader who gets one mode for
+   * both sides goes looking for a line which does not decide anything.
    */
   private String bothSidesOfTheClash(
       final String adapterId,
@@ -638,11 +632,11 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * Whether anything keeps two BPMN processes apart which reach the BPMS under one
-   * identifier. The answer is the whole difference between this check repairing a blind spot
-   * and this check refusing applications which are correct: under
-   * {@link NameClashAvoidance#BY_ADAPTER} the scoped form is the plain one, so two workflow
-   * modules which a tenant keeps apart perfectly well arrive here with two equal strings.
+   * Whether anything keeps apart two BPMN processes which reach the BPMS under one
+   * identifier. This answer decides whether the check repairs a blind spot or refuses correct
+   * applications. Under {@link NameClashAvoidance#BY_ADAPTER} the scoped form is the plain
+   * one. So two workflow modules which a tenant keeps apart perfectly well arrive here with
+   * two equal strings.
    */
   private boolean somethingSeparates(
       final String adapterId,
@@ -650,16 +644,16 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
       final Declaration otherSide) {
 
     if (oneSide.workflowModuleId().equals(otherSide.workflowModuleId())) {
-      // what a BPMS isolates is a workflow module, so inside one module there is nothing
-      // left which could tell two processes apart
+      // a BPMS keeps workflow modules apart. Inside one module nothing is left which could
+      // tell two processes apart
       return false;
     }
     final var oneMode = modeFor(oneSide.workflowModuleId(), oneSide.bpmnProcessId(), adapterId);
     final var otherMode = modeFor(otherSide.workflowModuleId(), otherSide.bpmnProcessId(), adapterId);
     if ((oneMode != NameClashAvoidance.BY_ADAPTER) && (otherMode != NameClashAvoidance.BY_ADAPTER)) {
-      // 'use-prefix' means this service composed both strings itself and 'none' means it
-      // composed neither: either way the two equal strings are the whole answer, and a mix
-      // of the two modes is how one module's prefixed form meets another's plain id
+      // 'use-prefix' means this service built both strings itself, 'none' means it built
+      // neither. Either way the two equal strings are the whole answer. A mix of the two
+      // modes is how the prefixed form of one module meets the plain id of another
       return false;
     }
     return ownIsolationSeparates(adapterId, oneSide.workflowModuleId(), otherSide.workflowModuleId());
@@ -668,17 +662,17 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
 
   /**
    * What the adapter says about the two workflow modules, asked once per pair. An adapter
-   * this service does not know answers like one without isolation, which is the refusing
-   * side: a platform which passes no deployment services is a test, and a test which means
-   * to be separated says so by answering.
+   * which this service does not know answers like one without isolation. That is the side
+   * which refuses. A platform which passes no deployment services is a test. A test which
+   * wants the modules kept apart says so by answering.
    */
   private boolean ownIsolationSeparates(
       final String adapterId,
       final String oneWorkflowModuleId,
       final String anotherWorkflowModuleId) {
 
-    // the two ids sorted, so the answer is the same one whichever module deploys first and
-    // the adapter is asked once rather than once per order
+    // the two ids sorted, so the answer is the same whichever module deploys first, and the
+    // adapter is asked once and not once per order
     final var first = oneWorkflowModuleId.compareTo(anotherWorkflowModuleId) <= 0
         ? oneWorkflowModuleId
         : anotherWorkflowModuleId;
@@ -697,9 +691,9 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * What frees the identifier, which differs per mode and differs again where both processes
-   * belong to one workflow module: naming a property which changes nothing for that case
-   * sends the developer after the wrong line.
+   * What frees the identifier. That differs per mode, and again where both processes belong
+   * to one workflow module. A message which names a property that changes nothing for this
+   * case sends the developer to the wrong line.
    */
   private String howToSeparateProcesses(
       final String adapterId,
@@ -776,9 +770,9 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
       return;
     }
 
-    // the fix depends on the mode, and the mode is resolved per workflow and per
-    // workflow module, so ten findings may need two sentences or one - they are
-    // collected while the findings are worded and written once each
+    // the fix depends on the mode, and the mode is resolved per workflow and per workflow
+    // module. So ten findings may need two sentences or one. The fixes are collected while
+    // the findings are worded, and each is written once
     final var fixes = new LinkedHashSet<String>();
     final var describedHoldings = new LinkedList<String>();
     for (final var held : holdings) {
@@ -808,8 +802,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * One block of the warning, so that ten findings stay readable: one line each, below
-   * the sentence introducing them.
+   * One block of the warning, so that ten findings stay readable: one line each, below the
+   * sentence which introduces them.
    */
   private static String asBullets(
       final Collection<String> lines) {
@@ -821,9 +815,9 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * The BPMN process whose mode decides for the given finding: its own id where the
-   * finding IS a process id, the process a task definition belongs to, and none for an
-   * identifier the workflow module scopes alone.
+   * The BPMN process whose mode decides about the given finding. That is the process id
+   * itself where the finding IS a process id, the process of a task definition, and none
+   * for an identifier which only the workflow module scopes.
    */
   private static String processDecidingTheMode(
       final IdentifierHeldElsewhere held) {
@@ -838,8 +832,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
 
   /**
    * One finding as the warning names it: what the application calls the identifier, what
-   * the BPMS sees instead, where that form comes from, and what the adapter could find
-   * out about the holder.
+   * the BPMS sees instead, where that form comes from, and what the adapter found out about
+   * the holder.
    */
   private String describe(
       final IdentifierHeldElsewhere held,
@@ -876,8 +870,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * The scoped form the BPMS sees for one identifier of one workflow module - composed
-   * here, because every caller hands over the plain identifier only.
+   * The scoped form which the BPMS sees for one identifier of one workflow module. It is
+   * built here, because every caller hands over only the plain identifier.
    */
   private String scopedFormOf(
       final ScopedIdentifierKind kind,
@@ -888,14 +882,14 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
 
     return switch (kind) {
       case BPMN_PROCESS_ID -> scopedProcessId(workflowModuleId, plainIdentifier, adapterId);
-      // a task definition carries its BPMN process, so a caller knowing none leaves the
-      // core with the module-wide form, which is also what an application switching the
-      // process part off deploys
+      // a task definition belongs to its BPMN process. A caller who knows no process gets
+      // the module-wide form. An application which switches the process part off deploys
+      // that form as well
       case TASK_DEFINITION -> bpmnProcessId == null
           ? scopedIdentifier(workflowModuleId, plainIdentifier, adapterId)
           : scopedTaskDefinition(workflowModuleId, bpmnProcessId, plainIdentifier, adapterId);
-      // a decision is called by several processes of a module, so it is scoped by the
-      // module alone, exactly like a message or an error code
+      // several processes of a module call a decision. So it is scoped by the module
+      // alone, exactly like a message or an error code
       case MESSAGE_NAME, SIGNAL_NAME, ERROR_CODE, ESCALATION_CODE, DMN_DECISION_ID -> scopedIdentifier(
           workflowModuleId,
           plainIdentifier,
@@ -905,8 +899,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * How the warning names a kind of identifier, in the words a developer sees in a
-   * modeller rather than in the words of the enum.
+   * How the warning names a kind of identifier: in the words a developer sees in a modeller,
+   * not in the words of the enum.
    */
   private static String kindOf(
       final ScopedIdentifierKind kind) {
@@ -924,8 +918,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * The property key which produced the mode, so the developer edits the line which
-   * decides rather than adding a second one somewhere else.
+   * The property key which produced the mode. So the developer edits the line which decides,
+   * and does not add a second one somewhere else.
    */
   private String whereTheModeComesFrom(
       final String workflowModuleId,
@@ -959,8 +953,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * What frees the identifier again, per mode: each mode leaves a different way out, and
-   * naming the wrong one sends the developer after a property which changes nothing.
+   * What frees the identifier again, per mode. Each mode has a different way out. Naming the
+   * wrong one sends the developer to a property which changes nothing.
    */
   private static String howToFree(
       final NameClashAvoidance mode,
@@ -1017,9 +1011,9 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
               declarationKey(adapterId, identifier.kind(), scopedForm),
               new Declaration(workflowModuleId, identifier.bpmnProcessId()));
       if ((declaredAlready == null) || declaredAlready.workflowModuleId().equals(workflowModuleId)) {
-        // the first module declaring it, or this module declaring it in a second process -
-        // the scope of such a name IS the workflow module, so sharing it inside one is
-        // ordinary VanillaBP
+        // the first module which declares it, or this module which declares it in a second
+        // process. The scope of such a name IS the workflow module, so sharing it inside one
+        // module is normal VanillaBP
         continue;
       }
       final var mode = modeFor(workflowModuleId, null, adapterId);
@@ -1101,8 +1095,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
         continue;
       }
       if (deployedNow.workflowModuleId().equals(workflowModuleId)) {
-        // the module which declares it today is the one the held version belongs to, which
-        // is the same model carried forward rather than a clash
+        // the module which declares it today is the one the held version belongs to. That is
+        // the same model carried forward, not a clash
         continue;
       }
       final var mode = modeFor(deployedNow.workflowModuleId(), null, adapterId);
@@ -1153,19 +1147,18 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * Whether a name a held version declares is one nothing sends any more - a message or a
-   * signal which reaches a workflow from outside and which no model of this deployment
-   * declares.
+   * Whether a name which a held version declares is one which nothing sends any more: a
+   * message or a signal which reaches a workflow from outside, and which no model of this
+   * deployment declares.
    * <p>
-   * Only those two kinds. An error code and an escalation code are thrown by the model
-   * itself, so a held version carrying one carries whatever throws it as well. A task
-   * definition nobody serves is the subject of its own check, which says more about it
-   * than this could. A BPMN process id of a held version is the process being asked
-   * about.
+   * Only those two kinds count. The model itself throws an error code or an escalation code.
+   * So a held version which has one also has whatever throws it. A task definition which
+   * nobody serves has a check of its own, which says more than this one could. A BPMN
+   * process id of a held version is the process being asked about.
    * <p>
-   * A version nobody is on is not asked about either: nothing waits there, so there is
-   * nothing to look at. A BPMS which cannot count is asked all the same, because "cannot
-   * tell" is not "nobody".
+   * A version which no workflow is on is not asked about either. Nothing waits there, so
+   * there is nothing to look at. A BPMS which cannot count is asked all the same, because
+   * "cannot tell" is not "nobody".
    *
    * @param adapterId The adapter ID whose BPMS holds the version
    * @param workflowModuleId The workflow module of the held version
@@ -1192,19 +1185,19 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * Says that a held version waits for a name the current deployment does not declare any
-   * more, which is what renaming a message leaves behind.
+   * Says that a held version waits for a name which the current deployment does not declare
+   * any more. Renaming a message leaves this behind.
    * <p>
-   * The workflows on that version wait for something nobody sends, and nothing else in
-   * VanillaBP would ever say so: the name lives in a model the BPMS holds and in no file
-   * of the application.
+   * The workflows on that version wait for something which nobody sends. Nothing else in
+   * VanillaBP would ever say so. The name lives in a model which the BPMS holds, and in no
+   * file of the application.
    * <p>
-   * The advice is "look at it" rather than "write this", because the platform can see the
-   * case and cannot know whether it is meant. An application may have renamed the message
-   * on purpose and finished the old workflows by hand, or the old version may be one
-   * nobody waits at. A refusal here would be a blind one - decision 38 in the repository's
-   * DECISIONS.md - so it is a warning, and it goes into the block a start writes at its
-   * end rather than into a paragraph of its own.
+   * The advice is "look at it" and not "write this". The platform can see the case, but it
+   * cannot know whether it is intended. An application may have renamed the message on
+   * purpose and finished the old workflows by hand. Or nobody may wait at the old version. A
+   * refusal here would be a blind one (decision 38 in the repository's DECISIONS.md). So it
+   * is a warning. It goes into the block which a start writes at its end, not into a
+   * paragraph of its own.
    *
    * @param adapterId The adapter ID whose BPMS holds the version
    * @param workflowModuleId The workflow module of the held version
@@ -1243,9 +1236,9 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * How urgent a held version's finding is, in the words the count allows: a version
-   * carrying workflows is the one somebody has to act on, and a BPMS which cannot count
-   * them says that instead of a number.
+   * How urgent the finding about a held version is, in the words the count allows. Somebody
+   * has to act on a version which has workflows. A BPMS which cannot count them says that
+   * instead of a number.
    */
   private static String workflowsRunningOn(
       final Long activeWorkflows) {
@@ -1263,12 +1256,11 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * What a finding cannot claim where the BPMS itself is supposed to keep the workflow
-   * modules apart: whether it really does. The core resolves the mode and composes the
-   * prefixes, but an isolation mechanism of a BPMS is the adapter's knowledge (a tenant, a
-   * namespace, a database of its own), so under that mode the line is a question rather
-   * than a verdict - and a reader who cannot see which of the two they got learns to ignore
-   * the whole message.
+   * What a finding cannot claim where the BPMS itself should keep the workflow modules
+   * apart: whether it really does. The core resolves the mode and builds the prefixes. But
+   * the adapter knows the isolation of its BPMS, for example a tenant, a namespace or a
+   * database of its own. So under that mode the line is a question and not a verdict. A
+   * reader who cannot see which of the two they got learns to ignore the whole message.
    */
   private static String whatTheBpmsOwnIsolationHides(
       final Collection<NameClashAvoidance> modes) {
@@ -1284,8 +1276,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * Which BPMN process a finding names, where the kind is scoped by one: a task definition
-   * belongs to its process, and a developer looking for it needs to know which.
+   * Which BPMN process a finding names, where the kind is scoped by one. A task definition
+   * belongs to its process, and a developer who looks for it needs to know which.
    */
   private static String processClauseOf(
       final ScopedIdentifierKind kind,
@@ -1298,9 +1290,9 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * The key the module declaring an identifier is remembered under. The kind is part of
-   * it because a BPMS keeps the kinds apart: a message name equal to an error code
-   * collides with nothing.
+   * The key under which the module that declares an identifier is remembered. The key has
+   * the kind in it, because a BPMS keeps the kinds apart. A message name which equals an
+   * error code collides with nothing.
    */
   private static String declarationKey(
       final String adapterId,
@@ -1312,8 +1304,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * The configuration levels which explicitly configure the given mode for the
-   * given adapter - used for guiding messages.
+   * The configuration levels which explicitly configure the given mode for the given
+   * adapter. Used for guiding messages.
    */
   private Collection<String> levelsConfiguring(
       final String adapterId,
@@ -1352,8 +1344,8 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
 
   /**
    * Whether the adapter has NO mode configured at all AND defaults to
-   * {@link NameClashAvoidance#BY_ADAPTER} - which an adapter without native isolation
-   * cannot serve either. An adapter defaulting to another mode is unaffected.
+   * {@link NameClashAvoidance#BY_ADAPTER}. An adapter without its own isolation cannot serve
+   * that default either. An adapter with another default is not affected.
    */
   private Collection<String> unconfiguredLevels(
       final String adapterId) {
@@ -1400,7 +1392,7 @@ public class NameClashAvoidanceService implements NameClashAvoidanceSupport {
   }
 
   /**
-   * Strips the given prefix if - and only if - the identifier carries it.
+   * Removes the given prefix, but only if the identifier has it.
    */
   private static String stripKnownPrefix(
       final String identifier,
