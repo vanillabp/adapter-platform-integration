@@ -1026,15 +1026,15 @@ public class PhaseTwoOutboxProperties {
 
   /**
    * The keys of the MongoDB default outbox (properties section
-   * <code>vanillabp.outbox.mongo.*</code>): whether it is built at all, and the
-   * collections it and the delivery log work on.
+   * <code>vanillabp.outbox.mongo.*</code>): whether it is built at all, and the collections
+   * on which it and the delivery log work.
    */
   public static class MongoOutboxProperties {
 
     /**
-     * The empty section a configuration binder starts from, and the section an application
-     * which writes nothing about the MongoDB outbox gets, since the field holding it has
-     * this as its default.
+     * The empty section from which a configuration binder starts. An application which
+     * writes nothing about the MongoDB outbox also gets this section, because the field which
+     * holds it has this as its default.
      * <p>
      * It asks the builder for the values, and that is not a detour. Every default of this
      * class is on the builder as well as on the field, and both ways into an object end here.
@@ -1049,10 +1049,9 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * The key of {@link #collection}:
-     * <code>vanillabp.outbox.mongo.collection</code>. It is a constant because the
-     * message about two stores in one collection names it and a test reads the key from
-     * here instead of writing it a second time.
+     * The key of {@link #collection}: <code>vanillabp.outbox.mongo.collection</code>. It is a
+     * constant, because the message about two stores in one collection names it. And a test
+     * reads the key from here, instead of writing it a second time.
      */
     public static final String COLLECTION_PROPERTY = SECTION
         + ".mongo.collection";
@@ -1074,24 +1073,24 @@ public class PhaseTwoOutboxProperties {
         + ".mongo.delivery-collection";
 
     /**
-     * The name of the collection the entries go into where the application configures
+     * The name of the collection into which the entries go, where the application configures
      * none.
      */
     public static final String DEFAULT_COLLECTION = "vanillabp-phase-two-outbox";
 
     /**
-     * What is appended to the name of the outbox collection to get the name of the
-     * payload collection. It is written the way a MongoDB collection is written here,
-     * in small letters with a hyphen, while the JDBC store appends
+     * What is added to the name of the outbox collection to get the name of the payload
+     * collection. It is written the way MongoDB collections are written here, in small
+     * letters with a hyphen. The JDBC store adds
      * {@link io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore#TABLE_NAME_SUFFIX}
-     * in the way a table is written. The two are the same idea in two spellings, so
-     * do not pull them together into one string.
+     * the way tables are written. The two are the same idea in two spellings. So do not merge
+     * them into one string.
      */
     public static final String PAYLOAD_COLLECTION_SUFFIX = "-payloads";
 
     /**
-     * The name of the collection the records of processed task deliveries go into where
-     * the application configures none.
+     * The name of the collection into which the records of processed task deliveries go,
+     * where the application configures none.
      */
     public static final String DEFAULT_DELIVERY_COLLECTION = "vanillabp-task-deliveries";
 
@@ -1104,16 +1103,16 @@ public class PhaseTwoOutboxProperties {
         + ".mongo.housekeeping-collection";
 
     /**
-     * The name of the collection the housekeeping takes its lease in where the
+     * The name of the collection in which the housekeeping takes its lease, where the
      * application configures none.
      */
     public static final String DEFAULT_HOUSEKEEPING_COLLECTION = "vanillabp-housekeeping";
 
     /**
      * Whether the default outbox based on MongoDB is created when a MongoDB connection is
-     * available. Disable it if the application defines its own
-     * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean and the default (including its
-     * store and background dispatcher) is unwanted.
+     * available. Switch it off if the application defines its own
+     * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} bean, and the default (with its
+     * store and background dispatcher) is not wanted.
      * <p>
      * Key <code>vanillabp.outbox.mongo.enabled</code>, <code>true</code> by default.
      */
@@ -1121,8 +1120,8 @@ public class PhaseTwoOutboxProperties {
 
     /**
      * The name of the collection which stores the outbox entries. Every outbox instance needs
-     * its own store - two dispatchers polling the same collection would compete and
-     * double-dispatch.
+     * its own store. Two dispatchers which poll the same collection would compete and dispatch
+     * twice.
      * <p>
      * Key <code>vanillabp.outbox.mongo.collection</code>,
      * {@value #DEFAULT_COLLECTION} by default.
@@ -1131,10 +1130,10 @@ public class PhaseTwoOutboxProperties {
 
     /**
      * The name of the collection which stores the payloads of phase-two calls which have one
-     * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). One collection per
-     * outbox, for the reason the outbox itself has one. <code>null</code> means the name of
-     * the outbox collection plus {@link #PAYLOAD_COLLECTION_SUFFIX}, so an application which
-     * renames the outbox renames the payloads with it.
+     * (see {@link io.vanillabp.integration.spi.PhaseTwoPayloadStore}). There is one collection
+     * per outbox, for the same reason as the outbox itself has one. <code>null</code> means
+     * the name of the outbox collection plus {@link #PAYLOAD_COLLECTION_SUFFIX}. So an
+     * application which renames the outbox renames the payloads with it.
      * <p>
      * Key <code>vanillabp.outbox.mongo.payload-collection</code>, unset by default.
      */
@@ -1142,14 +1141,14 @@ public class PhaseTwoOutboxProperties {
 
     /**
      * The name of the collection which stores the records of processed task deliveries (see
-     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The name lies in this section
-     * because the STORE settings of the delivery log are the outbox' ones, the way
+     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The name is in this section,
+     * because the STORE settings of the delivery log are the ones of the outbox, just like
      * <code>vanillabp.outbox.mongo.enabled</code> and
-     * <code>vanillabp.outbox.create-schema</code> already are; what belongs to the log alone
-     * is how long a record is kept (<code>vanillabp.delivery.retention</code>).
+     * <code>vanillabp.outbox.create-schema</code>. What belongs to the log alone is how long a
+     * record is kept (<code>vanillabp.delivery.retention</code>).
      * <p>
-     * Give it a name of its own where the database has naming rules, and keep it apart
-     * from {@link #collection} and the payload collection: three stores sharing one
+     * Give it a name of its own where the database has naming rules. And keep it apart from
+     * {@link #collection} and from the payload collection. Three stores which share one
      * collection would read each other's documents.
      * <p>
      * Key <code>vanillabp.outbox.mongo.delivery-collection</code>,
@@ -1161,8 +1160,8 @@ public class PhaseTwoOutboxProperties {
      * The name of the collection in which the nightly housekeeping takes its lease. There is
      * one document per store, which holds who cleans it up and until when. So only one node
      * of a cluster measures its own work (see decision 91 in the repository's DECISIONS.md).
-     * Like the delivery collection and unlike the payload collection it does not follow a
-     * renamed outbox: it carries a document per store rather than belonging to one.
+     * Like the delivery collection, and unlike the payload collection, it does not follow a
+     * renamed outbox. It has a document per store, and does not belong to one.
      * <p>
      * Key <code>vanillabp.outbox.mongo.housekeeping-collection</code>,
      * {@value #DEFAULT_HOUSEKEEPING_COLLECTION} by default.
@@ -1170,10 +1169,10 @@ public class PhaseTwoOutboxProperties {
     private String housekeepingCollection = DEFAULT_HOUSEKEEPING_COLLECTION;
 
     /**
-     * The collection both MongoDB stores write their payloads into: the configured
-     * name where there is one, and otherwise the name of the outbox collection plus
-     * {@link #PAYLOAD_COLLECTION_SUFFIX}. Read this instead of the plain getter, which
-     * answers what the application wrote and is <code>null</code> most of the time.
+     * The collection into which both MongoDB stores write their payloads: the configured name
+     * where there is one, otherwise the name of the outbox collection plus
+     * {@link #PAYLOAD_COLLECTION_SUFFIX}. Read this instead of the plain getter. The getter
+     * answers what the application wrote, and that is <code>null</code> most of the time.
      *
      * @return The payload collection name
      */
@@ -1553,20 +1552,19 @@ public class PhaseTwoOutboxProperties {
 
 
   /**
-   * When the outbox house-keeps and in which time zone (properties section
+   * When the outbox cleans up, and in which time zone (properties section
    * <code>vanillabp.outbox.housekeeping.*</code>).
    * <p>
-   * The housekeeping deletes the entries whose retention passed and the payloads no entry
-   * names any more. Both used to run at the end of every poll, which made every
-   * application pay for them all day long. They run in a window at night now, and inside
-   * that window the outbox works off as much as fits (see decision 91 in the repository's
-   * DECISIONS.md).
+   * The housekeeping deletes the entries whose retention has passed, and the payloads which
+   * no entry names any more. Both used to run at the end of every poll. So every application
+   * paid for them all day long. Now they run in a window at night. Inside that window the
+   * outbox removes as much as fits (see decision 91 in the repository's DECISIONS.md).
    */
   public static class HousekeepingProperties {
 
     /**
-     * The empty section a configuration binder starts from, and the section an application
-     * which writes nothing about the housekeeping gets.
+     * The empty section from which a configuration binder starts. An application which
+     * writes nothing about the housekeeping also gets this section.
      * <p>
      * It asks the builder for the values, and that is not a detour. Every default of this
      * class is on the builder as well as on the field, and both ways into an object end here.
@@ -1582,8 +1580,8 @@ public class PhaseTwoOutboxProperties {
 
     /**
      * What the box calls this section when one of its settings is worth a look:
-     * <code>vanillabp.outbox.housekeeping</code>. It is the scope of the finding, which
-     * is why it stands beside the message rather than inside it.
+     * <code>vanillabp.outbox.housekeeping</code>. It is the scope of the finding. That is why
+     * it stands next to the message and not inside it.
      */
     public static final String HOUSEKEEPING_PREFIX = SECTION
         + ".housekeeping";
@@ -1602,23 +1600,22 @@ public class PhaseTwoOutboxProperties {
 
     /**
      * The key of {@link #zone}: <code>vanillabp.outbox.housekeeping.zone</code>. It is a
-     * constant because the warning about a JVM on UTC names it, and a test reads the key
-     * from here instead of writing it a second time.
+     * constant, because the warning about a JVM on UTC names it. And a test reads the key from
+     * here, instead of writing it a second time.
      */
     public static final String ZONE_PROPERTY = SECTION
         + ".housekeeping.zone";
 
     /**
-     * The environment variable which carries {@link #ZONE_PROPERTY}. The message about a
-     * JVM on UTC names it rather than the property, because that message is read by
-     * whoever installs the application on a server and their way in is the environment,
-     * not a rebuild.
+     * The environment variable which carries {@link #ZONE_PROPERTY}. The message about a JVM
+     * on UTC names it, and not the property. Whoever installs the application on a server
+     * reads that message, and their way in is the environment, not a rebuild.
      */
     public static final String ZONE_ENVIRONMENT_VARIABLE = "VANILLABP_OUTBOX_HOUSEKEEPING_ZONE";
 
     /**
-     * The default of {@link #start}: four in the morning, which on most installations is
-     * the quietest hour of the day.
+     * The default of {@link #start}: four in the morning. On most installations that is the
+     * quietest hour of the day.
      */
     public static final LocalTime DEFAULT_START = LocalTime.of(4, 0);
 
@@ -1628,9 +1625,9 @@ public class PhaseTwoOutboxProperties {
     public static final LocalTime DEFAULT_END = LocalTime.of(5, 0);
 
     /**
-     * The spellings which all mean UTC. A JVM standing on one of them without a zone
-     * configured here is warned, because "four in the morning" then means four UTC,
-     * which is almost never what somebody meant.
+     * The spellings which all mean UTC. A JVM which runs on one of them, without a zone
+     * configured here, gets a warning. Then "four in the morning" means four UTC, and that is
+     * almost never what somebody meant.
      */
     private static final List<String> MEANS_UTC = List.of("UTC", "ETC/UTC", "GMT", "ETC/GMT", "Z", "ZULU", "UCT");
 
@@ -1638,7 +1635,7 @@ public class PhaseTwoOutboxProperties {
      * When the window opens, in the zone below. Key
      * <code>vanillabp.outbox.housekeeping.start</code>, <code>04:00</code> by default.
      * <p>
-     * A window which ends before it starts is read as crossing midnight, so
+     * A window which ends before it starts is read as crossing midnight. So
      * <code>23:00</code> to <code>01:00</code> is two hours and not a mistake.
      */
     private LocalTime start = DEFAULT_START;
@@ -1647,28 +1644,29 @@ public class PhaseTwoOutboxProperties {
      * When the window closes. Key <code>vanillabp.outbox.housekeeping.end</code>,
      * <code>05:00</code> by default.
      * <p>
-     * It is a deadline and not a promise: a batch which is running when the window closes
-     * runs to its end, and the next one does not start. Widen the window where the meters
-     * say that the outbox did not get through (see
+     * It is a deadline and not a promise. A batch which runs when the window closes runs to
+     * its end, and the next one does not start. Widen the window where the meters say that the
+     * outbox did not get through (see
      * {@link io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics#HOUSEKEEPING_REMAINING}).
      */
     private LocalTime end = DEFAULT_END;
 
     /**
      * The zone in which the two times above are read. Key
-     * <code>vanillabp.outbox.housekeeping.zone</code>, unset by default, which means the zone
-     * of the JVM.
+     * <code>vanillabp.outbox.housekeeping.zone</code>. It is unset by default, which means the
+     * zone of the JVM.
      * <p>
-     * Written the way {@link ZoneId} spells one, for example <code>Europe/Vienna</code>.
+     * Write it the way {@link ZoneId} spells one, for example <code>Europe/Vienna</code>.
      * <p>
-     * A JVM standing on UTC without this key is warned once at the startup, because "four
-     * in the morning" is then four UTC - see {@link #sayWhichZoneTheWindowRunsIn(io.vanillabp.integration.adapter.migration.startup.StartupFindings)}.
+     * A JVM which runs on UTC without this key gets one warning at startup, because then "four
+     * in the morning" is four UTC. See
+     * {@link #sayWhichZoneTheWindowRunsIn(io.vanillabp.integration.adapter.migration.startup.StartupFindings)}.
      */
     private String zone = null;
 
     /**
-     * The zone the window is read in: the configured one where there is one, and the
-     * zone of the JVM otherwise.
+     * The zone in which the window is read: the configured one where there is one, otherwise
+     * the zone of the JVM.
      *
      * @return The zone
      */
@@ -1681,10 +1679,10 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * Refuses a window which is none and a zone nobody knows, and warns where a JVM
-     * stands on UTC and nobody gave the window a zone of its own.
+     * Refuses a window which is none, and a zone which nobody knows. It warns where a JVM runs
+     * on UTC and nobody gave the window a zone of its own.
      *
-     * @param findings Where the warning about the zone is noted
+     * @param findings Where the warning about the zone goes
      * @throws IllegalStateException Naming the key and the way out
      */
     public void validate(
@@ -1732,26 +1730,25 @@ public class PhaseTwoOutboxProperties {
     }
 
     /**
-     * Says which zone the window really runs in, where a JVM stands on UTC and nobody
-     * configured one.
+     * Says in which zone the window really runs, where a JVM runs on UTC and nobody configured
+     * a zone.
      * <p>
-     * A container runs on UTC unless somebody sets its zone, so "four in the morning"
-     * becomes four UTC, which in most places is the middle of the working day. The
-     * application would house-keep at that hour and nothing would say so, which is what
-     * this line is for.
+     * A container runs on UTC unless somebody sets its zone. So "four in the morning" becomes
+     * four UTC, which in most places is the middle of the working day. The application would
+     * clean up at that hour, and nothing would say so. This line is for that.
      * <p>
-     * <strong>A warning and not a refusal.</strong> UTC is what a container ships with
-     * and what a Kubernetes deployment normally has, so refusing the start would invent a
-     * precondition rather than uncover a mistake. What the wrong zone costs is a sweep at
-     * an hour nobody expected, which is surprise and a little load; what a refused start
-     * costs is the deployment. The two are not the same size.
+     * <strong>A warning and not a refusal.</strong> A container ships with UTC, and a
+     * Kubernetes deployment normally has it. So refusing the start would invent a precondition,
+     * not uncover a mistake. The wrong zone costs a sweep at an hour which nobody expected:
+     * surprise and a little load. A refused start costs the deployment. The two are not the
+     * same size.
      * <p>
-     * It goes into the box VanillaBP writes at the end of a start rather than into a line
-     * of its own, because it is exactly the kind of note nobody goes looking for.
+     * It goes into the box which VanillaBP writes at the end of a start, and not into a line of
+     * its own. It is exactly the kind of note which nobody goes looking for.
      * <p>
-     * An application which really wants UTC writes it down, and then this says nothing.
+     * An application which really wants UTC writes it down. Then this says nothing.
      *
-     * @param findings Where the note is left
+     * @param findings Where the note goes
      */
     private void sayWhichZoneTheWindowRunsIn(
         final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
