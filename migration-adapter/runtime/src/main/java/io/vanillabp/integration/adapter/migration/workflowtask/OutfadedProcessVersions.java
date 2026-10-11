@@ -9,25 +9,24 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.config.OutfadedVersionsInUsePolicy;
 
 /**
- * The versions of a BPMN process an application declares obsolete:
- * <code>vanillabp.adapters.&lt;id&gt;.outfaded-versions</code>, resolvable per workflow
- * module and workflow like every adapter-scoped property.
+ * The versions of a BPMN process which an application declares obsolete:
+ * <code>vanillabp.adapters.&lt;id&gt;.outfaded-versions</code>. Like every adapter-scoped
+ * property, it can be set per workflow module and workflow.
  * <p>
  * A specification is written in the grammar of the <code>version</code> attribute (see
- * {@link VersionRange}), so nobody has to learn a second one, and a version is outfaded
- * as soon as ANY specification of the most specific configured level covers it.
- * Specifications naming a version TAG need the BPMS, which is why the resolver of the
- * process is handed in - the same one the annotations use.
+ * {@link VersionRange}), so nobody has to learn a second one. A version is faded out as soon
+ * as ANY specification of the most specific configured level covers it. Specifications
+ * which name a version TAG need the BPMS. That is why the resolver of the process is handed
+ * in, the same one which the annotations use.
  * <p>
- * Why outfading is configured here rather than per adapter is decision 15 in the repository's
- * DECISIONS.md.
+ * Decision 15 in the repository's DECISIONS.md says why fading out is configured here and
+ * not per adapter.
  */
 public class OutfadedProcessVersions {
 
   /**
-   * The bound <code>vanillabp.*</code> tree, or <code>null</code> where nobody bound
-   * one (test doubles registering workflow services directly) - then nothing is
-   * outfaded.
+   * The bound <code>vanillabp.*</code> tree, or <code>null</code> where nobody bound one
+   * (test doubles which register workflow services directly). Then nothing is faded out.
    */
   private final MigrationAdapterProperties properties;
 
@@ -38,8 +37,8 @@ public class OutfadedProcessVersions {
   }
 
   /**
-   * The parsed specifications per scope - parsing reports a broken specification with
-   * the grammar, and doing that once per boot is enough.
+   * The parsed specifications per scope. Parsing reports a broken specification with the
+   * grammar, and doing that once per boot is enough.
    */
   private final Map<SpecKey, List<VersionRange>> parsed = new ConcurrentHashMap<>();
 
@@ -47,11 +46,11 @@ public class OutfadedProcessVersions {
    * Built while the registry is wired, once per application.
    * <p>
    * Nothing is read or parsed here. The configuration is asked the first time a version is
-   * judged, so a broken specification is reported while the processes are checked and names
-   * the process it was configured for.
+   * judged. So a broken specification is reported while the processes are checked, and the
+   * message names the process it was configured for.
    *
-   * @param properties The bound configuration, <code>null</code> where nobody bound one -
-   *          nothing is outfaded then and every version keeps being served
+   * @param properties The bound configuration, <code>null</code> where nobody bound one.
+   *          Then nothing is faded out, and every version is still served
    */
   public OutfadedProcessVersions(
       final MigrationAdapterProperties properties) {
@@ -61,15 +60,15 @@ public class OutfadedProcessVersions {
   }
 
   /**
-   * The specifications configured for that process and adapter, most specific level
+   * The specifications configured for that process and adapter. The most specific level
    * wins.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @param adapterId The adapter ID
    * @return The parsed specifications, empty if nothing is outfaded
-   * @throws IllegalStateException If a specification cannot be parsed (the message
-   *           carries the whole grammar)
+   * @throws IllegalStateException If a specification cannot be parsed (the message has the
+   *           whole grammar)
    */
   public List<VersionRange> specificationsFor(
       final String workflowModuleId,
@@ -87,8 +86,8 @@ public class OutfadedProcessVersions {
   }
 
   /**
-   * Whether that version is faded out - a tag is placed through the BPMS, and a tag no
-   * BPMS knows covers nothing (same rule as the annotations).
+   * Whether that version is faded out. A tag is placed through the BPMS, and a tag which no
+   * BPMS knows covers nothing (the same rule as for the annotations).
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
@@ -111,11 +110,11 @@ public class OutfadedProcessVersions {
   }
 
   /**
-   * What the operator asked for when workflows still run on a version faded out.
+   * What the operator asked for when workflows still run on a version which is faded out.
    * <p>
-   * Reporting it is the default, because an application which boots is worth more than one
-   * which refuses over a workflow somebody can still complete. An operator who wants the
-   * boot stopped sets <code>outfaded-versions-in-use</code> to
+   * Reporting it is the default. An application which boots is worth more than one which
+   * refuses because of a workflow that somebody can still complete. An operator who wants
+   * the boot stopped sets <code>outfaded-versions-in-use</code> to
    * {@link OutfadedVersionsInUsePolicy#FAIL}.
    *
    * @param workflowModuleId The workflow module ID
@@ -168,8 +167,8 @@ public class OutfadedProcessVersions {
             key.adapterId(),
             adapter -> {
               final var versions = adapter.getOutfadedVersions();
-              // a level which materialized the section but left the list empty is a
-              // level which configured nothing - the next one decides
+              // a level which created the section but left the list empty has configured
+              // nothing. The next level decides
               return (versions == null) || versions.isEmpty()
                   ? null
                   : versions;

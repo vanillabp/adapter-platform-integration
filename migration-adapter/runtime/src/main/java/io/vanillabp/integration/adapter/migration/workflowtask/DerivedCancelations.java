@@ -13,36 +13,36 @@ import io.vanillabp.spi.service.TaskEvent;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Cancellations VanillaBP works out for itself, for the BPMS which do not report one.
+ * Cancellations which VanillaBP works out itself, for the BPMS which do not report one.
  * <p>
- * Two callers ask for the same thing and get it from here. The end of a workflow knows
- * that everything the application still believes is open in it is gone
- * ({@code WorkflowTaskRegistry#workflowEnded}), and a wake-up asks the BPMS about the
- * other tasks of its workflow and learns which of them the engine does not have any more
+ * Two callers ask for the same thing and get it from here. The end of a workflow knows that
+ * everything the application still believes is open in it is gone
+ * ({@code WorkflowTaskRegistry#workflowEnded}). And a wake-up asks the BPMS about the other
+ * tasks of its workflow, and learns which of them the engine does not have any more
  * ({@code WorkflowTaskRegistry#reportTasksTheBpmsNoLongerHas}). What follows from either
- * answer is one thing, so it is written once.
+ * answer is the same, so it is written once.
  *
  * <h2>Claim first, deliver second</h2>
  *
  * Each record is handled in a transaction of its own. Inside it the record is CLAIMED with
- * {@link TaskDeliveryLog#markTaskClosed}, and the delivery of
- * {@link TaskEvent.Event#CANCELED} follows only where the claim took, in the same
- * transaction. That order is what makes two application instances safe: on SQL the second
- * update waits on the row lock and reads zero afterwards, on MongoDB the second write
- * conflicts and the retry finds the filter no longer matching. Why the count of that call
- * is a claim rather than a statistic is decision 72 in the repository's DECISIONS.md.
+ * {@link TaskDeliveryLog#markTaskClosed}. The delivery of {@link TaskEvent.Event#CANCELED}
+ * follows only where the claim took, in the same transaction. That order makes two
+ * application instances safe. On SQL the second update waits for the row lock and reads
+ * zero afterwards. On MongoDB the second write conflicts, and the retry finds that the
+ * filter no longer matches. Decision 72 in the repository's DECISIONS.md says why the count
+ * of that call is a claim and not a statistic.
  * <p>
- * A handler which throws rolls its transaction back, the claim goes with it, and the task
- * is derived again the next time somebody looks. That is at-least-once, which is what the
- * platform promises everywhere else. The failure stays with that one record: neither the
- * end of a workflow nor the job which woke the application up is lost because a derived
- * cancellation failed.
+ * A handler which throws rolls its transaction back. The claim goes with it, and the task is
+ * derived again the next time somebody looks. That is at-least-once, which the platform
+ * promises everywhere else. The failure stays with that one record. Neither the end of a
+ * workflow nor the job which woke the application up is lost because a derived cancellation
+ * failed.
  *
  * <h2>What such a delivery cannot carry</h2>
  *
- * The element is gone by the time anybody derives anything, so a
+ * The element is gone by the time anybody derives anything. So a
  * <code>&#64;TaskParam</code> and a multi-instance value reach the method as
- * <code>null</code>. The methods which really declare one are named at the boot, see
+ * <code>null</code>. The boot names the methods which really declare one, see
  * {@code WorkflowTaskRegistry#reportWhatACancelationCannotCarry}.
  */
 @Slf4j
@@ -60,7 +60,7 @@ public final class DerivedCancelations {
    * @param transactionRunner The runner serving the workflow aggregate
    * @param workflowModuleId The workflow module of the workflow
    * @param invoker What delivers the event to the application
-   * @param why What is said in a log line about a record which could not be reported
+   * @param why What a log line says about a record which could not be reported
    * @return How many cancellations were really delivered
    */
   public static int reportAsCanceled(
@@ -73,8 +73,8 @@ public final class DerivedCancelations {
 
     var delivered = 0;
     for (final var record : records) {
-      // a record whose BPMS named no task cannot be claimed and names nothing the
-      // application could be told about - it is invisible to this whole mechanism
+      // a record whose BPMS named no task cannot be claimed, and it names nothing which the
+      // application could be told about. This whole mechanism cannot see it
       if (record.taskId() == null) {
         continue;
       }
@@ -87,8 +87,8 @@ public final class DerivedCancelations {
   }
 
   /**
-   * Derives the cancellation of one record: claim it, and deliver the event where the
-   * claim took.
+   * Derives the cancellation of one record. It claims the record, and delivers the event
+   * where the claim took.
    *
    * @return Whether this call delivered the event
    */
@@ -111,10 +111,10 @@ public final class DerivedCancelations {
               "reporting task '%s' as canceled".formatted(record.taskId()),
               () -> claimAndDeliver(record, deliveryLog, workflowModuleId, invoker, why));
     } catch (final RuntimeException failure) {
-      // the claim went back with the transaction, so the record is open again and the
-      // next look derives this task once more. What must not happen is that the caller
-      // loses its own work over it - the end of a workflow and the job which woke the
-      // application up are both worth more than one derived cancellation
+      // the claim went back with the transaction. So the record is open again, and the next
+      // look derives this task once more. But the caller must not lose its own work over it.
+      // The end of a workflow and the job which woke the application up are both worth more
+      // than one derived cancellation
       log
           .warn(
               "Task '{}' of workflow '{}' (BPMN process '{}' of workflow module '{}') {}, but "
@@ -145,7 +145,7 @@ public final class DerivedCancelations {
             record.workflowAggregateId(),
             record.taskId());
     if (claimed == 0) {
-      // somebody else took this record: another instance of this application derived the
+      // somebody else took this record. Another instance of this application derived the
       // same cancellation, or the application completed the task a moment ago
       log
           .debug(
@@ -169,16 +169,15 @@ public final class DerivedCancelations {
   }
 
   /**
-   * The delivery the application sees, built from what the record kept. Everything the
-   * job of the element carried is gone with the element, so a <code>&#64;TaskParam</code>
-   * and a multi-instance value are absent here.
+   * The delivery which the application sees, built from what the record kept. Everything the
+   * job of the element carried is gone with the element. So a <code>&#64;TaskParam</code> and
+   * a multi-instance value are missing here.
    * <p>
-   * It runs in the transaction this derivation opened
-   * ({@link TaskInvocationContext#runInCurrentTransaction()}), so the claim and whatever
-   * the method writes commit together. The delivery is named after the task rather than
-   * after a job, because there is no job: a second derivation of the same task therefore
-   * finds the record of the first one and is answered from it instead of running the
-   * method again.
+   * It runs in the transaction which this derivation opened
+   * ({@link TaskInvocationContext#runInCurrentTransaction()}). So the claim and whatever the
+   * method writes commit together. The delivery is named after the task and not after a job,
+   * because there is no job. So a second derivation of the same task finds the record of the
+   * first one, and is answered from it instead of running the method again.
    */
   private static TaskInvocationContext contextOf(
       final TaskDelivery record) {

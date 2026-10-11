@@ -16,32 +16,33 @@ import io.vanillabp.integration.spi.startup.StartupReport;
 import io.vanillabp.integration.spi.startup.StartupTopic;
 
 /**
- * Reads <code>implemented-externally</code>, the property with which an application says that
- * something other than itself serves a task, and says once per workflow module which lines of
- * it change nothing.
+ * Reads <code>implemented-externally</code>. With this property an application says that
+ * something other than itself serves a task. Once per workflow module, this class says which
+ * lines of it change nothing.
  * <p>
- * Where the line stands decides what it means. A line at the task itself says something about
- * that task, so a method next to it is a contradiction. A line above the task, at the workflow,
- * the workflow module or the application, covers whatever task below it has no method, and a
- * task with a method simply keeps its method.
+ * Where the line stands decides what it means. A line at the task itself says something
+ * about that task. So a method next to it is a contradiction. A line above the task (at the
+ * workflow, the workflow module, or the application) covers every task below it which has no
+ * method. A task with a method simply keeps its method.
  * <p>
- * The rule it serves is the wiring validation's: every task of a claimed process has a
- * <code>&#64;WorkflowTask</code> method or is marked with this property, see
- * {@link WorkflowTaskRegistry#validateTaskWiring(String, String, String, Collection)}. This
- * class answers the second half of that question and nothing more. The other meaning of a line
- * at the workflow, that a process nobody claims belongs to somebody else, is read by the
- * deployment before anything is deployed, from
+ * It serves the rule of the wiring check: every task of a claimed process has a
+ * <code>&#64;WorkflowTask</code> method, or is marked with this property (see
+ * {@link WorkflowTaskRegistry#validateTaskWiring(String, String, String, Collection)}). This
+ * class answers the second half of that question and nothing more. A line at the workflow
+ * has a second meaning: a process which nobody claims belongs to somebody else. The
+ * deployment reads that before anything is deployed, from
  * {@link MigrationAdapterProperties#implementedExternallyAtTheWorkflow(String, String, String)}.
  * <p>
- * A list of names in a configuration file goes out of date without anybody noticing, which
- * was the reason against such a list. The warning about lines nothing needs is the answer to
- * that. Why the rule is what it is: decision 119 in the repository's DECISIONS.md.
+ * A list of names in a configuration file goes out of date without anybody noticing. That
+ * was the argument against such a list. The warning about lines which nothing needs is the
+ * answer to that. Decision 119 in the repository's DECISIONS.md says why the rule is what it
+ * is.
  */
 final class ImplementedExternallyCheck {
 
   /**
-   * The configuration, or <code>null</code> for a registry built without one: then nothing is
-   * marked, and nothing is warned about.
+   * The configuration, or <code>null</code> for a registry built without one. Then nothing
+   * is marked, and nothing is warned about.
    */
   private final MigrationAdapterProperties properties;
 
@@ -51,8 +52,8 @@ final class ImplementedExternallyCheck {
   private final StartupReport findings;
 
   /**
-   * The task names the deployed models know, per workflow module and BPMN process: the element
-   * ids and the task definitions every adapter handed over while it wired.
+   * The task names which the deployed models know, per workflow module and BPMN process: the
+   * element ids and the task definitions which every adapter handed over while it wired.
    */
   private final Map<String, Map<String, Set<String>>> knownTaskNames = new ConcurrentHashMap<>();
 
@@ -71,7 +72,7 @@ final class ImplementedExternallyCheck {
    * The check, reading the given configuration.
    *
    * @param properties The configuration, <code>null</code> to mark nothing
-   * @param findings Where a line nothing needs is reported
+   * @param findings Where a line which nothing needs is reported
    */
   ImplementedExternallyCheck(
       final MigrationAdapterProperties properties,
@@ -98,8 +99,8 @@ final class ImplementedExternallyCheck {
     AT_THE_TASK,
 
     /**
-     * A line above the task says <code>true</code>, and the task itself says nothing. It covers
-     * the task only where the task has no method.
+     * A line above the task says <code>true</code>, and the task itself says nothing. It
+     * covers the task only where the task has no method.
      */
     INHERITED
 
@@ -107,9 +108,9 @@ final class ImplementedExternallyCheck {
 
   /**
    * Where the marking of this task comes from, for this adapter. The element id is asked
-   * before the task definition, so a line for the element id wins where both are written. A
-   * listener is the exception: its own task definition is what names it, and the line for its
-   * element counts for it like a line from above.
+   * before the task definition. So a line for the element id wins where both are written. A
+   * listener is the exception. Its own task definition names it, and the line for its element
+   * counts for it like a line from above.
    *
    * @param adapterId The adapter deploying the model, or <code>null</code>
    * @param workflowModuleId The workflow module
@@ -133,9 +134,10 @@ final class ImplementedExternallyCheck {
         .toList();
     if (task.listener()) {
       // a listener is named at the task level by its own task definition, and that line is
-      // about this listener. A line for the element id is about the element and covers every
-      // listener on it, so for a listener it is a line from above: it covers the listener only
-      // where no method serves it, and a served listener on a marked user task is no conflict
+      // about this listener. A line for the element id is about the element, and covers every
+      // listener on it. So for a listener it is a line from above. It covers the listener only
+      // where no method serves it, and a served listener on a marked user task is no
+      // conflict
       final var ofTheListener = task.taskDefinition() == null
           ? null
           : properties
@@ -162,8 +164,8 @@ final class ImplementedExternallyCheck {
   }
 
   /**
-   * Whether the application marked this task as served by something else, for this adapter,
-   * at the task or above it.
+   * Whether the application marked this task as served by something else, for this
+   * adapter, at the task or above it.
    *
    * @param adapterId The adapter deploying the model, or <code>null</code>
    * @param workflowModuleId The workflow module
@@ -182,8 +184,8 @@ final class ImplementedExternallyCheck {
   }
 
   /**
-   * Remembers that a claimed process was wired, which is what a line above its tasks is held
-   * against.
+   * Remembers that a claimed process was wired. A line above its tasks is checked against
+   * that.
    *
    * @param workflowModuleId The workflow module
    * @param bpmnProcessId The BPMN process
@@ -199,7 +201,8 @@ final class ImplementedExternallyCheck {
   }
 
   /**
-   * Remembers that a line above the task covered a task without a method of this process.
+   * Remembers that a line above the task covered a task of this process without a
+   * method.
    *
    * @param workflowModuleId The workflow module
    * @param bpmnProcessId The BPMN process
@@ -215,7 +218,8 @@ final class ImplementedExternallyCheck {
   }
 
   /**
-   * Remembers the names of the tasks one adapter wired for a process, claimed or not.
+   * Remembers the names of the tasks which one adapter wired for a process, claimed or
+   * not.
    *
    * @param workflowModuleId The workflow module
    * @param bpmnProcessId The BPMN process
@@ -239,9 +243,10 @@ final class ImplementedExternallyCheck {
 
   /**
    * Warns about every task-level line of <code>implemented-externally</code> of the workflow
-   * module which names a task no deployed model of its process has, by element id or by task
-   * definition. Asked once the module is deployed, when every adapter handed over its models,
-   * so a task only the model of the second adapter of a migration has is not reported.
+   * module which names a task that no deployed model of its process has, by element id or by
+   * task definition. It is asked once the module is deployed, when every adapter has handed
+   * over its models. So a task which only the model of the second adapter of a migration has
+   * is not reported.
    *
    * @param workflowModuleId The workflow module
    */
@@ -284,13 +289,14 @@ final class ImplementedExternallyCheck {
   }
 
   /**
-   * Warns about a line above the task, at a workflow or at the workflow module, which covers no
-   * task without a method of the claimed processes this start wired. Such a line changes
-   * nothing: every task below it has its method, and the method wins.
+   * Warns about a line above the task, at a workflow or at the workflow module, which covers
+   * no task without a method in the claimed processes this start wired. Such a line changes
+   * nothing. Every task below it has its method, and the method wins.
    * <p>
-   * Only claimed processes are looked at. A line at a process nobody claims says that the
-   * process belongs to somebody else, and that line is needed. A line at the application is not judged either, because it covers
-   * several workflow modules and one module alone cannot tell whether it is needed.
+   * Only claimed processes are looked at. A line at a process which nobody claims says that
+   * the process belongs to somebody else, and that line is needed. A line at the application
+   * is not judged either. It covers several workflow modules, and one module alone cannot
+   * tell whether it is needed.
    *
    * @param workflowModuleId The workflow module
    */
@@ -353,7 +359,7 @@ final class ImplementedExternallyCheck {
   }
 
   /**
-   * The warning about lines nothing needs.
+   * The warning about lines which nothing needs.
    */
   private static String messageAbout(
       final String workflowModuleId,
