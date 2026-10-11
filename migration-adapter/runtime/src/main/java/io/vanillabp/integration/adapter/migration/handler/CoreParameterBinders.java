@@ -18,18 +18,17 @@ import io.vanillabp.spi.service.NoResolver;
 import io.vanillabp.spi.service.TaskParam;
 
 /**
- * The parameters every kind of handler method may take - the workflow aggregate,
+ * The parameters which every kind of handler method may take: the workflow aggregate,
  * <code>&#64;TaskParam</code> and the multi-instance context. Three scanners build their
- * methods with these: the one for <code>&#64;WorkflowTask</code>, the one for
- * <code>&#64;WorkflowStartedByBpms</code> and the generic one serving the contracts an
- * extension registers.
+ * methods with these. One is for <code>&#64;WorkflowTask</code>, one for
+ * <code>&#64;WorkflowStartedByBpms</code>, and the generic one serves the contracts which
+ * an extension registers.
  * <p>
- * Which of them a method may take is the caller's decision ({@link CoreHandlerParameter}):
- * a workflow the BPMS started has no multi-instance context, and an extension says for
- * its own annotation what makes sense around its event. A parameter no allowed kind
- * serves is answered with <code>null</code> - the caller then either tries binders of its
- * own or writes the message naming what may stand there, which is where the annotation's
- * name belongs.
+ * The caller decides which of them a method may take ({@link CoreHandlerParameter}). A
+ * workflow which the BPMS started has no multi-instance context. An extension says for its
+ * own annotation what makes sense around its event. If no allowed kind serves a parameter,
+ * the answer is <code>null</code>. The caller then tries binders of its own, or writes the
+ * message which names what may stand there. The annotation's name belongs in that message.
  */
 public final class CoreParameterBinders {
 
@@ -134,8 +133,8 @@ public final class CoreParameterBinders {
 
   /**
    * Adapts the multi-instance values to the SPI's
-   * {@link MultiInstanceElementResolver.MultiInstance} view, preserving the
-   * outermost-first order.
+   * {@link MultiInstanceElementResolver.MultiInstance} view. The outermost comes first, as
+   * before.
    */
   private static Map<String, MultiInstanceElementResolver.MultiInstance<Object>> asResolverView(
       final Map<String, HandlerMultiInstance> multiInstances) {

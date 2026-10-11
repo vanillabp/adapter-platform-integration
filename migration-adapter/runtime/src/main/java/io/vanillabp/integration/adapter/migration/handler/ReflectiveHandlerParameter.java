@@ -6,8 +6,8 @@ import java.lang.reflect.Parameter;
 import io.vanillabp.integration.extension.spi.handler.HandlerParameter;
 
 /**
- * The view an extension's binder gets on a parameter of a handler method: the plain
- * reflection data plus a description a guiding message can be built from.
+ * What an extension's binder sees of a parameter of a handler method: the plain reflection
+ * data, plus a description from which a guiding message can be built.
  *
  * @param parameter The reflected parameter
  * @param location Names the parameter, its method and its class

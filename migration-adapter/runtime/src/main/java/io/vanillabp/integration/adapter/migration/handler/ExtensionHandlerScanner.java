@@ -17,13 +17,13 @@ import io.vanillabp.spi.service.TaskParam;
 
 /**
  * Scans a <code>&#64;WorkflowService</code> class for the methods of one extension
- * contract, the way {@code WorkflowTaskScanner} does it for
- * <code>&#64;WorkflowTask</code>: find the annotated methods, read the keys they serve,
- * bind their parameters - the extension's own binders first, then the core's - and check
- * the return type against what the contract promised.
+ * contract, the way {@code WorkflowTaskScanner} does it for <code>&#64;WorkflowTask</code>.
+ * It finds the annotated methods and reads the keys they serve. It binds their parameters,
+ * first with the extension's own binders and then with the core's. And it checks the return
+ * type against what the contract promised.
  * <p>
- * Everything decidable at startup is decided here, so an invocation only reads. Defects
- * end the boot with a message naming the extension, the method and the fix.
+ * Everything which can be decided at startup is decided here, so a call only reads. A
+ * defect ends the boot with a message which names the extension, the method and the fix.
  */
 final class ExtensionHandlerScanner {
 
@@ -80,8 +80,8 @@ final class ExtensionHandlerScanner {
     final var where = "%s method '%s#%s' of extension '%s'"
         .formatted(annotationName, workflowServiceClass.getName(), method.getName(), contract.getExtensionId());
 
-    // a public method of a package-private bean class is not accessible through plain
-    // reflection - lift the check once at scan time
+    // plain reflection cannot reach a public method of a package-private bean class, so
+    // switch the access check off once, while scanning
     method.trySetAccessible();
 
     checkAnnotations(contract, method, annotations, where);
@@ -107,8 +107,8 @@ final class ExtensionHandlerScanner {
       }
     }
     if (lookupKeys.isEmpty()) {
-      // the convention every VanillaBP annotation follows: an attribute naming nothing
-      // means the method's own name is the key
+    // the convention of every VanillaBP annotation: an attribute which names nothing means
+    // that the method's own name is the key
       lookupKeys.add(method.getName());
     }
 
@@ -125,9 +125,9 @@ final class ExtensionHandlerScanner {
         .stream()
         .map(BoundParameter::source)
         .toList();
-    // the process variables the core reads for this method, which is what an extension
-    // has to ask its BPMS for before a delivery arrives. A @TaskParam parameter an
-    // extension binder claimed is the extension's own business and not among them
+    // the process variables which the core reads for this method. An extension has to ask
+    // its BPMS for them before a delivery arrives. A @TaskParam parameter which an extension
+    // binder claimed is the extension's own business and not among them
     final var taskParameterNames = boundParameters
         .stream()
         .map(BoundParameter::taskParameterName)
@@ -143,10 +143,10 @@ final class ExtensionHandlerScanner {
   }
 
   /**
-   * The versions a method serves, read from the attribute the contract names. A
-   * repeatable annotation contributes the specifications of every repetition, the way it
-   * contributes its keys; naming none means every version, which is what a contract
-   * saying nothing about versions gets for all of its methods.
+   * The versions a method serves, read from the attribute which the contract names. A
+   * repeatable annotation adds the specifications of every repetition, the same way as it
+   * adds its keys. Naming none means every version. A contract which says nothing about
+   * versions gets that for all of its methods.
    */
   private static ServedVersions versionsOf(
       final HandlerContract contract,
@@ -170,9 +170,9 @@ final class ExtensionHandlerScanner {
   }
 
   /**
-   * Lets the extension judge its own annotation while the method carrying it is at
-   * hand. A refusal names where it happened before it says what the extension said, so
-   * a developer reading the boot log finds the method without searching for it.
+   * Lets the extension judge its own annotation while the method with it is at hand. A
+   * refusal first names where it happened, then what the extension said. So a developer who
+   * reads the boot log finds the method without searching.
    */
   private static void checkAnnotations(
       final HandlerContract contract,
@@ -196,7 +196,7 @@ final class ExtensionHandlerScanner {
   }
 
   /**
-   * How one parameter gets its value, and the process variable it reads where the core
+   * How one parameter gets its value, and which process variable it reads where the core
    * binds it with <code>&#64;TaskParam</code>.
    *
    * @param source Produces the value at invocation time
@@ -242,9 +242,9 @@ final class ExtensionHandlerScanner {
   }
 
   /**
-   * The process variable the core reads for a parameter it bound. That is the case
-   * exactly where the contract allows <code>&#64;TaskParam</code> and the parameter
-   * carries it, because {@link CoreParameterBinders} tries that kind first.
+   * The process variable which the core reads for a parameter it bound. That is the case
+   * exactly where the contract allows <code>&#64;TaskParam</code> and the parameter has it,
+   * because {@link CoreParameterBinders} tries that kind first.
    */
   private static String taskParameterNameOf(
       final HandlerContract contract,

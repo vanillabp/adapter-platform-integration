@@ -12,9 +12,9 @@ import io.vanillabp.integration.extension.spi.handler.HandlerContract;
 import io.vanillabp.integration.extension.spi.handler.HandlerValueSource;
 
 /**
- * One method of a <code>&#64;WorkflowService</code> class an extension's contract
- * matched: the bean it belongs to, the keys it serves and the value sources its
- * parameters were bound to at startup.
+ * One method of a <code>&#64;WorkflowService</code> class which an extension's contract
+ * matched: the bean it belongs to, the keys it serves, and the value sources its parameters
+ * were bound to at startup.
  */
 final class ExtensionHandlerMethod {
 
@@ -29,20 +29,20 @@ final class ExtensionHandlerMethod {
   private final List<HandlerValueSource> parameterBinders;
 
   /**
-   * The keys this method serves. Empty means "the method's name", which is resolved
-   * while scanning, so the list is never empty here.
+   * The keys this method serves. An empty attribute means "the method's name". The scan
+   * resolves that, so the list is never empty here.
    */
   private final List<String> lookupKeys;
 
   /**
-   * The process versions this method serves - the same mechanics VanillaBP's own handler
-   * methods are selected by.
+   * The process versions this method serves. VanillaBP's own handler methods are selected
+   * the same way.
    */
   private final ServedVersions versions;
 
   /**
-   * The process variables the core reads for this method's <code>&#64;TaskParam</code>
-   * parameters, sorted and duplicate-free.
+   * The process variables which the core reads for this method's <code>&#64;TaskParam</code>
+   * parameters, sorted and without duplicates.
    */
   private final List<String> taskParameterNames;
 
@@ -88,8 +88,8 @@ final class ExtensionHandlerMethod {
 
   /**
    * @param lookupKey One key the caller offered
-   * @return Whether this method NAMES it - the catch-all does not count here, which is
-   *         what lets a method for one element stand next to it
+   * @return Whether this method NAMES it. The catch-all does not count here. That lets a
+   *         method for one element stand next to the catch-all
    */
   boolean serves(
       final String lookupKey) {
@@ -99,8 +99,8 @@ final class ExtensionHandlerMethod {
   }
 
   /**
-   * @return The keys this method names, in the order the annotations were read - for the
-   *         report about what was wired
+   * @return The keys this method names, in the order the annotations were read. Used for
+   *         the report about what was wired
    */
   List<String> getLookupKeys() {
 
@@ -109,11 +109,10 @@ final class ExtensionHandlerMethod {
   }
 
   /**
-   * Whether two methods are ambiguous. A method serving one element and a catch-all next
-   * to it are not: the specific one wins, which is the rule
-   * <code>&#64;WorkflowStartedByBpms</code> follows for its start events too. Two
-   * catch-alls, on the other hand, are exactly as ambiguous as two methods naming the
-   * same element.
+   * Whether two methods are ambiguous. A method for one element and a catch-all next to it
+   * are not: the specific one wins. <code>&#64;WorkflowStartedByBpms</code> follows the same
+   * rule for its start events. But two catch-alls are exactly as ambiguous as two methods
+   * which name the same element.
    *
    * @param other Another method of the same contract and BPMN process
    * @return Whether both serve a common key
@@ -144,9 +143,9 @@ final class ExtensionHandlerMethod {
   }
 
   /**
-   * Whether this method and the given one serve at least one common process version -
-   * two methods serving the same key are ambiguous exactly then. Disjoint ranges are a
-   * legitimate way of serving several generations of a model.
+   * Whether this method and the given one serve at least one common process version. Two
+   * methods which serve the same key are ambiguous exactly then. Ranges which do not overlap
+   * are a valid way to serve several generations of a model.
    *
    * @param other Another method of the same contract and BPMN process
    * @param resolver Resolves version tags of the BPMN process both belong to
@@ -161,8 +160,7 @@ final class ExtensionHandlerMethod {
   }
 
   /**
-   * @return Whether this method serves every version, which is what a method naming
-   *         none does
+   * @return Whether this method serves every version. A method which names no version does
    */
   boolean servesEveryVersion() {
 
@@ -190,7 +188,7 @@ final class ExtensionHandlerMethod {
   }
 
   /**
-   * @return The version specification(s), for guiding messages
+   * @return The version specifications, for guiding messages
    */
   String describeVersions() {
 
@@ -240,9 +238,9 @@ final class ExtensionHandlerMethod {
   }
 
   /**
-   * Binds the parameters and invokes the method. Runtime exceptions of the method
-   * propagate unchanged - only the extension knows whether its BPMS repeats the
-   * notification behind them.
+   * Binds the parameters and calls the method. Runtime exceptions of the method are passed
+   * on unchanged. Only the extension knows whether its BPMS repeats the notification after
+   * one.
    *
    * @param context The values of this invocation
    * @return What the method returned, or <code>null</code> for a void one
