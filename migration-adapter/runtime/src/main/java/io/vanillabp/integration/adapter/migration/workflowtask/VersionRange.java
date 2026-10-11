@@ -255,6 +255,13 @@ public class VersionRange {
       final var reported = resolve(processVersion, resolver);
       return (reported != null) && lower.equals(reported.versionTag());
     }
+    if (!versionTags().isEmpty()) {
+      // the reported version first, as for a single tag above: the tag may have been
+      // unknown when this node booted, and the BPMS is then not asked about it again
+      // for a while. A version this node has not seen yet makes the BPMS be asked
+      // once, and that answer teaches the tag as well
+      resolve(processVersion, resolver);
+    }
     final var version = ordinalOf(processVersion, resolver);
     final var boundaries = boundaries(resolver);
     if ((version == null) || (boundaries == null) || !sameScale(version, boundaries[0]) || !sameScale(version,

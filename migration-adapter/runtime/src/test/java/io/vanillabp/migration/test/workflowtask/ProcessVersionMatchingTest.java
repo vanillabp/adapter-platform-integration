@@ -966,6 +966,60 @@ public class ProcessVersionMatchingTest {
 
   }
 
+  /**
+   * Whether a specification serves a version, on a BPMS which holds version 1 only
+   * while this node boots and versions 2 and 3, tagged 'release-2' and 'release-3',
+   * once another node deployed them. The floor between two queries is long, as in
+   * production, so the tags the boot did not find stay unknown unless something
+   * else makes the BPMS be asked.
+   */
+  private static boolean servedAfterALaterDeployment(
+      final String specification,
+      final String reportedVersion) {
+
+    final var versions = new ArrayList<DeployedProcessVersion>();
+    versions.add(DeployedProcessVersion.of("1", "release-1"));
+    final var catalog = new CachingProcessVersionCatalog(Duration.ofHours(1)) {
+
+      @Override
+      protected List<DeployedProcessVersion> fetchDeployedVersions(
+          final String workflowModuleId,
+          final String bpmnProcessId) {
+
+        return List.copyOf(versions);
+
+      }
+
+    };
+    // the boot asks for the tags the annotations name and does not find them
+    assertNull(catalog.resolveVersion(MODULE, PROCESS, "release-2"));
+    assertNull(catalog.resolveVersion(MODULE, PROCESS, "release-3"));
+    versions.add(DeployedProcessVersion.of("2", "release-2"));
+    versions.add(DeployedProcessVersion.of("3", "release-3"));
+    return VersionRange
+        .parse(specification, "test")
+        .matches(reportedVersion, versionOrTag -> catalog.resolveVersion(MODULE, PROCESS, versionOrTag));
+
+  }
+
+  @Test
+  @DisplayName("A range naming a tag unknown at boot serves a version tagged that way which is deployed later")
+  public void aRangeLearnsATagDeployedAfterTheBoot() {
+
+    assertTrue(servedAfterALaterDeployment(">=release-2", "2"), "the tagged version itself");
+    assertTrue(servedAfterALaterDeployment(">=release-2", "3"), "a version after it");
+    assertFalse(servedAfterALaterDeployment(">=release-2", "1"), "a version before it");
+    assertTrue(servedAfterALaterDeployment(">release-2", "3"), "a version after it");
+    assertFalse(servedAfterALaterDeployment(">release-2", "2"), "'>' excludes the tagged version");
+    assertTrue(servedAfterALaterDeployment("release-2..3", "2"), "the lower boundary is included");
+    assertTrue(servedAfterALaterDeployment("release-2..release-3", "3"), "two tags, the upper one");
+    assertFalse(servedAfterALaterDeployment("release-2..release-3", "1"), "two tags, a version before");
+    assertTrue(servedAfterALaterDeployment("1..release-2", "2"), "the upper boundary is included");
+    assertTrue(servedAfterALaterDeployment("<release-3", "2"), "a version before the tag");
+    assertFalse(servedAfterALaterDeployment("<release-3", "3"), "'<' excludes the tagged version");
+
+  }
+
   @Test
   @DisplayName("A BPMS query failing leaves the version unknown instead of failing the task")
   public void failingQueryIsSurvived() {
