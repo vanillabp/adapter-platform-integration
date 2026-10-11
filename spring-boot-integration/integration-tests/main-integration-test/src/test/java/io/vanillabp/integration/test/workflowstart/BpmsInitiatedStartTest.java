@@ -38,8 +38,8 @@ import io.vanillabp.spi.service.BpmsStartTrigger;
 import io.vanillabp.spi.service.WorkflowEnd;
 
 /**
- * Acceptance test of workflows the BPMS starts on its own, with the dummy adapter
- * standing in for a BPMS reporting a timer, signal or conditional start. The
+ * Acceptance test of workflows the BPMS starts on its own. The dummy adapter stands in
+ * for a BPMS which reports a timer, signal or conditional start. The
  * application's <code>&#64;WorkflowStartedByBpms</code> method builds the aggregate, and
  * the two start events of the process show the two ways it gets an id: the timer takes
  * the trigger time, so a repeated notification creates nothing twice, and the signal
@@ -170,8 +170,8 @@ public class BpmsInitiatedStartTest {
   }
 
   /**
-   * The same application, but its BPMN model has no start event the BPMS fires on
-   * its own - which makes the workflow service's method unservable.
+   * The same application, but its BPMN model has no start event which the BPMS fires on
+   * its own. So nothing can serve the method of the workflow service.
    */
   @Configuration
   static class NoStartEventConfiguration {
@@ -283,8 +283,8 @@ public class BpmsInitiatedStartTest {
       final var dummyAdapter = context
           .getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
 
-      // (a) a timer start: the method serving that start event builds the aggregate,
-      // names it after a value of the application's own and reads what the model set
+      // (a) a timer start: the method which serves that start event builds the aggregate.
+      // It names it after a value of the application and reads what the model set
       final var timerStart = dummyAdapter
           .startWorkflowByBpms(
               MODULE,
@@ -315,8 +315,8 @@ public class BpmsInitiatedStartTest {
       Assertions.assertEquals(42, timerAggregate.getAmount());
       Assertions.assertEquals("TIMER", timerAggregate.getStartedBy());
 
-      // (b) the same start reported again, now carrying the name the adapter wrote into
-      // the BPMS: nothing is created twice and business data written meanwhile survives
+      // (b) the same start reported again, now with the name the adapter wrote into the
+      // BPMS. Nothing is created twice, and business data written in between survives
       timerAggregate.setRegion("changed meanwhile");
       WorkflowStartConfiguration.AGGREGATES.put(TRIGGER_TIME.toString(), timerAggregate);
       final var repeated = dummyAdapter
@@ -335,7 +335,7 @@ public class BpmsInitiatedStartTest {
               "changed meanwhile",
               WorkflowStartConfiguration.AGGREGATES.get(TRIGGER_TIME.toString()).getRegion());
 
-      // (c) the signal start passes through the application's method, which sees the
+      // (c) the signal start goes through the application's method, which sees the
       // trigger and the variables
       final var signalStart = dummyAdapter
           .startWorkflowByBpms(
@@ -366,9 +366,9 @@ public class BpmsInitiatedStartTest {
       final var dummyAdapter = context
           .getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
 
-      // the dummy adapter knows no workflow of this aggregate, like a Camunda 8 cluster which does
-      // not show the workflow while its start listener runs. A report which asked it would end
-      // the start with a WorkflowNotFoundException
+      // the dummy adapter knows no workflow of this aggregate. A Camunda 8 cluster also does
+      // not show the workflow while its start listener runs. A report which asked the adapter
+      // would end the start with a WorkflowNotFoundException
       final var reportingStart = dummyAdapter
           .startWorkflowByBpms(
               MODULE,
@@ -396,9 +396,9 @@ public class BpmsInitiatedStartTest {
       final var dummyAdapter = context
           .getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
 
-      // the model pays for the notification only where the application asked for
-      // one: the workflow service of 'TimerProcess' has a @WorkflowEnded method,
-      // the other processes of the module have none
+      // the model pays for the notification only where the application asked for it.
+      // The workflow service of 'TimerProcess' has a @WorkflowEnded method, and the
+      // other processes of the module have none
       Assertions
           .assertEquals(
               List.of(PROCESS),
@@ -446,9 +446,9 @@ public class BpmsInitiatedStartTest {
       Assertions
           .assertEquals("COMPLETED/Event_Done", WorkflowStartConfiguration.AGGREGATES.get("4711").getRegion());
 
-      // the notification proves which BPMS held the workflow AND that it is over, so
-      // the election hint is marked rather than refreshed: it still answers the
-      // operation which crossed the end and leaves the cache long before a living one
+      // the notification proves which BPMS held the workflow AND that it is over. So the
+      // election hint is marked, not refreshed. It still answers an operation which
+      // crossed the end, and it leaves the cache long before the hint of a running one
       final var statistics = context
           .getBean(io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics.class);
       Assertions.assertEquals(1, statistics.getEndedMarks());

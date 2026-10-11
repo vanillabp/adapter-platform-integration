@@ -28,8 +28,8 @@ import io.vanillabp.spi.service.WorkflowStartedByBpms;
 public class WorkflowStartWorkflowService {
 
   /**
-   * Looked up when a method needs it, because the process service is built from this workflow
-   * service.
+   * Looked up only when a method needs it, because the process service is built from this
+   * workflow service.
    */
   @Autowired
   private ObjectProvider<ProcessService<WorkflowStartAggregate>> processService;
@@ -51,14 +51,14 @@ public class WorkflowStartWorkflowService {
       final BpmsStartTrigger trigger,
       @TaskParam("startedAt") final String startedAt,
       @TaskParam("region") final String region,
-      // a wrapper rather than the primitive: a notification which carries no amount
-      // would end the start instead of building the aggregate
+      // a wrapper, not the primitive: with the primitive, a notification without an
+      // amount would end the start instead of building the aggregate
       @TaskParam("amount") final Integer amount) {
 
     final var aggregate = new WorkflowStartAggregate();
-    // the time is the application's own value, filled by an expression in the model and
-    // read here - the trigger brings none, because no BPMS hands a start listener the
-    // time it scheduled the start for
+    // the time is the application's own value. An expression in the model fills it, and
+    // the method reads it here. The trigger brings no time, because no BPMS tells a start
+    // listener the time it scheduled the start for
     aggregate.setId(startedAt);
     aggregate.setStartedBy(trigger.kind().name());
     aggregate.setRegion(region);
@@ -86,9 +86,9 @@ public class WorkflowStartWorkflowService {
   }
 
   /**
-   * Reports the aggregate it builds as changed, the way an application does which calls
-   * <code>aggregateChanged</code> wherever it changes one. The workflow cannot be found yet while
-   * this method runs, so the report does nothing and the start hands the values over.
+   * Reports the aggregate it builds as changed, like an application which calls
+   * <code>aggregateChanged</code> wherever it changes one. The workflow cannot be found yet
+   * while this method runs. So the report does nothing, and the start hands the values over.
    */
   @WorkflowStartedByBpms(id = "ReportingStart")
   public WorkflowStartAggregate aggregateOfReportingStart(

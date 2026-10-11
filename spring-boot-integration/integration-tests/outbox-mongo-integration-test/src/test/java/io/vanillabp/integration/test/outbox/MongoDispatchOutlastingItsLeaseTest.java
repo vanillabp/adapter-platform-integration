@@ -36,16 +36,17 @@ import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * What the lease of the MongoDB store is for: an entry somebody is dispatching stays that
- * node's entry however long the dispatch takes, and the attempts count what was attempted.
+ * What the lease of the MongoDB store is for. A lease is a time-limited claim on an entry.
+ * An entry which a node is dispatching stays with that node, however long the dispatch
+ * takes. And the attempts count what was really attempted.
  * <p>
- * This store dispatches on lanes of its own, so its poller keeps asking while a dispatch is
- * under way. What makes a poll leave the entry alone is the live lease, this node's next poll
- * as much as another node's. The test plays another node: while a dispatch is under way it asks
- * the collection the question a poll asks, and the answer has to stay "nothing to take" for the
- * whole dispatch. Before the lease was renewed the answer flipped after one
- * <code>vanillabp.outbox.attempt-frequency</code>, half a second here, and the operation was
- * carried out twice.
+ * This store dispatches on its own lanes, so its poller keeps asking while a dispatch
+ * runs. The live lease makes a poll leave the entry alone, the next poll of this node as
+ * well as the poll of another node. The test plays another node. While a dispatch runs, it
+ * asks the collection the question a poll asks. The answer must stay "nothing to take" for
+ * the whole dispatch. Before the lease was renewed, the answer changed after one
+ * <code>vanillabp.outbox.attempt-frequency</code> (half a second here). Then the operation
+ * ran twice.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -57,26 +58,26 @@ import io.vanillabp.spi.process.ProcessService;
 public class MongoDispatchOutlastingItsLeaseTest {
 
   /**
-   * How long one dispatch stays inside the adapter - six times the lease this application
-   * configures, so every poll in that window used to take the entry.
+   * How long one dispatch stays inside the adapter. That is six times the lease this
+   * application configures, so every poll in that time used to take the entry.
    */
   private static final long A_DISPATCH_WHICH_TAKES_ITS_TIME = 3000;
 
   /**
-   * How long a test waits before it says that nothing more happened. Three of the windows a
-   * second taker used to appear in. It is a guard and not a measurement of speed: a machine
-   * which leaves this JVM without a turn only makes the wait longer, and what is asserted
-   * afterwards is a count which did not grow.
+   * How long a test waits before it says that nothing more happened. It is three of the
+   * windows in which a second taker used to appear. It is a guard, not a measurement of
+   * speed. A busy machine which leaves this JVM without a turn only makes the wait longer.
+   * And the test then asserts a count which did not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
   private static final long UNTIL_IT_HAPPENED = 30_000;
 
   /**
-   * How long the test asks its question while the dispatch is under way. Half the dispatch,
-   * which is three leases and therefore three windows a second taker used to appear in, and it
-   * ends well before the dispatch does - a question asked at the very end would race with the
-   * mark the dispatch writes and read the attempt it counted there.
+   * How long the test asks its question while the dispatch runs. It is half the dispatch.
+   * That is three leases, so three windows in which a second taker used to appear. It ends
+   * well before the dispatch does. A question at the very end would race with the mark the
+   * dispatch writes, and it would read the attempt counted there.
    */
   private static final long WHILE_THE_DISPATCH_IS_CLEARLY_RUNNING = A_DISPATCH_WHICH_TAKES_ITS_TIME / 2;
 
@@ -120,8 +121,8 @@ public class MongoDispatchOutlastingItsLeaseTest {
   }
 
   /**
-   * Puts the delay back, so a class running after this one is not dispatching slowly for a
-   * reason nobody can see in it.
+   * Puts the delay back. Otherwise a class running after this one would dispatch slowly
+   * for a reason nobody can see in that class.
    */
   @AfterEach
   public void letDispatchesBeFastAgain() {
@@ -131,7 +132,7 @@ public class MongoDispatchOutlastingItsLeaseTest {
   }
 
   /**
-   * Writes an entry the way a node which crashed left it behind: this JVM's outbox never saw
+   * Writes an entry the way a crashed node left it behind. The outbox of this JVM never saw
    * it being scheduled, so only a poll can pick it up.
    *
    * @param aggregateId The aggregate the operation belongs to
@@ -165,8 +166,8 @@ public class MongoDispatchOutlastingItsLeaseTest {
   }
 
   /**
-   * The store of the application, asked through the reader so that neither a collection
-   * nor a field is named here.
+   * The store of the application. The test asks it through the reader, so no collection
+   * and no field is named here.
    */
   private MongoPhaseTwoOutboxReader store() {
 
@@ -185,7 +186,7 @@ public class MongoDispatchOutlastingItsLeaseTest {
 
   /**
    * The question a poll of ANOTHER instance asks: is there an entry which is due and which
-   * nobody holds? This is a read and not the claim itself, so asking it changes nothing for
+   * nobody holds? This is a read, not the claim itself. So asking it changes nothing for
    * the dispatcher under test.
    *
    * @return Whether another node would take an entry right now
@@ -216,8 +217,8 @@ public class MongoDispatchOutlastingItsLeaseTest {
     final var entry = anEntryDueNow("slow-dispatch-aggregate", null, null);
 
     listener.awaitInvocations(1, UNTIL_IT_HAPPENED);
-    // the adapter is inside the dispatch now. Ask over the next three leases, and the entry
-    // has to stay out of reach for every single question
+    // the adapter is inside the dispatch now. Ask during the next three leases. The entry
+    // must stay out of reach for every single question
     final var whileItIsRunning = System.currentTimeMillis() + WHILE_THE_DISPATCH_IS_CLEARLY_RUNNING;
     while (System.currentTimeMillis() < whileItIsRunning) {
       assertFalse(
@@ -268,7 +269,7 @@ public class MongoDispatchOutlastingItsLeaseTest {
   @DisplayName("An entry whose holder died is taken over, one whose lease still runs is left alone")
   public void anEntryWhoseHolderDiedIsTakenOver() throws Exception {
 
-    // both are due, and the lease is the only thing telling them apart
+    // both are due, and only the lease tells them apart
     final var leftBehind = anEntryDueNow(
         "left-behind-aggregate", "a-node-which-died", Instant.now().minus(Duration.ofMinutes(1)));
     final var heldBySomebodyElse = anEntryDueNow(

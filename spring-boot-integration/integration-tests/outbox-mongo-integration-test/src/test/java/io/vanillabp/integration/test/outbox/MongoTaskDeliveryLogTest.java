@@ -32,17 +32,18 @@ import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The MongoDB store behind the inbound idempotency: a delivery record has to
- * ride the transaction which persists the workflow aggregate, be unique by its delivery
- * key and disappear once its retention period passed. The TestContainers MongoDB runs as
- * a replica set, so record and aggregate really share one MongoDB transaction.
+ * The MongoDB store behind the inbound idempotency. Idempotency means that a repeated
+ * delivery does not run the handler twice. A delivery record must be written in the
+ * transaction which persists the workflow aggregate. It must be unique by its delivery
+ * key. And it must disappear after its retention period. The Testcontainers MongoDB runs
+ * as a replica set, so record and aggregate really share one MongoDB transaction.
  * <p>
- * That the CORE skips a handler for a recorded delivery is pinned by the platform's
- * acceptance test; what is tested here is the store.
+ * The acceptance test of the platform pins that the CORE skips a handler for a recorded
+ * delivery. This test is about the store.
  * <p>
- * What a cleanup deleted is read back as state rather than counted, because the cleanup
- * running in the background of this application deletes the same records - see decision 46
- * in the repository's DECISIONS.md.
+ * The test reads back as state what a cleanup deleted, and does not count it. The cleanup
+ * in the background of this application deletes the same records - see decision 46 in the
+ * repository's DECISIONS.md.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -50,9 +51,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
     classes = {
         TestApplication.class, MongoTaskDeliveryLogTest.MongoDeliveryLogTestConfiguration.class
     },
-    // a retention longer than anything these tests write, so the cleanup running in the
+    // a retention longer than anything these tests write. So the cleanup in the
     // background of this application never deletes a record a test is looking at. A test
-    // which needs an expired record brings a log of its own with the retention it needs
+    // which needs an expired record brings its own log with the retention it needs
     properties = "vanillabp.outbox.retention=PT24H")
 @Testcontainers
 public class MongoTaskDeliveryLogTest {
@@ -118,8 +119,8 @@ public class MongoTaskDeliveryLogTest {
     assertEquals("BPMN_ERROR", recorded.get().outcome());
     assertEquals("PAYMENT_FAILED", recorded.get().bpmnErrorCode());
     assertEquals("PaymentFailed", recorded.get().bpmnErrorName());
-    // the element of the model and the workflow of the BPMS: written into the document and
-    // read back out of it, which is all this store owes them
+    // the element of the model and the workflow of the BPMS. This store only has to write
+    // them into the document and read them back
     assertEquals("Activity_processTask", recorded.get().bpmnElementId());
     assertEquals("workflow-4711", recorded.get().workflowId());
 
@@ -165,7 +166,7 @@ public class MongoTaskDeliveryLogTest {
       deliveryLog
           .record(
               new TaskDelivery("w-2", "test-adapter", "test-module", "TestProcess", "4711", "workflow-1", "awaitCompletion", null, "task-2", "COMPLETION_PENDING", null, null, now, null));
-      // a task a called process handed out: another BPMN process, the same workflow
+      // a task of a called process: another BPMN process, but the same workflow
       deliveryLog
           .record(
               new TaskDelivery("w-1", "test-adapter", "test-module", "CalledProcess", "4711", "workflow-1", "awaitCompletion", null, "task-1", "COMPLETION_PENDING", null, null, now
@@ -307,8 +308,8 @@ public class MongoTaskDeliveryLogTest {
   }
 
   /**
-   * A record of the given workflow, for the release which is bounded by exactly these
-   * three values plus the moment it runs at.
+   * A record of the given workflow. The release is limited by exactly these three values
+   * plus the moment it runs at.
    */
   private TaskDelivery deliveryOf(
       final String deliveryKey,
@@ -334,7 +335,7 @@ public class MongoTaskDeliveryLogTest {
     });
 
     final var released = deliveryLog
-        // a moment safely after the records were written: a store's timestamp has
+        // a moment safely after the records were written. The timestamp of a store has
         // millisecond resolution, and the bound is strict
         .releaseRecordsOf("test-module", "TestProcess", "4711", java.time.Instant.now().plusSeconds(1));
 
@@ -358,7 +359,7 @@ public class MongoTaskDeliveryLogTest {
             status -> deliveryLog.record(deliveryOf("job-10", "test-module", "TestProcess", "4711")));
 
     // the delivery of a SECOND workflow on the same aggregate, processed after the first
-    // one ended - the time bound is what keeps its record
+    // one ended. The time bound keeps its record
     final var released = deliveryLog.releaseRecordsOf("test-module", "TestProcess", "4711", endOfTheWorkflow);
 
     assertEquals(0, released);
@@ -370,16 +371,16 @@ public class MongoTaskDeliveryLogTest {
   @DisplayName("No expired record is left once the retention period passed")
   public void noExpiredRecordIsLeft() {
 
-    // two hours old, which is past the hour the log below keeps a record for. The age is
-    // written into the record rather than waited for, and it is two hours rather than a
-    // moment because the bound of the cleanup is strict while a store's timestamp has
+    // two hours old, which is past the hour the log below keeps a record. The test writes
+    // the age into the record instead of waiting for it. It is two hours, not a moment,
+    // because the bound of the cleanup is strict and the timestamp of a store has
     // millisecond resolution
     transactionTemplate.executeWithoutResult(
         status -> deliveryLog.record(backdated("job-4", java.time.Duration.ofHours(2))));
 
-    // twice on purpose: the second run meets a store the first one already emptied, which
-    // is the position a second deleter is in when it gets there first. What is asserted is
-    // the state, so the answer holds whoever deleted the record
+    // twice on purpose: the second run meets a store which the first one already emptied.
+    // A second deleter is in this position when the other one was first. The test asserts
+    // the state, so the answer holds no matter who deleted the record
     final var anHourOfRetention = anHourOfRetention();
     anHourOfRetention.cleanUpExpiredRecords();
     anHourOfRetention.cleanUpExpiredRecords();
@@ -394,9 +395,8 @@ public class MongoTaskDeliveryLogTest {
 
   /**
    * A log on the collection of this application, with an hour of retention instead of the
-   * day the application runs with. It is what lets a test delete a record whose age it
-   * chose, while the cleanup running in the background of the application reaches none of
-   * them.
+   * day the application runs with. With it, a test can delete a record whose age it chose.
+   * The cleanup in the background of the application reaches none of these records.
    */
   private MongoTaskDeliveryLog anHourOfRetention() {
 
@@ -406,8 +406,8 @@ public class MongoTaskDeliveryLogTest {
   }
 
   /**
-   * A record written the given time ago - both of its timestamps, exactly as the insert
-   * writes them.
+   * A record written the given time ago. Both of its timestamps are set exactly as the
+   * insert writes them.
    */
   private TaskDelivery backdated(
       final String deliveryKey,
@@ -430,7 +430,7 @@ public class MongoTaskDeliveryLogTest {
       deliveryLog.record(backdated("job-forgotten", java.time.Duration.ofHours(2)));
     });
 
-    // the BPMS redelivered the open task, which is what the core reports to the store
+    // the BPMS delivered the open task again, and the core reports that to the store
     anHourOfRetention.stillOpen("job-open");
     anHourOfRetention.cleanUpExpiredRecords();
 

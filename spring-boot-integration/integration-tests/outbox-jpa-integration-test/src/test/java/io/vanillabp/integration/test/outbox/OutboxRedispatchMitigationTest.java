@@ -30,13 +30,13 @@ import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * The START re-dispatch mitigation: a recovered/retried START outbox
- * entry (attempts &gt; 0) probes {@code awarenessOfWorkflowForRedispatch} on the
- * recorded adapter BEFORE re-dispatching - a workflow already known there means
- * the previous dispatch already started it, so the entry is consumed WITHOUT a
- * second start. This test proves the MITIGATION, not a closed window: the residual
- * at-least-once window (a hard crash between the remote call and recording the
- * completion) is an accepted eventual-consistency property.
+ * The mitigation for a START dispatched again. A START outbox entry which is recovered or
+ * retried (attempts &gt; 0) probes {@code awarenessOfWorkflowForRedispatch} on the
+ * recorded adapter BEFORE it dispatches again. If that adapter already knows the
+ * workflow, the previous dispatch has started it. Then the entry is used up WITHOUT a
+ * second start. This test proves the MITIGATION, not a closed window. A small
+ * at-least-once window stays: a hard crash between the remote call and recording its
+ * completion. We accept it as part of eventual consistency.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -65,14 +65,14 @@ public class OutboxRedispatchMitigationTest {
   public void retriedStartEntryDoesNotStartASecondWorkflow(
       final CapturedOutput output) throws Exception {
 
-    // the restarted context reports the workflow as ALREADY KNOWN - like a crash
-    // right after a successful CreateProcessInstance whose engine state is
-    // visible by the time the entry is retried
+    // the restarted context reports the workflow as ALREADY KNOWN. This is like a crash
+    // right after a successful CreateProcessInstance, whose engine state is visible by
+    // the time the entry is retried
     SteerableTaskAwarenessSource.initialAnswer = WorkflowAwareness.ACTIVE;
     try {
 
-      // first context: the dispatch fails (BPMS "unreachable") - the store writes the
-      // failed attempt down, the entry stays OPEN with attempts > 0
+      // first context: the dispatch fails (BPMS "unreachable"). The store writes down the
+      // failed attempt, and the entry stays OPEN with attempts > 0
       try (var context = runApplication("redispatch", "PT1H")) {
         final var listener = context.getBean(RecordingPhaseTwoListener.class);
         listener.failNextDispatches(Integer.MAX_VALUE);
@@ -88,15 +88,14 @@ public class OutboxRedispatchMitigationTest {
         });
         assertNotNull(attachedAggregate);
         listener.awaitInvocations(1, 10000);
-        // the entry has to carry the failed attempt before the context goes away: the
-        // mitigation reads that counter, so a context closed sooner would leave an entry
-        // the second context recovers as a first dispatch
+        // the entry must carry the failed attempt before the context goes away. The
+        // mitigation reads that counter. If the context closed sooner, the second context
+        // would recover the entry as a first dispatch
         FailedAttempts.awaitWrittenDown(context, 1);
       }
 
-      // second context: the recovery poll picks the entry up; the mitigation
-      // probe answers ACTIVE - the entry is consumed, phase two NEVER reaches
-      // the adapter
+      // second context: the recovery poll picks the entry up. The probe of the mitigation
+      // answers ACTIVE. So the entry is used up, and phase two NEVER reaches the adapter
       try (var context = runApplication("redispatch", "PT0.5S")) {
         final var listener = context.getBean(RecordingPhaseTwoListener.class);
 
@@ -138,8 +137,8 @@ public class OutboxRedispatchMitigationTest {
       final var outbox = PhaseTwoOutboxReader
           .ofTheVanillaBpOutbox(new TransactionAwareDataSourceProxy(context.getBean(DataSource.class)));
 
-      // the first workflow of the aggregate: it starts, and its entry is done, which frees the
-      // key the second start is planned under
+      // the first workflow of the aggregate starts, and its entry is done. That frees the
+      // key under which the second start is planned
       final var aggregate = transactionTemplate.execute(status -> {
         final var created = new Aggregate();
         created.setContent("first-workflow");
@@ -165,9 +164,9 @@ public class OutboxRedispatchMitigationTest {
           .findFirst()
           .orElseThrow();
 
-      // the row the first start leaves behind. The dummy adapter reports no workflow id, so the
-      // row is written here, the way an adapter which reports one leaves it, a day before the
-      // second start
+      // the row the first start leaves behind. The dummy adapter reports no workflow id. So
+      // the test writes the row here, as an adapter which reports one would leave it, a day
+      // before the second start
       transactionTemplate.executeWithoutResult(status -> context
           .getBean(JdbcTaskDeliveryLog.class)
           .recordWorkflowStart(
@@ -186,8 +185,9 @@ public class OutboxRedispatchMitigationTest {
       listener.failNextDispatches(1);
       transactionTemplate.execute(status -> processService.startWorkflow(aggregate));
 
-      // the retry reads the row of the first workflow, which is older than the entry, so it asks
-      // the adapter about workflows started since, which knows none, and starts
+      // the retry reads the row of the first workflow, which is older than the entry. So it
+      // asks the adapter about workflows started since then. The adapter knows none, and
+      // the retry starts
       listener.awaitInvocations(3, 15000);
       assertEquals(
           3,

@@ -5,8 +5,8 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * Two handler methods a developer can read in their own source and VanillaBP cannot: one
- * which is not public, and one which overrides an annotated method without repeating the
+ * Two handler methods which a developer can read in their own source, but VanillaBP cannot.
+ * One is not public. The other overrides an annotated method without repeating the
  * annotation.
  */
 @WorkflowService(

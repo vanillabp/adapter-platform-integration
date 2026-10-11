@@ -5,7 +5,7 @@ import lombok.Setter;
 
 /**
  * The aggregate of the workflow service which inherits its declaration. It lives in a
- * package of its own so no other test's context registers it.
+ * package of its own, so the context of no other test registers it.
  */
 @Getter
 @Setter

@@ -29,22 +29,22 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
  * The end of a start does not wait for the application to be ready.
  * <p>
  * A context which is only refreshed never fires
- * {@link org.springframework.boot.context.event.ApplicationReadyEvent}, and as long as the
- * end of the start hung on that event such a context got neither the block of what the
- * start noticed nor the refusals it collected. It now hangs on the lifecycle, which every
- * refresh runs, so both arrive here as they arrive in an application.
+ * {@link org.springframework.boot.context.event.ApplicationReadyEvent}. The end of the start
+ * used to wait for this event. So such a context got neither the block of what the start
+ * noticed nor the refusals the start collected. Now the end of the start runs in the
+ * lifecycle, and every refresh runs the lifecycle. So both arrive here as they arrive in an
+ * application.
  * <p>
- * The start of the workflow processing is the other half and stays on the event: what is
- * pinned here is only that the two are no longer the same moment.
+ * The start of the workflow processing is the other half, and it still waits for the event.
+ * This test only holds that the two no longer happen at the same moment.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheEndOfAStartWithoutTheReadyEventTest {
 
   /**
-   * An extension which refuses while the BPMN files are wired: a reason not to start
-   * which is found DURING the deployment, so it is neither known before the deployment
-   * begins nor reported by a bean the refresh builds. It is collected, and only the end
-   * of the start can throw it.
+   * An extension which refuses while the BPMN files are wired. This reason not to start is
+   * found DURING the deployment. So nobody knows it before the deployment begins, and no bean
+   * of the refresh reports it. It is collected, and only the end of the start can throw it.
    */
   @Configuration
   static class RefusingExtensionConfiguration {
@@ -135,8 +135,8 @@ public class TheEndOfAStartWithoutTheReadyEventTest {
 
           Assertions.assertNull(context.getStartupFailure(), "this context has nothing to refuse");
 
-          // the test application has more BPMN processes than workflow services, so there
-          // is something to say and the block says it
+          // The test application has more BPMN processes than workflow services. So there is
+          // something to say, and the block says it.
           Assertions.assertTrue(
               output.getAllOfThisTest().contains("looked at this application and found"),
               "a refreshed context has to get the block, printed: "
@@ -166,8 +166,8 @@ public class TheEndOfAStartWithoutTheReadyEventTest {
               "the refusal of the extension has to be the reason, but the start ended on: "
                   + cause);
 
-          // the box is written before the refusal is thrown, so what the start noticed
-          // besides the refusal is not lost with it
+          // The block is written before the refusal is thrown. So what else the start noticed
+          // is not lost with the refusal.
           Assertions.assertTrue(
               output.getAllOfThisTest().contains("looked at this application and found"),
               "the block belongs into the log of a refused start as well, printed: "

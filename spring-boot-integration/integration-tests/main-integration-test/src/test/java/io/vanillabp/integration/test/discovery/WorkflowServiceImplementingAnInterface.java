@@ -3,7 +3,7 @@ package io.vanillabp.integration.test.discovery;
 import org.springframework.stereotype.Service;
 
 /**
- * The bean of {@link WorkflowServiceInterface}: its own {@code processTask} carries no
+ * The bean of {@link WorkflowServiceInterface}. Its own {@code processTask} has no
  * annotation, because Java does not inherit a method annotation from an interface.
  */
 @Service

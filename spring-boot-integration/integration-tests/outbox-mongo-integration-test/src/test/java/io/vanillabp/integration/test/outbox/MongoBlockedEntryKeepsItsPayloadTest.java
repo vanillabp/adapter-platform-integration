@@ -39,15 +39,14 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 
 /**
- * What the housekeeping of the MongoDB store removes and what it leaves: the retention
- * counts at the entry, so an entry which is blocked keeps its payload however long the
- * repair takes, a dispatched entry takes its payload with it when it goes, and a payload
+ * What the housekeeping of the MongoDB store removes and what it leaves. The retention
+ * counts at the entry. So a blocked entry keeps its payload, however long the repair
+ * takes. A dispatched entry takes its payload with it when it goes. And a payload which
  * no entry names is removed by age.
  * <p>
- * The documents are written here rather than scheduled, because what is under test is a
- * store which has been standing for longer than the retention. Nothing is dispatched
- * while the test runs: the entries are BLOCKED respectively DONE, and the poller passes
- * over both.
+ * The test writes the documents directly and does not schedule them. It tests a store
+ * which has existed for longer than the retention. Nothing is dispatched while the test
+ * runs. One entry is BLOCKED and the other is DONE, and the poller skips both.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -59,22 +58,22 @@ import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 public class MongoBlockedEntryKeepsItsPayloadTest {
 
   /**
-   * The two collections the application writes, asked of the reader rather than written
-   * down here, so a rename of the platform is followed in one place.
+   * The two collections the application writes. The test asks the reader for them and does
+   * not write them down here. So a rename in the platform is followed in one place.
    */
   private static final String OUTBOX_COLLECTION = MongoPhaseTwoOutboxReader.defaultOutboxCollectionName();
 
   private static final String PAYLOAD_COLLECTION = MongoPhaseTwoOutboxReader.defaultPayloadCollectionName();
 
   /**
-   * Older than the default retention of seven days, so everything written here is old
-   * enough to be removed - which makes the entries the only reason a payload stays.
+   * Older than the default retention of seven days. So everything written here is old
+   * enough to be removed, and the entries are the only reason why a payload stays.
    */
   private static final Instant LONG_BEFORE_THE_RETENTION = Instant.now().minus(Duration.ofDays(10));
 
   /**
    * How long the test waits for the poll which cleans up. The application polls twice a
-   * second, so this is a guard against a machine which leaves the JVM without a turn,
+   * second. So this is a guard against a busy machine which leaves the JVM without a turn,
    * not a measurement of speed.
    */
   private static final long UNTIL_THE_HOUSEKEEPING_RAN = 30_000;
@@ -104,8 +103,8 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
   private MongoTemplate mongoTemplate;
 
   /**
-   * Writes a payload the way a call which carried one wrote it, old enough to be
-   * removed by age.
+   * Writes a payload the way a call with a payload wrote it. It is old enough to be removed
+   * by age.
    *
    * @param reference The reference an entry names it by
    * @param content What the call carried
@@ -165,14 +164,14 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
   }
 
   /**
-   * Waits until the housekeeping removed one document, and says what was expected of it
-   * where it never did.
+   * Waits until the housekeeping removed one document. If it never does, it says what was
+   * expected of that document.
    * <p>
-   * Every document this test waits for is one the assertion is about. A sweep which ran
-   * before the test had written everything down removes none of them, so the wait goes on
-   * until the next sweep. Waiting for another document is what used to end this test early:
-   * the orphaned payload was gone after a sweep which had not seen the dispatched entry
-   * yet, and that entry was then still there.
+   * The test waits only for documents the assertion is about. A sweep which ran before the
+   * test had written everything removes none of them, so the wait goes on until the next
+   * sweep. Waiting for another document used to end this test too early. The orphaned
+   * payload was gone after a sweep which had not seen the dispatched entry yet, and that
+   * entry was then still there.
    *
    * @param document Reads the document, <code>null</code> once it is gone
    * @param whatIsExpected What the housekeeping owes this document
@@ -196,9 +195,9 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
     final var blockedPayload = UUID.randomUUID().toString();
     final var dispatchedPayload = UUID.randomUUID().toString();
     final var orphanPayload = UUID.randomUUID().toString();
-    // an entry is written before the payload it names, because a sweep between the two
-    // writes would meet a payload nothing names yet and remove the very payload this
-    // test says is kept
+    // an entry is written before the payload it names. A sweep between the two writes
+    // would meet a payload which nothing names yet. It would remove exactly the payload
+    // this test says is kept
     final var blockedEntry = entry(blockedPayload, PhaseTwoOutboxEntry.STATUS_BLOCKED, null);
     final var dispatchedEntry = entry(
         dispatchedPayload, PhaseTwoOutboxEntry.STATUS_DONE, LONG_BEFORE_THE_RETENTION);

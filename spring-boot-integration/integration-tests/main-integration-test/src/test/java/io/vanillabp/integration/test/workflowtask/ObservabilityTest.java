@@ -41,14 +41,14 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Acceptance test of what an operator gets to see on Spring Boot: every
- * task delivery is counted by outcome and measured, it carries a logging context
- * naming the workflow it belongs to, and the BPMS adapters contribute what they know
- * about their BPMS to the health endpoint.
+ * Acceptance test of what an operator gets to see on Spring Boot. Every task delivery is
+ * counted by outcome and measured. It carries a logging context which names its
+ * workflow. And the BPMS adapters add what they know about their BPMS to the health
+ * endpoint.
  * <p>
- * The dummy adapter plays the BPMS, as in {@link WorkflowTaskProcessingTest} whose
- * fixture (aggregate, handlers, persistence) this test reuses - what is asserted here
- * is not the delivery but what the delivery leaves behind.
+ * The dummy adapter plays the BPMS, as in {@link WorkflowTaskProcessingTest}. This test
+ * reuses its fixture (aggregate, handlers, persistence). It does not assert the delivery
+ * itself, but what the delivery leaves behind.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ObservabilityTest {
@@ -60,7 +60,7 @@ public class ObservabilityTest {
   private static final String ADAPTER = "test";
 
   /**
-   * What the dummy adapter answers when it is asked for its health - set per test.
+   * What the dummy adapter answers when it is asked for its health. Each test sets it.
    */
   private static final AtomicReference<DummyHealthSource> HEALTH = new AtomicReference<>();
 
@@ -502,7 +502,7 @@ public class ObservabilityTest {
   }
 
   /**
-   * The messages along the chain of causes - a startup failure wraps the guiding one.
+   * The messages along the chain of causes. A startup failure wraps the guiding message.
    */
   private static String messagesOf(
       final Throwable failure) {

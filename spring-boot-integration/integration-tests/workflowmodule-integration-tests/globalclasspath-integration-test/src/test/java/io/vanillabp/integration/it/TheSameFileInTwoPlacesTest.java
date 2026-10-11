@@ -14,9 +14,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 
 /**
- * The four places a workflow module may use do not rank against each other, so the same
- * file may lie in one of them only. A module which ships it twice ends the boot instead of
- * letting one of the two win (see decision 65 in the repository's DECISIONS.md).
+ * The four places a workflow module may use have no ranking among each other. So a file
+ * may lie in only one of them. If a module ships it twice, the boot ends. Neither of the
+ * two copies wins (see decision 65 in the repository's DECISIONS.md).
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheSameFileInTwoPlacesTest {

@@ -37,14 +37,14 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * A BPMN process belongs to exactly one workflow aggregate, on Spring Boot. Classes of
- * different aggregates declaring the same process end the start, whichever way each of them
- * declares it and whichever of them is found first. Classes of one aggregate may still share a
- * process.
+ * A BPMN process belongs to exactly one workflow aggregate, on Spring Boot. If classes of
+ * different aggregates declare the same process, the application does not start. It does not
+ * matter how each class declares the process, or which class is found first. Classes of one
+ * aggregate may still share a process.
  * <p>
- * The order of the classes is the order of the sources handed to the application, which is
- * the order the bean definitions are registered in and so the order the workflow services are
- * found in.
+ * The order of the classes is the order of the sources we hand to the application. Spring
+ * registers the bean definitions in this order. So the workflow services are found in this
+ * order, too.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AProcessBelongsToOneAggregateTest {
@@ -242,8 +242,8 @@ public class AProcessBelongsToOneAggregateTest {
   }
 
   /**
-   * Starts the application and returns the message which ended the start, wherever Spring
-   * wrapped it.
+   * Starts the application and returns the message which stopped the start. Spring may wrap
+   * this message in other exceptions, so the method searches the whole chain of causes.
    */
   private static String refusalOfAStartWith(
       final Class<?>... workflowServices) {

@@ -25,18 +25,18 @@ import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * What happens to a phase-two call an adapter cannot serve yet: on Camunda 8 the exporter
- * of the cluster has not written the workflow, the adapter says so and names how long that
- * takes, and this is the ordinary case rather than a failure.
+ * What happens to a phase-two call which an adapter cannot serve yet. On Camunda 8, the
+ * exporter of the cluster has not written the workflow yet. The adapter says so and names
+ * how long that takes. This is the ordinary case, not a failure.
  * <p>
  * Such an attempt ENDS. The store gets the entry back, gives it the due time the adapter
- * named and dispatches it again, so the consumer sees the call once and the entry is ticked
- * off. Repeating the attempt on the spot was what a store used to do, and it could not
- * work: a dispatch runs in the transaction of its aggregate, the rejected attempt marked
- * that transaction rollback-only, and the attempt behind it reached the BPMS and then lost
- * its commit. The call went out while the entry stayed open, and what the handler had written
- * went back with the transaction. The entry came again afterwards and the consumer got the
- * same call twice.
+ * named, and dispatches it again. So the consumer sees the call once, and the entry is
+ * ticked off. A store used to repeat the attempt on the spot, and that could not work. A
+ * dispatch runs in the transaction of its aggregate. The rejected attempt marked that
+ * transaction rollback-only. The attempt after it reached the BPMS and then lost its
+ * commit. So the call went out while the entry stayed open, and what the handler had
+ * written was rolled back with the transaction. Later the entry came again, and the
+ * consumer got the same call twice.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -44,23 +44,23 @@ import io.vanillabp.spi.process.ProcessService;
 public class ARejectedDispatchIsPlannedAgainTest {
 
   /**
-   * The BPMN process the workflow service serves. It names none, so the convention applies
-   * and the class name is the process id.
+   * The BPMN process the workflow service serves. The service names none, so the
+   * convention applies: the class name is the process id.
    */
   private static final String PROCESS = SampleWorkflowService.class.getSimpleName();
 
   /**
-   * How long an assertion waits for something the outbox does on its own thread. Long
-   * enough for a loaded build machine, and it is a deadline rather than a pause: a test
-   * which is right stops waiting as soon as the entry moved.
+   * How long an assertion waits for something the outbox does on its own thread. It is long
+   * enough for a loaded build machine. It is a deadline, not a pause: a passing test stops
+   * waiting as soon as the entry moved.
    */
   private static final long PATIENCE = 20000L;
 
   /**
-   * The window a rejected dispatch names in the test below. Nothing there waits for it:
-   * the entry comes back when the test makes it due, which is why the window may be this
-   * long. It outlasts every deadline of that test many times over, so the rejected entry
-   * cannot come back on its own while the test is still running.
+   * The window a rejected dispatch names in the test below. Nothing there waits for it. The
+   * entry comes back when the test makes it due, so the window may be this long. It is
+   * many times longer than every deadline of that test. So the rejected entry cannot come
+   * back by itself while the test still runs.
    */
   private static final Duration LONGER_THAN_THIS_TEST_CAN_TAKE = Duration.ofMinutes(5);
 
@@ -106,8 +106,8 @@ public class ARejectedDispatchIsPlannedAgainTest {
   }
 
   /**
-   * The key the extension's operation derives, which is the one thing which finds the row
-   * of one aggregate among everything the shared table of this module holds.
+   * The key the operation of the extension derives. Only this key finds the row of one
+   * aggregate among everything in the shared table of this module.
    */
   private static String idempotencyKeyOf(
       final Aggregate aggregate,
@@ -133,7 +133,7 @@ public class ARejectedDispatchIsPlannedAgainTest {
   }
 
   /**
-   * Whether the entry of that operation was ticked off: a dispatched entry is marked DONE
+   * Whether the entry of that operation was ticked off. A dispatched entry is marked DONE
    * and kept until its retention runs out.
    */
   private boolean isTickedOff(
@@ -146,8 +146,8 @@ public class ARejectedDispatchIsPlannedAgainTest {
   }
 
   /**
-   * Waits until the entry of that operation is ticked off for good. The status is asked
-   * twice because the handler of the dispatch runs before the entry is marked: a read may
+   * Waits until the entry of that operation is ticked off for good. The status is read
+   * twice, because the handler of the dispatch runs before the entry is marked. A read may
    * find the mark of an attempt which is still running.
    */
   private void awaitTickedOff(
@@ -171,8 +171,8 @@ public class ARejectedDispatchIsPlannedAgainTest {
   }
 
   /**
-   * How often the store counted an attempt on the entry of that operation, and zero
-   * where no entry carries that key.
+   * How often the store counted an attempt on the entry of that operation. Zero if no
+   * entry carries that key.
    */
   private int attemptsOf(
       final String idempotencyKey) {
@@ -184,10 +184,10 @@ public class ARejectedDispatchIsPlannedAgainTest {
   }
 
   /**
-   * Waits until the extension was asked once, which is the rejection it was told to give.
-   * The store counts no attempt for a rejection of this kind, so the number on the entry
-   * cannot say it, and the extension's own count is what says which entry used the
-   * rejection up.
+   * Waits until the extension was asked once. That first call gets the rejection the
+   * extension was told to give. The store counts no attempt for this kind of rejection, so
+   * the number on the entry cannot show it. The count of the extension itself shows which
+   * entry used up the rejection.
    */
   private void awaitRejected() throws InterruptedException {
 
@@ -225,8 +225,8 @@ public class ARejectedDispatchIsPlannedAgainTest {
     final var key = idempotencyKeyOf(aggregate, "created");
 
     extension.awaitDispatched(1, PATIENCE);
-    // an entry marked DONE is one no poll takes again, so this is what makes "once" an
-    // answer of the store rather than of a pause in this test
+    // no poll takes an entry marked DONE again. So "once" is an answer of the store, not
+    // of a pause in this test
     awaitTickedOff(key);
 
     assertEquals(
@@ -253,17 +253,17 @@ public class ARejectedDispatchIsPlannedAgainTest {
   }
 
   /**
-   * The other half of ending a rejected attempt: one thread claims the due entries of this
-   * store, so an entry which waited for its BPMS held every other workflow's entry with it.
-   * Nothing waits any more, which is why the call of the workflow nobody is waiting for is
-   * the one the consumer sees here.
+   * The other half of ending a rejected attempt. One thread claims the due entries of this
+   * store. So an entry which waited for its BPMS held up the entries of every other
+   * workflow. Now nothing waits any more. So here the consumer sees the call of the
+   * workflow nobody is waiting for.
    * <p>
-   * The rejected entry is given a window which outlasts the test, so it cannot come back
-   * while the test runs. The order below rests on that and not on the speed of the
-   * machine. A store which ends the rejected attempt dispatches the entry behind it at
-   * once, and a store which waits for the rejected one dispatches nothing, however long
-   * anybody waits for it. The test makes the rejected entry due itself at the end, so
-   * nothing of it is left standing for the classes which follow.
+   * The rejected entry gets a window which outlasts the test, so it cannot come back while
+   * the test runs. The order below relies on that, not on the speed of the machine. A
+   * store which ends the rejected attempt dispatches the next entry at once. A store which
+   * waits for the rejected one dispatches nothing, however long anybody waits. At the end
+   * the test makes the rejected entry due itself, so nothing of it is left for the classes
+   * which follow.
    */
   @Test
   @DisplayName("A workflow which is not searchable yet does not hold the entries behind it")
@@ -272,8 +272,8 @@ public class ARejectedDispatchIsPlannedAgainTest {
     extension.rejectNextDispatches(1, LONGER_THAN_THIS_TEST_CAN_TAKE);
 
     final var waiting = startWorkflowAndSchedule("not-searchable-yet", "created");
-    // the rejection belongs to this workflow, and the extension being asked is what says
-    // so. Scheduling the second workflow before that could hand the rejection to it
+    // the rejection belongs to this workflow, as the call to the extension shows. If the
+    // second workflow were scheduled before that, it could get the rejection
     awaitRejected();
     final var passing = startWorkflowAndSchedule("searchable", "created");
 

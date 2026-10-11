@@ -35,10 +35,10 @@ import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * A payload on the MongoDB store: the document with the bytes is written in the very
- * transaction which writes the outbox entry, the dispatch reads it back, and it is gone
- * once the entry was marked DONE. And the whole way of a younger report which takes the
- * place of one still waiting - one dispatch, the younger bytes, one payload document
+ * A payload on the MongoDB store. The document with the bytes is written in the same
+ * transaction which writes the outbox entry. The dispatch reads it back, and it is gone
+ * once the entry was marked DONE. The test also follows a younger report which replaces
+ * one that is still waiting: one dispatch, the younger bytes, and one payload document
  * left.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -52,12 +52,12 @@ public class MongoPhaseTwoPayloadTest {
 
   /**
    * How long a test waits before it says that nothing more happened. The application
-   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>. These tests set it
+   * to half a second, so this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A busy machine which leaves this JVM
+   * without a turn only makes the wait longer. And the test then asserts a count which did
+   * not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -111,8 +111,8 @@ public class MongoPhaseTwoPayloadTest {
   }
 
   /**
-   * The store of the application, asked through the reader so that neither a collection
-   * nor a field is named here.
+   * The store of the application. The test asks it through the reader, so no collection
+   * and no field is named here.
    */
   private MongoPhaseTwoOutboxReader store() {
 
@@ -163,7 +163,7 @@ public class MongoPhaseTwoPayloadTest {
     final var younger = new java.util.concurrent.atomic.AtomicReference<String>();
     final var key = new java.util.concurrent.atomic.AtomicReference<String>();
 
-    // both ride ONE transaction on purpose: nothing is dispatched before it commits,
+    // both run in ONE transaction on purpose. Nothing is dispatched before it commits,
     // so the second call meets an entry which is certainly still waiting
     final var aggregate = transactionTemplate.execute(status -> {
       final var newAggregate = new Aggregate();
@@ -190,7 +190,7 @@ public class MongoPhaseTwoPayloadTest {
     assertArrayEquals(payloadOf("{\"amount\":2}"), dispatched.getFirst().payload());
     assertEquals(younger.get(), dispatched.getFirst().payloadReference());
 
-    // and the one which was dispatched is the only one there ever was
+    // and the dispatched call is the only one there ever was
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertEquals(1, extension.dispatched().size());
 
@@ -245,7 +245,7 @@ public class MongoPhaseTwoPayloadTest {
       return attached;
     });
     assertNotNull(aggregate);
-    // the bytes rode the very transaction the aggregate rode
+    // the bytes were written in the same transaction as the aggregate
     assertEquals(1L, countPayloadsOf(reference.get()));
 
     final var dispatched = extension.awaitDispatched(1, 20000);

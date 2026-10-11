@@ -15,13 +15,13 @@ import io.vanillabp.integration.test.TestApplication;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * A file of a workflow module ships defaults. The application wins
- * over it, whichever of its own files carries the value.
+ * A file of a workflow module ships defaults. The application wins over it, no matter
+ * which of its own files has the value.
  *
- * <p>Three sources of the same key meet here: <i>test-module.yaml</i> inside the
- * workflow module's jar, <i>application.yaml</i> on the application's classpath
- * and <i>config/application.yaml</i> next to the runner, which is this Maven
- * module's directory while its tests run.
+ * <p>Three sources of the same key meet here: <i>test-module.yaml</i> inside the jar of
+ * the workflow module, <i>application.yaml</i> on the classpath of the application, and
+ * <i>config/application.yaml</i> next to the runner. While the tests run, the runner's
+ * directory is the directory of this Maven module.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SpringBootTest(classes = {
@@ -80,8 +80,8 @@ public class WorkflowModuleConfigurationIsADefaultTest {
   @Test
   public void testAValueOnlyTheModuleShipsIsStillVisible() {
 
-    // the improvement of Version 2: these values are proper environment
-    // properties, not just something ${...} can see
+    // the improvement of Version 2: these values are real environment properties,
+    // not only visible to ${...}
     assertEquals(8, environment.getProperty("test-module.test-unmodified", int.class));
     assertEquals(8, testModuleProperties.getTestUnmodified());
     assertEquals(11, testModuleProperties.getTest());

@@ -24,18 +24,17 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * A <code>&#64;WorkflowTask</code> method matching no task of any BPMN process of its
- * workflow module is a defect the developer has to learn about while the application
- * starts - a typo in a task definition, or a method left behind after a model change,
- * otherwise stays silent until a workflow reaches the task.
+ * A <code>&#64;WorkflowTask</code> method may match no task of any BPMN process of its
+ * workflow module. That is a defect, and the developer has to learn about it while the
+ * application starts. Otherwise a typo in a task definition, or a method left behind after a
+ * model change, stays silent until a workflow reaches the task.
  * <p>
- * The check itself is old; who runs it is new. It used to be the adapter's duty, written
- * down in the javadoc of the SPI and nowhere else, and Camunda 7 forgot it for a year.
- * Since the SPI was split into
+ * The check itself is old. Who runs it is new. It used to be the adapter's duty. Only the
+ * javadoc of the SPI said so, and Camunda 7 forgot it for a year. Since the SPI was split into
  * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring} and
- * {@code WorkflowTaskInvoker}, the core runs it itself once the last adapter of a module
- * finished deploying - which is what this test holds: the dummy adapter does not call it
- * any more, and the boot still fails.
+ * {@code WorkflowTaskInvoker}, the core runs it itself. It runs once the last adapter of a
+ * module finished deploying. This test holds exactly that: the dummy adapter does not call
+ * the check any more, and the boot still fails.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OrphanWorkflowTaskMethodTest {
@@ -68,8 +67,8 @@ public class OrphanWorkflowTaskMethodTest {
 
   /**
    * What the BPMN of this test really contains: one service task, served by
-   * {@code juhu}. Without such a source the dummy adapter reports no tasks at all, and a
-   * module nothing was wired in is deliberately not reported - a model may arrive later
+   * {@code juhu}. Without such a source the dummy adapter reports no tasks at all. A module
+   * in which nothing was wired is not reported on purpose, because a model may arrive later
    * during a migration.
    */
   @org.springframework.context.annotation.Configuration
@@ -115,8 +114,8 @@ public class OrphanWorkflowTaskMethodTest {
         .hideResource("application.yaml")
         .build()) {
 
-      // the check runs at the end of the deployment, which Spring does while it refreshes
-      // the context - so the guiding message arrives wrapped
+      // the check runs at the end of the deployment. Spring does that while it refreshes
+      // the context, so the guiding message arrives wrapped
       final var failure = Assertions.assertThrows(
           Exception.class,
           () -> testApp

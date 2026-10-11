@@ -8,10 +8,11 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * A workflow service written the naive Spring way: the handler is annotated with
- * {@code @Transactional} like an ordinary service method. The annotation joins the
- * transaction VanillaBP runs the handler in, so a {@code TaskException} would discard
- * every change made to the workflow aggregate. The application must not boot with it.
+ * A workflow service written the naive Spring way. Its handler carries
+ * {@code @Transactional}, like an ordinary service method. The annotation joins the
+ * transaction in which VanillaBP runs the handler. So a {@code TaskException} would
+ * throw away every change to the workflow aggregate. The application must not boot
+ * with this service.
  */
 @Service
 @WorkflowService(

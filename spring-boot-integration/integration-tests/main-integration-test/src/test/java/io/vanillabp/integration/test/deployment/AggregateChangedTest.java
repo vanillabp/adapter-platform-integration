@@ -103,8 +103,8 @@ public class AggregateChangedTest {
     }
 
     /**
-     * The dummy knows the workflow - otherwise the core would refuse to push to a
-     * BPMS which never heard of it.
+     * The dummy knows the workflow. Otherwise the core would refuse to push to a BPMS
+     * which never heard of it.
      */
     @Bean
     DummyTaskAwarenessSource activeWorkflow() {
@@ -140,7 +140,7 @@ public class AggregateChangedTest {
         @Override
         public Object getAggregateId(
             final Aggregate workflowAggregate) {
-          // the sample aggregate has no attributes - every test runs its own
+          // the sample aggregate has no attributes. Every test runs its own
           // application, so one id is enough
           return "42";
         }

@@ -21,14 +21,15 @@ import io.vanillabp.integration.test.outbox.TestApplication;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Concurrent tokens on Spring Boot, with a real JPA aggregate carrying <code>@Version</code>:
- * while the <code>@WorkflowTask</code> handler runs, a second writer changes the same
- * row in a transaction of its own and commits - the shape of two branches of one
- * workflow, made sequential so nothing here depends on a race.
+ * Concurrent tokens on Spring Boot, with a real JPA aggregate which has
+ * <code>@Version</code>. While the <code>@WorkflowTask</code> handler runs, a second
+ * writer changes the same row in its own transaction and commits. This is what two
+ * branches of one workflow do. Here it happens one after the other, so nothing depends
+ * on a race.
  * <p>
- * VanillaBP's commit then fails: the platform recognizes the conflict, one guiding
- * message names it, and the exception reaches the adapter unchanged, which is what
- * lets the BPMS apply its retry semantics.
+ * Then the commit of VanillaBP fails. The platform recognizes the conflict, and one
+ * guiding message names it. The exception reaches the adapter unchanged, so the BPMS can
+ * apply its own retry rules.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -70,12 +71,12 @@ public class AggregateWriteConflictTest {
     assertTrue(message.contains(aggregateId.toString()), message);
     assertTrue(message.contains("conflictingTask"), message);
     assertTrue(message.contains("does not retry"), message);
-    // not wrapped: the adapter needs the exception its BPMS' retry semantics know
+    // not wrapped: the adapter needs the exception which the retry rules of its BPMS know
     assertTrue(
         thrown.getMessage().contains(ConflictAggregate.class.getName()),
         thrown.getMessage());
 
-    // what the other branch wrote survived, what this run changed did not
+    // the write of the other branch survived, the change of this run did not
     assertEquals(
         "changed by the other branch",
         repository

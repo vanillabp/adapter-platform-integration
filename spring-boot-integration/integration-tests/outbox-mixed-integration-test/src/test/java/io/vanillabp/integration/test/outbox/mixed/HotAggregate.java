@@ -9,10 +9,10 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * A JPA workflow aggregate of a "high-load" process: a
- * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware} bean assigns it a
- * DEDICATED outbox on its own table (<code>HOT_OUTBOX</code>) to isolate it from the
- * other processes' outbox traffic.
+ * A JPA workflow aggregate of a process under high load. A
+ * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware} bean gives it its OWN outbox
+ * on its own table (<code>HOT_OUTBOX</code>). So the outbox traffic of the other
+ * processes does not slow it down.
  */
 @Entity
 @Table(name = "MIXED_HOT_AGGREGATE")

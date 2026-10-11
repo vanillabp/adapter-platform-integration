@@ -11,18 +11,18 @@ import io.vanillabp.integration.test.sample.Aggregate;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Test application repackaged as an executable (fat) JAR by the
- * spring-boot-maven-plugin. The workflow modules 'test-module' and
- * 'multi-bpmn-module' are pulled in as dependencies, so inside the fat JAR they are
- * nested JARs ({@code jar:nested:} protocol). On startup the workflow module of
- * each {@link ProcessService} is reported to stdout to be asserted by the
- * integration test. Once started, the application shuts down gracefully (closing
- * the context stops workflow processing via the SmartLifecycle stop path).
+ * Test application which the spring-boot-maven-plugin repackages as an executable (fat)
+ * JAR. The workflow modules 'test-module' and 'multi-bpmn-module' are dependencies. So
+ * inside the fat JAR they are nested JARs ({@code jar:nested:} protocol). At startup,
+ * the application prints the workflow module of each {@link ProcessService} to stdout,
+ * and the integration test checks that output. After the start, the application shuts
+ * down gracefully. Closing the context stops workflow processing through the stop path
+ * of SmartLifecycle.
  */
 @SpringBootApplication
-// three aggregates none of which this application persists: it starts, reports the
-// workflow module of each process service and shuts down. VanillaBP asks an application to
-// say who owns its aggregates, and the sample module's double answers for all of them
+// This application stores none of its three aggregates. It starts, prints the workflow
+// module of each process service and shuts down. VanillaBP asks an application who owns
+// its aggregates, and the double of the sample module answers for all three
 @org.springframework.context.annotation.Import(io.vanillabp.integration.test.sample.NoPersistenceForTheSampleAggregate.class)
 public class FatJarTestApplication {
 

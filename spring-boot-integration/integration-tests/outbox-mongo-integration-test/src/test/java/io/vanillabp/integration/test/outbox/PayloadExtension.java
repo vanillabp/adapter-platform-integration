@@ -12,9 +12,9 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Stands in for an extension which passes the state it saw at its sync point, the way a
- * sync to the Business Cockpit does. It registers an operation of its own and records
- * the calls dispatched to it, payload included.
+ * Stands in for an extension which passes on the state it saw at its sync point, as a
+ * sync to the Business Cockpit does. It registers its own operation and records the calls
+ * dispatched to it, with their payload.
  */
 @RequiredArgsConstructor
 public class PayloadExtension {
@@ -71,8 +71,8 @@ public class PayloadExtension {
   }
 
   /**
-   * Forgets what was dispatched before. A test which waits for the first call has to
-   * start from nothing, or it reads the call of the test which ran before it.
+   * Forgets what was dispatched before. A test which waits for the first call must start
+   * from nothing. Otherwise it reads the call of the test which ran before it.
    */
   public void reset() {
 

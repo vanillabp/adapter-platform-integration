@@ -45,12 +45,13 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.service.WorkflowEnd;
 
 /**
- * Acceptance test on Spring Boot: an adapter reports the end of a workflow and names it,
- * and every task the core still believes is open in that workflow reaches the application
- * as canceled before <code>&#64;WorkflowEnded</code> runs.
+ * Acceptance test on Spring Boot. An adapter reports the end of a workflow and names the
+ * workflow. Then every task which the core still believes is open in that workflow reaches
+ * the application as canceled. This happens before <code>&#64;WorkflowEnded</code> runs.
  * <p>
- * The cases which must NOT derive are here too, because they are what keeps this additive:
- * an end which names no workflow, and a record which belongs to another adapter.
+ * The cases which must NOT derive anything are here too. They make sure the feature only
+ * adds behavior and changes nothing which worked before: an end which names no workflow,
+ * and a record which belongs to another adapter.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DerivedCancelationTest {
@@ -62,9 +63,9 @@ public class DerivedCancelationTest {
   private static final String ADAPTER = "test";
 
   /**
-   * In-memory persistence of the test aggregate plus the H2 database the delivery log
-   * writes its records into. The aggregate is copied on save and on load, so a handler
-   * which threw leaves nothing of what it changed behind.
+   * In-memory persistence of the test aggregate, plus the H2 database which the delivery
+   * log writes its records into. The aggregate is copied on save and on load. So a handler
+   * which threw leaves none of its changes behind.
    */
   @Configuration
   static class CancelConfiguration {
@@ -141,8 +142,8 @@ public class DerivedCancelationTest {
     }
 
     /**
-     * The BPMS this test elects: it knows every workflow it is asked about, and it writes
-     * down which id the election passed it.
+     * The BPMS which this test elects. It knows every workflow it is asked about, and it
+     * writes down which id the election passed to it.
      */
     static final java.util.List<String> WORKFLOW_IDS_THE_ELECTION_PASSED = new java.util.concurrent.CopyOnWriteArrayList<>();
 
@@ -310,8 +311,8 @@ public class DerivedCancelationTest {
 
       @Override
       public WorkflowEnd.Kind getKind() {
-        // COMPLETED on purpose: a terminate end event ends a Camunda 8 instance this way
-        // while taking open tasks with it, so the kind must not decide
+        // COMPLETED on purpose. A terminate end event ends a Camunda 8 instance this way and
+        // takes the open tasks with it. So the kind must not decide
         return WorkflowEnd.Kind.COMPLETED;
       }
 
@@ -380,8 +381,8 @@ public class DerivedCancelationTest {
               openRecordCount(context, "4711"),
               "and both records are closed, so nothing derives them a second time");
 
-      // the same notification once more, which is what at-least-once means: the records
-      // are closed, so nothing is reported again
+      // the same notification once more, because that is what at-least-once means. The
+      // records are closed, so nothing is reported again
       dummyAdapter.notifyWorkflowEnded(MODULE, PROCESS, workflowEnded("4711", "workflow-of-4711"));
       Assertions
           .assertEquals(
@@ -446,8 +447,8 @@ public class DerivedCancelationTest {
   }
 
   /**
-   * The other half of the same mechanism: nothing ended, the BPMS simply does not have a
-   * task any more, and a wake-up of that workflow is what finds out.
+   * The other half of the same mechanism. Nothing ended, but the BPMS no longer has a task.
+   * A wake-up of that workflow finds this out.
    */
   @Test
   @DisplayName("A wake-up reports the other tasks the BPMS does not have, and leaves the rest alone")
@@ -466,8 +467,8 @@ public class DerivedCancelationTest {
       dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitDelivery", "4715", "task-9"));
       Assertions.assertEquals(3, openRecordCount(context, "4715"));
 
-      // task-9 is the job being worked on. Of the other two the BPMS has one and not the
-      // other, and it cannot say about nothing here
+      // task-9 is the job being worked on. Of the other two, the BPMS has one and not the
+      // other. Here it never answers that it cannot say
       final var probed = new java.util.ArrayList<String>();
       dummyAdapter
           .reportTasksTheBpmsNoLongerHas(
@@ -504,8 +505,8 @@ public class DerivedCancelationTest {
   }
 
   /**
-   * What an extension asks for, and what the election hands the adapter on the way: both
-   * come out of the same row the delivery record wrote.
+   * What an extension asks for, and what the election hands to the adapter on the way.
+   * Both come from the same row which the delivery record wrote.
    */
   @Test
   @DisplayName("The election carries the workflow id, and an extension gets it back")
@@ -541,8 +542,8 @@ public class DerivedCancelationTest {
       // the old call still answers its string
       Assertions.assertEquals(ADAPTER, election.adapterIdOfWorkflow(MODULE, PROCESS, "4716"));
 
-      // a workflow nobody delivered anything for: the adapter id and no workflow id, which
-      // is a regular answer
+      // a workflow which nobody delivered anything for: the adapter id and no workflow id.
+      // This is a regular answer
       CancelConfiguration.WORKFLOW_IDS_THE_ELECTION_PASSED.clear();
       storeAggregate("4717");
       final var withoutAnId = election.locationOfWorkflow(MODULE, PROCESS, "4717");
@@ -559,9 +560,10 @@ public class DerivedCancelationTest {
   }
 
   /**
-   * A derived cancellation carries no job of the element, so a value the method reads
-   * from it is absent. The boot names exactly the methods which read one, because a value
-   * which is silently missing is what an application finds out in production.
+   * A derived cancellation carries no job of the element. So a value which the method reads
+   * from that job is absent. The boot names exactly the methods which read such a value.
+   * Otherwise the value would be missing without a word, and the application would find out
+   * in production.
    */
   @Test
   @DisplayName("The boot names the methods a derived cancellation cannot fill")
@@ -573,9 +575,9 @@ public class DerivedCancelationTest {
     try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
 
       // Everything read below is the output of the running test alone. The sentences
-      // come from the boot report, and the five other tests of this class boot the same
-      // application, so an absence taken over the class buffer only holds as long as
-      // every one of those boots writes the same report.
+      // come from the boot report. The five other tests of this class boot the same
+      // application. So a check for an absence over the output of the whole class only
+      // holds as long as every one of those boots writes the same report.
       Assertions
           .assertTrue(
               captured.getAllOfThisTest().contains("subscribe to TaskEvent.Event.CANCELED and read values"),

@@ -11,14 +11,15 @@ import io.vanillabp.integration.test.utils.CapturedOutput;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What a boot says about the handler methods of an extension: which method serves which
- * key of which BPMN process, and which of them runs where no key is served at all. The
- * <code>&#64;WorkflowTask</code> side of a workflow module is reported this way, and a
- * developer whose method of an extension is never called had nothing to read before.
+ * What a boot says about the handler methods of an extension. It says which method serves
+ * which key of which BPMN process, and which of them runs where no key is served at all.
+ * The <code>&#64;WorkflowTask</code> side of a workflow module is reported in the same
+ * way. Before this report, a developer whose extension method was never called had
+ * nothing to read.
  * <p>
- * The application is started INSIDE the test, because the report is written while the
- * workflow module is deployed and a context booted before the test began would have
- * written it where nothing captures output.
+ * The test starts the application INSIDE the test method. The report is written while
+ * the workflow module is deployed. A context booted before the test would have written it
+ * where nothing captures the output.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ExtensionHandlerWiringReportTest {
@@ -30,14 +31,14 @@ public class ExtensionHandlerWiringReportTest {
 
     try (var context = new SpringApplicationBuilder(TestApplication.class)
         .web(WebApplicationType.NONE)
-        // a database of its own: the scenario's other contexts are still cached and the
+        // its own database: the other contexts of this scenario are still cached, and the
         // schema must not be created twice
         .properties("spring.datasource.url=jdbc:h2:mem:extension-wiring-report;DB_CLOSE_DELAY=-1")
         .run()) {
 
-      // Everything read below is the output of the running test alone. The absent
-      // sentence belongs to a wiring report which every boot of this scenario writes,
-      // so a second test booting here would decide whether this one passes.
+      // Everything read below is the output of this test alone. Every boot of this
+      // scenario writes a wiring report, and the sentence which must be absent belongs to
+      // it. So a second test booting here would decide whether this one passes.
       final var reported = output.getAllOfThisTest();
       Assertions.assertTrue(
           reported.contains("Extension 'sample' serves BPMN process 'DummyProcess'"),
@@ -51,8 +52,7 @@ public class ExtensionHandlerWiringReportTest {
           .assertTrue(reported.contains("'%s'".formatted(TestApplication.USER_TASK_DEFINITION)), reported);
       Assertions.assertTrue(reported.contains("the first one a method serves wins"), reported);
       // the BPMN process whose workflow service knows nothing about the extension is not
-      // named: a line per pair of extension and process would be a line about nothing for
-      // most of them
+      // named. A line per pair of extension and process would say nothing for most pairs
       Assertions.assertFalse(
           reported.contains("serves BPMN process 'UnnotedProcess'"),
           reported);

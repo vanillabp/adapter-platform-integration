@@ -10,16 +10,16 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 
 /**
- * The outbox for tests not concerned with it, next to
- * {@link TestPersistenceConfiguration}. Every operation which reaches a BPMS is
- * planned in the caller's transaction and dispatched after it committed, so an
- * application without a store cannot start a workflow and the platform says so while
- * it boots. An application which drives its BPMS through a double needs one all the
- * same, and this is it: it remembers what was planned and dispatches nothing, which
- * is what tests about wiring, versions or delivery want to happen to a phase two.
+ * The outbox for tests which do not care about it, next to
+ * {@link TestPersistenceConfiguration}. Every operation which reaches a BPMS is planned
+ * in the caller's transaction. It is dispatched after that transaction committed. So an
+ * application without a store cannot start a workflow, and the platform says so while it
+ * boots. An application which drives its BPMS through a double needs a store as well, and
+ * this is it. It remembers what was planned and dispatches nothing. Tests about wiring,
+ * versions or delivery want exactly that for a phase two.
  * <p>
- * A test which cares about the dispatch brings its own store instead of this one -
- * two of them in one application is the ambiguity the resolver refuses.
+ * A test which cares about the dispatch brings its own store instead of this one. Two
+ * stores in one application are ambiguous, and the resolver refuses them.
  */
 @Configuration
 public class TestPhaseTwoOutboxConfiguration {
@@ -30,8 +30,8 @@ public class TestPhaseTwoOutboxConfiguration {
   public static final List<PhaseTwoCall> PLANNED = new LinkedList<>();
 
   /**
-   * Forgets what was planned so far - a test looking at {@link #PLANNED} starts from
-   * a known state, whatever ran before it.
+   * Forgets what was planned so far. So a test which looks at {@link #PLANNED} starts
+   * from a known state, whatever ran before it.
    */
   public static void clear() {
 

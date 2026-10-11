@@ -7,9 +7,9 @@ import io.vanillabp.spi.service.WorkflowTask;
 /**
  * The defect: {@code @WorkflowService} on an interface, with the handler declared in the
  * interface as well. Spring Boot's {@code AnnotationUtils.findAnnotation} searches
- * implemented interfaces, which {@code @Inherited} does not, so an implementing bean
- * used to reach the registrar - which reads the annotation off the class itself and
- * found none. See
+ * implemented interfaces, and {@code @Inherited} does not. So an implementing bean used to
+ * reach the registrar. The registrar reads the annotation from the class itself and found
+ * none. See
  * {@link WorkflowServiceDiscoveryTest#anAnnotatedInterfaceEndsTheStartNamingBothTypes}.
  */
 @WorkflowService(

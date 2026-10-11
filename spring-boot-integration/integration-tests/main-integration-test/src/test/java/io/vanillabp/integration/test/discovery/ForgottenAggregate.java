@@ -4,8 +4,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The aggregate of {@link ForgottenWorkflowService} - never persisted by anything, because
- * the class declaring it never became a bean.
+ * The aggregate of {@link ForgottenWorkflowService}. Nothing ever persists it, because the
+ * class which declares it never became a bean.
  */
 @Getter
 @Setter

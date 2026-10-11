@@ -5,11 +5,11 @@ import org.springframework.transaction.annotation.Transactional;
 import io.vanillabp.spi.service.TaskException;
 
 /**
- * A bean of the application carrying its own transaction annotation, called by a
- * <code>&#64;WorkflowTask</code> handler. This is the shape the startup check cannot
- * see: the annotation sits three calls down, not on the handler. Its interceptor joins
- * VanillaBP's transaction and marks it rollback-only as soon as an exception passes
- * it.
+ * A bean of the application with its own transaction annotation. A
+ * <code>&#64;WorkflowTask</code> handler calls it. The startup check cannot see this case,
+ * because the annotation sits three calls down and not on the handler. Its interceptor joins
+ * VanillaBP's transaction. As soon as an exception passes the interceptor, it marks the
+ * transaction rollback-only.
  */
 @Transactional
 public class NestedTransactionalBean {

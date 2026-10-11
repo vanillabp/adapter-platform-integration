@@ -40,16 +40,15 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.service.WorkflowEnd;
 
 /**
- * Acceptance test of the release of delivery records on Spring Boot, with the
- * default JDBC-based delivery log: a workflow which ended deletes the records of its
- * processed deliveries instead of leaving them to the retention. The workflow service of
- * this test has NO <code>&#64;WorkflowEnded</code> method on purpose - the notification is
- * asked for by the release alone, which is what makes the feature work without touching
- * any adapter.
+ * Acceptance test on Spring Boot for the release of delivery records, with the default
+ * delivery log based on JDBC. A workflow which ended deletes the records of its processed
+ * deliveries. It does not leave them to the retention. The workflow service of this test
+ * has NO <code>&#64;WorkflowEnded</code> method on purpose. Only the release asks for the
+ * notification. That is why the feature works without a change to any adapter.
  * <p>
- * Pinned as well: the record of a SECOND workflow on the same aggregate, written after the
- * end of the first one, survives; records of another aggregate stay; and with the option
- * off nothing is released and no end listener is attached at all.
+ * The test pins three more things. The record of a SECOND workflow on the same aggregate,
+ * written after the end of the first one, survives. Records of another aggregate stay. And
+ * with the option off, nothing is released and no end listener is attached at all.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DeliveryRecordReleaseTest {
@@ -61,8 +60,8 @@ public class DeliveryRecordReleaseTest {
   private static final String ADAPTER = "test";
 
   /**
-   * The same in-memory persistence plus H2 the inbound-idempotency test uses - the records
-   * are really written, read and deleted through JDBC.
+   * The same in-memory persistence plus H2 which the inbound-idempotency test uses. The
+   * records are really written, read and deleted through JDBC.
    */
   @Configuration
   static class ReleaseConfiguration {
@@ -195,8 +194,8 @@ public class DeliveryRecordReleaseTest {
             DeliveryWorkflowService.class,
             WorkflowModuleConfiguration.class,
             ReleaseConfiguration.class,
-            // after the data source it is conditional on: the auto-configuration is
-            // listed as a plain source here, so its conditions see the bean definitions
+            // after the data source which it depends on. The auto-configuration is listed
+            // as a plain source here, so its conditions only see the bean definitions
             // registered before it
             JdbcTaskDeliveryLogAutoConfiguration.class,
             DeploymentTest.TestConfig.class)
@@ -327,8 +326,8 @@ public class DeliveryRecordReleaseTest {
       Assertions.assertEquals(0, recordCount(context, "4711"), "the ended workflow releases its records");
       Assertions.assertEquals(1, recordCount(context, "4712"), "another workflow keeps its own");
 
-      // a SECOND workflow on the same aggregate: its delivery is processed after the end
-      // of the first one, so its record was written after the notification and stays
+      // a SECOND workflow on the same aggregate. Its delivery is processed after the end
+      // of the first one. So its record was written after the notification, and it stays
       dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4711", "job-4"));
       Assertions.assertEquals(1, recordCount(context, "4711"));
 

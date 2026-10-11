@@ -6,10 +6,10 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Bound to the keys of the workflow module <i>test-module</i> to prove that its
- * files reach {@code @ConfigurationProperties} and not only {@code ${...}}
- * placeholders. Version 1 kept them out of the environment, so this is what
- * Version 2 added and what the profile support must not take away again.
+ * Bound to the keys of the workflow module <i>test-module</i>. It proves that the files
+ * of the module reach {@code @ConfigurationProperties}, not only {@code ${...}}
+ * placeholders. Version 1 kept them out of the environment. Version 2 added this, and the
+ * profile support must not take it away again.
  */
 @ConfigurationProperties(prefix = "test-module")
 @Getter

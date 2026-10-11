@@ -5,7 +5,7 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The workflow service of the application-owned-transaction test.
+ * The workflow service of the test with transactions the application owns.
  */
 @WorkflowService(
     workflowAggregateClass = AppTxAggregate.class,

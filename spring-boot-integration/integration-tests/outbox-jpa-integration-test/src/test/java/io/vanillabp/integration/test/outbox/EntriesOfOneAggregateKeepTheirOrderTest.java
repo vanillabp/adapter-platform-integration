@@ -20,15 +20,14 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Ten operations of one workflow, planned in one transaction and dispatched by an
- * application which dispatches on four threads: they reach the handler in the order they
- * were planned.
+ * Ten operations of one workflow, planned in one transaction. The application dispatches
+ * on four threads. The operations reach the handler in the order they were planned.
  * <p>
- * What this test adds to {@code DispatchLanesTest} is the wiring. The rule itself is held
- * there, in milliseconds and without a database, because a test which starts workflows
- * cannot tell a correct implementation from one which quietly serialises everything. Here
- * the question is whether the dispatcher really hands its entries to the lanes, and
- * whether the poller really reads them in the order they were written.
+ * This test adds the wiring to {@code DispatchLanesTest}. That test holds the rule
+ * itself, in milliseconds and without a database. A test which starts workflows cannot
+ * tell a correct implementation from one which quietly runs everything one after the
+ * other. Here the question is whether the dispatcher really hands its entries to the
+ * lanes, and whether the poller really reads them in the order they were written.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -41,9 +40,9 @@ public class EntriesOfOneAggregateKeepTheirOrderTest {
 
   /**
    * How many operations of one workflow wait for their dispatch at the same moment. Ten
-   * of them: enough that a dispatcher which took its entries in any other order would be
-   * caught. Most of them wait in the table meanwhile, because a lane takes one entry beyond
-   * the one it dispatches, and the order is what the poller hands them over in either way.
+   * are enough to catch a dispatcher which takes its entries in any other order. Most of
+   * them wait in the table meanwhile, because a lane takes only one entry beyond the one
+   * it dispatches. Either way, the poller decides the order in which it hands them over.
    */
   private static final int OPERATIONS_OF_ONE_WORKFLOW = 10;
 
@@ -70,9 +69,8 @@ public class EntriesOfOneAggregateKeepTheirOrderTest {
   @DisplayName("Ten operations of one workflow arrive in the order they were planned")
   public void operationsOfOneWorkflowArriveInOrder() throws Exception {
 
-    // all of them ride ONE transaction, so nothing is dispatched before the last one is
-    // written and the dispatcher meets ten entries at once - which is the state this test
-    // is about
+    // all of them are in ONE transaction. So nothing is dispatched before the last one is
+    // written, and the dispatcher meets ten entries at once. This test is about that state
     final var aggregate = transactionTemplate.execute(status -> {
       final var newAggregate = new Aggregate();
       newAggregate.setContent("ordering");
@@ -80,9 +78,9 @@ public class EntriesOfOneAggregateKeepTheirOrderTest {
       IntStream
           .range(0, OPERATIONS_OF_ONE_WORKFLOW)
           .forEach(operation -> {
-            // the entries are ordered by the moment they were written, and two of them
-            // written in the same microsecond would leave that order to the database.
-            // A millisecond apart is what keeps this test about the lanes
+            // the entries are ordered by the moment they were written. For two entries
+            // written in the same microsecond, the database would decide the order. A
+            // millisecond apart keeps this test about the lanes
             pauseAMoment();
             outbox
                 .schedule(
@@ -106,8 +104,8 @@ public class EntriesOfOneAggregateKeepTheirOrderTest {
   }
 
   /**
-   * The event the operation of that position notifies about. It is part of the
-   * extension's idempotency key, so every one of them is an entry of its own.
+   * The event the operation at that position notifies about. It is part of the
+   * idempotency key of the extension, so each of them is a separate entry.
    *
    * @param operation The position in the row
    * @return The name of the event

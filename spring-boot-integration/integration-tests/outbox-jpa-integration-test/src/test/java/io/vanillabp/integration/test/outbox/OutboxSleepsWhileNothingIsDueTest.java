@@ -24,16 +24,17 @@ import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * What a quiet application costs on the JDBC store, counted in connections rather than
- * measured in seconds. A poll is a few database commands whether or not anything is
- * waiting, and an application sitting in a timer used to pay for them every ten seconds.
+ * What a quiet application costs on the JDBC store, counted in connections, not measured
+ * in seconds. A poll is a few database commands, whether or not anything is waiting. An
+ * application which waited in a timer used to pay for them every ten seconds.
  * <p>
- * Connections and not statements, because a connection is the claim from below: none taken is
- * none used, whatever the code would have sent over it. The pool reports every one of them.
+ * The test counts connections, not statements, because a connection is the lower bound.
+ * If none was taken, none was used, whatever the code would have sent over it. The pool
+ * reports every one of them.
  * <p>
- * The claim under test is not that the poller sleeps, it is that the database is not touched
- * while nothing is due. Each test boots its own application on its own database, because what
- * it varies is the cap on the sleep.
+ * The test does not claim that the poller sleeps. It claims that the database is not
+ * touched while nothing is due. Each test boots its own application on its own database,
+ * because each test sets a different cap on the sleep.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -43,9 +44,8 @@ public class OutboxSleepsWhileNothingIsDueTest {
   private static final String DATASOURCE_URL_PATTERN = "jdbc:h2:mem:outbox-sleeping-%s;DB_CLOSE_DELAY=-1";
 
   /**
-   * How often a connection was taken out of the pool. Hikari reports it to whatever tracker it
-   * is given, which is how this test watches the application's own pool rather than a pool of
-   * its own.
+   * How often a connection was taken out of the pool. Hikari reports this to any tracker it
+   * is given. So this test watches the pool of the application, not a pool of its own.
    */
   private final java.util.concurrent.atomic.AtomicLong connectionsTaken = new java.util.concurrent.atomic.AtomicLong();
 
@@ -105,8 +105,8 @@ public class OutboxSleepsWhileNothingIsDueTest {
   }
 
   /**
-   * Waits until the outbox has dispatched everything it holds, which is the state "nothing
-   * is due" these tests start counting from.
+   * Waits until the outbox has dispatched everything it holds. These tests start counting
+   * from this state of "nothing is due".
    *
    * @param dataSource Where the outbox table lives
    */
@@ -122,21 +122,20 @@ public class OutboxSleepsWhileNothingIsDueTest {
   }
 
   /**
-   * How long the store is watched after it went quiet. Three seconds, which is long enough
-   * for a poller sleeping on a rhythm of its own to come back at least once: the shortest
-   * rhythm anything here has is the half second of
-   * <code>vanillabp.outbox.attempt-frequency</code>.
+   * How long the store is watched after it went quiet. Three seconds are long enough for a
+   * poller with its own rhythm to come back at least once. The shortest rhythm here is the
+   * half second of <code>vanillabp.outbox.attempt-frequency</code>.
    * <p>
-   * The number is not a budget anybody has to be faster than: what is asserted afterwards
-   * is that nothing was asked at all, and a machine which leaves this JVM without a turn
-   * only makes the silence longer.
+   * Nobody has to be faster than this number. Afterwards the test asserts that nothing was
+   * asked at all. A machine which leaves this JVM without a turn only makes the silence
+   * longer.
    */
   private static final long SILENCE_MEASURED_OVER_MS = 3000;
 
   /**
-   * How long the pool has to stay untouched before the work counts as over. Below
-   * {@link #SILENCE_MEASURED_OVER_MS}, so a poller asking on a rhythm shorter than that is
-   * caught by the wait rather than passing through it.
+   * How long the pool must stay untouched before the work counts as over. It is below
+   * {@link #SILENCE_MEASURED_OVER_MS}. So the wait catches a poller which asks on a
+   * shorter rhythm, instead of letting it pass.
    */
   private static final long QUIET_FOR_MS = 500;
 
@@ -144,16 +143,15 @@ public class OutboxSleepsWhileNothingIsDueTest {
    * Waits until the poll which brought the store into the state above has stopped taking
    * connections.
    * <p>
-   * Nothing left to dispatch is not the end of that poll. It looks for the next due
-   * entry, deletes what the retention lets go and reads when to wake up again, and those
-   * statements run AFTER the wait above has returned. Setting the counter back to zero
-   * in between is what turns a test of this shape red once in a while on a run where
-   * nothing was wrong.
+   * The poll does not end when nothing is left to dispatch. It looks for the next due
+   * entry, deletes what the retention lets go, and reads when to wake up again. These
+   * statements run AFTER the wait above has returned. If the counter were set back to zero
+   * in between, a test like this would sometimes turn red on a run where nothing was
+   * wrong.
    * <p>
-   * The wait reads the counter and asks the database nothing itself, because a question
-   * of its own would be the traffic it is waiting out. A store which never goes quiet is
-   * the very thing these tests are about, so the deadline says that instead of timing
-   * out without a word.
+   * The wait only reads the counter and asks the database nothing. A question of its own
+   * would be exactly the traffic it waits out. These tests are about a store which never
+   * goes quiet. So the deadline says that, instead of timing out without a word.
    */
   private void awaitTheWorkWentQuiet() throws Exception {
 
@@ -194,8 +192,8 @@ public class OutboxSleepsWhileNothingIsDueTest {
       countConnectionsOf(dataSource);
       startAWorkflow(context, "quiet-store");
       awaitNothingLeftUndone(dataSource);
-      // the zero below is a measurement rather than a silence only if the counter sees a
-      // connection at all
+      // the zero below is a measurement, and not just silence, only if the counter sees
+      // connections at all
       assertTrue(connectionsTaken.get() > 0, "the pool has to report what this test itself took");
 
       awaitTheWorkWentQuiet();
@@ -219,8 +217,8 @@ public class OutboxSleepsWhileNothingIsDueTest {
       final var dataSource = context.getBean(DataSource.class);
       final var listener = context.getBean(RecordingPhaseTwoListener.class);
       countConnectionsOf(dataSource);
-      // a failure the adapter calls permanent is blocked on the first attempt, which is
-      // the shortest way to an entry waiting for a person rather than for a clock
+      // a failure the adapter calls permanent is blocked at the first attempt. That is the
+      // shortest way to an entry which waits for a person, not for a clock
       listener.failNextDispatchesPermanently(Integer.MAX_VALUE);
       startAWorkflow(context, "blocked-entry");
 
@@ -250,8 +248,8 @@ public class OutboxSleepsWhileNothingIsDueTest {
   @DisplayName("An entry another node left behind is dispatched within the cap")
   public void theCapPicksUpWhatAnotherNodeLeftBehind() throws Exception {
 
-    // nothing notifies a sleeping node about an entry another node wrote, and where no
-    // shared cache reports that node going away the cap is what covers it
+    // nothing tells a sleeping node about an entry another node wrote. Where no shared
+    // cache reports that the other node went away, the cap covers it
     try (var context = runApplication("cap", "PT2S")) {
       final var dataSource = context.getBean(DataSource.class);
       final var listener = context.getBean(RecordingPhaseTwoListener.class);
@@ -259,9 +257,8 @@ public class OutboxSleepsWhileNothingIsDueTest {
       awaitNothingLeftUndone(dataSource);
       assertEquals(1, listener.getInvocations().size());
 
-      // the row is opened again the way the wiki tells an operator to open one, which is
-      // also what another node inserting an entry looks like from here: a due row nothing
-      // told this node about
+      // the row is opened again, as the wiki tells an operator to do. From here this looks
+      // like another node which inserts an entry: a due row nobody told this node about
       outboxTableOf(dataSource).openEveryEntryAgain();
 
       final var deadline = System.currentTimeMillis() + 30000;

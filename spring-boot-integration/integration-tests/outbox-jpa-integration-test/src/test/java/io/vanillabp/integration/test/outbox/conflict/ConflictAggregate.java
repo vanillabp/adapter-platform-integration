@@ -10,9 +10,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The workflow aggregate of the version-conflict acceptance test: a JPA
- * entity carrying the version attribute which turns two writers into an exception
- * instead of a silent overwrite.
+ * The workflow aggregate of the version-conflict acceptance test. It is a JPA entity with a
+ * version attribute. Because of it, two writers cause an exception instead of a silent
+ * overwrite.
  */
 @Entity
 @Table(name = "CONFLICT_TEST_AGGREGATE")

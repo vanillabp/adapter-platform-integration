@@ -19,9 +19,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * What the phase-two outbox reports about itself on Spring Boot. The backlog is read off
- * the outbox table, which is why this test runs against the real store rather than a
- * double.
+ * What the phase-two outbox reports about itself on Spring Boot. The backlog is read from
+ * the outbox table. So this test runs against the real store, not against a double.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -29,7 +28,7 @@ import io.vanillabp.spi.process.ProcessService;
 public class OutboxMetricsTest {
 
   /**
-   * The name the meters of this store carry, which is the simple name of the bean an
+   * The name the meters of this store carry. It is the simple name of the bean an
    * application sees.
    */
   private static final String STORE = "JdbcPhaseTwoOutbox";
@@ -95,8 +94,8 @@ public class OutboxMetricsTest {
     final var registry = new SimpleMeterRegistry();
     metrics.bindTo(registry);
 
-    // the entry keeps the moment it was written in a column of its own, which is what
-    // the gruelbox store this one replaced could not do
+    // the entry keeps the moment it was written in its own column. The gruelbox store,
+    // which this one replaced, could not do that
     final var age = outbox.ageOfOldestPendingCall();
     assertTrue(age.isPresent(), "the store reads the moment its oldest waiting entry was written");
 
@@ -112,9 +111,9 @@ public class OutboxMetricsTest {
   /**
    * Waits until the wait of the dispatched entry was measured.
    * <p>
-   * The listener runs INSIDE the dispatch and the wait is reported when the dispatch
-   * returns, so the listener is not the signal that the measurement is there. Waiting
-   * for the meter is.
+   * The listener runs INSIDE the dispatch, and the wait is reported when the dispatch
+   * returns. So the listener does not signal that the measurement is there. The meter
+   * does.
    *
    * @param registry The registry the meters were bound to
    */

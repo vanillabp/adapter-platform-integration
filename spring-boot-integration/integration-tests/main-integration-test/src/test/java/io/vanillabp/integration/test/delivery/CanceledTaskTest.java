@@ -45,11 +45,11 @@ import io.vanillabp.spi.service.TaskEvent;
  * Acceptance test on Spring Boot, with the default JDBC-based delivery log: a task the
  * BPMS cancels leaves ONE record and that record is closed.
  * <p>
- * Both halves of it are read from the table. The record the task left open is stamped by
- * the cancelling delivery itself, and that delivery writes no second OPEN record although
- * the method carries a <code>&#64;TaskId</code> parameter. A method which does not
- * subscribe to the cancellation is the case which must not change: its record stays open,
- * because nothing told it the task is over.
+ * The test reads both halves from the table. The cancelling delivery itself stamps the
+ * record which the task left open. That delivery writes no second OPEN record, although the
+ * method has a <code>&#64;TaskId</code> parameter. A method which does not subscribe to the
+ * cancellation must not change: its record stays open, because nothing told it that the
+ * task is over.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class CanceledTaskTest {
@@ -61,8 +61,8 @@ public class CanceledTaskTest {
   private static final String ADAPTER = "test";
 
   /**
-   * In-memory persistence of the test aggregate plus the H2 database the delivery log
-   * writes its records into - the shape the other delivery tests use.
+   * In-memory persistence of the test aggregate, plus the H2 database which the delivery
+   * log writes its records into. The other delivery tests use the same setup.
    */
   @Configuration
   static class CancelConfiguration {
@@ -335,10 +335,10 @@ public class CanceledTaskTest {
               CancelConfiguration.AGGREGATES.get("4711").getCanceledTasks(),
               "the method asked for the event, so it was called with it");
 
-      // what the table says afterwards: no open record left, and every record naming that
-      // task carries the moment it was closed. Two rows, one per delivery: the
-      // cancellation keeps a record of its own so a BPMS repeating it does not run the
-      // method a second time
+      // what the table says afterwards: no open record is left, and every record which
+      // names that task carries the moment it was closed. There are two rows, one per
+      // delivery. The cancellation keeps a record of its own. So a BPMS which repeats it
+      // does not run the method a second time
       Assertions
           .assertEquals(
               0,
@@ -355,8 +355,8 @@ public class CanceledTaskTest {
               deliveryLog.openTasksOfAggregate(MODULE, PROCESS, "4711").isEmpty(),
               "so nothing reads that workflow as waiting for a task any more");
 
-      // (c) a method which never asked for the event: the delivery is skipped and the
-      // record it left open stays exactly as it was
+      // (c) a method which never asked for the event: the delivery is skipped, and the
+      // record which the task left open stays exactly as it was
       storeAggregate("4712");
       dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitCompletion", "4712", "task-2", TaskEvent.Event.CREATED));
       Assertions.assertEquals(1, openRecordCount(context, "4712"));
@@ -377,10 +377,10 @@ public class CanceledTaskTest {
   }
 
   /**
-   * The second record of one task is what {@code markTaskClosed} has to close as well:
-   * a task cancelled after a record was written for it by another delivery id leaves two
-   * rows naming the same task, and a row left open keeps the task alive for everything
-   * which reads the open work.
+   * {@code markTaskClosed} has to close the second record of one task as well. Take a task
+   * which another delivery id already wrote a record for, and which is canceled later. It
+   * leaves two rows which name the same task. A row left open keeps the task alive for
+   * everything which reads the open work.
    */
   @Test
   @DisplayName("Every record naming the task is closed, not only the newest one")
@@ -393,8 +393,8 @@ public class CanceledTaskTest {
       final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
       final var deliveryLog = context.getBean(JdbcTaskDeliveryLog.class);
 
-      // two deliveries of ONE task, under two delivery ids - which is what a BPMS
-      // handing the same task out under a new job key produces
+      // two deliveries of ONE task, under two delivery ids. A BPMS produces this when it
+      // hands out the same task under a new job key
       storeAggregate("4713");
       dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitCompletion", "4713", "task-3", TaskEvent.Event.CREATED));
       dummyAdapter

@@ -26,11 +26,11 @@ import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * The whole way on Spring Boot: two reports of one workflow are planned while the
- * dispatch stands, and the extension is called once, with the younger state. The younger
- * call takes the row of the waiting entry, which keeps its id and its key, and the payload
- * of the entry it replaced is removed in the same transaction, because no dispatch had
- * ever read it (decision 68 in the repository's DECISIONS.md).
+ * The whole way on Spring Boot. Two reports of one workflow are planned while the dispatch
+ * stands still. The extension is called once, with the younger state. The younger call
+ * takes the row of the waiting entry, which keeps its id and its key. The payload of the
+ * replaced entry is removed in the same transaction, because no dispatch had ever read it
+ * (decision 68 in the repository's DECISIONS.md).
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -39,12 +39,12 @@ public class AYoungerCallReplacesTheWaitingOneTest {
 
   /**
    * How long a test waits before it says that nothing more happened. The application
-   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>. These tests set that
+   * to half a second, so this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A machine which leaves this JVM without a
+   * turn only makes the wait longer. Afterwards the test asserts a count which did not
+   * grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -64,10 +64,9 @@ public class AYoungerCallReplacesTheWaitingOneTest {
   private DataSource dataSource;
 
   /**
-   * The outbox of the application, read through the transaction this test is running.
-   * Everything below is asserted while the transaction which wrote it is still open,
-   * which is the only moment a replacement can be watched, so the reader has to see what
-   * that transaction wrote.
+   * The outbox of the application, read through the transaction this test runs. The tests
+   * below assert everything while the transaction which wrote it is still open. Only then
+   * can a replacement be watched. So the reader must see what that transaction wrote.
    */
   private PhaseTwoOutboxReader outboxTable;
 
@@ -116,8 +115,8 @@ public class AYoungerCallReplacesTheWaitingOneTest {
     final var younger = new AtomicReference<String>();
     final var key = new AtomicReference<String>();
 
-    // both ride ONE transaction on purpose: nothing is dispatched before it commits,
-    // so the second call meets an entry which is certainly still waiting
+    // both run in ONE transaction on purpose. Nothing is dispatched before it commits. So
+    // the second call meets an entry which is surely still waiting
     final var aggregate = transactionTemplate.execute(status -> {
       final var newAggregate = new Aggregate();
       newAggregate.setContent("replace-waiting");
@@ -134,8 +133,8 @@ public class AYoungerCallReplacesTheWaitingOneTest {
       younger.set(second.payloadReference());
       assertTrue(outbox.scheduleReplacingWhatIsStillWaiting(second));
 
-      // one entry under that key, and the bytes of the replaced call are gone before
-      // this transaction commits
+      // one entry under that key. The bytes of the replaced call are gone before this
+      // transaction commits
       assertEquals(1L, countEntriesOf(key.get()));
       assertEquals(0L, countPayloadsOf(older.get()));
       assertEquals(1L, countPayloadsOf(younger.get()));
@@ -147,7 +146,7 @@ public class AYoungerCallReplacesTheWaitingOneTest {
     assertArrayEquals(payloadOf("{\"amount\":2}"), dispatched.getFirst().payload());
     assertEquals(younger.get(), dispatched.getFirst().payloadReference());
 
-    // and the one which was dispatched is the only one there ever was
+    // and the dispatched call is the only one there ever was
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertEquals(1, extension.getDispatched().size());
 
@@ -229,7 +228,7 @@ public class AYoungerCallReplacesTheWaitingOneTest {
       extension.releaseHeldDispatch();
     }
 
-    // both reach the handler - which of them first is the dispatcher's business
+    // both reach the handler. The dispatcher decides which one comes first
     final var payloads = extension
         .awaitDispatched(2, 10000)
         .stream()
@@ -248,11 +247,11 @@ public class AYoungerCallReplacesTheWaitingOneTest {
     final var younger = new AtomicReference<String>();
     final var key = new AtomicReference<String>();
 
-    // the replaced entry has to be committed for this to be a replacement at all, and
-    // the only moment it is certainly still waiting is before the transaction commits
-    // which wrote it - so both calls ride the transaction which rolls back. What it
-    // proves is that all three writes of a replacement enlist: the entry, the younger
-    // payload, and the removal of the payload which was replaced
+    // for a replacement, the replaced entry must already be written. It is surely still
+    // waiting only before the transaction which wrote it commits. So both calls run in the
+    // transaction which rolls back. This proves that all three writes of a replacement
+    // are part of the transaction: the entry, the younger payload, and the removal of the
+    // replaced payload
     try {
       transactionTemplate.execute(status -> {
         final var newAggregate = new Aggregate();

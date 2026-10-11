@@ -18,8 +18,8 @@ public class WorkflowStartAggregate {
   private int amount;
 
   /**
-   * Set by the <code>&#64;WorkflowStartedByBpms</code> method, so a test can tell
-   * whether the application had its say or VanillaBP built the aggregate alone.
+   * Set by the <code>&#64;WorkflowStartedByBpms</code> method. So a test can tell whether
+   * the application had its say or VanillaBP built the aggregate alone.
    */
   private String startedBy;
 

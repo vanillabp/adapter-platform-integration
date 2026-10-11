@@ -9,8 +9,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The workflow aggregate of this scenario. Reading it is what takes the database
- * connection, the way a service task takes one before it reports anything.
+ * The workflow aggregate of this scenario. Reading it takes the database connection, just
+ * as a service task takes one before it reports anything.
  */
 @Entity
 @Table(name = "COST_AGGREGATE")

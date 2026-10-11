@@ -39,14 +39,14 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Which of the two retentions the JDBC delivery log runs with, asserted on a booted
- * application rather than on a properties object: the two numbers are set to different
- * values here, so a store reading the wrong one cannot pass by accident.
+ * Which of the two retentions the JDBC delivery log runs with. The test checks this on a
+ * booted application, not on a properties object. The two numbers have different values
+ * here. So a store which reads the wrong one cannot pass by accident.
  * <p>
  * They were one property until the outbound deduplication window ended with the dispatch.
- * Since then the outbox number decides how long a dispatched entry stays readable during
- * support, and the delivery number decides whether a late redelivery runs the business
- * code a second time.
+ * Since then, the outbox number decides how long a dispatched entry stays readable for
+ * support. The delivery number decides whether a late redelivery runs the business code a
+ * second time.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DeliveryRetentionWiringTest {
@@ -167,8 +167,8 @@ public class DeliveryRetentionWiringTest {
   @DisplayName("Without a delivery retention the log follows the outbox number")
   public void theDeliveryLogFallsBackToTheOutboxRetention() {
 
-    // the upgrade case: one property governed both windows, so an installation which
-    // lowered it keeps the behaviour it had
+    // the upgrade case: one property used to control both windows. So an installation
+    // which lowered it keeps the behaviour it had
     runner("vanillabp.outbox.retention=PT1H")
         .run(context -> {
           Assertions.assertNull(context.getStartupFailure(), "the application boots");

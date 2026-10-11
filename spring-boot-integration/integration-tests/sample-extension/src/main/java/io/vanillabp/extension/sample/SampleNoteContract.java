@@ -10,18 +10,18 @@ import io.vanillabp.integration.extension.spi.handler.HandlerParameter;
 import io.vanillabp.integration.extension.spi.handler.HandlerValueSource;
 
 /**
- * What the sample extension tells VanillaBP about {@link SampleNote}: how a method is
- * matched, what may stand in its parameter list and that what it returns is handed back.
+ * What the sample extension tells VanillaBP about {@link SampleNote}. It says how a method
+ * is matched, which parameters it may have, and that its return value is handed back.
  * <p>
- * This is the whole wiring an extension writes. Everything else - finding the methods,
- * loading the aggregate, the transaction, the guiding messages - is what VanillaBP does
- * for its own annotations and now does for this one too.
+ * This is all the wiring an extension writes. VanillaBP does everything else for its own
+ * annotations, and now for this one too: it finds the methods, loads the aggregate, runs
+ * the transaction and writes the guiding messages.
  */
 public final class SampleNoteContract {
 
   /**
-   * The extension's id, named in every message about one of its methods and the section
-   * its configuration lives in (<code>vanillabp.extensions.sample.*</code>).
+   * The id of the extension. Every message about one of its methods names it. It is also
+   * the section of its configuration (<code>vanillabp.extensions.sample.*</code>).
    */
   public static final String EXTENSION_ID = "sample";
 
@@ -50,8 +50,8 @@ public final class SampleNoteContract {
   }
 
   /**
-   * The keys one occurrence of the annotation names. Naming neither leaves the list
-   * empty, which is VanillaBP's convention for "the method's own name".
+   * The keys one occurrence of the annotation names. If it names neither, the list stays
+   * empty. For VanillaBP an empty list means "the name of the method".
    */
   private static List<String> keysOf(
       final SampleNote annotation) {
@@ -80,10 +80,10 @@ public final class SampleNoteContract {
   }
 
   /**
-   * What happened to the element, recognized by its annotation. A parameter carrying the
-   * annotation on the wrong type is a defect this binder REPORTS rather than rejects -
-   * rejecting it would end the boot with "nothing can bind this parameter", which says
-   * nothing about the mistake actually made.
+   * What happened to the element, recognized by its annotation. A parameter may carry the
+   * annotation but have the wrong type. This binder REPORTS that mistake instead of
+   * rejecting the parameter. A rejection would end the boot with "nothing can bind this
+   * parameter", and that says nothing about the real mistake.
    */
   private static Optional<HandlerValueSource> bindEvent(
       final HandlerParameter parameter) {

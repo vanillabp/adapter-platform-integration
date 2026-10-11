@@ -9,11 +9,11 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * An application which IS its workflow module: the file <code>META-INF/workflow-module</code>
+ * An application which IS its workflow module. The file <code>META-INF/workflow-module</code>
  * and the BPMN files below <code>processes/</code> are part of this artifact. The
  * repackaged JAR keeps the classes below <code>BOOT-INF/classes/</code> and the marker file
- * at the top of the JAR, which is the case the integration test starts. The application
- * reports where VanillaBP looked for the BPMN files and stops again.
+ * at the top of the JAR. The integration test starts exactly this case. The application
+ * prints where VanillaBP looked for the BPMN files and stops again.
  */
 @SpringBootApplication
 @org.springframework.context.annotation.Import(NoPersistenceForTheStandaloneAggregate.class)

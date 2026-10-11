@@ -38,9 +38,9 @@ import io.vanillabp.spi.service.BpmsStartTrigger;
 /**
  * Acceptance test of the rule that <code>ProcessService#startWorkflowByMessage</code> starts
  * the process of its own process service and no other. The dummy adapter stands in for an
- * adapter reading its model: 'TimerProcess' starts on the message 'OrderPlaced', and a
- * message the model does not know is refused before anything is saved or planned. An adapter
- * which reports no messages is not checked, and the start says so.
+ * adapter which reads its model. 'TimerProcess' starts on the message 'OrderPlaced'. A
+ * message the model does not know is refused before anything is saved or planned. An
+ * adapter which reports no messages is not checked, and the start says so.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AMessageStartsOnlyItsOwnProcessTest {
@@ -50,8 +50,8 @@ public class AMessageStartsOnlyItsOwnProcessTest {
   private static final String START_MESSAGE = "OrderPlaced";
 
   /**
-   * The sentence the start writes for a process whose adapter reported no messages. Both
-   * cases below quote it: the one which has to say it and the one which must not.
+   * The sentence the start writes for a process whose adapter reported no messages. Two
+   * cases below quote it: the one which must write it and the one which must not.
    */
   private static final String NOT_CHECKED = "so ProcessService#startWorkflowByMessage is not checked for it";
 
@@ -86,8 +86,8 @@ public class AMessageStartsOnlyItsOwnProcessTest {
   }
 
   /**
-   * The same model reported by an adapter which says nothing about messages: an adapter
-   * which cannot read its model, or one which does not know about the report yet.
+   * The same model, reported by an adapter which says nothing about messages. Such an
+   * adapter cannot read its model, or it does not know about the report yet.
    */
   @Configuration
   static class NoReportedStartMessagesConfiguration {
@@ -103,7 +103,7 @@ public class AMessageStartsOnlyItsOwnProcessTest {
 
   /**
    * The start events the workflow service of this scenario serves. Without them it does not
-   * boot, because it has a method for each.
+   * boot, because it has a method for each of them.
    */
   static class StartEventsOfTimerProcess implements DummyBpmsInitiatedStartSource {
 
@@ -126,8 +126,8 @@ public class AMessageStartsOnlyItsOwnProcessTest {
   }
 
   /**
-   * Makes the dummy adapter wire 'TimerProcess' like a deployed process. A process nobody
-   * wired counts as one the application only declares, and the start says nothing about
+   * Makes the dummy adapter wire 'TimerProcess' like a deployed process. A process which
+   * nobody wired counts as only declared by the application. The start says nothing about
    * such a process.
    */
   @Configuration
@@ -246,7 +246,7 @@ public class AMessageStartsOnlyItsOwnProcessTest {
                   + NOT_CHECKED),
           output.getAll());
 
-      // goes to the BPMS as before, whatever the name
+      // goes to the BPMS as before, whatever the name is
       startByMessage(context, "unchecked", "InvoicePaid");
       Assertions.assertEquals(1, plannedStartsByMessage().size());
 

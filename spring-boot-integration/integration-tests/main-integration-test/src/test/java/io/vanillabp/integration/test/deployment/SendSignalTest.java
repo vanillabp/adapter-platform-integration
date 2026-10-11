@@ -122,9 +122,8 @@ public class SendSignalTest {
   }
 
   /**
-   * The module prioritizes 'test', while one workflow of it uses 'test2' - so
-   * 'test2' belongs to the deployment union without being prioritized for
-   * 'DummyProcess'.
+   * The module prioritizes 'test', and one of its workflows uses 'test2'. So 'test2'
+   * belongs to the deployment union, but it is not prioritized for 'DummyProcess'.
    */
   private static final String APPLICATION_YAML = """
       vanillabp:
@@ -192,7 +191,7 @@ public class SendSignalTest {
           .executeWithoutResult(status -> processService.sendSignal("OrderReceived"));
 
       // both adapter ids of the module are asked, and each of them gets an entry of
-      // its own: the broadcast leaves after the commit, never inside the transaction
+      // its own. The broadcast leaves after the commit, never inside the transaction
       Assertions
           .assertEquals(
               List.of("test", "test2"),
@@ -230,7 +229,8 @@ public class SendSignalTest {
               IllegalStateException.class,
               () -> processService.sendSignal("OrderReceived"));
 
-      // the message says why a broadcast needs a transaction of its own accord
+      // the message explains why a broadcast needs a transaction, even if the caller
+      // never asked for one
       Assertions.assertTrue(exception.getMessage().contains("Broadcasting a signal"), exception.getMessage());
       Assertions.assertTrue(exception.getMessage().contains("@Transactional"), exception.getMessage());
 

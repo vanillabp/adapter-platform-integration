@@ -19,10 +19,11 @@ import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What an extension gets from VanillaBP for an annotation of its own: the methods of the
- * application's workflow services are found, matched, invoked with the parameters the
- * contract allows, and what they return is handed back - the mechanics of
- * <code>&#64;WorkflowTask</code>, without a line of extension-specific code in the core.
+ * What an extension gets from VanillaBP for its own annotation. VanillaBP finds the
+ * methods of the application's workflow services and matches them. It calls them with the
+ * parameters the contract allows, and it hands back what they return. These are the
+ * mechanics of <code>&#64;WorkflowTask</code>, without one line of code for a specific
+ * extension in the core.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SpringBootTest(classes = TestApplication.class)
@@ -71,9 +72,9 @@ public class ExtensionHandlerTest {
         .orElseThrow();
 
     // the workflow aggregate VanillaBP loaded, the note the extension prefilled, the
-    // value of the extension's own annotated parameter, and a process variable
-    // "Servus" rather than "Hello": the workflow module overrides what the extension
-    // is configured with globally
+    // value of the parameter with the extension's own annotation, and a process variable.
+    // "Servus" and not "Hello": the workflow module overrides the global configuration of
+    // the extension
     assertEquals("a-loan/Servus Activity_1c9pa8d/CREATED/CREATED", note.getTitle());
 
   }
@@ -172,8 +173,8 @@ public class ExtensionHandlerTest {
 
     final var aggregate = startWorkflow("in-the-callers-transaction");
 
-    // the extension is called from a transaction of the application, and an invocation
-    // which opened one of its own would have saved what the method changed either way
+    // the extension is called from a transaction of the application. A call which opened
+    // its own transaction would have saved the change of the method anyway
     transactionTemplate
         .execute(status -> {
           workflowService
@@ -203,7 +204,7 @@ public class ExtensionHandlerTest {
                 "extension-module",
                 "UnnotedProcess",
                 java.util.List.of("Activity_1c9pa8d", "endOfTheProcess")));
-    // and its own process service still works, which is what "optional" means here
+    // and its own process service still works. That is what "optional" means here
     final var aggregate = transactionTemplate.execute(status -> {
       final var unnoted = new UnnotedAggregate();
       unnoted.setContent("no extension here");
@@ -222,8 +223,8 @@ public class ExtensionHandlerTest {
     assertEquals(
         java.util.Optional.of(NotedAggregate.class),
         handlers.workflowAggregateOf("extension-module", "DummyProcess"));
-    // a process whose workflow service knows nothing about this extension is answered
-    // too - the question is about the application, not about the extension's methods
+    // a process whose workflow service knows nothing about this extension gets an answer
+    // too. The question is about the application, not about the methods of the extension
     assertEquals(
         java.util.Optional.of(UnnotedAggregate.class),
         handlers.workflowAggregateOf("extension-module", "UnnotedProcess"));
@@ -243,8 +244,8 @@ public class ExtensionHandlerTest {
         java.util.List.of("kind"),
         handlers.taskParameterNames(SampleNote.class, "extension-module", "DummyProcess",
             java.util.List.of("Activity_1c9pa8d")));
-    // the keys are walked like an invocation walks them: the method naming the element id
-    // serves every version, so the one naming the task definition never runs for it
+    // the keys are walked as a call walks them. The method naming the element id serves
+    // every version. So the method naming the task definition never runs for this order
     assertEquals(
         java.util.List.of(),
         handlers
@@ -261,7 +262,7 @@ public class ExtensionHandlerTest {
                 "extension-module",
                 "DummyProcess",
                 java.util.List.of(TestApplication.USER_TASK_DEFINITION, TestApplication.USER_TASK_ID)));
-    // two generations of one element: the event has to carry what either of them reads
+    // two generations of one element: the event must carry what either of them reads
     assertEquals(
         java.util.List.of("firstGenerationInput", "laterGenerationInput"),
         handlers
@@ -318,8 +319,8 @@ public class ExtensionHandlerTest {
     assertEquals(
         java.util.Optional.of(TestApplication.USER_TASK_NAME),
         handlers.bpmnTaskNameOf("extension-module", "DummyProcess", TestApplication.USER_TASK_ID));
-    // an element the adapter reported no name for, and a process nothing was deployed
-    // under, are both answered with nothing rather than with a guess
+    // an element without a name from the adapter, and a process with nothing deployed,
+    // both get an empty answer, not a guess
     assertEquals(
         java.util.Optional.empty(),
         handlers.bpmnTaskNameOf("extension-module", "DummyProcess", "Activity_1c9pa8d"));

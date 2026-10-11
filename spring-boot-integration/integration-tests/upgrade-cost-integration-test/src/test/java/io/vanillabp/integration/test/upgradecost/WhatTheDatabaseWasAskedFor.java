@@ -13,24 +13,24 @@ import java.util.concurrent.atomic.AtomicInteger;
 import javax.sql.DataSource;
 
 /**
- * The meter of this scenario: a data source which hands out connections that count what
- * they are asked for, per thread.
+ * The meter of this scenario. It is a data source whose connections count what they are
+ * asked for, per thread.
  * <p>
- * Per thread, because the question of this measurement is who pays. A start writes its
- * outbox entry in the thread of the caller and the entry leaves in a thread of the
- * dispatch, and a count over the whole application would add the two together and lose
- * exactly the part an upgrader wants to know.
+ * It counts per thread, because this measurement asks who pays. A start writes its outbox
+ * entry in the thread of the caller. The entry leaves in a thread of the dispatch. A count
+ * over the whole application would add the two together. Then it would lose exactly the
+ * part an upgrader wants to know.
  * <p>
- * Commits are counted rather than transactions begun: a transaction which commits is one
- * the database did work for, and a read-only transaction Spring never commits is not a
- * cost this measurement talks about. Statements are counted where they are created, which
- * is one count per statement a connection is asked to prepare.
+ * It counts commits, not transactions begun. For a transaction which commits, the
+ * database did work. A read-only transaction which Spring never commits is not a cost this
+ * measurement is about. Statements are counted where they are created. That is one count
+ * per statement a connection is asked to prepare.
  */
 public class WhatTheDatabaseWasAskedFor implements DataSource {
 
   /**
-   * The methods of a connection which create a statement. Counted together, because a
-   * driver is free to answer any of them for the same SQL.
+   * The methods of a connection which create a statement. They are counted together,
+   * because a driver may use any of them for the same SQL.
    */
   private static final Set<String> CREATES_A_STATEMENT = Set
       .of("prepareStatement", "createStatement", "prepareCall");
@@ -49,8 +49,8 @@ public class WhatTheDatabaseWasAskedFor implements DataSource {
   }
 
   /**
-   * Forgets everything counted so far. A measurement starts with this, so that the boot of
-   * the application and whatever a test before it did are not part of the count.
+   * Forgets everything counted so far. A measurement starts with this. So the boot of the
+   * application and the work of earlier tests are not part of the count.
    */
   public void startCounting() {
 

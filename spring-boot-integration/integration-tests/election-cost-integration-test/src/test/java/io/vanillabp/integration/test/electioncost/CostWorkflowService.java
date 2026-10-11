@@ -8,7 +8,7 @@ import io.vanillabp.spi.service.WorkflowService;
 
 /**
  * The workflow service of this scenario. It exists so that the election has a process
- * service to answer from; what it serves is never run.
+ * service to answer from. Its workflow never runs.
  */
 @Service
 @WorkflowService(

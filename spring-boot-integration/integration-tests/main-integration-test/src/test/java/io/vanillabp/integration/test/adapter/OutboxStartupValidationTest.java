@@ -21,11 +21,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Startup validation of the phase-two outbox: everything an application sends to its
- * BPMS is dispatched after the caller's transaction committed, so every application
- * needs a resolvable outbox and needs it AT STARTUP - the boot fails with a guiding
- * message naming the remedies instead of surfacing the gap at the first workflow
- * start.
+ * Startup validation of the phase-two outbox. Everything an application sends to its BPMS
+ * is dispatched after the caller's transaction committed. So every application needs an
+ * outbox which can be resolved, and it needs it AT STARTUP. Without one, the boot fails
+ * with a guiding message which names the remedies. The gap does not wait until the first
+ * workflow start.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OutboxStartupValidationTest {
@@ -47,9 +47,9 @@ public class OutboxStartupValidationTest {
                 DummyAdapterConfiguration.class, DummyAdapterProcessServiceConfiguration.class,
                 WorkflowModuleAutoConfiguration.class,
                 SpringBootMigrationAdapterAutoConfiguration.class,
-                // the lifecycle bean which ends the start: a collected refusal is thrown
-                // there, and a context without that bean never reaches the moment this
-                // test is about
+                // the lifecycle bean which ends the start. A collected refusal is thrown
+                // there. A context without that bean never reaches the moment this test
+                // is about
                 DeploymentAutoConfiguration.class))
         .run(context -> {
 

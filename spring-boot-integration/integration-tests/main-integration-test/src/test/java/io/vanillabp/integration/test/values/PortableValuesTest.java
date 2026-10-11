@@ -33,17 +33,17 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * An application which hands the BPMS a decimal, and which asks for a parameter of no
- * type at all, does not start until it says that it looked at both. This is the whole way
- * through a Spring Boot startup, where the unit tests of the check
- * ({@code PortableValuesCheckTest}) read the message alone. The same behaviour is held
- * for Quarkus by {@code UndeclaredValuesTest} and {@code DeclaredValuesTest} of the
- * deployment integration tests, because the two platforms start their applications
- * differently.
+ * Take an application which hands the BPMS a decimal and asks for a parameter of no type
+ * at all. It does not start until it says that it looked at both. This test goes the
+ * whole way through a Spring Boot startup. The unit tests of the check
+ * ({@code PortableValuesCheckTest}) read only the message. For Quarkus,
+ * {@code UndeclaredValuesTest} and {@code DeclaredValuesTest} of the deployment
+ * integration tests hold the same behaviour, because the two platforms start their
+ * applications differently.
  * <p>
  * The declaration of a <code>&#64;TaskParam</code> can be written at four levels, and the
- * most specific of them wins. Every level is started here, because a level which binds
- * but is never read looks exactly like a level which works.
+ * most specific one wins. The test starts every level. A level which binds but is never
+ * read looks exactly like a level which works.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PortableValuesTest {
@@ -60,15 +60,15 @@ public class PortableValuesTest {
       + ".declared-aggregate-values";
 
   /**
-   * The key at the task, which the message writes with a placeholder for the task
-   * because it reports several tasks at once.
+   * The key at the task. The message writes it with a placeholder for the task, because
+   * it reports several tasks at once.
    */
   private static final String DECLARED_PARAMS_OF_THE_TASK = WORKFLOW
       + ".tasks.assessRisk.declared-task-params";
 
   /**
-   * The stores of the application's own, so the boot gets past the outbox and the
-   * transaction check: this context has no data source a platform default could use.
+   * The application's own stores, so the boot gets past the outbox and the transaction
+   * check. This context has no data source which a platform default could use.
    */
   @Configuration
   static class OwnStoresConfiguration {
@@ -265,8 +265,8 @@ public class PortableValuesTest {
   }
 
   /**
-   * An aggregate which keeps one attribute back, so the full-sync check is happy and this
-   * test is about the types of the values alone.
+   * An aggregate which keeps one attribute back. So the full-sync check passes, and this
+   * test is only about the types of the values.
    */
   @Getter
   public static class LoanAggregate {

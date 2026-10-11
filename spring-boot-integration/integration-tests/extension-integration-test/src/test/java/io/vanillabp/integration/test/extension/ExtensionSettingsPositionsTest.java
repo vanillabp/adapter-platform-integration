@@ -14,13 +14,14 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The eight positions an extension setting may be written at, in a booted application
- * which runs TWO adapters of the same BPMS type. Each position is written once, so every
- * assertion says which one won, and the second adapter says that a value of one adapter
- * never reaches the other (decision 53 in the repository's DECISIONS.md).
+ * The eight positions where an extension setting may be written, in a booted
+ * application which runs TWO adapters of the same BPMS type. Each position is written
+ * once, so every assertion shows which one won. The second adapter shows that a value of
+ * one adapter never reaches the other (decision 53 in the repository's DECISIONS.md).
  * <p>
- * Measured on Spring Boot here and on Quarkus by the test of the same name there: that
- * the core resolves the positions says nothing about a platform binding all of them.
+ * This test measures Spring Boot. The test of the same name in Quarkus measures Quarkus.
+ * The core resolves the positions, but that does not prove that a platform binds all of
+ * them.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SpringBootTest(classes = TestApplication.class)

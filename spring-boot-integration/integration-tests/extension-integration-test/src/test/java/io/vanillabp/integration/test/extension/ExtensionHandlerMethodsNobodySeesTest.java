@@ -11,15 +11,15 @@ import io.vanillabp.integration.test.utils.CapturedOutput;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * A method carrying the extension's own annotation which is not public, and therefore is
- * not among the methods VanillaBP wires. For a <code>&#64;WorkflowTask</code> the defect
- * surfaces later as a task nobody serves; for an extension nothing surfaces at all, since
- * an extension asking whether a method exists is simply told no and does whatever it does
- * instead. So the boot names the method, the class it is declared in and the way out.
+ * A method with the annotation of the extension which is not public. So VanillaBP does
+ * not wire it. For a <code>&#64;WorkflowTask</code>, the mistake shows up later as a task
+ * nobody serves. For an extension it never shows up. The extension asks whether a method
+ * exists, hears no, and does something else instead. So the boot names the method, its
+ * class and the way out.
  * <p>
- * The application is started INSIDE the test, because the report is written while the
- * workflow services are scanned and a context booted before the test began would have
- * written it where nothing captures output.
+ * The test starts the application INSIDE the test method. The report is written while
+ * the workflow services are scanned. A context booted before the test would have written
+ * it where nothing captures the output.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ExtensionHandlerMethodsNobodySeesTest {
@@ -31,7 +31,7 @@ public class ExtensionHandlerMethodsNobodySeesTest {
 
     try (var context = new SpringApplicationBuilder(TestApplication.class)
         .web(WebApplicationType.NONE)
-        // a database of its own: the scenario's other context is still cached and its
+        // its own database: the other context of this scenario is still cached, and its
         // schema must not be created twice
         .properties("spring.datasource.url=jdbc:h2:mem:extension-nobody-sees;DB_CLOSE_DELAY=-1")
         .run()) {

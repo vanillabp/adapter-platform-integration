@@ -54,17 +54,17 @@ import lombok.Setter;
 
 /**
  * What a called process delivered is found under the id the application calls, on Spring
- * Boot: this is the platform half of the change, and what it proves is that the ids a
- * workflow service serves really reach the two readers of the core.
+ * Boot. This is the platform half of the change. It proves that the ids a workflow service
+ * serves really reach the two readers in the core.
  * <p>
- * The scenario is the everyday one. A workflow service serves {@code Ordering} and
- * declares {@code Shipping} as a secondary process, the BPMS hands out a task of
- * {@code Shipping}, and the application completes that task through the only process
- * service it ever sees, the one of {@code Ordering}. The delivery wrote two things under
- * {@code Shipping}: the record naming the adapter which delivered, and the hint saying
- * which BPMS holds this workflow. Both used to be invisible to the primary service, so
- * every operation on such a task paid a probe, no visibility window was ever waited out,
- * and the row of the task stayed open forever.
+ * The scenario is the everyday one. A workflow service serves {@code Ordering} and declares
+ * {@code Shipping} as a secondary process. The BPMS hands out a task of {@code Shipping}. The
+ * application completes this task through the only process service it ever sees, the one of
+ * {@code Ordering}. The delivery wrote two things under {@code Shipping}: the record which
+ * names the adapter that delivered, and the hint which says which BPMS holds this workflow.
+ * The primary service used to see neither of them. So every operation on such a task asked
+ * the BPMS first, no wait for the BPMS to catch up ever happened, and the row of the task
+ * stayed open forever.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SecondaryProcessDeliveryTest {
@@ -90,9 +90,9 @@ public class SecondaryProcessDeliveryTest {
   }
 
   /**
-   * One workflow service, two BPMN processes: the one the application addresses and the
-   * one it calls. The task of the called process is asynchronous, so the delivery leaves
-   * it open and its record is the one a later completion is elected from.
+   * One workflow service, two BPMN processes: the one the application addresses and the one
+   * it calls. The task of the called process is asynchronous. So the delivery leaves it open,
+   * and a later completion finds its adapter through the record of this delivery.
    */
   @Service
   @WorkflowService(
@@ -126,14 +126,14 @@ public class SecondaryProcessDeliveryTest {
     static final Map<String, OrderAggregate> AGGREGATES = new ConcurrentHashMap<>();
 
     /**
-     * What the BPMS is asked about a workflow, and how often. The count is the whole
-     * point of the record: an operation answered from it asks nobody.
+     * How often the BPMS is asked about a workflow. This count is why the record exists: an
+     * operation which the record answers asks nobody.
      */
     static final AtomicInteger PROBES = new AtomicInteger();
 
     /**
-     * What the awareness probes answer while a test runs - "nobody knows this workflow"
-     * unless a test says otherwise.
+     * What the BPMS answers while a test runs, when asked whether it knows a workflow. The
+     * answer is "nobody knows this workflow", unless a test sets another one.
      */
     static volatile WorkflowAwareness AWARENESS = WorkflowAwareness.UNKNOWN_TO_BPMS;
 
@@ -288,8 +288,8 @@ public class SecondaryProcessDeliveryTest {
             WorkflowModuleConfiguration.class,
             ScenarioConfiguration.class,
             OrderWorkflowService.class,
-            // after the data source it is conditional on: listed as a plain source, so
-            // its conditions see the bean definitions registered before it
+            // It depends on the data source, so it comes after it. It is listed as a plain
+            // source, so its conditions see the bean definitions registered before it.
             JdbcTaskDeliveryLogAutoConfiguration.class,
             DeploymentTest.TestConfig.class)
         .run();
@@ -343,8 +343,8 @@ public class SecondaryProcessDeliveryTest {
   }
 
   /**
-   * The transaction an application opens around its own call - VanillaBP writes the
-   * aggregate and plans the operation in it.
+   * The transaction an application opens around its own call. VanillaBP writes the aggregate
+   * and plans the operation in this transaction.
    */
   private TransactionTemplate transaction(
       final ConfigurableApplicationContext context) {
@@ -363,7 +363,7 @@ public class SecondaryProcessDeliveryTest {
   }
 
   /**
-   * The moment the row of the given task carries, or <code>null</code> while the task is
+   * The moment the row of the given task was closed, or <code>null</code> while the task is
    * open.
    */
   private Object taskClosedAt(
@@ -408,8 +408,8 @@ public class SecondaryProcessDeliveryTest {
           ScenarioConfiguration.PROBES.get(),
           "the record of the called process answered the election, so no BPMS was asked");
 
-      // and the moment the completion reaches the BPMS the row is closed - under the id
-      // the delivery wrote it, which is the called process
+      // When the completion reaches the BPMS, the row is closed. It is closed under the id
+      // the delivery wrote it under, which is the called process.
       final var planned = TestPhaseTwoOutboxConfiguration.PLANNED.getLast();
       context.getBean(PhaseTwoRouter.class).dispatch(planned);
 
@@ -427,7 +427,7 @@ public class SecondaryProcessDeliveryTest {
 
     ScenarioConfiguration.AGGREGATES.clear();
     TestPhaseTwoOutboxConfiguration.clear();
-    // the read model of the BPMS has not caught up: nobody reports this workflow
+    // the read model of the BPMS has not caught up, so nobody reports this workflow
     ScenarioConfiguration.AWARENESS = WorkflowAwareness.UNKNOWN_TO_BPMS;
 
     try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
@@ -435,8 +435,8 @@ public class SecondaryProcessDeliveryTest {
       storeAggregate();
       final var processService = primaryProcessService(context);
 
-      // an aggregate nobody ever delivered a task for: the id is simply wrong, and the
-      // caller hears it at once
+      // Nobody ever delivered a task for this aggregate. The id is simply wrong, and the
+      // caller learns it at once.
       final var unknown = new OrderAggregate();
       unknown.setId("no-workflow-of-this-one");
       unknown.setStatus("new");
@@ -445,8 +445,8 @@ public class SecondaryProcessDeliveryTest {
           () -> transaction(context)
               .executeWithoutResult(status -> processService.correlateMessage(unknown, "ShipmentArrived")));
 
-      // the same answer from the BPMS, but this workflow was reported by a delivery of
-      // the called process - so it exists, and the operation is planned
+      // The BPMS gives the same answer. But a delivery of the called process reported this
+      // workflow. So it exists, and the operation is planned.
       final var bpms = context.getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
       bpms.invokeTask(MODULE, SECONDARY_PROCESS, deliveryOfTheCalledProcess("shipment-2"));
 

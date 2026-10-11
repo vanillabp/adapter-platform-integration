@@ -16,25 +16,25 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Simulates crash recovery of the JDBC phase-two outbox on JPA: a first
- * application context leaves a committed-but-unprocessed entry in the database (the
- * dispatch fails and the poll interval is too long for a retry - like a crashed
- * instance). A second application context using the same (in-memory, kept-alive) H2
- * database has to dispatch the left-over entry on startup.
+ * Simulates the crash recovery of the JDBC phase-two outbox on JPA. A first application
+ * context leaves a committed entry in the database which was never processed. Its
+ * dispatch fails, and the poll interval is too long for a retry, as with a crashed
+ * instance. A second application context uses the same H2 database (in memory, kept
+ * alive). It must dispatch the left-over entry at startup.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
 public class OutboxRecoveryTest {
 
-  // one database PER TEST: the kept-alive in-memory database outlives a test while
-  // Hibernate recreates the aggregate table on every context start - reused
-  // aggregate IDs would collide with idempotency keys of a previous test's entries
+  // one database PER TEST. The kept-alive in-memory database outlives a test, but
+  // Hibernate creates the aggregate table again at every context start. Reused aggregate
+  // IDs would collide with the idempotency keys of the entries of an earlier test
   private static final String DATASOURCE_URL_PATTERN = "jdbc:h2:mem:outbox-recovery-%s;DB_CLOSE_DELAY=-1";
 
   /**
-   * Runs the test application using an own H2 database (not shared with other test
-   * contexts). The configuration is passed as command-line arguments since those take
-   * precedence over <code>application.yaml</code>.
+   * Runs the test application with its own H2 database, not shared with other test
+   * contexts. The configuration goes in as command-line arguments, because those win
+   * over <code>application.yaml</code>.
    *
    * @param pollInterval The poll interval to be used by the context
    * @return The running application context
@@ -60,9 +60,9 @@ public class OutboxRecoveryTest {
 
     final Long aggregateId;
 
-    // first context: dispatch fails once; no retry happens since the poll interval
-    // is huge - this leaves a committed-but-unprocessed entry, like a crash right
-    // after the commit would
+    // first context: the dispatch fails. No retry happens, because the poll interval is
+    // huge. This leaves a committed entry which was never processed, like a crash right
+    // after the commit
     try (var context = runApplication("start", "PT1H")) {
       final var listener = context.getBean(RecordingPhaseTwoListener.class);
       listener.failNextDispatches(Integer.MAX_VALUE);
@@ -78,13 +78,13 @@ public class OutboxRecoveryTest {
       });
       assertNotNull(attachedAggregate);
       aggregateId = attachedAggregate.getId();
-      // wait for the (failing) immediate post-commit dispatch, so the entry's next
-      // attempt is scheduled before the context is closed
+      // wait for the (failing) dispatch right after the commit. So the next attempt of the
+      // entry is scheduled before the context is closed
       listener.awaitInvocations(1, 10000);
       FailedAttempts.awaitWrittenDown(context, 1);
     }
 
-    // second context: the initial poll on startup has to recover the entry
+    // second context: the first poll at startup must recover the entry
     try (var context = runApplication("start", "PT0.5S")) {
       final var listener = context.getBean(RecordingPhaseTwoListener.class);
       final var invocations = listener.awaitInvocations(1, 15000);
@@ -99,19 +99,19 @@ public class OutboxRecoveryTest {
 
     final Long aggregateId;
 
-    // the restarted context has to answer ACTIVE right away - the dispatch-time
-    // election probes again on recovery. WORKFLOW probes answer UNKNOWN on
-    // purpose: they serve the START re-dispatch mitigation, which
-    // would otherwise consume the recovered START entry instead of dispatching
-    // it - that path has its own test (OutboxRedispatchMitigationTest)
+    // the restarted context must answer ACTIVE right away, because the election at
+    // dispatch time probes again on recovery. WORKFLOW probes answer UNKNOWN on purpose.
+    // They serve the mitigation for a START dispatched again. Otherwise that mitigation
+    // would use up the recovered START entry instead of dispatching it. That path has
+    // its own test (OutboxRedispatchMitigationTest)
     SteerableTaskAwarenessSource.initialAnswer = io.vanillabp.integration.adapter.spi.WorkflowAwareness.ACTIVE;
     SteerableTaskAwarenessSource.initialWorkflowAnswer = io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS;
     try {
 
-      // first context: schedule a completion whose dispatch fails - leaving a
-      // committed-but-unprocessed COMPLETE_TASK entry (the crash shape); the
-      // outbox STORE is untouched by the task operations, so recovery works for the new
-      // operation exactly like for START_WORKFLOW
+      // first context: schedule a completion whose dispatch fails. This leaves a committed
+      // COMPLETE_TASK entry which was never processed, as after a crash. The task
+      // operations do not change the outbox STORE. So recovery works for the new
+      // operation exactly as for START_WORKFLOW
       try (var context = runApplication("tasks", "PT1H")) {
         final var listener = context.getBean(RecordingPhaseTwoListener.class);
         listener.failNextDispatches(Integer.MAX_VALUE);
@@ -127,18 +127,18 @@ public class OutboxRecoveryTest {
         });
         assertNotNull(attachedAggregate);
         aggregateId = attachedAggregate.getId();
-        // the start's phase two fails, too - that entry stays as well and proves
+        // phase two of the start fails, too. That entry stays as well, and it proves that
         // both operations dispatch after the restart
         listener.awaitInvocations(1, 10000);
         transactionTemplate.executeWithoutResult(status -> processService
             .completeTask(attachedAggregate, "task-recovered"));
-        // both the start and the completion have to carry their failed attempt before
-        // the context goes away, otherwise this is a test of something else
+        // the start and the completion must both carry their failed attempt before the
+        // context goes away. Otherwise this tests something else
         FailedAttempts.awaitWrittenDown(context, 2);
       }
 
-      // second context: BOTH the old (START_WORKFLOW) and the new (COMPLETE_TASK)
-      // entry have to dispatch
+      // second context: BOTH the old (START_WORKFLOW) and the new (COMPLETE_TASK) entry
+      // must dispatch
       try (var context = runApplication("tasks", "PT0.5S")) {
         final var listener = context.getBean(RecordingPhaseTwoListener.class);
         final var invocations = listener.awaitInvocations(1, 15000);

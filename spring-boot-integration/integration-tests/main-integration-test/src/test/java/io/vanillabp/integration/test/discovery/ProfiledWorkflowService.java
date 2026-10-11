@@ -9,9 +9,9 @@ import io.vanillabp.spi.service.WorkflowTask;
 
 /**
  * The handlers of 'DummyProcess', brought by one profile only. Without that profile the
- * class is still on the classpath but no bean of it exists, which is the situation the
- * discovery cannot tell apart from a class another profile brings - and does not have
- * to: the deployment reports the BPMN process nothing serves, see
+ * class is still on the classpath, but no bean of it exists. The discovery cannot tell this
+ * apart from a class which another profile brings. It does not have to: the deployment
+ * reports the BPMN process which nothing serves, see
  * WorkflowServiceDiscoveryTest#aWorkflowServiceOfAnInactiveProfileLeavesItsProcessUnclaimed.
  */
 @Service

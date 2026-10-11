@@ -39,12 +39,12 @@ public class OutboxDispatchTest {
 
   /**
    * How long a test waits before it says that nothing more happened. The application
-   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>. These tests set that
+   * to half a second, so this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A machine which leaves this JVM without a
+   * turn only makes the wait longer. Afterwards the test asserts a count which did not
+   * grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -74,9 +74,9 @@ public class OutboxDispatchTest {
   }
 
   /**
-   * What the outbox table holds. It is read outside the transaction of this test, which
-   * is what the rollback case below asks for: an entry becomes visible when the
-   * transaction which wrote it commits.
+   * What the outbox table holds. It is read outside the transaction of this test, as the
+   * rollback case below needs. An entry becomes visible when the transaction which wrote it
+   * commits.
    *
    * @return The reader of the table
    */
@@ -87,9 +87,9 @@ public class OutboxDispatchTest {
   }
 
   /**
-   * The entries of ONE aggregate which were dispatched - the state in which their key
-   * stops deduplicating. A count over the whole table would already be satisfied by a
-   * sibling test's entry, which is the same mistake in a hiding place.
+   * The entries of ONE aggregate which were dispatched. In this state their key stops
+   * deduplicating. A count over the whole table would already be satisfied by an entry of
+   * another test. That would hide the same mistake.
    *
    * @param aggregateId The aggregate asked about
    * @return The number of entries
@@ -114,16 +114,16 @@ public class OutboxDispatchTest {
       final var aggregate = new Aggregate();
       aggregate.setContent("commit-test");
       return processService.startWorkflow(aggregate);
-      // note: the entry is written on the connection of this very transaction, so
-      // nobody outside it can see it yet - the transactional enlisting is proven by the
-      // rollback test instead
+      // note: the entry is written on the connection of this transaction, so nobody
+      // outside can see it yet. The rollback test proves instead that the entry is part
+      // of the transaction
     });
 
     assertNotNull(attachedAggregate);
     assertNotNull(attachedAggregate.getId());
 
-    // after the commit, phase two has to be dispatched with the aggregate's ID
-    // converted back from its string representation to the original type
+    // after the commit, phase two must be dispatched. The ID of the aggregate is
+    // converted back from its string form to the original type
     final var invocations = listener.awaitInvocations(1, 10000);
     assertEquals(attachedAggregate.getId(), invocations.getFirst());
 
@@ -145,7 +145,7 @@ public class OutboxDispatchTest {
         }));
     assertEquals("test rollback", exception.getMessage());
 
-    // the entry must be gone since it was enlisted in the rolled-back transaction
+    // the entry must be gone, because it was part of the rolled-back transaction
     assertEquals(entriesBefore, countOutboxEntries());
 
     // wait longer than the poll interval: phase two must never be dispatched
@@ -158,14 +158,14 @@ public class OutboxDispatchTest {
   @DisplayName("A duplicate schedule while the first one is still pending is a no-op")
   public void duplicateScheduleAgainstAPendingEntryIsNoOp() {
 
-    // the dispatcher must not empty the outbox while both are scheduled, so both
-    // starts ride ONE transaction
+    // the dispatcher must not empty the outbox while both are scheduled. So both starts
+    // run in ONE transaction
     final var attachedAggregate = transactionTemplate.execute(status -> {
       final var aggregate = new Aggregate();
       aggregate.setContent("dedup-pending");
       final var started = processService.startWorkflow(aggregate);
-      // the same idempotency key while nothing was dispatched: the unique DEDUP_KEY
-      // of the waiting entry makes it a no-op
+      // the same idempotency key while nothing was dispatched. The unique DEDUP_KEY of
+      // the waiting entry makes it a no-op
       return processService.startWorkflow(started);
     });
     assertNotNull(attachedAggregate);
@@ -187,18 +187,17 @@ public class OutboxDispatchTest {
     assertNotNull(attachedAggregate);
     listener.awaitInvocations(1, 10000);
 
-    // DONE instead of delete: the dispatched entry stays in the table until the
-    // retention passes, and its key is released when it is marked DONE.
-    // Waiting for the ENTRY and not for the listener is what makes the next schedule
-    // meet the state this test is about - the listener runs inside the dispatch, before
-    // the entry is processed
+    // DONE instead of delete: the dispatched entry stays in the table until the retention
+    // passes. Its key is released when it is marked DONE. The test waits for the ENTRY,
+    // not for the listener. Only then does the next schedule meet the state this test is
+    // about. The listener runs inside the dispatch, before the entry is processed
     final var deadline = System.currentTimeMillis() + 10000;
     while (dispatchedEntriesOf(attachedAggregate.getId()) == 0) {
       assertTrue(System.currentTimeMillis() < deadline, "processed outbox entry was not retained");
       Thread.sleep(50);
     }
 
-    // the key deduplicates what is PLANNED, so the retained entry is released and the
+    // the key deduplicates what is PLANNED. So the retained entry is released, and the
     // second start is carried out (see decision 22 in the repository's DECISIONS.md)
     transactionTemplate.execute(status -> processService.startWorkflow(attachedAggregate));
 
@@ -211,9 +210,9 @@ public class OutboxDispatchTest {
   }
 
   /**
-   * How often phase two of a start ran for the given aggregate, waiting until at least
-   * the expected number arrived and then a poll interval longer, so a third dispatch
-   * would still show up.
+   * How often phase two of a start ran for the given aggregate. It waits until at least
+   * the expected number arrived, and then a little longer. So a further dispatch would
+   * still show up.
    */
   private long countStartsOf(
       final Object aggregateId,

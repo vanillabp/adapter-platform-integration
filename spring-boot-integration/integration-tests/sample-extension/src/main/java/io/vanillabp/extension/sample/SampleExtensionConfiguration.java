@@ -12,8 +12,8 @@ import io.vanillabp.integration.extension.spi.service.AggregateServiceFactory;
  * How the sample extension joins a Spring Boot application: two beans and one
  * registration.
  * <p>
- * The ordering is by NAME, so this module needs no dependency on the platform
- * integration - which is the point of the module (see its POM).
+ * The ordering uses the class NAME. So this module needs no dependency on the platform
+ * integration, and that is the point of the module (see its POM).
  */
 @AutoConfiguration(afterName = "io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration")
 public class SampleExtensionConfiguration implements InitializingBean {
@@ -28,8 +28,8 @@ public class SampleExtensionConfiguration implements InitializingBean {
   }
 
   /**
-   * Registers what {@link SampleNote} means. Whether the workflow services were scanned
-   * by now does not matter - a contract registered later is applied to the classes
+   * Registers what {@link SampleNote} means. It does not matter whether the workflow
+   * services were scanned already. A contract registered later is applied to the classes
    * registered so far.
    */
   @Override
@@ -40,8 +40,8 @@ public class SampleExtensionConfiguration implements InitializingBean {
   }
 
   /**
-   * @param properties VanillaBP's configuration, which is where this extension's own
-   *          section lives
+   * @param properties The configuration of VanillaBP, which holds the section of this
+   *          extension
    * @return The factory building one service per workflow aggregate
    */
   @Bean

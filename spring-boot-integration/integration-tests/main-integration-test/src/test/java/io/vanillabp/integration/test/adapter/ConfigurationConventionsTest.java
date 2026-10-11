@@ -34,16 +34,16 @@ import io.vanillabp.spi.process.ProcessService;
  * <code>vanillabp.*</code> property at all,</li>
  * <li>several BPMS &rarr; nothing but <code>vanillabp.prioritized-adapters</code>,</li>
  * <li>a custom adapter id (an id which is not an adapter type) still needs its
- * <code>type</code> - it can never be derived.</li>
+ * <code>type</code>. It can never be derived.</li>
  * </ul>
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ConfigurationConventionsTest {
 
   /**
-   * The SECOND adapter type of the "several BPMS" case: the type announcement and
-   * the log-only services of {@code TwoAdapterTypesDeploymentTest} serving the
-   * DERIVED adapter id (which is the adapter type itself).
+   * The SECOND adapter type of the "several BPMS" case. It uses the type announcement
+   * and the log-only services of {@code TwoAdapterTypesDeploymentTest}. They serve the
+   * DERIVED adapter id, which is the adapter type itself.
    */
   @org.springframework.context.annotation.Configuration
   static class SecondAdapterConfiguration {
@@ -117,9 +117,9 @@ public class ConfigurationConventionsTest {
 
   /**
    * Says that the one BPMN file of these applications holds the process of
-   * {@link SampleWorkflowService}, with its one task. Without it the BPMS double would name the
-   * process after the file, nobody would claim it, and the start would end over it - which would
-   * ask these applications for a property, the one thing they are here to do without.
+   * {@link SampleWorkflowService}, with its one task. Without it, the BPMS double would name the
+   * process after the file. Nobody would claim it, and the start would stop. Then these
+   * applications would need a property, and doing without properties is their whole point.
    */
   @org.springframework.context.annotation.Configuration
   static class TheSampleModel {
@@ -160,8 +160,8 @@ public class ConfigurationConventionsTest {
   };
 
   /**
-   * An application whose classpath provides ONE adapter and ONE workflow module -
-   * and not a single VanillaBP property.
+   * An application whose classpath provides ONE adapter and ONE workflow module, and
+   * not a single VanillaBP property.
    */
   private SpringBootTestApplication zeroConfigurationApplication() throws IOException {
 
@@ -256,7 +256,7 @@ public class ConfigurationConventionsTest {
 
       final var properties = context.getBean(MigrationAdapterProperties.class);
 
-      // both adapter sections are derived from the ids - which ARE adapter types
+      // both adapter sections are derived from the ids, because the ids ARE adapter types
       Assertions.assertEquals(
           Map.of("dummy", "dummy", "dummy2", "dummy2"),
           properties.adapterTypes());

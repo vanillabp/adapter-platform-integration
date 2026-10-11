@@ -39,8 +39,8 @@ public class FullSyncPermissionTest {
   private static final String PERMISSION = "vanillabp.workflow-modules.test-module.workflows.FullSyncProcess.allow-full-sync-with-bpms";
 
   /**
-   * The stores of the application's own, so the boot gets past the outbox and the
-   * transaction check: this context has no data source a platform default could use.
+   * The application's own stores, so the boot gets past the check of the outbox and of the
+   * transactions. This context has no data source which a default of the platform could use.
    */
   @Configuration
   static class OwnStoresConfiguration {

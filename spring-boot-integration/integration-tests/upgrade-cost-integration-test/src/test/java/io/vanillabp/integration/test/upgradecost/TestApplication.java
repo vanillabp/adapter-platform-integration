@@ -13,8 +13,8 @@ import io.vanillabp.bpmsdouble.DummyTaskWiringSource;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 
 /**
- * The application of this scenario: one workflow aggregate, one BPMN process with one
- * service task, a BPMS double which requires the two phases of a remote BPMS, and a data
+ * The application of this scenario. It has one workflow aggregate, one BPMN process with
+ * one service task, a BPMS double which needs the two phases of a remote BPMS, and a data
  * source which counts.
  */
 @SpringBootApplication
@@ -33,9 +33,9 @@ public class TestApplication {
   }
 
   /**
-   * Puts the meter between the application and its database. A post processor rather than a
-   * data source of its own: what is measured has to be the pooled data source Spring Boot
-   * builds for the application, not a second one beside it.
+   * Puts the meter between the application and its database. It is a post processor, not a
+   * data source of its own. The measurement must count the pooled data source which Spring
+   * Boot builds for the application, not a second one beside it.
    *
    * @return The post processor wrapping the one data source of this application
    */
@@ -60,8 +60,8 @@ public class TestApplication {
   }
 
   /**
-   * Stands in for what an adapter reads out of the model of this scenario: the BPMN process
-   * the file declares and its one service task.
+   * Stands in for what an adapter reads out of the model of this scenario. That is the BPMN
+   * process the file declares and its one service task.
    *
    * @return What this scenario's BPMN file holds
    */

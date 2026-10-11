@@ -4,7 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The aggregate of the workflow service whose handler methods nobody sees.
+ * The aggregate of the workflow service whose handler methods VanillaBP does not see.
  */
 @Getter
 @Setter

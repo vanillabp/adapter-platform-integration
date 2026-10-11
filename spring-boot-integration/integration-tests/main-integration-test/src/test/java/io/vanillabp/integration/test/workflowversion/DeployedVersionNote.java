@@ -6,8 +6,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * The annotation of {@link DeployedVersionNoteExtension}, a test extension whose contract asks
- * for a method for the version a start deployed.
+ * The annotation of {@link DeployedVersionNoteExtension}. The contract of this test
+ * extension asks for a method for the version which a start deployed.
  */
 @Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)

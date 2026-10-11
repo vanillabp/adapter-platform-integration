@@ -8,10 +8,9 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * A handler which correlates a message while it runs, which is the shape the story is
- * about: the correlation id comes from business data and does not have to differ
- * between the elements of a multi-instance activity, so what tells the elements apart
- * can only come from the BPMS.
+ * A handler which correlates a message while it runs. The story is about this case. The
+ * correlation id comes from business data, and it does not have to differ between the
+ * elements of a multi-instance activity. So only the BPMS can tell the elements apart.
  */
 @WorkflowService(
     workflowAggregateClass = ActivationAggregate.class,
@@ -19,8 +18,8 @@ import io.vanillabp.spi.service.WorkflowTask;
 public class ActivationWorkflowService {
 
   /**
-   * The correlation id every element of the multi-instance activity uses - one partner
-   * asked once per element, and business data which is legitimately equal.
+   * The correlation id which every element of the multi-instance activity uses. One
+   * partner is asked once per element, and the business data is equal for good reason.
    */
   public static final String CORRELATION_ID = "partner-42";
 

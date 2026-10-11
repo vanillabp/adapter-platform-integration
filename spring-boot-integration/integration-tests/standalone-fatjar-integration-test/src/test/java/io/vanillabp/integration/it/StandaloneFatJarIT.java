@@ -24,12 +24,12 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 /**
  * An application which IS its workflow module, started the way it runs in production.
  * <p>
- * Spring Boot repackages the JAR: the classes move below <code>BOOT-INF/classes/</code>,
- * while <code>META-INF/workflow-module</code> stays at the top of the JAR. Under
- * <code>mvn spring-boot:run</code> both share one directory, so the BPMN files below
- * <code>processes/</code> are found. In the JAR they were not, and the application
- * deployed nothing. Each test starts the application in a process of its own and reads
- * what it printed.
+ * Spring Boot repackages the JAR. The classes move below <code>BOOT-INF/classes/</code>,
+ * but <code>META-INF/workflow-module</code> stays at the top of the JAR. Under
+ * <code>mvn spring-boot:run</code> both are in one directory, so the BPMN files below
+ * <code>processes/</code> are found. In the JAR they were not found, and the application
+ * deployed nothing. Each test starts the application in its own process and reads what
+ * it printed.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class StandaloneFatJarIT {
@@ -62,8 +62,8 @@ public class StandaloneFatJarIT {
 
     assertContains(output, "Started StandaloneTestApplication");
     assertContains(output, "STANDALONE-TEST module: standalone-module");
-    // the application's own artifact is recognised, so the convention searches below
-    // 'processes/' as well
+    // the artifact of the application is recognized, so the convention also searches
+    // below 'processes/'
     assertContains(output, "STANDALONE-TEST searched: classpath*:processes/dummy");
     assertContains(output, "Dummy-Adapter[dummy]: Deploying resources for standalone-module");
     assertContains(output, "Dummy-Adapter[dummy]: Starting workflow processing for standalone-module");
@@ -119,7 +119,7 @@ public class StandaloneFatJarIT {
         .info()
         .command()
         .orElse("java"));
-    // the JaCoCo agent, so the started application counts for the coverage (see pom.xml)
+    // the JaCoCo agent, so the started application counts for coverage (see pom.xml)
     final var jacocoAgent = System.getProperty("jacoco.agent");
     if ((jacocoAgent != null) && !jacocoAgent.isBlank() && !jacocoAgent.startsWith("$")) {
       command.add(jacocoAgent);

@@ -10,8 +10,8 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 @Service("sampleWorkflowService2")
-// a process of its own: the sample of the other package is named after the same class, and a
-// BPMN process belongs to one workflow aggregate
+// a process of its own: the sample in the other package has the same class name. A BPMN
+// process belongs to one workflow aggregate only.
 @WorkflowService(workflowAggregateClass = Aggregate.class,
     bpmnProcess = @BpmnProcess(bpmnProcessId = "SampleWorkflow2"))
 public class SampleWorkflowService {

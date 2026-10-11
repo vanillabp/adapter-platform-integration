@@ -5,9 +5,9 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The workflow service of the test about the elements an extension reports: the task is served
- * in every version, and the note of the test extension serves versions 1 to 4 only. Nothing
- * notes the process itself.
+ * The workflow service of the test about the elements an extension reports. The task is
+ * served in every version. The note of the test extension serves only versions 1 to 4.
+ * Nothing notes the process itself.
  */
 @WorkflowService(
     workflowAggregateClass = VersionedAggregate.class,

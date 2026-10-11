@@ -32,16 +32,16 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Regression test for review finding B1: two different adapter TYPES must coexist in
- * one application - THE migration scenario. The dummy adapter plus a second
- * dummy-like adapter type ("dummy2", defined inline) boot together, both deployment
- * services receive {@code deployResources} and both process services are found by
- * the election (proven by a green boot - the election fails fast on any prioritized
- * adapter without a process service).
+ * Regression test for review finding B1. Two different adapter TYPES must work together in
+ * one application. That is THE migration scenario. The dummy adapter and a second adapter
+ * type like it ("dummy2", defined in this class) boot together. Both deployment services
+ * receive {@code deployResources}. The election finds both process services. A green boot
+ * proves that, because the election fails fast on any prioritized adapter without a
+ * process service.
  * <p>
- * Historically each adapter registered a bean of type
- * {@code List<AdapterDeploymentService>}; Spring's collection injection only
- * collects <i>element</i> beans, so a second adapter type broke the boot.
+ * In the past, each adapter registered a bean of type
+ * {@code List<AdapterDeploymentService>}. Spring's collection injection only collects
+ * <i>element</i> beans, so a second adapter type broke the boot.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TwoAdapterTypesDeploymentTest {
@@ -164,8 +164,8 @@ public class TwoAdapterTypesDeploymentTest {
     }
 
     /**
-     * Serves every operation and does nothing: this double is here for the election
-     * and the deployment, not for what an operation sends to a BPMS.
+     * Serves every operation and does nothing. This double is here for the election and
+     * the deployment, not for what an operation sends to a BPMS.
      */
     @Override
     public java.util.Map<io.vanillabp.integration.spi.PhaseOperation, io.vanillabp.integration.adapter.spi.PhaseOperationHandler<Object>> phaseOperations() {
@@ -209,8 +209,8 @@ public class TwoAdapterTypesDeploymentTest {
   }
 
   /**
-   * Element beans of the second adapter - one AdapterDeploymentService and one
-   * MigratableProcessService bean, following the element-bean convention.
+   * The element beans of the second adapter: one AdapterDeploymentService and one
+   * MigratableProcessService bean, as the element-bean convention asks.
    */
   @Configuration
   public static class SecondAdapterBeans {
@@ -256,7 +256,6 @@ public class TwoAdapterTypesDeploymentTest {
 
       final var capturedOutput = output.getAll();
 
-      // both adapters' deployment services have to receive deployResources
       Assertions.assertTrue(
           capturedOutput.contains("Dummy-Adapter[test]: Deploying resources for test-module"),
           "dummy adapter has to deploy. Captured output: "

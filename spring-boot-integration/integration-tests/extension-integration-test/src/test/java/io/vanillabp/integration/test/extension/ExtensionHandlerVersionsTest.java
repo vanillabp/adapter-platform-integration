@@ -20,10 +20,10 @@ import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An extension picks the method by the version of the BPMN process its event came from,
- * with the selection VanillaBP's own <code>&#64;WorkflowTask</code> methods go through.
- * Two methods for one element are told apart by the versions they name, and an element
- * nobody serves in that version answers with nothing.
+ * An extension picks the method by the version of the BPMN process its event came from.
+ * The choice works as for the <code>&#64;WorkflowTask</code> methods of VanillaBP. The
+ * versions two methods name tell them apart. If no method serves an element in that
+ * version, the answer is empty.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SpringBootTest(classes = TestApplication.class)

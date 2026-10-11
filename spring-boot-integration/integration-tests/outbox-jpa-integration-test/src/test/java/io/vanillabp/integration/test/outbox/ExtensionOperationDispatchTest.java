@@ -25,11 +25,11 @@ import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * The outbox is open to extensions: an operation registered by
- * {@link SampleExtension} is scheduled inside the business transaction, dispatched
- * to the extension's own handler after the commit, deduplicated by the extension's
- * own idempotency key and retried when the handler fails - the same guarantees the
- * core operations get, without any core code knowing the operation.
+ * The outbox is open to extensions. {@link SampleExtension} registers an operation. It is
+ * scheduled inside the business transaction and dispatched to the handler of the
+ * extension after the commit. The idempotency key of the extension deduplicates it, and
+ * it is retried when the handler fails. These are the same guarantees the core
+ * operations get, and no code of the core knows the operation.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -38,12 +38,12 @@ public class ExtensionOperationDispatchTest {
 
   /**
    * How long a test waits before it says that nothing more happened. The application
-   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>. These tests set that
+   * to half a second, so this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A machine which leaves this JVM without a
+   * turn only makes the wait longer. Afterwards the test asserts a count which did not
+   * grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -63,8 +63,8 @@ public class ExtensionOperationDispatchTest {
   private DataSource dataSource;
 
   /**
-   * What the outbox table holds, read through the transaction this test is running: the
-   * payload of a call is asserted while the transaction which wrote it is still open.
+   * What the outbox table holds, read through the transaction this test runs. The test
+   * asserts the payload of a call while the transaction which wrote it is still open.
    */
   private PhaseTwoOutboxReader outboxTable;
 
@@ -77,8 +77,8 @@ public class ExtensionOperationDispatchTest {
   }
 
   /**
-   * How many entries of that key were dispatched, which is the state in which a key
-   * stops deduplicating.
+   * How many entries of that key were dispatched. In this state a key stops
+   * deduplicating.
    *
    * @param idempotencyKey The key asked about
    * @return The number of entries
@@ -96,8 +96,8 @@ public class ExtensionOperationDispatchTest {
   }
 
   /**
-   * How many payloads lie under that reference, which is one while the bytes of a call
-   * wait and none once its entry was dispatched.
+   * How many payloads lie under that reference. It is one while the bytes of a call wait,
+   * and none once its entry was dispatched.
    *
    * @param reference The reference asked about
    * @return The number of payloads
@@ -116,10 +116,10 @@ public class ExtensionOperationDispatchTest {
   /**
    * Waits until the entry of the given call stopped deduplicating.
    * <p>
-   * {@link SampleExtension#awaitDispatched} reports that the handler was called, and
-   * the handler runs INSIDE the dispatch - the entry is marked processed only after it
-   * returned. Scheduling the same key in that window is discarded, so a test which
-   * asserts that a repetition IS planned has to wait for the entry.
+   * {@link SampleExtension#awaitDispatched} reports that the handler was called. The
+   * handler runs INSIDE the dispatch, and the entry is marked processed only after it
+   * returned. If the same key is scheduled in that window, it is discarded. So a test which
+   * asserts that a repetition IS planned must wait for the entry.
    */
   private void awaitDeduplicationWindowClosed(
       final Aggregate aggregate,
@@ -168,8 +168,8 @@ public class ExtensionOperationDispatchTest {
     final var call = dispatched.getFirst();
     assertEquals(SampleExtension.OPERATION_NAME, call.operation());
     assertEquals(aggregate.getId().toString(), call.workflowAggregateId());
-    // the arguments travel with the entry - the store persists them without ever
-    // interpreting them
+    // the arguments travel with the entry. The store saves them but never reads their
+    // meaning
     assertEquals("created", call.args().get(SampleExtension.ARG_EVENT));
 
   }
@@ -178,9 +178,9 @@ public class ExtensionOperationDispatchTest {
   @DisplayName("The extension's own idempotency key deduplicates its planned entries")
   public void extensionOperationIsDeduplicatedByItsOwnKey() throws Exception {
 
-    // same aggregate, same event, and the first entry still waiting for its dispatch:
-    // the key repeats, so scheduling is a no-op. Both ride ONE transaction on purpose -
-    // this half of the test plans AGAINST a pending entry
+    // same aggregate, same event, and the first entry still waits for its dispatch. The
+    // key repeats, so scheduling is a no-op. Both run in ONE transaction on purpose: this
+    // half of the test plans AGAINST a waiting entry
     final var scheduledTwice = new java.util.concurrent.atomic.AtomicBoolean(true);
     final var aggregate = transactionTemplate.execute(status -> {
       final var newAggregate = new Aggregate();
@@ -210,9 +210,9 @@ public class ExtensionOperationDispatchTest {
     assertEquals("created", dispatched.get(0).args().get(SampleExtension.ARG_EVENT));
     assertEquals("completed", dispatched.get(1).args().get(SampleExtension.ARG_EVENT));
 
-    // and the very same event again, now that the first one reached the extension AND
-    // its entry was marked processed: a new operation, because the key deduplicates
-    // what is planned
+    // and the same event again, now that the first one reached the extension AND its
+    // entry was marked processed. This is a new operation, because the key deduplicates
+    // only what is planned
     awaitDeduplicationWindowClosed(aggregate, "created");
     final var scheduledAfterDispatch = transactionTemplate
         .execute(status -> outbox
@@ -254,8 +254,8 @@ public class ExtensionOperationDispatchTest {
           .call("test-module", "dummy", attached.getId().toString(), "created", state);
       reference.set(call.payloadReference());
       outbox.schedule(call);
-      // the bytes ride the very transaction the aggregate rides: they are there
-      // already, and a rollback would take them with it
+      // the bytes are written in the same transaction as the aggregate. They are there
+      // already, and a rollback would remove them too
       assertEquals(1L, payloadsOf(call.payloadReference()));
       return attached;
     });
@@ -266,8 +266,8 @@ public class ExtensionOperationDispatchTest {
     assertArrayEquals(state, call.payload());
     assertEquals(reference.get(), call.payloadReference());
 
-    // the entry was dispatched, so the bytes are gone - removed right after the entry was
-    // marked DONE
+    // the entry was dispatched, so the bytes are gone. They are removed right after the
+    // entry was marked DONE
     final var deadline = System.currentTimeMillis() + 10000;
     while (payloadsOf(reference.get()) > 0) {
       assertTrue(
@@ -313,7 +313,7 @@ public class ExtensionOperationDispatchTest {
       assertEquals("test rollback", e.getMessage());
     }
 
-    // wait longer than the poll interval: the entry rode the rolled-back
+    // wait longer than the poll interval. The entry was part of the rolled-back
     // transaction, so nothing may ever be dispatched
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertTrue(extension.getDispatched().isEmpty());

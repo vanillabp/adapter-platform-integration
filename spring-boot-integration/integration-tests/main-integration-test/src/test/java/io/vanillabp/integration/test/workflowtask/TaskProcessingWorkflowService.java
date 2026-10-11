@@ -14,10 +14,10 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The workflow service of the task-processing acceptance test: one
- * <code>&#64;WorkflowTask</code> method per user-visible variation (happy path,
- * BPMN error, failure, asynchronous task, parameter binding). See
- * {@link TaskProcessingAggregate} for why this lives in its own package.
+ * The workflow service of the acceptance test for task processing. It has one
+ * <code>&#64;WorkflowTask</code> method per variation a user can see (happy path, BPMN
+ * error, failure, asynchronous task, parameter binding). {@link TaskProcessingAggregate}
+ * says why this class lives in its own package.
  */
 @WorkflowService(
     workflowAggregateClass = TaskProcessingAggregate.class,
@@ -45,9 +45,9 @@ public class TaskProcessingWorkflowService {
   }
 
   /**
-   * What the logging context held while the handler ran - the assertion of the MDC
-   * VanillaBP puts around every delivery. A map rather than a log line,
-   * because a test has to see the keys and not their rendering.
+   * What the logging context held while the handler ran. The test asserts with it the MDC
+   * which VanillaBP puts around every delivery. It is a map and not a log line, because a
+   * test must see the keys, not how they are rendered.
    */
   public static final java.util.Map<String, String> MDC_DURING_TASK = new java.util.concurrent.ConcurrentHashMap<>();
 

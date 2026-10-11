@@ -5,8 +5,8 @@ import org.springframework.stereotype.Service;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * A class declaring its workflow service through {@link OurOwnWorkflowService} instead of
- * through {@code @WorkflowService} itself.
+ * A class which declares its workflow service through {@link OurOwnWorkflowService}
+ * instead of through {@code @WorkflowService} itself.
  */
 @Service
 @OurOwnWorkflowService

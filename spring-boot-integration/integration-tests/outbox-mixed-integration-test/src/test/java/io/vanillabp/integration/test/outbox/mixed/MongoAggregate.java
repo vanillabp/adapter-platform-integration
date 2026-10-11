@@ -7,9 +7,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * A MongoDB workflow aggregate: its outbox entries have to land in the MongoDB
- * outbox, riding the MongoDB transaction - even though JPA aggregates exist in the
- * same application (mixed persistence).
+ * A MongoDB workflow aggregate. Its outbox entries must land in the MongoDB outbox, inside
+ * the MongoDB transaction. This holds even though the same application also has JPA
+ * aggregates (mixed persistence).
  */
 @Document(collection = "mixed-mongo-aggregate")
 @Getter

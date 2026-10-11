@@ -31,8 +31,8 @@ public class SampleWorkflowService {
   }
 
   /**
-   * The shape of a provider which notes down what it reported: it writes into the workflow
-   * aggregate while it answers, and VanillaBP saves the aggregate afterwards.
+   * A provider which notes down what it reported. It writes into the workflow aggregate
+   * while it answers, and VanillaBP saves the aggregate afterwards.
    *
    * @param aggregate The workflow aggregate VanillaBP loaded
    * @param prefilled The note the extension prefilled

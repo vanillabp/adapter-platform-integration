@@ -17,9 +17,9 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 
 /**
  * A workflow module which ships <i>test-module-tenant.yaml</i> and no
- * <i>test-module.yaml</i>. Spring Boot reads such a file, Quarkus does not, and the
- * workflow module is the same library on both. So the values are there and the boot says
- * what a Quarkus application would make of this module (see decision 61 in the
+ * <i>test-module.yaml</i>. Spring Boot reads such a file, Quarkus does not. And the
+ * workflow module is the same library on both. So the values are there, and the boot says
+ * what a Quarkus application would do with this module (see decision 61 in the
  * repository's DECISIONS.md).
  */
 @ExtendWith(SuppressOutputExtension.class)

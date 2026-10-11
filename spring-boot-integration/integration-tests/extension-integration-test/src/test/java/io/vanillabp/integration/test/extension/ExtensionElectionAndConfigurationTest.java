@@ -21,8 +21,9 @@ import io.vanillabp.integration.extension.spi.election.WorkflowElection;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The other things an extension gets: which BPMS holds a workflow right now, a place of
- * its own in the configuration, and the log it reads what a workflow is waiting for from.
+ * The other things an extension gets. It learns which BPMS holds a workflow right now. It
+ * gets its own place in the configuration. And it gets the log which tells what a
+ * workflow is waiting for.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SpringBootTest(classes = TestApplication.class)
@@ -99,15 +100,15 @@ public class ExtensionElectionAndConfigurationTest {
   @DisplayName("An extension is told which delivery log holds the records of the workflow")
   public void anExtensionResolvesTheDeliveryLogOfTheAggregate() {
 
-    // the same shape as the outbox and the transaction: the resolver is the bean, because
-    // which store serves an aggregate follows the persistence VanillaBP resolved for it -
-    // this application persists with JPA, so the answer is the platform's JDBC store and
-    // not merely something non-null
+    // the same shape as for the outbox and the transaction: the resolver is the bean. The
+    // store which serves an aggregate follows the persistence VanillaBP resolved for it.
+    // This application persists with JPA. So the answer is the JDBC store of the platform,
+    // not just anything which is not null
     assertInstanceOf(JdbcTaskDeliveryLog.class, deliveryLog.logOf(NotedAggregate.class));
 
-    // and it answers what an extension would show. Nothing is waiting here: the one user
-    // task of this model has no @WorkflowTask method, so the adapter finishes its
-    // notification itself and no record is written (see decision 54 in the repository's
+    // and it answers what an extension would show. Nothing is waiting here. The one user
+    // task of this model has no @WorkflowTask method. So the adapter finishes its
+    // notification itself, and no record is written (see decision 54 in the repository's
     // DECISIONS.md)
     assertTrue(deliveryLog.openTasksOf(NotedAggregate.class, MODULE, PROCESS, "1").isEmpty());
 
@@ -125,7 +126,7 @@ public class ExtensionElectionAndConfigurationTest {
     assertEquals(
         "Hello",
         properties.extensionProperty(null, SampleNoteContract.EXTENSION_ID, SampleNoteServiceFactory.GREETING));
-    // what the module says nothing about stays what the global section says
+    // a key the module does not set keeps the value of the global section
     assertEquals(
         "whatever",
         properties.extensionProperty("extension-module", SampleNoteContract.EXTENSION_ID, "unused"));
@@ -153,7 +154,7 @@ public class ExtensionElectionAndConfigurationTest {
         "Moin",
         properties.resolveForExtension(MODULE, PROCESS, "theTask", SampleNoteContract.EXTENSION_ID, greeting));
 
-    // what the more specific levels say nothing about stays what the global section says
+    // a key the more specific levels do not set keeps the value of the global section
     assertEquals(
         "whatever",
         properties.resolveForExtension(MODULE, PROCESS, "theTask", SampleNoteContract.EXTENSION_ID, "unused"));

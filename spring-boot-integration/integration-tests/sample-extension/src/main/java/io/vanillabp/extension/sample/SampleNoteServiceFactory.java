@@ -10,8 +10,7 @@ import io.vanillabp.integration.extension.spi.service.AggregateServiceFactory;
 
 /**
  * Builds one {@link SampleNoteService} per workflow-aggregate class. VanillaBP calls it
- * when the application first injects the service, which is what makes injecting it
- * optional.
+ * when the application first injects the service. That is why injecting it is optional.
  */
 public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleNoteService> {
 
@@ -48,7 +47,7 @@ public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleN
           final String elementId,
           final SampleNoteDetails.Kind kind) {
 
-        // a note somebody reads is a read: VanillaBP is told not to save the aggregate
+        // reading a note is a read, so VanillaBP must not save the aggregate
         return invoke(workflowAggregate, List.of(elementId), kind, false, null);
 
       }
@@ -96,8 +95,8 @@ public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleN
             elementId, kind, "%s %s".formatted(configuredGreeting(), elementId));
         final var call = HandlerCall
             .of(SampleNote.class, context.getWorkflowModuleId(), context.getBpmnProcessId())
-            // the element id first and the task definition after it, which is the order
-            // VanillaBP asks an extension to offer
+            // the element id first and the task definition after it. VanillaBP asks
+            // extensions to offer the keys in this order
             .lookupKeys(lookupKeys)
             .processVersion(processVersion)
             .workflowAggregateId(context.getWorkflowAggregateId(workflowAggregate))

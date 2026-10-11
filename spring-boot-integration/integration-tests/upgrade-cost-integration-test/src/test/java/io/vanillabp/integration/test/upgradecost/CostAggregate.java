@@ -9,8 +9,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The workflow aggregate of this scenario. Its id is also the key the outbox orders by, so
- * which dispatch thread an entry of this aggregate travels on follows from this id.
+ * The workflow aggregate of this scenario. The outbox also orders by its id. So this id
+ * decides on which dispatch thread an entry of this aggregate travels.
  */
 @Entity
 @Table(name = "UPGRADE_COST_AGGREGATE")

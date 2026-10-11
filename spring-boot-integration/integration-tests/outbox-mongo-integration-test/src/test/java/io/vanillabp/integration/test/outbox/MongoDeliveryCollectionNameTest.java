@@ -30,13 +30,13 @@ import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An application which has naming rules for its collections renames the delivery log the
- * way it renames the outbox: <code>vanillabp.outbox.mongo.delivery-collection</code>.
+ * An application with naming rules for its collections renames the delivery log in the
+ * same way as the outbox: <code>vanillabp.outbox.mongo.delivery-collection</code>.
  * <p>
- * The name is followed rather than read back: the record has to land in the configured
- * collection, the indexes have to be created on the same one, and the default name must
- * not exist at all. A wiring which read the property and then wrote to the constant would
- * pass a test asserting the property and fail this one.
+ * The test follows the name instead of reading it back. The record must land in the
+ * configured collection, the indexes must be created on the same one, and the default
+ * name must not exist at all. A wiring could read the property and then write to the
+ * constant. It would pass a test which asserts the property, but it fails this one.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
