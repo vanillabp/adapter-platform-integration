@@ -29,8 +29,8 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Which transaction the work on a workflow aggregate runs in, and
- * what the startup check makes of what the platform reports about it.
+ * In which transaction the work on a workflow aggregate runs, and what the startup check
+ * makes of what the platform reports about it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -106,7 +106,7 @@ public class TransactionRunnerResolutionTest {
   }
 
   /**
-   * A resolver answering one runner and one verdict, standing in for a platform.
+   * A resolver which answers one runner and one verdict. It stands in for a platform.
    */
   private record StubResolver(TransactionRunner runner,
                               TransactionCoverage coverage) implements TransactionRunnerResolver {
@@ -167,7 +167,8 @@ public class TransactionRunnerResolutionTest {
         new StubResolver(resolved, TransactionCoverage.covered()));
     assertSame(resolved, withResolver.getTransactionRunner(fallback));
 
-    // no resolver at all (tests, adapters handing their runner in): the caller's runner
+    // no resolver at all (tests, adapters which hand their runner in): the runner of the
+    // caller
     final var withoutResolver = MigrationProcessService
         .forBpmnProcess("test-module", "TestProcess", Object.class)
         .properties(properties(null, null))
@@ -196,14 +197,14 @@ public class TransactionRunnerResolutionTest {
   @DisplayName("No runner at all ends the startup, naming the platform's remedies and both SPIs")
   public void noRunnerEndsTheStartup() {
 
-    // the aggregate and the outbox entry have to be written in one transaction, so an
+    // the aggregate and the outbox entry have to be written in one transaction. So an
     // application without one cannot start a single workflow
     final var properties = properties(null, null);
     processService(properties, new StubResolver(null, TransactionCoverage.unknown()))
         .validateTransactionRunnerAtStartup();
 
-    // the reason is collected and thrown at the end of the start, so every workflow of
-    // the application is named in one exception instead of one per restart
+    // the reason is collected and thrown at the end of the start. So one exception names
+    // every workflow of the application, instead of one per restart
     final var failure = properties.startupFindings().theRefusal();
     assertNotNull(failure, "the start has to be refused");
     assertTrue(failure.getMessage().contains("test-module"), failure.getMessage());
@@ -251,7 +252,7 @@ public class TransactionRunnerResolutionTest {
         new StubResolver(NO_TRANSACTION_AT_ALL, TransactionCoverage.uncoverable("unguarded")))
         .validateTransactionRunnerAtStartup();
 
-    // and the module's rejection wins over a global acceptance
+    // and the rejection of the module wins over a global acceptance
     final var rejectingProperties = properties(TransactionsProperties.UnguardedAggregateWrites.ACCEPTED,
         TransactionsProperties.UnguardedAggregateWrites.REJECTED);
     processService(

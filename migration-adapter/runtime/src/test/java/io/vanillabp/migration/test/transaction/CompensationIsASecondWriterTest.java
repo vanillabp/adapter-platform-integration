@@ -24,14 +24,14 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * Compensation is the second token nobody warned about. A throw event which compensates two
- * finished activities starts both handlers, the workflow holds a token per handler, and each
- * of them writes the same workflow aggregate - the very situation
- * {@link io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck} is
- * about, drawn with an element its list did not know.
+ * Compensation is the second token about which nobody warned. A throw event which
+ * compensates two finished activities starts both handlers. The workflow holds a token per
+ * handler, and each of them writes the same workflow aggregate. That is exactly the
+ * situation of {@link io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck},
+ * drawn with an element which its list did not know.
  * <p>
- * Reading the model is the adapter's job, so the shape arrives through the wiring SPI; what
- * it means is decided here.
+ * Reading the model is the job of the adapter, so the shape arrives through the wiring SPI.
+ * What it means is decided here.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class CompensationIsASecondWriterTest {
@@ -54,9 +54,9 @@ public class CompensationIsASecondWriterTest {
   }
 
   /**
-   * Stands in for <code>jakarta.persistence.Version</code> respectively
-   * <code>org.springframework.data.annotation.Version</code>, which the core must not depend
-   * on - it recognizes them by their name.
+   * Stands in for <code>jakarta.persistence.Version</code> and for
+   * <code>org.springframework.data.annotation.Version</code>. The core must not depend on
+   * them, so it recognizes them by their name.
    */
   @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
   @java.lang.annotation.Target({
@@ -66,8 +66,8 @@ public class CompensationIsASecondWriterTest {
   }
 
   /**
-   * The same aggregate with the attribute a persistence layer increments per write - the
-   * collision raises an exception there instead of being lost, which is what silences the
+   * The same aggregate with the attribute which a persistence layer increments per write.
+   * There a collision raises an exception instead of being lost. That silences the
    * warning.
    */
   @Getter
@@ -188,8 +188,8 @@ public class CompensationIsASecondWriterTest {
             PROCESS,
             List.of(new CompensationSpec(THROW_EVENT, List.of(FIRST_HANDLER, SECOND_HANDLER))));
 
-    // two shapes of one finding about one aggregate, so they carry the same text and differ
-    // in their scope - which is what lets the box fold them into one entry
+    // two shapes of one finding about one aggregate. So they carry the same text and differ
+    // in their scope. That lets the box fold them into one entry
     final var aboutTwoTokens = properties
         .startupFindings()
         .findings()
@@ -205,9 +205,9 @@ public class CompensationIsASecondWriterTest {
   }
 
   /**
-   * What the check said while an adapter wired a model reporting the given compensation - the
-   * scope of a finding beside its message, because the scope is where the throw event and its
-   * handlers stand.
+   * What the check said while an adapter wired a model which reports the given
+   * compensation. It shows the scope of a finding beside its message, because the scope is
+   * where the throw event and its handlers stand.
    */
   private List<String> whatTheCheckSaidAbout(
       final Class<?> workflowAggregateClass,
@@ -246,8 +246,8 @@ public class CompensationIsASecondWriterTest {
   }
 
   /**
-   * The registry needs a process service to register a workflow service; nothing here invokes
-   * it, and its aggregate class is the whole point of the question asked.
+   * The registry needs a process service to register a workflow service. Nothing here invokes
+   * it. Its aggregate class is the whole point of the question asked.
    */
   @SuppressWarnings({
       "unchecked", "rawtypes"
@@ -268,7 +268,8 @@ public class CompensationIsASecondWriterTest {
   }
 
   /**
-   * The transaction runner is irrelevant here - no test in this class runs a handler.
+   * The transaction runner does not matter here, because no test in this class runs a
+   * handler.
    */
   private static class TransactionRunnerStub implements TransactionRunner {
 

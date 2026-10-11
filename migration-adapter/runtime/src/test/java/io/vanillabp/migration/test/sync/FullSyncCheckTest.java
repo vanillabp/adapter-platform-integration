@@ -24,12 +24,12 @@ import io.vanillabp.spi.service.WorkflowService;
 import lombok.Getter;
 
 /**
- * An aggregate carrying no {@code @NoSyncWithBPMS} anywhere hands every attribute to the
- * BPMS. Nobody decided that, it is where an application lands by doing nothing, so the
+ * An aggregate which carries no {@code @NoSyncWithBPMS} anywhere hands every attribute to
+ * the BPMS. Nobody decided that. An application lands there by doing nothing. So the
  * startup ends until the workflow says that it may.
  * <p>
- * What the message has to carry is under test as much as the refusal itself: the
- * workflow, the aggregate, the attributes which travel and the property line to copy.
+ * What the message has to carry is under test as much as the refusal itself: the workflow,
+ * the aggregate, the attributes which travel, and the property line to copy.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class FullSyncCheckTest {
