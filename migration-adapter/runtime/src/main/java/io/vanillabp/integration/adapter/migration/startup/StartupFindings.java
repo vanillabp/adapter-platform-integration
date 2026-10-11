@@ -129,9 +129,9 @@ public class StartupFindings implements StartupReport {
    *
    * @param severity How loud it is
    * @param topic Where its fix lies
-   * @param scope What it is about - a workflow module, a BPMN process, an adapter id, a
-   *          property key - written as the developer knows it and never folded into the
-   *          text, so the same finding over twelve modules can become one entry
+   * @param scope What it is about: a workflow module, a BPMN process, an adapter id or a
+   *          property key. It is written as the developer knows it, and never folded into
+   *          the text. So the same finding over twelve modules can become one entry
    * @param message The whole message, the way it is written to a developer, ending with
    *          what to do
    */

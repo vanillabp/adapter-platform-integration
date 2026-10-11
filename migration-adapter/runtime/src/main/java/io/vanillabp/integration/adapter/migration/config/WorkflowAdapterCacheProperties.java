@@ -8,12 +8,12 @@ import java.time.Duration;
  * <code>vanillabp.workflow-adapter-cache</code>). It is the one source of truth for keys,
  * defaults and documentation, and both platform integrations use it.
  * <p>
- * The bounds are hard on purpose: entries are hints, so losing one costs an extra
- * probing walk (and, on an eventually consistent BPMS, its visibility window) but
- * never correctness. An application with more workflows in flight
- * than the cache holds raises {@link #maxEntries} - roughly 300 bytes per entry, so
- * 100.000 entries cost about 30 MB. Why the bound is not a soft reference is
- * written down in <code>migration-adapter/README.md</code>.
+ * The bounds are hard on purpose. Entries are hints. Losing one costs an extra probing
+ * walk (and, on an eventually consistent BPMS, its visibility window), but never
+ * correctness. An application with more running workflows than the cache holds raises
+ * {@link #maxEntries}. An entry takes roughly 300 bytes, so 100.000 entries cost about
+ * 30 MB. <code>migration-adapter/README.md</code> explains why the bound is not a soft
+ * reference.
  */
 public class WorkflowAdapterCacheProperties {
 
@@ -107,12 +107,12 @@ public class WorkflowAdapterCacheProperties {
    * BPMS only reports the end where somebody asked for it. Switching this on attaches a
    * listener or a worker to every deployed process of every workflow module.
    * <p>
-   * It is the third consumer of that one signal, next to an application's
-   * <code>&#64;WorkflowEnded</code> method and
-   * <code>vanillabp.delivery.release-on-workflow-end</code>. Where one of those asks
-   * for the end anyway the notification arrives regardless of this setting, and the
-   * entry is marked at no extra cost - a shared cache of a cluster is where that
-   * saving is worth configuring for its own sake.
+   * It is the third user of that one signal, next to the
+   * <code>&#64;WorkflowEnded</code> method of an application and
+   * <code>vanillabp.delivery.release-on-workflow-end</code>. Where one of those asks for
+   * the end anyway, the notification arrives whatever this setting says, and the entry is
+   * marked at no extra cost. Configuring this saving for its own sake pays off for a
+   * shared cache of a cluster.
    * <p>
    * Key <code>vanillabp.workflow-adapter-cache.release-on-workflow-end</code>,
    * <code>false</code> by default.

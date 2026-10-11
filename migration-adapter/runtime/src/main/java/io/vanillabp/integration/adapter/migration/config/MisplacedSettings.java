@@ -28,9 +28,9 @@ final class MisplacedSettings {
   /**
    * Builds the refusal of a setting which was written below the level where it is read.
    *
-   * @param whereTheSettingIsRead Which levels read it, as a clause the message continues
-   *          with "but it is configured at" - for example "The location of an adapter's
-   *          BPMN files is read at the workflow module and at the adapter"
+   * @param whereTheSettingIsRead Which levels read it, as a clause which the message
+   *          continues with "but it is configured at". For example "The location of an
+   *          adapter's BPMN files is read at the workflow module and at the adapter"
    * @param writtenAt The full property keys the application wrote, in any order
    * @param whereEachLineBelongs What the reader moves each line to, as a noun phrase -
    *          for example "the workflow it is meant for"
