@@ -15,27 +15,27 @@ import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartResu
 import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
- * Decides what a start the BPMS reported means, and lets the APPLICATION build the
- * workflow aggregate where the answer is a workflow nobody started through VanillaBP.
+ * Decides what a start which the BPMS reported means. Where the answer is a workflow which
+ * nobody started through VanillaBP, it lets the APPLICATION build the workflow aggregate.
  * <p>
- * The decision reads the STATE of the workflow and not the kind of its start event, which
- * is why an adapter reports every start event of a process:
+ * The decision reads the STATE of the workflow, not the kind of its start event. That is
+ * why an adapter reports every start event of a process:
  * <ul>
- * <li>The BPMS holds a name for this workflow and a workflow aggregate carries it: the
- * workflow is already ours and nothing is built. That is the application's own start, and
- * it is also what keeps a second delivery of the same notification from building a second
+ * <li>The BPMS holds a name for this workflow, and a workflow aggregate has it. Then the
+ * workflow is already ours, and nothing is built. That is the application's own start. It
+ * also keeps a second delivery of the same notification from building a second
  * aggregate.</li>
- * <li>The BPMS holds no name: somebody started this workflow past VanillaBP. The
+ * <li>The BPMS holds no name. Then somebody started this workflow without VanillaBP. The
  * <code>&#64;WorkflowStartedByBpms</code> method builds the aggregate and names it, and the
  * adapter writes that name into the BPMS.</li>
- * <li>The BPMS holds a name no workflow aggregate carries: the workflow was started under a
- * name VanillaBP did not give it, and the start is refused.</li>
+ * <li>The BPMS holds a name which no workflow aggregate has. Then the workflow was started
+ * under a name which VanillaBP did not give it, and the start is refused.</li>
  * </ul>
  * VanillaBP builds nothing itself. An object which comes into existence without the
- * application does not carry the application's values, and for a workflow nobody started
- * through VanillaBP that would be the very first thing that ever happens to it.
+ * application does not have the application's values. For a workflow which nobody started
+ * through VanillaBP, that would be the very first thing that ever happens to it.
  * <p>
- * The rule and what it replaced are decision 98 in the repository's DECISIONS.md.
+ * Decision 98 in the repository's DECISIONS.md has the rule and what it replaced.
  */
 public final class BpmsInitiatedStartExecution {
 
@@ -46,22 +46,23 @@ public final class BpmsInitiatedStartExecution {
 
   /**
    * Runs that decision for one notification of the BPMS, in the transaction the adapter
-   * asked for. A notification which arrives twice - a retried listener job, a replayed
-   * engine transaction - finds the workflow named in the BPMS by the first attempt and
-   * builds nothing, so business data written meanwhile survives.
+   * asked for. A notification may arrive twice, for example from a retried listener job or a
+   * replayed engine transaction. Then the second one finds the workflow named in the BPMS by
+   * the first attempt, and it builds nothing. So business data written in the meantime
+   * survives.
    *
    * @param <A> The workflow-aggregate type
    * @param processService The process service of the BPMN process (persistence, ID
    *          type, aggregate class)
-   * @param handler The application's method building the aggregate, used only where the
-   *          workflow turns out to be one nobody started through VanillaBP, and
-   *          <code>null</code> where the process has no method for this start
+   * @param handler The application's method which builds the aggregate. It is used only
+   *          where the workflow turns out to be one which nobody started through VanillaBP.
+   *          It is <code>null</code> where the process has no method for this start
    * @param refusalWithoutAMethod What to say where such a workflow arrives and
    *          <code>handler</code> is <code>null</code>
    * @param context The adapter's notification
    * @param transactionRunner The platform's transaction runner
-   * @return The aggregate's ID and the variables the adapter writes back (the
-   *         aggregate-ID variable; shared aggregate values are added by the caller)
+   * @return The aggregate's ID and the variables the adapter writes back (the aggregate-ID
+   *         variable; the caller adds the shared aggregate values)
    */
   public static <A> BpmsInitiatedStartResult run(
       final MigrationProcessService<A> processService,
@@ -78,8 +79,8 @@ public final class BpmsInitiatedStartExecution {
         context,
         nameTheBpmsHolds);
 
-    // the started instance is the activation the application's handler runs in, so
-    // what it plans is told apart from what a second firing of the same start event
+    // the started instance is the activation in which the application's handler runs. So
+    // what it plans can be told apart from what a second firing of the same start event
     // plans (see io.vanillabp.integration.spi.RunningActivation)
     try (var activation = io.vanillabp.integration.spi.RunningActivation
         .of(context.getNativeInstanceId())) {
@@ -99,19 +100,19 @@ public final class BpmsInitiatedStartExecution {
 
   /**
    * Answers the start of a called process, which is no workflow of its own. Nothing is built
-   * and no start row is written: the instance runs on the workflow aggregate of the process
-   * which called it, and the id of that aggregate is all the adapter is handed back.
+   * and no start row is written. The instance runs on the workflow aggregate of the process
+   * which called it. The id of that aggregate is all the adapter gets back.
    * <p>
    * Only a model deployed before adapters asked
    * {@link io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker#startsAWorkflowOfItsOwn}
-   * still reports such a start, because it carries the start listener of that time.
+   * still reports such a start, because it has the start listener of that time.
    *
    * @param <A> The workflow-aggregate type
    * @param processService The process service of the called process
    * @param context The adapter's notification
    * @return The id the instance already carries, as the variables the adapter writes back
-   * @throws IllegalStateException Where the instance carries no id: a called process which
-   *           does not know its caller's aggregate cannot run any task
+   * @throws IllegalStateException Where the instance has no id. A called process which does
+   *           not know its caller's aggregate cannot run any task
    */
   public static <A> BpmsInitiatedStartResult theStartOfACalledProcess(
       final MigrationProcessService<A> processService,
@@ -154,13 +155,12 @@ public final class BpmsInitiatedStartExecution {
   }
 
   /**
-   * The name the BPMS already has for this workflow, wherever that BPMS keeps it.
+   * The name which the BPMS already has for this workflow, wherever that BPMS keeps it.
    * <p>
-   * Camunda 7 keeps it as the business key. A BPMS without a business key of its own -
-   * Camunda 8, the Process-Engine-API - keeps it in the process variable named after the
-   * workflow aggregate's id attribute, which is the name every other part of VanillaBP
-   * reads it under there as well. Asking both, in this order, is what lets one rule serve
-   * every BPMS.
+   * Camunda 7 keeps it as the business key. A BPMS without a business key of its own, such
+   * as Camunda 8 or the Process-Engine-API, keeps it in the process variable named after the
+   * id attribute of the workflow aggregate. Every other part of VanillaBP reads it under that
+   * name there as well. Asking both, in this order, lets one rule serve every BPMS.
    *
    * @return The name the BPMS holds, or <code>null</code> where it holds none
    */
@@ -184,7 +184,7 @@ public final class BpmsInitiatedStartExecution {
   }
 
   /**
-   * Where that name is kept, in the words of a message, so a reader knows which value of
+   * Where that name is kept, in the words of a message. So a reader knows which value of
    * their workflow a refusal is about.
    */
   private static <A> String whereTheNameIsKept(
@@ -214,8 +214,8 @@ public final class BpmsInitiatedStartExecution {
 
     final var aggregateClass = processService.getWorkflowAggregateClass();
     final Object returned;
-    // a report about the aggregate the method builds asks about a workflow nobody can find yet,
-    // and the start reports its values anyway once the method returned
+    // a report about the aggregate which the method builds would ask about a workflow which
+    // nobody can find yet. The start reports its values anyway once the method returned
     try (var running = io.vanillabp.integration.adapter.migration.processservice.RunningBpmsInitiatedStart
         .of(processService.getWorkflowModuleId(), processService.getBpmnProcessId())) {
       returned = handler.invoke(context);
@@ -240,8 +240,8 @@ public final class BpmsInitiatedStartExecution {
       final var existing = processService.loadWorkflowAggregateById(chosenId);
       if (existing != null) {
         // the application named the workflow after something it already knows, and a
-        // workflow of that name is running - saving the new object would overwrite
-        // business data
+        // workflow of that name is running. Saving the new object would overwrite business
+        // data
         log
             .debug(
                 "The workflow aggregate '{}' of the started workflow of BPMN process '{}' "
@@ -275,12 +275,12 @@ public final class BpmsInitiatedStartExecution {
   }
 
   /**
-   * What to do with a workflow the BPMS already has a name for: nothing where a workflow
-   * aggregate carries that name, and a refusal where none does.
+   * What to do with a workflow for which the BPMS already has a name. Nothing, where a
+   * workflow aggregate has that name. A refusal, where none has it.
    * <p>
-   * A name which does not even fit the type of the id attribute - a text against a numeric
-   * id - can be no workflow aggregate's id, so it names none and is refused like every
-   * other name nothing carries.
+   * A name which does not even fit the type of the id attribute, such as a text for a
+   * numeric id, cannot be the id of any workflow aggregate. So it names none, and it is
+   * refused like every other name which nothing has.
    */
   private static <A> BpmsInitiatedStartResult theWorkflowTheBpmsNamed(
       final MigrationProcessService<A> processService,
@@ -310,8 +310,8 @@ public final class BpmsInitiatedStartExecution {
                   processService.getWorkflowAggregateClass().getName(),
                   describeOrigin(context)));
     }
-    // the workflow is already ours: the application started it, or the BPMS reported
-    // this start before (a retried listener job, a replayed engine transaction)
+    // the workflow is already ours. The application started it, or the BPMS reported this
+    // start before (a retried listener job, a replayed engine transaction)
     log
         .debug(
             "The workflow of BPMN process '{}' (workflow module '{}') started at start event '{}' is "
@@ -325,9 +325,9 @@ public final class BpmsInitiatedStartExecution {
   }
 
   /**
-   * Which BPMS a refused start came from and which workflow it is there, so an operator can
-   * look the workflow up where it is stuck. Both values are optional, and where an adapter
-   * reports neither the message says nothing about them.
+   * Which BPMS a refused start came from, and which workflow it is there. So an operator
+   * can look up the workflow where it is stuck. Both values are optional. Where an adapter
+   * reports neither, the message says nothing about them.
    */
   private static String describeOrigin(
       final BpmsInitiatedStartContext context) {
@@ -346,12 +346,12 @@ public final class BpmsInitiatedStartExecution {
   }
 
   /**
-   * The aggregate's id and the variables the adapter writes back, and the place where the pair
-   * "this aggregate, that workflow" is written down.
+   * The aggregate's id and the variables which the adapter writes back. This is also where
+   * the pair "this aggregate, that workflow" is written down.
    * <p>
-   * The id variable travels even where nothing was built: an adapter completing a listener
-   * job writes what it is handed, and writing the name a workflow already has changes
-   * nothing about it.
+   * The id variable travels even where nothing was built. An adapter which completes a
+   * listener job writes what it is given. And writing the name which a workflow already has
+   * changes nothing about it.
    */
   private static <A> BpmsInitiatedStartResult result(
       final MigrationProcessService<A> processService,
@@ -362,11 +362,11 @@ public final class BpmsInitiatedStartExecution {
     final var aggregateIdName = aggregateIdNameIfAnswered(processService);
     final var serializedId = String.valueOf(processService.getWorkflowAggregateId(workflowAggregate));
     // the aggregate and the workflow which runs it are both known right here, in the
-    // transaction which persists the aggregate, so this is where the pair is written down. It
-    // happens for every outcome of the decision above, including the workflow which was ours
-    // already: the row is keyed by the aggregate, so writing it again writes nothing. The version
-    // the BPMS reported with the start goes with it, which is where an adapter of a remote BPMS
-    // knows it without asking anybody
+    // transaction which persists the aggregate. So this is where the pair is written down.
+    // It happens for every outcome of the decision above, also for the workflow which was
+    // ours already. The row is keyed by the aggregate, so writing it again writes nothing.
+    // The version which the BPMS reported with the start goes with it. That is where an
+    // adapter of a remote BPMS knows the version without asking anybody
     processService
         .recordWorkflowStart(
             context.getAdapterId(),
@@ -383,10 +383,11 @@ public final class BpmsInitiatedStartExecution {
 
   /**
    * The name of the aggregate's ID property, where the persistence answers it. A BPMS with a
-   * business key of its own, Camunda 7 say, keeps the id there and reads no variable, so an
-   * application on it need not implement {@code AggregatePersistenceAware#getAggregateIdName}. A
-   * BPMS without a business key needs the name already while the model is wired, and the start of
-   * such an application ends there if the persistence does not answer.
+   * business key of its own, such as Camunda 7, keeps the id there and reads no variable. So
+   * an application on it does not need to implement
+   * {@code AggregatePersistenceAware#getAggregateIdName}. A BPMS without a business key needs
+   * the name already while the model is wired. If the persistence does not answer, the start
+   * of such an application ends there.
    *
    * @param processService The process service of the workflow
    * @return The name, or <code>null</code> where the persistence does not answer it

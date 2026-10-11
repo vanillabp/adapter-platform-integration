@@ -17,30 +17,28 @@ import io.vanillabp.spi.service.BpmsStartTrigger;
 import io.vanillabp.spi.service.WorkflowStartedByBpms;
 
 /**
- * Scans a <code>&#64;WorkflowService</code> class for
- * <code>&#64;WorkflowStartedByBpms</code> methods and builds their handlers. Runs
- * once at startup per workflow service class; defects yield guiding exceptions
- * naming the method and the fix.
+ * Scans a <code>&#64;WorkflowService</code> class for <code>&#64;WorkflowStartedByBpms</code>
+ * methods and builds their handlers. It runs once at startup for each workflow service
+ * class. For a defect it throws an exception which names the method and the fix.
  * <p>
- * The binding surface is deliberately smaller than the one of
- * <code>&#64;WorkflowTask</code>: there is no task, so no task ID, no task event and
- * no multi-instance context. There is no workflow aggregate either - the method is the
- * place it comes into existence. What a method may ask for is the
- * {@link BpmsStartTrigger} and process variables via <code>&#64;TaskParam</code>, and
- * what it has to do is RETURN the aggregate.
+ * Such a method binds fewer parameters than a <code>&#64;WorkflowTask</code> method, on
+ * purpose. There is no task, so there is no task ID, no task event and no multi-instance
+ * context. There is no workflow aggregate either, because the method is where it comes into
+ * being. A method may ask for the {@link BpmsStartTrigger} and for process variables with
+ * <code>&#64;TaskParam</code>. It has to RETURN the aggregate.
  */
 public final class BpmsInitiatedStartScanner {
 
   /**
-   * A started workflow has no task around it, so no multi-instance scope either, and no
-   * aggregate yet - what such a method may take is the process variables the model set.
+   * A started workflow has no task around it. So it has no multi-instance scope, and no
+   * aggregate yet. Such a method may take the process variables which the model set.
    */
   private static final java.util.Set<CoreHandlerParameter> CORE_PARAMETERS = java.util.Set
       .of(CoreHandlerParameter.TASK_PARAM);
 
   /**
-   * No parameter of such a method resolves a bean - the only kind which would is
-   * <code>&#64;MultiInstanceElement</code>, which this handler does not allow.
+   * No parameter of such a method resolves a bean. Only <code>&#64;MultiInstanceElement</code>
+   * would, and this handler does not allow it.
    */
   private static final java.util.function.Function<Class<?>, Object> NO_BEAN_RESOLVER = beanClass -> null;
 
@@ -48,9 +46,9 @@ public final class BpmsInitiatedStartScanner {
   }
 
   /**
-   * Reads the <code>&#64;WorkflowStartedByBpms</code> methods of one workflow service
-   * class and builds a handler per method, with the parameter binders that method needs.
-   * Every public method of the class is looked at, the inherited ones included.
+   * Reads the <code>&#64;WorkflowStartedByBpms</code> methods of one workflow service class
+   * and builds one handler per method, with the parameter binders the method needs. It looks
+   * at every public method of the class, the inherited ones included.
    *
    * @param workflowServiceClass The <code>&#64;WorkflowService</code> class
    * @param workflowAggregateClass The workflow-aggregate class of that service
@@ -95,8 +93,8 @@ public final class BpmsInitiatedStartScanner {
       final InheritedVersions inherited) {
 
     final var location = "%s#%s".formatted(workflowServiceClass.getName(), method.getName());
-    // a public method of a package-private bean class is not accessible through
-    // plain reflection - lift the check once at scan time
+    // plain reflection cannot reach a public method of a package-private bean class, so
+    // switch the access check off once, while scanning
     method.trySetAccessible();
 
     validateReturnType(method, workflowAggregateClass, location);
@@ -121,9 +119,9 @@ public final class BpmsInitiatedStartScanner {
   }
 
   /**
-   * The method has to hand the aggregate over. A <code>void</code> method would leave the
-   * workflow without any data at all, and there is nothing for it to fill either: the
-   * aggregate does not exist before this method runs.
+   * The method has to hand over the aggregate. A <code>void</code> method would leave the
+   * workflow without any data at all. And there is nothing it could fill either, because
+   * the aggregate does not exist before this method runs.
    */
   private static void validateReturnType(
       final Method method,
@@ -147,8 +145,8 @@ public final class BpmsInitiatedStartScanner {
       final Class<?> workflowAggregateClass,
       final String location) {
 
-    // the one value only this kind of handler has; the rest comes from the binders all
-    // three scanners share
+    // the one value which only this kind of handler has. The binders which all three
+    // scanners share do the rest
     if (parameter.getType().equals(BpmsStartTrigger.class)) {
       return context -> {
         final var start = context.payload(BpmsInitiatedStartContext.class);

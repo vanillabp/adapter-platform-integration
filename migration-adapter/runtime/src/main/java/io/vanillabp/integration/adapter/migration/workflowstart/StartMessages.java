@@ -13,26 +13,26 @@ import org.slf4j.LoggerFactory;
 import io.vanillabp.integration.adapter.migration.workflowtask.DeclaredBpmnProcesses;
 
 /**
- * The messages which start each deployed BPMN process, as the adapters reported them
- * while the application started, and the check of
- * <code>ProcessService#startWorkflowByMessage</code> which rests on them.
+ * The messages which start each deployed BPMN process, as the adapters reported them while
+ * the application started. Also the check of <code>ProcessService#startWorkflowByMessage</code>
+ * which relies on them.
  * <p>
  * A process service starts its own process and no other. A message which starts another
- * process is refused before phase one, because the core would otherwise write down the
- * new workflow under the process of the caller. Why the check is made here and not left
- * to the BPMS is decision 109 in the repository's DECISIONS.md.
+ * process is refused before phase one. Otherwise the core would write down the new workflow
+ * under the process of the caller. Decision 109 in the repository's DECISIONS.md says why
+ * the check is made here and not left to the BPMS.
  * <p>
  * Three things decide how the check works:
  * <ul>
  * <li>The names are kept per adapter. During a migration two adapters may deploy one
- * process in two different versions, and the check asks the adapter which starts the
+ * process in two different versions. The check asks the adapter which starts the
  * workflow.</li>
- * <li>The names come from the model the adapter deploys during this start. A message
- * always starts the newest version of a process, and the newest version this application
- * knows is the one it deploys.</li>
+ * <li>The names come from the model which the adapter deploys during this start. A message
+ * always starts the newest version of a process. The newest version this application knows
+ * is the one it deploys.</li>
  * <li>The names are plain, as the application passes them. Where an adapter prefixes
- * identifiers to avoid name clashes, it strips the prefix before it reports, so both
- * sides of the comparison are the plain name.</li>
+ * identifiers to avoid name clashes, it removes the prefix before it reports. So both sides
+ * of the comparison are the plain name.</li>
  * </ul>
  * An adapter which reports nothing for a process is not checked for it. That keeps an
  * adapter working which does not know about the report yet, and one which cannot read a
@@ -51,9 +51,9 @@ public class StartMessages {
   private final Map<ReportKey, Set<String>> reported = new ConcurrentHashMap<>();
 
   /**
-   * Which ids a model was deployed under. An id the application only declares has no
-   * model this start could read, so nobody reports its messages, and saying so would be
-   * noise about a process nobody starts any more.
+   * Which ids a model was deployed under. An id which the application only declares has no
+   * model which this start could read. So nobody reports its messages. Saying so would be
+   * noise about a process which nobody starts any more.
    */
   private final DeclaredBpmnProcesses declaredProcesses;
 
@@ -71,8 +71,8 @@ public class StartMessages {
   }
 
   /**
-   * Keeps the messages an adapter reported for one process. A second report of the same
-   * adapter for the same process adds to the first.
+   * Keeps the messages which an adapter reported for one process. A second report of the
+   * same adapter for the same process adds to the first.
    *
    * @param adapterId The adapter which deployed the process
    * @param workflowModuleId The workflow module ID
@@ -98,8 +98,8 @@ public class StartMessages {
   }
 
   /**
-   * Refuses a message which does not start the process of the calling process service.
-   * Called before phase one, so nothing was saved or planned when it throws.
+   * Refuses a message which does not start the process of the calling process service. It
+   * is called before phase one, so nothing was saved or planned when it throws.
    *
    * @param adapterId The adapter which would start the workflow
    * @param workflowModuleId The workflow module ID
@@ -139,9 +139,9 @@ public class StartMessages {
   }
 
   /**
-   * Says once, while the application starts, that a process is not checked because the
-   * adapter which starts it reported no messages for it. A process the application only
-   * declares is left out: no adapter deployed a model for it.
+   * Says once, while the application starts, that a process is not checked. The adapter
+   * which starts it reported no messages for it. A process which the application only
+   * declares is left out, because no adapter deployed a model for it.
    *
    * @param adapterId The adapter which starts the workflows of that process
    * @param workflowModuleId The workflow module ID

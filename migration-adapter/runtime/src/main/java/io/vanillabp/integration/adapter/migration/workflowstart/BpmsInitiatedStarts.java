@@ -19,11 +19,11 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.spi.service.BpmsStartTrigger;
 
 /**
- * The <code>&#64;WorkflowStartedByBpms</code> methods of the application per
- * (workflow module, BPMN process), and the start events the adapters reported for
- * those processes. Backs the adapter-facing
- * {@link io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker},
- * which the workflow-task registry implements by delegating here.
+ * The <code>&#64;WorkflowStartedByBpms</code> methods of the application, per workflow
+ * module and BPMN process, and the start events which the adapters reported for those
+ * processes. This class does the work behind the adapter-facing
+ * {@link io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker}. The
+ * workflow-task registry implements that interface and hands every call on to here.
  */
 public class BpmsInitiatedStarts {
 
@@ -39,9 +39,9 @@ public class BpmsInitiatedStarts {
     private final List<BpmsInitiatedStartHandler> handlers = new LinkedList<>();
 
     /**
-     * The start events reported by the adapters deploying this process. Several
-     * adapters may report the same process (the migration case) - the union is
-     * what the application may serve.
+     * The start events which the adapters that deploy this process reported. Several
+     * adapters may report the same process (the migration case). The application may serve
+     * all of them together.
      */
     private final List<BpmsInitiatedStartSpec> startEvents = new LinkedList<>();
 
@@ -50,25 +50,26 @@ public class BpmsInitiatedStarts {
   private final Map<RegistryKey, RegistryEntry> entries = new ConcurrentHashMap<>();
 
   /**
-   * What the BPMS know about the deployed versions of the BPMN processes - owned by the
+   * What the BPMS know about the deployed versions of the BPMN processes. The
    * {@link io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry}
-   * and shared, since all three annotations carry a <code>version</code> attribute.
+   * owns it and shares it, because all three annotations have a <code>version</code>
+   * attribute.
    */
   private final io.vanillabp.integration.adapter.migration.workflowtask.ProcessVersions processVersions;
 
   /**
-   * Which ids the application declares without a deployment - owned by the registry as
-   * well. For such an id every version a BPMS holds is an older one, and the version
-   * exemption below has to read it the way its twin in the registry does
+   * Which ids the application declares without a deployment. The registry owns this as
+   * well. For such an id every version which a BPMS holds is an older one. The version
+   * exemption below has to read it the same way as its twin in the registry
    * ({@code WorkflowTaskRegistry#servesOnlyOlderVersions}).
    */
   private final io.vanillabp.integration.adapter.migration.workflowtask.DeclaredBpmnProcesses declaredProcesses;
 
   /**
    * Built by the workflow-task registry, once per application. Both arguments belong to
-   * that registry and are read rather than copied, because a
-   * <code>&#64;WorkflowStartedByBpms</code> method has to reach the same verdict about a
-   * version as the registry does about a <code>&#64;WorkflowTask</code> method.
+   * that registry. They are read and not copied, because a
+   * <code>&#64;WorkflowStartedByBpms</code> method has to get the same verdict about a
+   * version as a <code>&#64;WorkflowTask</code> method gets from the registry.
    *
    * @param processVersions What the BPMS know about the deployed versions of the BPMN
    *          processes
@@ -85,9 +86,9 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * Scans a workflow service class and registers what it found. Called by the
-   * platform integration at startup, once per (workflow service class, declared
-   * BPMN process ID).
+   * Scans a workflow service class and registers what it found. The platform integration
+   * calls it at startup, once for each pair of workflow service class and declared BPMN
+   * process ID.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -113,8 +114,8 @@ public class BpmsInitiatedStarts {
     final var entry = entries
         .computeIfAbsent(new RegistryKey(workflowModuleId, bpmnProcessId), key -> new RegistryEntry());
     synchronized (entry) {
-      // one by one, so two methods of the SAME class serving one start event are
-      // compared against each other as well
+      // one by one, so that two methods of the SAME class which serve one start event are
+      // compared with each other as well
       handlers
           .forEach(handler -> {
             failOnDuplicateWiring(
@@ -130,9 +131,9 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * Resolves the version tags the methods of the given workflow module name and checks
-   * the version ranges naming a tag for overlaps - those could not be placed while
-   * registering, since no BPMS had been asked about its versions at that point.
+   * Resolves the version tags which the methods of the given workflow module name. Then it
+   * checks the version ranges which name a tag for overlaps. Those could not be checked at
+   * registration, because no BPMS had been asked about its versions yet.
    *
    * @param workflowModuleId The workflow module ID
    */
@@ -184,8 +185,8 @@ public class BpmsInitiatedStarts {
         .stream()
         .filter(existing -> existing != handler)
         .filter(existing -> java.util.Objects.equals(existing.getStartEventId(), handler.getStartEventId()))
-        // overlapping version ranges are ambiguous; disjoint ones are a legitimate
-        // way to serve several process versions
+        // overlapping version ranges are ambiguous. Ranges which do not overlap are a
+        // valid way to serve several process versions
         .filter(existing -> existing.overlapsVersions(handler, resolver))
         .findFirst();
     if (duplicate.isPresent()) {
@@ -209,15 +210,16 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * The @WorkflowStartedByBpms methods registered for that BPMN process, each with the
-   * verdict whether its version specifications are worth keeping. A method worth keeping
-   * nowhere in its workflow module never runs, and the start says so - which of the two
-   * the registry decides, since a method is registered once per BPMN process its class
+   * The @WorkflowStartedByBpms methods registered for that BPMN process. Each comes with the
+   * verdict whether its version specifications are worth keeping. A method which is worth
+   * keeping nowhere in its workflow module never runs, and the start says so. The registry
+   * decides that, because a method is registered once for each BPMN process its class
    * declares.
    * <p>
-   * What "worth keeping" means is the caller's question, and there are two of them: the
-   * versions the BPMS holds minus the ones the configuration faded out, and, where the
-   * BPMS keeps no catalog at all, whether a delivery there can meet the specification.
+   * The caller decides what "worth keeping" means, and there are two answers. One is the
+   * versions which the BPMS holds, minus the ones the configuration faded out. The other,
+   * where the BPMS keeps no list of versions at all, is whether a delivery there can match
+   * the specification.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
@@ -244,17 +246,17 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * Registers the start events an adapter reported while wiring a deployed BPMN
-   * process and validates the application's methods against them.
+   * Registers the start events which an adapter reported while it wired a deployed BPMN
+   * process, and checks the application's methods against them.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
    * @param startEvents The start events of the process
    * @param workflowAggregateClass The workflow aggregate of that process, written into the
-   *          method the message hands out; may be <code>null</code>
-   * @throws IllegalStateException If a start event the BPMS fires has no method, if a
+   *          method which the message suggests. May be <code>null</code>
+   * @throws IllegalStateException If a start event which the BPMS fires has no method, if a
    *           method serves a process without such a start event, or if a method names a
-   *           start event the process does not have
+   *           start event which the process does not have
    */
   public void validate(
       final String workflowModuleId,
@@ -264,9 +266,9 @@ public class BpmsInitiatedStarts {
 
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if (entry == null) {
-      // the process has no @WorkflowStartedByBpms method at all. Where the BPMS can
-      // start it, that ends the boot: nobody would build the aggregate when the timer
-      // fires, and three in the morning is a bad moment to find out
+      // the process has no @WorkflowStartedByBpms method at all. Where the BPMS can start
+      // it, that ends the boot. Nobody would build the aggregate when the timer fires, and
+      // three in the morning is a bad moment to find out
       refuseStartEventsWithoutAMethod(
           workflowModuleId, bpmnProcessId, startEvents, List.of(), workflowAggregateClass);
       return;
@@ -299,10 +301,10 @@ public class BpmsInitiatedStarts {
       entry.handlers
           .stream()
           .filter(handler -> handler.getStartEventId() != null)
-          // A method kept for an OLDER version names a start event the
-          // deployed model may not have any more - that is what it is for. Whether
-          // such a version still exists is answered by the startup check, which
-          // reports a method serving no held version as dead.
+          // A method kept for an OLDER version names a start event which the deployed
+          // model may not have any more. That is what it is for. The startup check answers
+          // whether such a version still exists. It reports a method which serves no held
+          // version as dead.
           .filter(handler -> !servesOnlyOlderVersions(workflowModuleId, bpmnProcessId, handler))
           .filter(handler -> entry.startEvents
               .stream()
@@ -326,22 +328,22 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * Judges the <code>&#64;WorkflowStartedByBpms</code> methods of the BPMN process ids the
-   * workflow module DECLARES without deploying a model for them, against the start events
-   * of the versions the BPMS still holds under such an id.
+   * Judges the <code>&#64;WorkflowStartedByBpms</code> methods of the BPMN process ids
+   * which the workflow module DECLARES without deploying a model for them. It judges them
+   * against the start events of the versions which the BPMS still holds under such an id.
    * <p>
-   * Nothing wires such an id during a boot - the id a renamed BPMN process left behind
-   * arrives with no model - so {@link #validate} is never called for it and its methods are
-   * judged by nothing, while the BPMS may fire the old model's timer every day. The
-   * question the judgement needs is
+   * Nothing wires such an id during a boot. The id which a renamed BPMN process left behind
+   * arrives without a model. So {@link #validate} is never called for it, and nothing
+   * judges its methods. Meanwhile the BPMS may fire the timer of the old model every day.
+   * The judgement needs the answer of
    * {@link io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog#startEventsOfVersion},
-   * and this is where the answer is used.
+   * and this is where it is used.
    * <p>
-   * Every finding is a warning naming the versions it was drawn from, never the end of a
-   * boot: what is read here are models nobody can change any more, and a check reading them
-   * says what it found instead of refusing - see decision 38 in the repository's
-   * DECISIONS.md. Where a version cannot be read at all, this stays silent for that BPMS,
-   * because a start event might be sitting in exactly the model which could not be read.
+   * Every finding is a warning which names the versions it comes from. It never ends a
+   * boot. The models read here are models which nobody can change any more. A check which
+   * reads them says what it found instead of refusing (see decision 38 in the repository's
+   * DECISIONS.md). Where a version cannot be read at all, this stays silent for that BPMS.
+   * A start event might be in exactly the model which could not be read.
    *
    * @param workflowModuleId The workflow module which finished deploying
    */
@@ -365,8 +367,9 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * The same for one declared-only BPMN process, once per BPMS answering for it: the
-   * versions belong to one BPMS, so the message names the adapter which holds them.
+   * The same for one BPMN process which is only declared, once for each BPMS which answers
+   * for it. The versions belong to one BPMS, so the message names the adapter which holds
+   * them.
    */
   private void validateAgainstVersionsTheBpmsHolds(
       final String workflowModuleId,
@@ -380,8 +383,8 @@ public class BpmsInitiatedStarts {
               .catalog()
               .deployedVersionsOf(workflowModuleId, bpmnProcessId);
           if ((heldVersions == null) || heldVersions.isEmpty()) {
-            // an id nothing is held under is reported by the startup check for old
-            // process versions, in its own words and once per adapter
+            // the startup check for old process versions reports an id under which nothing
+            // is held, in its own words and once per adapter
             return;
           }
           final var versionsRead = new LinkedList<String>();
@@ -395,8 +398,8 @@ public class BpmsInitiatedStarts {
                 .catalog()
                 .startEventsOfVersion(workflowModuleId, bpmnProcessId, version);
             if (eventsOfVersion == null) {
-              // one model which cannot be read is enough to make every verdict about
-              // this id a guess, so nothing is said about this BPMS at all
+              // one model which cannot be read makes every verdict about this id a guess.
+              // So nothing is said about this BPMS at all
               return;
             }
             versionsRead.add(version);
@@ -417,9 +420,9 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * Says what the methods of a declared-only id serve which the versions the BPMS holds do
-   * not have - the whole process where no held version starts on its own, and the single
-   * method otherwise.
+   * Says what the methods of an id which is only declared serve, and the versions held by
+   * the BPMS do not have. That is the whole process where no held version starts on its
+   * own, and the single method otherwise.
    */
   private void reportStartEventsTheHeldVersionsLack(
       final String workflowModuleId,
@@ -476,8 +479,8 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * The BPMN process ids of that workflow module a model WAS deployed under during this
-   * boot - what a developer compares a declared id which reaches nothing against.
+   * The BPMN process ids of that workflow module under which a model WAS deployed during
+   * this boot. A developer compares a declared id which reaches nothing against them.
    */
   private String deployedProcessIdsOf(
       final String workflowModuleId) {
@@ -494,16 +497,16 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * Whether the method exists for versions OLDER than the one this boot deployed
-   * - it then names an element of a model which is not the deployed one.
+   * Whether the method exists for versions OLDER than the one this boot deployed. Then it
+   * names an element of a model which is not the deployed one.
    * <p>
-   * A BPMN process id the application declares WITHOUT bringing a model - the id a
-   * renamed process left behind - is the same situation with a different boundary:
-   * this boot deployed no version of it at all, so every version the BPMS holds is
-   * what a method serving the id is kept for. The registry's twin of this method
-   * ({@code WorkflowTaskRegistry#servesOnlyOlderVersions}) grew this branch first,
-   * and without it here a method matching a held version of such an id would be
-   * validated against the start events of a model which does not exist.
+   * A BPMN process id which the application declares WITHOUT bringing a model is the same
+   * case with a different limit. An example is the id which a renamed process left behind.
+   * This boot deployed no version of it at all. So a method which serves the id is kept for
+   * every version which the BPMS holds. The twin of this method in the registry
+   * ({@code WorkflowTaskRegistry#servesOnlyOlderVersions}) got this branch first. Without it
+   * here, a method which matches a held version of such an id would be checked against the
+   * start events of a model which does not exist.
    */
   private boolean servesOnlyOlderVersions(
       final String workflowModuleId,
@@ -529,11 +532,11 @@ public class BpmsInitiatedStarts {
             .stream()
             .anyMatch(version -> handler.matchesVersion(version, resolver));
       }
-      // nothing held and nothing to ask: unlike the registry's twin, this check may
-      // run BEFORE the task wiring settled the difference between declared and
-      // deployed - an id looking declared-only without any catalog is answered by
-      // the strict path below, so a deployed process validated first stays as
-      // strictly judged as it was
+      // nothing held and nothing to ask. Unlike the twin in the registry, this check may run
+      // BEFORE the task wiring has settled which ids are declared and which are deployed. An
+      // id which looks declared-only and has no catalog is answered by the strict path
+      // below. So a deployed process which is checked first is judged as strictly as
+      // before
     }
     final var deployedVersions = processVersions
         .registeredCatalogs(workflowModuleId, bpmnProcessId)
@@ -583,15 +586,15 @@ public class BpmsInitiatedStarts {
                 processService.getBpmnProcessId())))
         .findFirst()
         .orElse(null);
-    // a workflow the BPMS already names is ours and needs no method, so the complaint is
-    // only written down here and thrown where the start turns out to be a foreign one
+    // a workflow which the BPMS already names is ours and needs no method. So the complaint
+    // is only written down here, and thrown where the start turns out to be a foreign one
     final var refusalWithoutAMethod = handler != null
         ? null
         : startNobodyBuilds(processService, context, wired);
 
     final var result = BpmsInitiatedStartExecution
         .run(processService, handler, refusalWithoutAMethod, context, transactionRunner);
-    // the BPMS just built this workflow through us - it holds it
+    // the BPMS just built this workflow through us, so it holds it
     if (result != null) {
       processService.rememberWorkflowAdapter(result.workflowAggregateId(), context.getAdapterId());
     }
@@ -600,11 +603,11 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * Whether the BPMS fires this kind of start event by itself, which is what makes such a
-   * start certain to arrive without a name. A none or message start event is the shape the
-   * application's own start has, so a process carrying only those needs no
-   * <code>&#64;WorkflowStartedByBpms</code> method until somebody starts it past VanillaBP -
-   * and that start says so when it happens.
+   * Whether the BPMS fires this kind of start event by itself. Then such a start is certain
+   * to arrive without a name. A none or message start event has the shape of the
+   * application's own start. So a process with only those needs no
+   * <code>&#64;WorkflowStartedByBpms</code> method until somebody starts it without
+   * VanillaBP. That start says so when it happens.
    *
    * @param kind The kind of start event an adapter reported
    * @return Whether the BPMS fires it without anybody asking
@@ -617,25 +620,25 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * Ends the boot where the BPMS can start the process and the application did not say
-   * how. The message names the process, the start event and the method to write, so a
-   * developer can copy it out of the log.
+   * Ends the boot where the BPMS can start the process and the application did not say how.
+   * The message names the process, the start event and the method to write, so that a
+   * developer can copy it from the log.
    * <p>
-   * Judged per START EVENT rather than per process: a process with a timer and a signal
-   * start may have a method for one of them and none for the other, and the one without
-   * would fire into nothing. A method serving every start event of the process
+   * This is judged per START EVENT, not per process. A process with a timer start and a
+   * signal start may have a method for one and none for the other. The one without a method
+   * would fire into nothing. A method which serves every start event of the process
    * ({@code @WorkflowStartedByBpms} without an id) covers all of them.
    * <p>
-   * The version a method serves is not read here. A method kept for an older version of
-   * the model still says that the application knows about this start event, and refusing
-   * a boot over a version range would be a second verdict on top of the one the startup
-   * check about dead handlers already makes.
+   * The version which a method serves is not read here. A method kept for an older version
+   * of the model still says that the application knows about this start event. Refusing a
+   * boot because of a version range would be a second verdict on top of the one which the
+   * startup check about dead handlers already makes.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
    * @param startEvents The start events the adapters reported for the process
    * @param handlers The methods registered for this process
-   * @param workflowAggregateClass The aggregate the method has to return, or
+   * @param workflowAggregateClass The aggregate which the method has to return, or
    *          <code>null</code> where it is not known here
    */
   private static void refuseStartEventsWithoutAMethod(
@@ -647,9 +650,9 @@ public class BpmsInitiatedStarts {
 
     final var unserved = startEvents
         .stream()
-        // only a start event the BPMS fires by itself is certain to arrive unnamed. A
-        // none or message start event can be the application's own start, and demanding
-        // a method for those would refuse every ordinary process at boot
+        // only a start event which the BPMS fires by itself is certain to arrive without a
+        // name. A none or message start event can be the application's own start.
+        // Demanding a method for those would refuse every ordinary process at boot
         .filter(spec -> firedWithoutTheApplication(spec.kind()))
         .filter(spec -> handlers
             .stream()
@@ -689,10 +692,10 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * Why a workflow which reached this application unnamed cannot be built: either the
-   * process has no <code>&#64;WorkflowStartedByBpms</code> method at all, or none of its
-   * methods serves the version the BPMS reported. Both texts hand the reader the next step,
-   * because a start refused at three in the morning has to explain itself on its own.
+   * Why a workflow which reached this application without a name cannot be built. Either
+   * the process has no <code>&#64;WorkflowStartedByBpms</code> method at all, or none of its
+   * methods serves the version which the BPMS reported. Both texts tell the reader the next
+   * step, because a start refused at three in the morning has to explain itself.
    */
   private static <A> String startNobodyBuilds(
       final MigrationProcessService<A> processService,
@@ -749,9 +752,9 @@ public class BpmsInitiatedStarts {
   }
 
   /**
-   * Names the start events the BPMS reported, for a message which has to say which ones
-   * were there. A signal event is shown with its name behind its kind, because without it
-   * the reader is left with an element id to look up in the model.
+   * Names the start events which the BPMS reported, for a message which has to say which
+   * ones were there. A signal event shows its name after its kind. Without the name, the
+   * reader would have to look up an element id in the model.
    *
    * @param startEvents The start events the adapter reported
    * @return One text naming every event
