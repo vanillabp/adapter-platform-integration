@@ -1056,7 +1056,7 @@ public class DeployedProcessVersionsCheck {
    * runs before the deployment and cannot know the version. A call picks the method by version,
    * so no call of this version would find one, see
    * decision 126 in the repository's {@code DECISIONS.md}. An element of an extension counts
-   * as well where its contract asks for it, see {@code DECISIONS.pending/954.md}.
+   * as well where its contract asks for it, see decision 127 in the repository's {@code DECISIONS.md}.
    * <p>
    * A method which serves no version at all is still only a warning (decision 60 in the
    * repository's DECISIONS.md). The difference is the element: here an element of the deployed

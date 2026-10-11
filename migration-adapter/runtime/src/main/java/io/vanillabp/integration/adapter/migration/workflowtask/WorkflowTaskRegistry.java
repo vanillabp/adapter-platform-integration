@@ -2306,7 +2306,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    * Which elements of the model this start deployed no method serves in the version the BPMS
    * gave that model: the tasks of {@link #tasksTheDeployedVersionLeavesUnserved}, then the
    * elements the extensions reported for a contract which asks for it (see
-   * {@code DECISIONS.pending/954.md}).
+   * decision 127 in the repository's {@code DECISIONS.md}).
    * <p>
    * The tasks are kept per adapter, the elements of an extension per BPMN process. Each adapter
    * holds both against the version its own BPMS gave the model.

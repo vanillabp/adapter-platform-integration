@@ -487,7 +487,7 @@ contract with the flag and without the other ends the boot.
 The elements are kept per workflow module and BPMN process, not per adapter, because `wireBpmn`
 names no adapter. Each adapter holds them against the version its own BPMS gave the model. Where two
 adapters deploy different models of one process, they share what you reported. The reason for all of
-this is in `DECISIONS.pending/954.md`.
+this is in decision 127 of the repository's `DECISIONS.md`.
 
 The contract is described in full under
 [The extension's own annotation: handler contracts](./README.md#the-extensions-own-annotation-handler-contracts)

@@ -4125,7 +4125,7 @@ An extension can join this check. Its contract says `theDeployedVersionNeedsAMet
 lookup keys a call would offer. `WorkflowTaskRegistry#elementsTheDeployedVersionLeavesUnserved`
 hands the check the tasks and then what `ExtensionHandlerRegistry` finds: an element whose methods
 all miss the deployed version. An element with no method at all is left alone. One message names
-both kinds, each with its own sentence about what the gap means. See `DECISIONS.pending/954.md`.
+both kinds, each with its own sentence about what the gap means. See decision 127 in the repository's `DECISIONS.md`.
 
 Two rules govern the reverse direction. A method whose version range
 excludes the deployed version needs no task in the deployed model - without that exemption

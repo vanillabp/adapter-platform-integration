@@ -615,7 +615,7 @@ public class ExtensionHandlerRegistry implements ExtensionHandlers {
    * Which elements the extensions reported for one BPMN process no method serves in the
    * version the BPMS gave the deployed model. Only a contract which asks for it is asked
    * ({@link HandlerContract#deployedVersionNeedsAMethod()}), see
-   * {@code DECISIONS.pending/954.md}.
+   * decision 127 in the repository's {@code DECISIONS.md}.
    * <p>
    * The methods of an element are the ones a call offering its keys may reach in some version,
    * picked like {@link #taskParameterNames(Class, String, String, List)} picks them. An element
