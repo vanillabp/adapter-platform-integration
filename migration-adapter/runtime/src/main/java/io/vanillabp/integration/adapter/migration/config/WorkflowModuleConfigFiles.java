@@ -7,17 +7,17 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
- * The places a workflow module may put its configuration file, shared by both platform
- * integrations so that a module behaves the same wherever it runs.
+ * The places where a workflow module may put its configuration file. Both platform
+ * integrations share them, so that a module behaves the same wherever it runs.
  * <p>
- * Four places, and they are styles rather than a ranking: next to the rest of the
- * application, in a <code>config</code> directory, next to the BPMN files of the module,
- * or in a <code>config</code> directory of the module. VanillaBP prescribes none of them
- * (see decision 65 in the repository's DECISIONS.md).
+ * There are four places, and they are styles, not a ranking: next to the rest of the
+ * application, in a <code>config</code> directory, next to the BPMN files of the module, or
+ * in a <code>config</code> directory of the module. VanillaBP prescribes none of them (see
+ * decision 65 in the repository's DECISIONS.md).
  * <p>
- * There is no order among the four, because a file belongs in exactly one of them. Two
- * copies of the same file end the boot rather than let one of them win, which nobody could
- * have guessed from the outside.
+ * There is no order among the four, because a file belongs in exactly one of them. Two copies
+ * of the same file end the boot. Otherwise one of them would win, and nobody could guess
+ * which from the outside.
  */
 public final class WorkflowModuleConfigFiles {
 
@@ -25,8 +25,8 @@ public final class WorkflowModuleConfigFiles {
   }
 
   /**
-   * The four directories of one workflow module, in the order they are written down here
-   * rather than in an order of precedence - a file belongs in exactly one of them.
+   * The four directories of one workflow module, in the order in which they are written here.
+   * That is not an order of precedence, because a file belongs in exactly one of them.
    *
    * @param workflowModuleId The ID of the workflow module
    * @return The directories a file of that module is read in, each ending in a slash
@@ -44,9 +44,9 @@ public final class WorkflowModuleConfigFiles {
   }
 
   /**
-   * Where one named file of a workflow module is looked for: the four directories above,
-   * each with the file name appended. A platform reads all four and refuses to start where
-   * two of them hold the file.
+   * Where one named file of a workflow module is looked for: the four directories above, each
+   * with the file name added. A platform reads all four, and refuses to start where two of
+   * them hold the file.
    *
    * @param workflowModuleId The ID of the workflow module
    * @param filename The name of the file, for example <code>loan-approval-prod.yaml</code>
@@ -65,8 +65,8 @@ public final class WorkflowModuleConfigFiles {
 
   /**
    * Builds the message for a workflow module which ships the same file in more than one of
-   * the four places. Both platforms refuse to start on it: with no ranking among the places
-   * there is no answer to which of the two files applies, and inventing one would mean a
+   * the four places. Both platforms refuse to start then. There is no ranking among the
+   * places, so there is no answer which of the two files applies. Inventing one would mean a
    * setting whose source cannot be seen from the outside.
    *
    * @param workflowModuleId The ID of the workflow module

@@ -4,22 +4,22 @@ package io.vanillabp.integration.adapter.migration.config;
  * The configuration of one adapter instance
  * (properties section <code>vanillabp.adapters.&lt;id&gt;.*</code>).
  * <p>
- * The properties modeled here are the platform-neutral ones owned by the
- * migration adapter. BPMS adapters contribute their own keys to the same
- * properties section (e.g. connection settings) by binding an overlay view of
- * the <code>vanillabp.*</code> tree - those keys are not modeled here.
+ * The properties modeled here are the ones which the migration adapter owns, and they do not
+ * depend on the platform. BPMS adapters add their own keys to the same properties section
+ * (for example connection settings). They bind their own view of the <code>vanillabp.*</code>
+ * tree for that. Those keys are not modeled here.
  * <p>
- * Extends {@link AdapterProperties}: this section is the least specific level of
- * the most-specific-wins resolution of adapter-scoped properties (see
- * {@link MigrationAdapterProperties#resolveForAdapter}), so it carries the same
- * per-level keys as the workflow-module, workflow and task levels.
+ * It extends {@link AdapterProperties}. For adapter-scoped properties the most specific level
+ * wins, and this section is the least specific level (see
+ * {@link MigrationAdapterProperties#resolveForAdapter}). So it has the same keys per level as
+ * the workflow-module, workflow and task levels.
  */
 public class AdapterConfigProperties extends AdapterProperties {
 
   /**
-   * The empty section a configuration binder starts from, one per configured adapter id:
-   * both platforms create the object and then write the keys the application configured
-   * into it, one setter per key.
+   * The empty section from which a configuration binder starts, one per configured adapter
+   * id. Both platforms create the object, and then write the keys which the application
+   * configured into it, one setter per key.
    * <p>
    * It asks the builder for the values, and that is not a detour. Every default of this class
    * is on the builder as well as on the field, and both ways into an object end here. A
@@ -33,23 +33,23 @@ public class AdapterConfigProperties extends AdapterProperties {
   }
 
   /**
-   * The adapter's type in case of a custom adapter identifier or null in case
-   * of a non-custom adapter identifier (the adapter's ID is the type then -
-   * see {@link MigrationAdapterProperties#adapterTypes()}).
+   * The adapter's type for a custom adapter identifier, or null for an identifier which is
+   * not custom. Then the adapter's ID is the type (see
+   * {@link MigrationAdapterProperties#adapterTypes()}).
    */
   private String type;
 
   /**
-   * How to treat a failing deployment of BPMS resources for this adapter:
-   * {@link DeploymentFailurePolicy#FAIL} (default) aborts booting of the
-   * application; {@link DeploymentFailurePolicy#WARN} logs the failure of a
-   * NON-first-priority adapter and the application still starts (a failure of
-   * the first-priority adapter always fails the boot).
+   * How to treat a failed deployment of BPMS resources for this adapter.
+   * {@link DeploymentFailurePolicy#FAIL} (the default) stops the boot of the application.
+   * {@link DeploymentFailurePolicy#WARN} logs the failure of an adapter which is NOT first
+   * priority, and the application still starts. A failure of the first-priority adapter
+   * always fails the boot.
    */
   private DeploymentFailurePolicy deploymentFailure;
 
   /**
-   * Convenience factory for an adapter configuration of the given type.
+   * Creates an adapter configuration of the given type.
    *
    * @param type The adapter's type
    * @return The adapter configuration
@@ -75,18 +75,18 @@ public class AdapterConfigProperties extends AdapterProperties {
   public abstract static class AdapterConfigPropertiesBuilder<C extends AdapterConfigProperties, B extends AdapterConfigProperties.AdapterConfigPropertiesBuilder<C, B>> extends AdapterProperties.AdapterPropertiesBuilder<C, B> {
 
     /**
-     * The adapter's type in case of a custom adapter identifier or null in case of a
-     * non-custom adapter identifier (the adapter's ID is the type then - see
+     * The adapter's type for a custom adapter identifier, or null for an identifier which is
+     * not custom. Then the adapter's ID is the type (see
      * {@link MigrationAdapterProperties#adapterTypes()}).
      */
     private String type;
 
     /**
-     * How to treat a failing deployment of BPMS resources for this adapter:
-     * {@link DeploymentFailurePolicy#FAIL} (default) aborts booting of the application;
-     * {@link DeploymentFailurePolicy#WARN} logs the failure of a NON-first-priority
-     * adapter and the application still starts (a failure of the first-priority adapter
-     * always fails the boot).
+     * How to treat a failed deployment of BPMS resources for this adapter.
+     * {@link DeploymentFailurePolicy#FAIL} (the default) stops the boot of the application.
+     * {@link DeploymentFailurePolicy#WARN} logs the failure of an adapter which is NOT first
+     * priority, and the application still starts. A failure of the first-priority adapter
+     * always fails the boot.
      */
     private DeploymentFailurePolicy deploymentFailure;
 
@@ -98,8 +98,8 @@ public class AdapterConfigProperties extends AdapterProperties {
     }
 
     /**
-     * The adapter's type in case of a custom adapter identifier or null in case of a
-     * non-custom adapter identifier (the adapter's ID is the type then - see
+     * The adapter's type for a custom adapter identifier, or null for an identifier which is
+     * not custom. Then the adapter's ID is the type (see
      * {@link MigrationAdapterProperties#adapterTypes()}).
      *
      * @param type The value of {@link #type}
@@ -114,11 +114,11 @@ public class AdapterConfigProperties extends AdapterProperties {
     }
 
     /**
-     * How to treat a failing deployment of BPMS resources for this adapter:
-     * {@link DeploymentFailurePolicy#FAIL} (default) aborts booting of the application;
-     * {@link DeploymentFailurePolicy#WARN} logs the failure of a NON-first-priority
-     * adapter and the application still starts (a failure of the first-priority adapter
-     * always fails the boot).
+     * How to treat a failed deployment of BPMS resources for this adapter.
+     * {@link DeploymentFailurePolicy#FAIL} (the default) stops the boot of the application.
+     * {@link DeploymentFailurePolicy#WARN} logs the failure of an adapter which is NOT first
+     * priority, and the application still starts. A failure of the first-priority adapter
+     * always fails the boot.
      *
      * @param deploymentFailure The value of {@link #deploymentFailure}
      * @return This builder, so the calls chain
@@ -239,8 +239,8 @@ public class AdapterConfigProperties extends AdapterProperties {
   }
 
   /**
-   * The adapter's type in case of a custom adapter identifier or null in case of a
-   * non-custom adapter identifier (the adapter's ID is the type then - see
+   * The adapter's type for a custom adapter identifier, or null for an identifier which is
+   * not custom. Then the adapter's ID is the type (see
    * {@link MigrationAdapterProperties#adapterTypes()}).
    *
    * @return The value of {@link #type}
@@ -252,11 +252,11 @@ public class AdapterConfigProperties extends AdapterProperties {
   }
 
   /**
-   * How to treat a failing deployment of BPMS resources for this adapter:
-   * {@link DeploymentFailurePolicy#FAIL} (default) aborts booting of the application;
-   * {@link DeploymentFailurePolicy#WARN} logs the failure of a NON-first-priority
-   * adapter and the application still starts (a failure of the first-priority adapter
-   * always fails the boot).
+   * How to treat a failed deployment of BPMS resources for this adapter.
+   * {@link DeploymentFailurePolicy#FAIL} (the default) stops the boot of the application.
+   * {@link DeploymentFailurePolicy#WARN} logs the failure of an adapter which is NOT first
+   * priority, and the application still starts. A failure of the first-priority adapter
+   * always fails the boot.
    *
    * @return The value of {@link #deploymentFailure}
    */
@@ -267,8 +267,8 @@ public class AdapterConfigProperties extends AdapterProperties {
   }
 
   /**
-   * The adapter's type in case of a custom adapter identifier or null in case of a
-   * non-custom adapter identifier (the adapter's ID is the type then - see
+   * The adapter's type for a custom adapter identifier, or null for an identifier which is
+   * not custom. Then the adapter's ID is the type (see
    * {@link MigrationAdapterProperties#adapterTypes()}).
    *
    * @param type The value of {@link #type}
@@ -281,11 +281,11 @@ public class AdapterConfigProperties extends AdapterProperties {
   }
 
   /**
-   * How to treat a failing deployment of BPMS resources for this adapter:
-   * {@link DeploymentFailurePolicy#FAIL} (default) aborts booting of the application;
-   * {@link DeploymentFailurePolicy#WARN} logs the failure of a NON-first-priority
-   * adapter and the application still starts (a failure of the first-priority adapter
-   * always fails the boot).
+   * How to treat a failed deployment of BPMS resources for this adapter.
+   * {@link DeploymentFailurePolicy#FAIL} (the default) stops the boot of the application.
+   * {@link DeploymentFailurePolicy#WARN} logs the failure of an adapter which is NOT first
+   * priority, and the application still starts. A failure of the first-priority adapter
+   * always fails the boot.
    *
    * @param deploymentFailure The value of {@link #deploymentFailure}
    */
