@@ -1,21 +1,23 @@
 # Upgrade notes
 
-Contributor-facing list of what a VanillaBP 1 application has to do, organised per version line. It
-describes the step to the release, not how the release was built - the development history is in
-git. These entries feed the user-facing
-[migration guide](https://github.com/vanillabp/adapter-platform-integration/wiki/Migrating-from-version-1),
-which is the narrated version for users and wins where the two disagree. The same file exists for
+This list is for contributors. It says what a VanillaBP 1 application has to do, sorted by version
+line. It describes the step to the release, not how the release was built. Git has the development
+history. These entries feed the
+[migration guide](https://github.com/vanillabp/adapter-platform-integration/wiki/Migrating-from-version-1)
+for users. The guide tells the same story in a narrative form, and where the two disagree, the guide
+wins. The same file exists for
 [spi-for-java](https://github.com/vanillabp/spi-for-java/blob/main/UPGRADE.md), for the
 [Camunda 7 adapter](https://github.com/camunda-community-hub/vanillabp-camunda7-adapter/blob/main/UPGRADE.md) and for the
-[Camunda 8 adapter](https://github.com/camunda-community-hub/vanillabp-camunda8-adapter/blob/main/UPGRADE.md). What your
-BPMS asks of you on top of this is in the file of its adapter.
+[Camunda 8 adapter](https://github.com/camunda-community-hub/vanillabp-camunda8-adapter/blob/main/UPGRADE.md).
+What your BPMS (business process management system) asks of you on top of this is in the file of its
+adapter.
 
-An entry is owed where a version-1 application behaves differently or has to change something.
-Everything else belongs in the wiki, in [`DECISIONS.md`](./DECISIONS.md) or nowhere.
+An entry is needed where a version-1 application behaves differently or has to change something.
+Everything else belongs in the wiki, in [`DECISIONS.md`](./DECISIONS.md), or nowhere.
 
 ## 2.0
 
-The sections stand in the order an upgrade is carried out.
+The sections follow the order in which you carry out an upgrade.
 
 ### The runtime and the dependencies
 
@@ -25,54 +27,55 @@ The sections stand in the order an upgrade is carried out.
 | Spring Boot | 3.5           | 4.1       |
 | Quarkus     | not supported | 3.37      |
 
-Spring Boot 4 split the one artifact `spring-boot-autoconfigure` into a module per technology, so a
-few imports of your own code move. `@EntityScan` comes from
-`org.springframework.boot.persistence.autoconfigure` now, `HibernateJpaAutoConfiguration` from
-`org.springframework.boot.hibernate.autoconfigure` and `MongoClientSettingsBuilderCustomizer` from
-`org.springframework.boot.mongodb.autoconfigure`. The test slices left `spring-boot-starter-test`
-and each needs a dependency of its own, `@DataJpaTest` for instance
-`org.springframework.boot:spring-boot-data-jpa-test`. That is Spring's change rather than
-VanillaBP's, so Spring Boot's own migration guide is what describes it.
+Spring Boot 4 split the single artifact `spring-boot-autoconfigure` into one module per technology.
+So a few imports in your own code move:
 
-A module of your application which must not depend on a BPMS depends on
-`io.vanillabp:vanillabp-spring-boot-support`, where version 1 had `io.vanillabp:spring-boot-support`,
-and there is `io.vanillabp:vanillabp-quarkus-support` next to it. Both carry the VanillaBP API such
-a module compiles against and bring the integration SPI
-(`io.vanillabp:vanillabp-integration-spi`) along, which is where the interfaces live your
-application may implement. The adapter artifacts were renamed as well and the file of your adapter
-names them.
+* `@EntityScan` now comes from `org.springframework.boot.persistence.autoconfigure`,
+* `HibernateJpaAutoConfiguration` from `org.springframework.boot.hibernate.autoconfigure`,
+* `MongoClientSettingsBuilderCustomizer` from `org.springframework.boot.mongodb.autoconfigure`.
 
-Persistence needs no dependency change. Version 1 stored workflow aggregates through Spring Data,
-JPA or MongoDB, and version 2 does that out of the box. On Quarkus the built-in support is wider: a
-Panache repository, a Panache active record and a Spring Data repository are all served.
+The test slices moved out of `spring-boot-starter-test`, and each needs a dependency of its own. For
+`@DataJpaTest`, for example, that is `org.springframework.boot:spring-boot-data-jpa-test`. This is a
+change of Spring, not of VanillaBP, so Spring Boot's own migration guide describes it.
+
+Some modules of your application must not depend on a BPMS. In version 1 such a module depended on
+`io.vanillabp:spring-boot-support`. Now it depends on `io.vanillabp:vanillabp-spring-boot-support`,
+and next to it there is `io.vanillabp:vanillabp-quarkus-support`. Both carry the VanillaBP API which
+such a module compiles against. Both also bring the integration SPI (service provider interface,
+`io.vanillabp:vanillabp-integration-spi`) along. It holds the interfaces your application may
+implement. The adapter artifacts were renamed as well, and the file of your adapter names them.
+
+Persistence needs no change of dependencies. Version 1 stored workflow aggregates through Spring
+Data, JPA or MongoDB, and version 2 does that out of the box. On Quarkus the built-in support covers
+more: a Panache repository, a Panache active record and a Spring Data repository all work.
 
 ### Workflow modules are declared by a file
 
 Version 1 read the id of a workflow module from `spring.application.name`, from the name of the
-module's configuration file, or from a static bean method handing over a `WorkflowModuleProperties`.
-Version 2 reads it from a text file `META-INF/workflow-module` whose content is the id, one file per
-module, so both platforms find a module the same way.
+module's configuration file, or from a static bean method which handed over a
+`WorkflowModuleProperties`. Version 2 reads it from the text file `META-INF/workflow-module`. The
+content of the file is the id, and there is one file per module. So both platforms find a module the
+same way.
 
 ```
 src/main/resources/META-INF/workflow-module      # content: loan-approval
 ```
 
-`WorkflowModuleProperties` does not exist any more, so the bean method has to go and a project
-keeping it does not compile. The properties class it named stays as it is, because binding a
-module's own configuration has not changed. Keep the ids you had: they name BPMS tenants and
-resource directories, and a new id detaches the running workflows of that module from their
-configuration.
+`WorkflowModuleProperties` no longer exists. So the bean method has to go, and a project which keeps
+it does not compile. The properties class it named stays as it is, because binding a module's own
+configuration has not changed. Keep the ids you had. They name BPMS tenants and resource
+directories. A new id cuts the running workflows of that module off from their configuration.
 
-An application without any such file is one single global workflow module, which is what an
-application with one use case was in version 1 as well.
+An application without any such file is one single global workflow module. In version 1 an
+application with one use case was the same.
 
 ### Configuration
 
 #### `default-adapter` becomes `prioritized-adapters`
 
-Version 1 named the one adapter of a module. Version 2 names an order of adapters, because several
-BPMS may serve one application, and that is what makes a BPMS migration a matter of configuration.
-The key sits at the same three levels it did.
+Version 1 named the one adapter of a module. Version 2 names an ordered list of adapters, because
+several BPMS may serve one application. This turns a BPMS migration into a matter of configuration.
+The key sits at the same three levels as before.
 
 ```yaml
 # before
@@ -99,17 +102,17 @@ vanillabp:
             - camunda7
 ```
 
-The first entry starts new workflows and the others are asked about workflows started earlier. The
-most specific non-empty value wins as a whole, so a workflow's list replaces the module's instead of
-being merged into it.
+The first entry starts new workflows. The others are asked about workflows started earlier. The most
+specific value which is not empty wins as a whole. So a workflow's list replaces the module's list
+and is not merged into it.
 
 #### An adapter id names one BPMS instance
 
 In version 1 an adapter's settings lived per workflow module
-(`vanillabp.workflow-modules.<m>.adapters.<adapter>.*`) and the connection to the engine was
-configured through the BPMS' own Spring integration. In version 2 everything one BPMS instance needs
-lives in the section of its adapter id, `vanillabp.adapters.<id>.*`, and no BPMS-specific Spring
-configuration is involved.
+(`vanillabp.workflow-modules.<m>.adapters.<adapter>.*`). The connection to the engine was configured
+through the BPMS' own Spring integration. In version 2 everything one BPMS instance needs lives in
+the section of its adapter id, `vanillabp.adapters.<id>.*`. No Spring configuration specific to the
+BPMS is involved.
 
 ```yaml
 vanillabp:
@@ -122,16 +125,15 @@ vanillabp:
       job-timeout: PT5M       # adapter-wide, overridable per module, workflow and task
 ```
 
-An id which is not an adapter type needs `vanillabp.adapters.<id>.type`. That is how two instances
-of one BPMS are told apart, and two ids of one type additionally have to be distinguishable by
-something the adapter decides, a second address or a second datasource for instance. Version 1 had
-one adapter and its id was its type, so keeping the type as the id is the smallest step. Pick the
-names with care all the same: VanillaBP persists the adapter id, so renaming one later leaves
-workflows nothing serves any more.
+An id which is not an adapter type needs `vanillabp.adapters.<id>.type`. This is how two instances
+of one BPMS are told apart. Two ids of one type also have to differ in something the adapter
+decides, for example a second address or a second datasource. Version 1 had one adapter, and its id
+was its type. So the smallest step is to keep the type as the id. Still, choose the names with care.
+VanillaBP stores the adapter id, so if you rename one later, nothing serves those workflows any more.
 
-An adapter-specific value stays resolvable most specific first, across task, workflow, workflow
-module and adapter, so `vanillabp.workflow-modules.<m>.adapters.<id>.<key>` still wins over
-`vanillabp.adapters.<id>.<key>`.
+An adapter-specific value is still resolved with the most specific place first, across task,
+workflow, workflow module and adapter. So `vanillabp.workflow-modules.<m>.adapters.<id>.<key>` still
+wins over `vanillabp.adapters.<id>.<key>`.
 
 #### Key by key
 
@@ -150,9 +152,9 @@ module and adapter, so `vanillabp.workflow-modules.<m>.adapters.<id>.<key>` stil
 
 #### Keeping workflow modules apart
 
-Version 1 isolated a workflow module through a BPMS tenant and let you switch that off per module
-(`use-tenants`). Version 2 makes it one setting with three values, resolvable per workflow, workflow
-module and adapter.
+Version 1 kept a workflow module apart through a BPMS tenant, and let you switch that off per module
+(`use-tenants`). Version 2 makes it one setting with three values. You can set it per workflow,
+workflow module and adapter.
 
 ```yaml
 vanillabp:
@@ -163,98 +165,100 @@ vanillabp:
       # name-clash-avoidance: none       # nothing is scoped, the old 'use-tenants: false'
 ```
 
-`by-adapter` is the default because that is what version 1 deployed on both Camunda adapters, so an
+`by-adapter` is the default, because version 1 deployed this way on both Camunda adapters. So an
 application which configures nothing keeps its tenants and finds the workflows it started under
-version 1. What a BPMS needs for it is the BPMS' business: Camunda 7 needs nothing, a Camunda 8
-cluster needs multi-tenancy and the tenant, and the Process-Engine-API has no isolation of its own
-and refuses the mode while deploying.
+version 1. What a BPMS needs for this mode is up to the BPMS. Camunda 7 needs nothing. A Camunda 8
+cluster needs multi-tenancy and the tenant. The Process-Engine-API has no isolation of its own and
+refuses the mode during deployment.
 
-Switching the mode is a migration in the BPMS rather than a property change, because the identifiers
-the BPMS knows change with it and workflows started earlier would no longer be found. The way to do
-it is a second adapter id which differs only in this setting, put first in `prioritized-adapters`,
-and the wiki page [BPMS migration](https://github.com/vanillabp/adapter-platform-integration/wiki/BPMS-migration)
-walks through it.
+Switching the mode is a migration in the BPMS, not a change of a property. The identifiers the BPMS
+knows change with it, and workflows started earlier would no longer be found. To switch, add a second
+adapter id which differs only in this setting, and put it first in `prioritized-adapters`. The wiki
+page [BPMS migration](https://github.com/vanillabp/adapter-platform-integration/wiki/BPMS-migration)
+walks you through it.
 
-Under `use-prefix` VanillaBP rewrites the identifiers of a workflow module: BPMN process ids, call
+Under `use-prefix` VanillaBP rewrites these identifiers of a workflow module: BPMN process ids, call
 activity references, message and signal names, escalation and error codes, and task definitions.
 Your business code, your `ProcessService` calls, your BPMN files and your configuration keep the
-plain names. Two new startup checks come with the mode: a workflow module id must not contain the
-separator `__`, and two processes must not end up with the same prefixed identifier.
+plain names. The mode brings two new checks at startup. A workflow module id must not contain the
+separator `__`. And two processes must not end up with the same prefixed identifier.
 
 #### What you may delete
 
 An application with one adapter dependency and one workflow module needs no `vanillabp.*` property
 at all, because the classpath is the configuration. The adapter section, the module section and
-`resources-location` are all derived, and only what the BPMS itself needs is left. Where several
-BPMS serve the application, `vanillabp.prioritized-adapters` alone is enough as long as the ids are
-adapter types. Everything you configured explicitly keeps working and is never overruled by a
-derived value.
+`resources-location` are all derived. Only what the BPMS itself needs is left. If several BPMS serve
+the application, `vanillabp.prioritized-adapters` alone is enough, as long as the ids are adapter
+types. Everything you configured explicitly keeps working. A derived value never overrules it.
 
 #### A workflow module's own files are defaults
 
 A file named after a workflow module (`loan-approval.yaml`, `loan-approval-prod.properties`) carries
-defaults, and everything the application configures wins over it, whichever file the application
-uses. That is what version 1 did, and both platforms answer it that way now. From strongest to
-weakest: system properties, environment variables, the application's own configuration wherever it
-lives, `{module}-{profile}`, `{module}`. Inside a module the profile variant still beats the plain
-file.
+defaults. Everything the application configures wins over it, no matter which file the application
+uses. Version 1 did the same, and now both platforms work this way. From strongest to weakest:
+system properties, environment variables, the application's own configuration wherever it lives,
+`{module}-{profile}`, `{module}`. Inside a module the profile variant still beats the plain file.
 
-Version 2 adds one thing: these values are proper configuration properties now. Version 1 kept them
-out of the environment, so `${...}` and `@Value` could see them while `Environment#getProperty` and
-`@ConfigurationProperties` could not. A workflow module can therefore be bound to a
+Version 2 adds one thing: these values are now real configuration properties. Version 1 kept them
+out of the environment. So `${...}` and `@Value` could see them, but `Environment#getProperty` and
+`@ConfigurationProperties` could not. Now a workflow module can be bound to a
 `@ConfigurationProperties` class of its own.
 
 #### The outbox and the delivery log
 
-An adapter whose BPMS is remote cannot take part in your local transaction, so a workflow is started
-in two phases through a transaction outbox. Coming from version 1 that is new, and it is asked of an
-application on Camunda 7 as well. Four tables are created in the database your workflow aggregates
-live in: the outbox store, the payloads of the calls which carry one, the log of processed task
-deliveries which keeps a redelivered task from running your handler twice, and the claim which says
-which node removes the old rows tonight. A payload lies beside its
-entry rather than inside it, which is why it has a table of its own.
+An adapter whose BPMS is remote cannot take part in your local transaction. So a workflow is started
+in two phases, through a transaction outbox. This is new compared to version 1, and applications on
+Camunda 7 need it too. Four tables are created in the database of your workflow aggregates:
+
+* the outbox store,
+* the payloads of the calls which carry one,
+* the log of processed task deliveries, which keeps a redelivered task from running your handler
+  twice,
+* the claim which says which node removes the old rows tonight.
+
+A payload lies beside its entry, not inside it. That is why it has a table of its own.
 
 Version 1 had no outbox. On Camunda 8 a listener completed the job after your transaction had
-committed, so nothing about that call was written down and a node which died in between lost it.
+committed. So nothing about that call was written down, and a node which died in between lost it.
 Version 1 left no table of two-phase calls behind, so there is nothing to drain or carry over.
 
-`vanillabp.outbox.create-schema` defaults to `true`, so an application which configures nothing gets
-its tables on the first boot. An application whose schema is a reviewed artifact sets the switch to
-`false` and applies the statements itself. They ship as `io.vanillabp:vanillabp-schema`, which holds
-a Liquibase changelog and generated Flyway scripts per database and pulls no runtime along. With the
-switch off the startup checks that the tables are there and names the one which is missing, together
-with any column a later version of VanillaBP added to a table you created earlier.
+`vanillabp.outbox.create-schema` defaults to `true`. So an application which configures nothing gets
+its tables on the first boot. If your schema is a reviewed artifact, set the switch to `false` and
+apply the statements yourself. They ship as `io.vanillabp:vanillabp-schema`. It holds a Liquibase
+changelog and generated Flyway scripts per database, and it pulls in no runtime. With the switch
+off, the startup checks that the tables are there and names the one which is missing. It also names
+any column which a later version of VanillaBP added to a table you created earlier.
 
 The names are `VANILLABP_PHASE_TWO_OUTBOX`, `VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD` and
-`VANILLABP_TASK_DELIVERY`. An application which renames the outbox through
-`vanillabp.outbox.jdbc.table` renames the payload table with it, because that name is the outbox
-name plus a suffix unless `vanillabp.outbox.jdbc.payload-table` says otherwise. The delivery table
-is a store of its own and gets its name from `vanillabp.outbox.jdbc.delivery-table`. On MongoDB the
-same rules apply to the collections.
+`VANILLABP_TASK_DELIVERY`. If an application renames the outbox through
+`vanillabp.outbox.jdbc.table`, the payload table is renamed with it. Its name is the outbox name plus
+a suffix, unless `vanillabp.outbox.jdbc.payload-table` says otherwise. The delivery table is a store
+of its own and gets its name from `vanillabp.outbox.jdbc.delivery-table`. On MongoDB the same rules
+apply to the collections.
 
-Where the first adapter of the priority list needs the outbox and none can be resolved, the
-application does not boot and the message names what to add. The transaction the outbox entry rides
-in is checked in the same moment. What the outbox guarantees, and what it does not, is on the wiki
-page [Spring Boot integration](https://github.com/vanillabp/adapter-platform-integration/wiki/Spring-Boot-integration#what-the-outbox-guarantees).
+The first adapter of the priority list may need the outbox while none can be resolved. Then the
+application does not boot, and the message names what to add. The transaction which carries the
+outbox entry is checked at the same moment. What the outbox guarantees, and what it does not, is on
+the wiki page [Spring Boot integration](https://github.com/vanillabp/adapter-platform-integration/wiki/Spring-Boot-integration#what-the-outbox-guarantees).
 
 #### What the startup says about a configuration
 
-A defect in the configuration shows up while the application starts rather than at the first
-workflow. An adapter section which is absent lets the application boot and earns a message naming
-the keys to add, a section which contradicts itself ends the boot naming what is missing. Messages
-name property keys and never values, so nothing echoes a credential.
+A defect in the configuration shows up while the application starts, not at the first workflow. If
+an adapter section is missing, the application still boots, and a message names the keys to add. If
+a section contradicts itself, the boot ends, and the message names what is missing. Messages name
+property keys and never values, so no credential is ever printed.
 
-An environment variable cannot introduce an adapter id or a workflow module id which no
-configuration file declares. A `VANILLABP_*` variable whose id segment matches nothing configured
-ends the startup with a message, because it looks like an override and is none.
+An environment variable cannot add an adapter id or a workflow module id which no configuration file
+declares. Take a `VANILLABP_*` variable whose id segment matches nothing configured. It ends the
+startup with a message, because it looks like an override but is none.
 
 ### Your code
 
 #### Three `ProcessService` overloads are gone
 
-The overloads taking a message object, whose class simple name became the message name, were
-removed. Name the message instead. What version 1 and version 2 share is that message content never
-travels to the BPMS, so incorporate the data into the aggregate before you correlate.
+The overloads which took a message object were removed. They used the simple class name of that
+object as the message name. Name the message instead. In version 1 and version 2 alike, message
+content never travels to the BPMS. So put the data into the aggregate before you correlate.
 
 ```java
 // before
@@ -268,41 +272,41 @@ processService.correlateMessage(ride, "RideConfirmation", correlationId);
 processService.startWorkflowByMessage(ride, "RideRequested");
 ```
 
-`@BpmnProcess.primary()` is gone as well: whether a process is the primary one follows from where it
-is declared. Both changes belong to `spi-for-java` and its own
-[upgrade notes](https://github.com/vanillabp/spi-for-java/blob/main/UPGRADE.md) carry them with the
-version line they came in. A hand-written `ProcessService` of your own keeps compiling: the query
-methods and `startWorkflowByMessage(A, String)` are `default` methods now, and only
-`getWorkflowModuleId()` stays abstract.
+`@BpmnProcess.primary()` is gone as well. Where a process is declared now decides whether it is the
+primary one. Both changes belong to `spi-for-java`. Its own
+[upgrade notes](https://github.com/vanillabp/spi-for-java/blob/main/UPGRADE.md) list them under the
+version line they came in. A `ProcessService` you wrote by hand keeps compiling. The query methods
+and `startWorkflowByMessage(A, String)` are now `default` methods, and only `getWorkflowModuleId()`
+stays abstract.
 
 #### One class declares the processes of one workflow aggregate
 
-`@WorkflowService.secondaryBpmnProcesses` is honoured now, where the version-1 platform integration
-ignored it. Every BPMN process id a class declares is wired for task processing, and a secondary
-entry has to name an explicit `bpmnProcessId`.
+`@WorkflowService.secondaryBpmnProcesses` now takes effect. The version-1 platform integration
+ignored it. Every BPMN process id a class declares is wired for task processing. A secondary entry
+has to name an explicit `bpmnProcessId`.
 
-An application which spread the processes of one workflow aggregate over several classes, each with
-its own `bpmnProcess`, has to move them together. One class declares the process `startWorkflow`
-starts and the others belong into its `secondaryBpmnProcesses`; handlers may still live in separate
-classes as long as each of them declares that same `bpmnProcess`. Version 2 says so while the
-application starts, where version 1 picked one of the processes by the order the classes happened to
-be found in.
+Some applications spread the processes of one workflow aggregate over several classes, each with its
+own `bpmnProcess`. They have to bring them together. One class declares the process which
+`startWorkflow` starts, and the others belong into its `secondaryBpmnProcesses`. Handlers may still
+live in separate classes, as long as each of them declares that same `bpmnProcess`. Version 2 tells
+you about this while the application starts. Version 1 picked one of the processes, based on the
+order in which the classes happened to be found.
 
 #### A BPMN process belongs to one workflow aggregate
 
 Classes of different workflow aggregates may no longer declare the same BPMN process in one workflow
 module. It does not matter how each of them declares it, as `bpmnProcess` or in
-`secondaryBpmnProcesses`. Where two classes named the same `bpmnProcess`, version 1 logged a warning
-and kept the class it found first. Version 2 stops the start, on Quarkus already while the
-application is built. The message names both classes, both aggregates and how each declares the
+`secondaryBpmnProcesses`. If two classes named the same `bpmnProcess`, version 1 logged a warning and
+kept the class it found first. Version 2 stops the start. On Quarkus it stops already while the
+application is built. The message names both classes, both aggregates and how each one declares the
 process.
 
 Decide what the process is:
 
 - A workflow of its own: only classes of its own aggregate declare it, and the other class does not
   list it in `secondaryBpmnProcesses`. A call activity may still call it. Then the mappings of the
-  call activity in your BPMS set up the data the called workflow gets. Two workflows are usually
-  better started and synchronised by messages.
+  call activity in your BPMS set up the data which the called workflow gets. But it is usually
+  better to start and synchronise two workflows with messages.
 - A step of another workflow: only the class of that workflow lists it in `secondaryBpmnProcesses`,
   and no class of another aggregate declares it.
 
@@ -313,68 +317,69 @@ has the details.
 #### Remove `@Transactional` from workflow services
 
 Version 1 asked you to write `@Transactional(noRollbackFor = TaskException.class)` on a workflow
-service. VanillaBP 2 owns the transaction around a `@WorkflowTask` method itself, load the aggregate,
-invoke, save, and the rule that a `TaskException` commits the aggregate changes while completing the
-task with a BPMN error is built in.
+service. VanillaBP 2 owns the transaction around a `@WorkflowTask` method itself: load the aggregate,
+call the method, save. One rule is built in. A `TaskException` commits the changes of the aggregate
+and completes the task with a BPMN error.
 
 The version-1 line still boots, because the startup check accepts a rollback rule which excludes
-`TaskException`. What ends the boot is an annotation joining VanillaBP's transaction without such a
-rule, since a `TaskException` would then throw the aggregate changes away. The check also sees an
-annotation inherited from a superclass or an interface and one hidden inside an annotation of your
-own. Where the annotation sits on a bean your handler calls, no check can see it and the task fails
-at runtime with a message naming the same remedies.
+`TaskException`. The boot ends if an annotation joins VanillaBP's transaction without such a rule,
+because a `TaskException` would then throw the changes of the aggregate away. The check also sees an
+annotation inherited from a superclass or an interface, and one hidden inside an annotation of your
+own. If the annotation sits on a bean which your handler calls, no check can see it. Then the task
+fails at runtime, with a message which names the same remedies.
 
-Look at what else the class does before you delete the line. Small applications keep the
-`@WorkflowTask` methods and the business methods their API calls in one class, and deleting the
-annotation there takes the transaction away from the business methods too. Every call into
-`ProcessService` needs an active transaction, so a `startWorkflow` from an endpoint fails once the
-annotation is gone, and nothing reports it: the application starts and only the paths entered from
-your API break. Split the class or keep the version-1 annotation on it.
+Before you delete the line, look at what else the class does. Small applications keep the
+`@WorkflowTask` methods and the business methods which their API calls in one class. If you delete
+the annotation there, the business methods lose their transaction too. Every call into
+`ProcessService` needs an active transaction. So once the annotation is gone, a `startWorkflow` from
+an endpoint fails, and nothing reports it. The application starts, and only the paths entered from
+your API break. Split the class, or keep the version-1 annotation on it.
 
-A `javax.transaction.Transactional` carried over from Spring Boot 2 is read by neither Spring
-Framework 7 nor Quarkus. It does nothing at all, and the startup warns about it so the transaction
-boundary you believe in does not stay imaginary.
+Neither Spring Framework 7 nor Quarkus reads a `javax.transaction.Transactional` carried over from
+Spring Boot 2. It does nothing at all. The startup warns about it, so that you do not rely on a
+transaction boundary which does not exist.
 
 #### A workflow service is found because it is a bean
 
-VanillaBP does not scan the classpath for classes carrying `@WorkflowService` any more. It walks the
-bean definitions of the application and keeps the ones whose class carries the annotation, which is
-what makes a start noticeably faster.
+VanillaBP no longer scans the classpath for classes which carry `@WorkflowService`. It walks the
+bean definitions of the application and keeps those whose class carries the annotation. This makes
+a start noticeably faster.
 
-An application whose workflow service is no Spring bean therefore gets no `ProcessService` for it.
-Such a class could never serve a task anyway, because the handler object is resolved through the
-bean factory, and the start ends with a message naming the BPMN process nobody serves, the file it
-came from and the class which is no bean. Make the class a bean, with `@Service` or with a `@Bean` method whose return
-type is the workflow service class. A workflow service registered by one profile only is found while
-that profile is active, which is the point of reading the bean definitions of this run.
+So if your workflow service is not a Spring bean, you get no `ProcessService` for it. Such a class
+could never serve a task anyway, because the handler object is resolved through the bean factory.
+The start ends with a message. It names the BPMN process nobody serves, the file it came from and
+the class which is not a bean. Make the class a bean, with `@Service` or with a `@Bean` method whose
+return type is the workflow service class. A workflow service which only one profile registers is
+found while that profile is active. That is the point of reading the bean definitions of this run.
 
-`@WorkflowService` belongs on the class holding the `@WorkflowTask` methods. On an interface, or on
-an annotation of your own composing it, both platforms refuse it with a message naming the interface
-and the classes implementing it. A class inheriting the annotation from an annotated superclass is
-the supported way to declare something for several classes, and the class VanillaBP works with is
-the subclass.
+`@WorkflowService` belongs on the class which holds the `@WorkflowTask` methods. Both platforms refuse
+it on an interface, or on an annotation of your own which includes it. The message names the
+interface and the classes which implement it. To declare something for several classes, let them
+inherit the annotation from an annotated superclass. That is supported, and VanillaBP works with the
+subclass.
 
-While the application starts it reports the handler methods it cannot see: a `@WorkflowTask`,
-`@WorkflowStartedByBpms` or `@WorkflowEnded` method which is not public, and a method overriding an
-annotated one without repeating the annotation, which Java never inherits. Neither was ever wired,
-in version 1 no more than now, and the report names the method and says what to do about it.
+While the application starts, it reports the handler methods it cannot see. That is a
+`@WorkflowTask`, `@WorkflowStartedByBpms` or `@WorkflowEnded` method which is not public. It is also
+a method which overrides an annotated one without repeating the annotation, because Java never
+inherits it. Neither kind was ever wired, in version 1 just as now. The report names the method and
+says what to do about it.
 
 #### The workflow aggregate says what the BPMS sees
 
-`@SyncWithBPMS` and `@NoSyncWithBPMS` are real now. Version 1 documented them and never shipped
-them, so an aggregate carrying no annotation hands every attribute to the BPMS, and everything
-hanging on those attributes with it. That is what your application brings with it: no annotations,
-so everything is shared.
+`@SyncWithBPMS` and `@NoSyncWithBPMS` now exist. Version 1 documented them but never shipped them.
+So an aggregate without an annotation hands every attribute to the BPMS, together with everything
+which hangs on those attributes. Your application comes with exactly that: no annotations, so
+everything is shared.
 
-What is shared by default has not changed. Every adapter still shares everything an aggregate holds
-unless the aggregate says otherwise, so you do not have to touch your Java code for this.
+What is shared by default has not changed. Every adapter still shares everything an aggregate holds,
+unless the aggregate says otherwise. So you do not have to touch your Java code for this.
 
-What is new is that version 2 does not start such a workflow before you have said so. The message
-names the workflow, the aggregate and the attributes which would travel, and it offers two ways on.
-The recommended one is to say what the models really need: `@NoSyncWithBPMS` on the aggregate class,
-`@SyncWithBPMS` on each attribute a BPMN expression reads. An aggregate which keeps a single
-attribute back starts without anything else. The other way is the permission, for the case where the
-models really may read everything:
+What is new: version 2 does not start such a workflow until you have said that this is what you
+want. The message names the workflow, the aggregate and the attributes which would travel. It offers
+two ways forward. The recommended way is to say what the models really need: `@NoSyncWithBPMS` on
+the aggregate class, and `@SyncWithBPMS` on each attribute which a BPMN expression reads. An
+aggregate which keeps back even a single attribute starts without anything else. The other way is
+the permission, for the case where the models really may read everything:
 
 ```yaml
 vanillabp:
@@ -385,33 +390,33 @@ vanillabp:
           allow-full-sync-with-bpms: true
 ```
 
-Write it before you upgrade and the upgrade does not begin with a failed start. It is one line of
+Write it before you upgrade, and the upgrade does not begin with a failed start. It is one line of
 configuration. An application which is happy to share everything keeps its code as it is and says so
-once per workflow. The permission belongs to the workflow and is not inherited: the same line at a
-workflow module, at the application or in an adapter section is refused with a message saying where
-it goes. A permission from above would cover the next workflow somebody adds, and that is the
-workflow nobody looked at. An aggregate holding nothing but its id needs neither way, because that
-value reaches the BPMS in any case. The reasoning is decision 66 in
+once per workflow. The permission belongs to the workflow and is not inherited. The same line at a
+workflow module, at the application or in an adapter section is refused, and the message says where
+it belongs. A permission from above would also cover the next workflow somebody adds, and nobody has
+looked at that workflow yet. An aggregate which holds nothing but its id needs neither way, because
+that value reaches the BPMS in any case. The reasoning is decision 66 in
 [`DECISIONS.md`](./DECISIONS.md).
 
-Two rules are worth knowing before you annotate the first attribute. Every attribute inherits the
-behaviour of its owner until it says otherwise, and the class mode is derived from the attributes
-where the class itself says nothing: attributes marked `@SyncWithBPMS` mean the class shares nothing
-else, attributes marked `@NoSyncWithBPMS` mean it shares everything else. Mixing both on the
-attributes of a class which states no mode ends the boot naming the class and the attributes.
-Nothing is ever read back: a process variable never updates the aggregate, and the only variables
-VanillaBP reads are those a `@TaskParam` asks for.
+Know two rules before you annotate the first attribute. First, every attribute inherits the
+behaviour of its owner until it says otherwise. Second, if the class itself says nothing, its mode
+is derived from the attributes. Attributes marked `@SyncWithBPMS` mean the class shares nothing
+else. Attributes marked `@NoSyncWithBPMS` mean it shares everything else. If a class states no mode
+and its attributes mix both, the boot ends, and the message names the class and the attributes.
+Nothing is ever read back. A process variable never updates the aggregate, and VanillaBP reads only
+the variables which a `@TaskParam` asks for.
 
 #### Only a boolean and a text reach the BPMS unasked
 
 Once your aggregate says what it shares, version 2 looks at the TYPES of those values. A value of
-the aggregate travels so that a model can decide on it, and the thing reading it is the expression
-language of the BPMS. Two types mean the same in every expression language: the plain `boolean` and
-a text. Everything else is declared first, and an aggregate sharing an undeclared decimal, date or
-number does not start.
+the aggregate travels so that a model can decide on it, and the expression language of the BPMS
+reads it. Two types mean the same in every expression language: the plain `boolean` and a text.
+Every other type has to be declared first. An aggregate which shares a decimal, date or number
+without a declaration does not start.
 
-Your Java code does not have to change for this. The declaration is configuration, one entry per
-value:
+Your Java code does not have to change for this. The declaration is configuration, with one entry
+per value:
 
 ```yaml
 vanillabp:
@@ -424,26 +429,25 @@ vanillabp:
             - shipping.*
 ```
 
-An entry names a path in the aggregate. A plain name is the attribute itself, `shipping.*` is every
-value below `shipping`, and `shipping.express` is one value below it. A lone `*` covers every value
-of the aggregate, which is the one line a workflow that already allows the full sync needs. Writing
-the entries before you upgrade means the upgrade does not begin with a failed start.
+An entry names a path in the aggregate. A plain name is the attribute itself. `shipping.*` is every
+value below `shipping`, and `shipping.express` is one value below it. A single `*` covers every value
+of the aggregate. A workflow which already allows the full sync needs just this one line. If you
+write the entries before you upgrade, the upgrade does not begin with a failed start.
 
-The better answer, where you have the time, is a getter. A `boolean isLargeAmount()` on the
-aggregate carries the expression in Java, the model reads nothing but its name, and a change to your
-data model cannot break a model nobody touched. A decision table is the case where declaring is the
-intended way rather than a shortcut: its inputs are numbers and dates, that is what a decision table
-is for.
+If you have the time, a getter is the better answer. A `boolean isLargeAmount()` on the aggregate
+holds the expression in Java, and the model reads nothing but its name. Then a change to your data
+model cannot break a model nobody touched. For a decision table, declaring is the intended way and
+not a shortcut. Its inputs are numbers and dates, because that is what a decision table is for.
 
 The wrapper `Boolean` is not the plain `boolean`, and the message says so in its own words. A `null`
 in a gateway condition means something different on every BPMS, and a value nobody computed must not
-carry a decision.
+decide anything.
 
-The other direction is softer, because no expression language is involved: a `@TaskParam` is read by
-your handler and by nobody else. Such a parameter is named only where an adapter says that its BPMS
-hands the type back as something else, and where the declaration names no type at all. A
-`@TaskParam Object` is the second case: Camunda 7 answers it with a `BigDecimal` and Camunda 8 with a
-`Double`, so it has to be declared and covered with tests.
+The other direction is less strict, because no expression language is involved. Only your handler
+reads a `@TaskParam`. You have to declare such a parameter in two cases only: where an adapter says
+that its BPMS hands the type back as something else, and where the declaration names no type at
+all. A `@TaskParam Object` is the second case. Camunda 7 answers it with a `BigDecimal` and
+Camunda 8 with a `Double`. So it has to be declared and covered by tests.
 
 ```yaml
 vanillabp:
@@ -457,256 +461,263 @@ vanillabp:
                 - amount
 ```
 
-That key may also stand at the workflow, at the workflow module or at `vanillabp` itself, and the
-most specific level wins.
+That key may also stand at the workflow, at the workflow module or at `vanillabp` itself. The most
+specific level wins.
 
-An adapter is allowed to answer that it cannot say what its BPMS does with a type. That answer costs
-a warning and never a failed start: Camunda 8 drops the scale of a decimal inside the broker, which
-no adapter sees without a running cluster, and an application whose BPMS is unreachable while it
-boots still has to boot.
+An adapter may answer that it cannot say what its BPMS does with a type. That answer costs a warning,
+never a failed start. Camunda 8 drops the scale of a decimal inside the broker, and no adapter sees
+that without a running cluster. And an application whose BPMS cannot be reached while it boots still
+has to boot.
 
-A value the aggregate declares also has to be readable. A section of a larger process usually sits
-as a sub-object, and while the section has not run that object is `null`, so `shipping.express`
-resolves to nothing. That stops the workflow with a message naming the path and the link which is
-`null`, and the way out is either a boolean getter on the top level or a declared substitute,
-`shipping.express=false`. Writing `false` on its own would be the worst answer of all, because
-nobody can tell it from a `false` somebody computed.
+A value which the aggregate declares also has to be readable. A section of a larger process usually
+sits in a sub-object. While the section has not run, that object is `null`, so `shipping.express`
+resolves to nothing. This stops the workflow with a message which names the path and the link which
+is `null`. There are two ways out: a boolean getter on the top level, or a declared substitute,
+`shipping.express=false`. Writing just `false` would be the worst answer of all, because nobody can
+tell it from a `false` which somebody computed.
 
 #### A `java.util.Calendar` is refused, a `Date` travels as an instant
 
 An attribute of type `java.util.Calendar` cannot be shared. The text a `Calendar` prints is the
-debug form of its implementation, 769 characters naming every field of it. No model reads a point in
-time out of that and nothing reads it back into a `@TaskParam`, so version 2 refuses it: an
-application whose aggregate shares such an attribute does not start, and the message names the
-attribute, its class
-and its type. Share an `Instant` instead, and a `TimeZone` or a `ZoneId` next to it where the zone
-matters. Where no model needs the attribute, `@NoSyncWithBPMS` is the answer and the application
-starts. A `Calendar` inside a nested object or as the element of a collection is refused the same
-way. Look for one before you upgrade:
+debug form of its implementation: 769 characters which name every field of it. No model reads a
+point in time out of that, and nothing reads it back into a `@TaskParam`. So version 2 refuses it.
+An application whose aggregate shares such an attribute does not start, and the message names the
+attribute, its class and its type. Share an `Instant` instead, and a `TimeZone` or a `ZoneId` next
+to it if the zone matters. If no model needs the attribute, put `@NoSyncWithBPMS` on it, and the
+application starts. A `Calendar` inside a nested object, or as the element of a collection, is
+refused the same way. Look for one before you upgrade:
 
 ```
 grep -rn "java.util.Calendar" --include="*.java" .
 ```
 
-A `java.util.Date` travels as the instant it holds rather than as the text a `Date` prints.
+A `java.util.Date` travels as the instant it holds, not as the text a `Date` prints.
 
 | what the aggregate holds |      what version 1 wrote       |   what version 2 writes    |
 |--------------------------|---------------------------------|----------------------------|
 | a `Date` at 21:55:30.123 | `Wed Sep 16 21:55:30 CEST 2026` | `2026-09-16T19:55:30.123Z` |
 
-The milliseconds survive where the old text dropped them, and the text no longer depends on the
-server which wrote it. A BPMN expression comparing the old text reads something else from now on, so
-read such an expression as a date, or share a `String` your own code writes and keep the form in your
-hand. A `java.util.TimeZone` travels as the id of its zone, `Europe/Berlin`, and a parameter
-declared `TimeZone` reads it back. Every other
-attribute whose text nothing reads back is named while the application boots, a `java.util.Locale`
-or a `java.net.URI` among them, and that one is a warning. The reasoning is decision 58 and decision
-59 in [`DECISIONS.md`](./DECISIONS.md), and
+The milliseconds survive, while the old text dropped them. And the text no longer depends on the
+server which wrote it. A BPMN expression which compares the old text reads something else from now
+on. So read such an expression as a date. Or share a `String` which your own code writes, and keep
+the form under your control. A `java.util.TimeZone` travels as the id of its zone, `Europe/Berlin`,
+and a parameter declared as `TimeZone` reads it back. Every other attribute whose text nothing reads
+back is named while the application boots, for example a `java.util.Locale` or a `java.net.URI`.
+For those this is a warning. The reasoning is in decision 58 and decision 59 in
+[`DECISIONS.md`](./DECISIONS.md), and
 [`migration-adapter/README.md`](./migration-adapter/README.md) lists the types which travel both
 ways.
 
 #### A value which does not fit its `@TaskParam`
 
-A `@TaskParam`, a parameter of a `@WorkflowStartedByBpms` method and an attribute of an aggregate a
-BPMS-initiated start builds all get their value through one conversion. It converts a number through
-its decimal form and hands the result over only where it reads back as the same number. Where it
-does not, the invocation fails with a message naming the value, the type and the method, and the
-BPMS raises the incident it raises for any other failing task.
+Three things get their value through one and the same conversion: a `@TaskParam`, a parameter of a
+`@WorkflowStartedByBpms` method, and an attribute of an aggregate which a start by the BPMS builds.
+The conversion turns a number into its decimal form. It hands the result over only if it reads back
+as the same number. If it does not, the call fails with a message which names the value, the type
+and the method. The BPMS then raises the same incident as for any other failing task.
 
-Version 1 refused the same pairs, so this is a return rather than a new rule. It bound the parameter
-by raw reflection, and a pair reflection could not satisfy threw `argument type mismatch` with no
-cause, no parameter name and no method name. What version 1 accepted is accepted here as well.
+Version 1 refused the same pairs, so this is an old rule coming back, not a new one. Version 1 bound
+the parameter by raw reflection. A pair which reflection could not satisfy threw
+`argument type mismatch`, with no cause, no parameter name and no method name. What version 1
+accepted is accepted here as well.
 
-A value which travels as text is served where version 1 could not serve it. An aggregate shares an
-enum as the name of its constant and a value type such as a `UUID`, a `LocalDate` or a `Duration` as
-the text that type writes itself, and a parameter declaring one of those types receives the value
-now. A workaround which declares a `String` and parses it in the handler keeps working, so nothing
-has to change on upgrading. `java.util.Calendar` and `java.util.Locale` are the exception: their
-text does not carry the value back, they stay refused, and the message names the type to declare
-instead. The measurement is decision 57 and the reasoning decision 55 in
+A value which travels as text now works where version 1 failed. An aggregate shares an enum as the
+name of its constant. It shares a value type such as a `UUID`, a `LocalDate` or a `Duration` as the
+text which that type writes itself. A parameter which declares one of those types now receives the
+value. A workaround which declares a `String` and parses it in the handler keeps working, so nothing
+has to change when you upgrade. `java.util.Calendar` and `java.util.Locale` are the exception. Their
+text does not carry the value back, so they stay refused, and the message names the type to declare
+instead. The measurement is decision 57, and the reasoning is decision 55 in
 [`DECISIONS.md`](./DECISIONS.md).
 
 #### A workflow the BPMS starts needs a method which builds its aggregate
 
-Version 1 did not support a process the BPMS starts on its own, so there is nothing to migrate.
-Where you model a timer, signal or conditional start event in version 2, the workflow service of
-that process needs a `@WorkflowStartedByBpms` method which RETURNS the workflow aggregate. Without
-one the application does not start, and the message shows the method to write.
+Version 1 did not support a process which the BPMS starts on its own, so there is nothing to
+migrate. If you model a timer, signal or conditional start event in version 2, the workflow service
+of that process needs a `@WorkflowStartedByBpms` method which RETURNS the workflow aggregate. Without
+it the application does not start, and the message shows the method to write.
 
 #### `version` decides which method serves a task
 
-The `version` attribute of `@WorkflowTask` exists since version 1 and was never read there, so every
-method served every version. Version 2 reads it, on `@WorkflowStartedByBpms` and `@WorkflowEnded` as
-well, and matches it against the version of the deployed process definition as the BPMS counts it.
-That is never a version your application invents. A specification may also name a version tag of the
-model, and `>=3` and `<=3` work as version 1's README described them.
+The `version` attribute of `@WorkflowTask` has existed since version 1, but version 1 never read
+it. So every method served every version. Version 2 reads it, also on `@WorkflowStartedByBpms` and
+`@WorkflowEnded`. It matches it against the version of the deployed process definition, as the BPMS
+counts it. Your application never invents that version. A specification may also name a version tag
+of the model. `>=3` and `<=3` work as version 1's README described them.
 
-`@BpmnProcess(version = ...)` is the fallback of the three annotations. A method naming no version
-serves the range its process was declared with, and a method naming one keeps it word by word.
-Version 1 read that attribute nowhere either, so an application which wrote it believing it worked
-has to look at every `@BpmnProcess` it declares: the methods of such a class now serve what the class
-says and stop being called outside that range.
+`@BpmnProcess(version = ...)` is the fallback for the three annotations. A method which names no
+version serves the range its process was declared with. A method which names one keeps exactly that.
+Version 1 did not read this attribute anywhere either. So if your application wrote it in the belief
+that it worked, look at every `@BpmnProcess` it declares. The methods of such a class now serve what
+the class says, and they are no longer called outside that range.
 
-Four things change for an application which already carries the attribute anywhere. Ranges which
-were meant to be disjoint really are disjoint, so a version served by no method fails the delivery
-instead of running the first one. A task of the model the boot deploys is the exception: where none
-of its methods covers the version the BPMS gives that model, the boot ends and names the task, the
-version and the methods with their ranges. A BPMS which reports no version at all reaches methods
-without the attribute only. And two methods wired to one BPMN element with overlapping ranges end the
-boot naming both. An application which never wrote the attribute sees no change, because the default
-`*` leaves every method serving every version.
+Four things change for an application which already has the attribute anywhere:
+
+1. Ranges which were meant to be disjoint really are disjoint. So a version which no method serves
+   fails the delivery, and the first method no longer runs. A task of the model which the boot
+   deploys is the exception. If none of its methods covers the version the BPMS gives that model,
+   the boot ends. The message names the task, the version and the methods with their ranges.
+2. If a BPMS reports no version at all, only methods without the attribute are reached.
+3. Two methods wired to one BPMN element with overlapping ranges end the boot, and the message names
+   both.
+4. An application which never wrote the attribute sees no change. The default `*` lets every method
+   serve every version.
 
 ### Behaviour under unchanged code
 
 #### A workflow is started in two phases
 
-`startWorkflow` no longer talks to a remote BPMS inside your transaction. An outbox entry rides your
-transaction and the workflow is created after the commit, so a rolled-back transaction cannot leave
-a workflow behind any more. In exchange the workflow is visible in the BPMS a moment later, and the
-start is at-least-once: a duplicate is unlikely, because VanillaBP probes before it dispatches an
-entry a second time, and it is not impossible. Never build on a start which happens exactly once.
+`startWorkflow` no longer talks to a remote BPMS inside your transaction. An outbox entry is written
+in your transaction, and the workflow is created after the commit. So a transaction which was rolled
+back can no longer leave a workflow behind. The price is that the workflow shows up in the BPMS a
+moment later. And the start happens at least once. A duplicate is unlikely, because VanillaBP checks
+before it sends an entry a second time. But it is not impossible. Never build on a start which
+happens exactly once.
 
-Camunda 7 works that way too now. It delivers tasks inside the engine's transaction, and every
-operation which progresses a workflow runs after your commit so it can be repeated when it loses a
+Camunda 7 now works this way too. It delivers tasks inside the engine's transaction. Every operation
+which moves a workflow forward runs after your commit, so it can be repeated if it loses a
 concurrency conflict.
 
 #### A repeated delivery does not run your handler again
 
-A remote BPMS hands a task out again whenever it did not learn the result, after a crash between
-your commit and the report to the BPMS for instance. Version 1 passed that straight through and
-every handler had to guard itself. Version 2 records each processed delivery in the transaction of
-the handler and answers a repeated delivery from that record.
+A remote BPMS hands out a task again whenever it did not learn the result, for example after a
+crash between your commit and the report to the BPMS. Version 1 passed that straight through, and
+every handler had to protect itself. Version 2 records each processed delivery in the transaction of
+the handler. It answers a repeated delivery from that record.
 
-Keep the guards in your handlers. They still cover what a record cannot: two deliveries running at
-the same time, and everything a handler does outside its transaction. They also carry the tasks the
-upgrade left open. A task which was already open before the new version first ran has no record, so
-its next delivery runs the `@WorkflowTask` method a second time, and nothing can repair that: a
-record would have to claim the handler ran and left the task open, and an activated job which is
-still there may equally be a handler which crashed halfway. The startup counts those tasks where
-both the store and the BPMS can answer, and the number falling to zero is when the guards have
-carried the case.
+Keep the guards in your handlers. They still cover what a record cannot: two deliveries which run at
+the same time, and everything a handler does outside its transaction. They also cover the tasks
+which the upgrade left open. A task which was already open before the new version first ran has no
+record. So its next delivery runs the `@WorkflowTask` method a second time, and nothing can repair
+that. A record would have to claim that the handler ran and left the task open. But an activated job
+which is still there may just as well come from a handler which crashed halfway. Where both the
+store and the BPMS can answer, the startup counts those tasks. Once the number falls to zero, the
+guards have done their job for the upgrade.
 
-`vanillabp.adapters.<id>.deduplicate-deliveries` switches the record off, per workflow module,
-workflow and task as well. Where the aggregates live in a persistence VanillaBP brings no store for,
-one warning per BPMN process names the bean to provide and the property to set, and the application
-boots and behaves as version 1 did.
+`vanillabp.adapters.<id>.deduplicate-deliveries` switches the record off, also per workflow module,
+workflow and task. VanillaBP may bring no store for the persistence your aggregates live in. Then one
+warning per BPMN process names the bean to provide and the property to set. The application boots
+and behaves as version 1 did.
 
 #### An operation finds its BPMS by asking
 
 `completeTask`, `cancelTask`, the user-task operations and `correlateMessage` ask the prioritized
-adapters which of them holds the workflow, and they remember the answer. The task operations usually
-skip the question, because the record written when the task was delivered names the BPMS which
+adapters which of them holds the workflow. They remember the answer. The task operations usually
+skip the question, because the record written at the delivery of the task names the BPMS which
 handed it out.
 
-A task or a workflow no BPMS knows raises a guiding `TaskNotFoundException` or
-`WorkflowNotFoundException`, and one already completed makes the operation a warned no-op. While a
-BPMS is unreachable the operation fails rather than falling back to another BPMS, because quietly
-starting to use the wrong one would be worse.
+A task or a workflow which no BPMS knows raises a `TaskNotFoundException` or a
+`WorkflowNotFoundException`, with a message which guides you on. If the task or workflow is already
+completed, the operation does nothing and logs a warning. While a BPMS cannot be reached, the
+operation fails. It does not fall back to another BPMS, because quietly using the wrong one would be
+worse.
 
-An operation right after a start is the case a remote BPMS is slow with. A BPMS which answers from
-an eventually consistent read model reports a workflow it created moments ago as unknown, so
-VanillaBP waits out the window the adapter names before it gives up, and it does so only where it
-knows which adapter holds the workflow. An application on several nodes should therefore provide a
-shared election cache, see [what operations has to watch](#what-operations-has-to-watch).
+A remote BPMS is slow with an operation right after a start. A BPMS which answers from an eventually
+consistent read model reports a workflow it created moments ago as unknown. So VanillaBP waits out
+the window which the adapter names before it gives up. It only does this where it knows which
+adapter holds the workflow. So an application on several nodes should provide a shared election
+cache, see [what operations has to watch](#what-operations-has-to-watch).
 
-The ids the viewer API hands out are namespaced `<adapter id>#<BPMS specific id>` and opaque. Pass
-them back unchanged and never parse or compose one.
+The ids which the viewer API hands out have the form `<adapter id>#<BPMS specific id>`, and you
+should treat them as opaque. Pass them back unchanged. Never parse one or build one yourself.
 
 #### A message starts only the process of its own `ProcessService`
 
 `startWorkflowByMessage` of a `ProcessService` starts the process of that service and no other.
 Version 1 passed the message to the BPMS, so any process with a start event for that message
-started. Version 2 checks the name before anything is saved. Where the model of that process has no
+started. Version 2 checks the name before anything is saved. If the model of that process has no
 message start event with this name, the call throws an `IllegalArgumentException`. It names the
 process and the messages which do start it.
 
-Where your code starts a process through the `ProcessService` of another one, call the
+If your code starts a process through the `ProcessService` of another process, call the
 `ProcessService` of the process the message is meant for instead. The name is the plain one, the
-same name version 1 took. An adapter which cannot name the messages of its model is not checked,
+same name version 1 took. If an adapter cannot name the messages of its model, there is no check,
 and the start says so once per process.
 
 #### One error contract for `@WorkflowTask` methods
 
-Every BPMS follows the same rule now. A normal return completes the task. A `TaskException` becomes
-a BPMN error with the aggregate changes committed. Any other exception rolls the transaction back and
-leaves the retry to the BPMS.
+Every BPMS now follows the same rule. A normal return completes the task. A `TaskException` becomes
+a BPMN error, and the changes of the aggregate are committed. Any other exception rolls the
+transaction back and leaves the retry to the BPMS.
 
 #### A task something else serves can say so
 
-Version 1 ended the start for every task of your process which had no `@WorkflowTask` method, a user
-task included. Version 2 does the same. What is new is a way out for a task somebody else serves on
-purpose, a user task worked through a task list or a job another worker answers:
+Version 1 ended the start for every task of your process which had no `@WorkflowTask` method,
+including user tasks. Version 2 does the same. What is new is a way out for a task which somebody
+else serves on purpose. That may be a user task worked on through a task list, or a job which
+another worker answers:
 
 ```properties
 vanillabp.workflow-modules.<module>.workflows.<process>.tasks.<element-id>.implemented-externally=true
 ```
 
-The task may be named by its element id or by its task definition, and the element id wins where both
-are written. A task with a method and this line at the task ends the start, a line written for a whole
-workflow or module covers only the tasks without a method, and a line for a task no deployed model
-has is a warning. Nothing changes for an application which served every task in version 1.
+The task may be named by its element id or by its task definition. Where both are written, the
+element id wins. If a task has a method and also this line at the task, the start ends. A line
+written for a whole workflow or module covers only the tasks without a method. A line for a task
+which no deployed model has is a warning. Nothing changes for an application which served every
+task in version 1.
 ([Workflow tasks](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-tasks#a-task-something-else-serves))
 
 #### A process nobody claims can say so
 
-Version 1 ended the start for every BPMN process no `@WorkflowService` declared, a process which only
-sits in the same file as yours included. Version 2 does the same. What is new is a way out for a
-process somebody else serves:
+Version 1 ended the start for every BPMN process which no `@WorkflowService` declared. This
+included a process which only sits in the same file as yours. Version 2 does the same. What is new is
+a way out for a process which somebody else serves:
 
 ```properties
 vanillabp.workflow-modules.<module>.workflows.<process>.implemented-externally=true
 ```
 
-VanillaBP then deploys the process with its file and leaves it alone: no listener, no worker and no
-check of the adapter touches it. A process somebody else deployed into the same BPMS is not touched
-either. Nothing changes for an application which declared every process of its files in version 1.
+VanillaBP then deploys the process with its file and leaves it alone. No listener, no worker and no
+check of the adapter touches it. A process which somebody else deployed into the same BPMS is not
+touched either. Nothing changes for an application which declared every process of its files in version 1.
 ([Workflow tasks](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-tasks#a-process-somebody-else-serves))
 
 #### Decision tables are deployed with the workflow module
 
-A workflow module may put `.dmn` files next to its BPMN files, and the boot deploys them to the same
-BPMS, in the same deployment, with the same tenant. An application which already keeps such files at
-its `resources-location` and deploys them by a mechanism of its own now deploys them twice. Both
-Camunda engines answer a redeployment of an unchanged file by keeping what they have, so this is
-usually invisible, but an application deploying a different version of a decision by its own
-mechanism has two writers and has to pick one. An application without DMN files there notices
-nothing.
+A workflow module may put `.dmn` files next to its BPMN files. The boot deploys them to the same
+BPMS, in the same deployment, with the same tenant. Some applications already keep such files at
+their `resources-location` and deploy them in a way of their own. They now deploy them twice. Both
+Camunda engines keep what they have when an unchanged file is deployed again, so you usually do not
+notice. But if your own way deploys a different version of a decision, you have two writers and must
+pick one. An application without DMN files there notices nothing.
 
-Under `use-prefix` the decision ids of those files are rewritten like the process ids, and the
-reference of a business rule task with them. A business rule task pointing at a decision this module
-does not deploy therefore breaks under that mode. Deploy the decision with the module, or scope the
-module by tenant, where nothing is rewritten.
+Under `use-prefix` the decision ids of those files are rewritten like the process ids, and so is
+the reference of a business rule task. So under that mode, a business rule task which points at a
+decision this module does not deploy breaks. Deploy the decision with the module, or scope the
+module by tenant, which rewrites nothing.
 
 #### Two writers on one workflow aggregate
 
-A BPMN process holding more than one token has two branches writing the same aggregate, one in the
-transaction VanillaBP owns for its task and one in the transaction your application opens around its
-API call. A persistence layer writing the whole record loses what the branch committing first wrote.
-VanillaBP does not resolve that, it makes it visible, which version 1 did not.
+A BPMN process which holds more than one token has two branches which write the same aggregate. One
+writes in the transaction VanillaBP owns for its task. The other writes in the transaction your
+application opens around its API call. If a persistence layer writes the whole record, it loses
+what the branch which committed first wrote. VanillaBP does not solve that, but it makes it visible.
+Version 1 did not.
 
-Your application sees two messages and gets no new property. A warning per BPMN process whose model
-can produce concurrent tokens while its workflow aggregate has no version attribute names the
-elements and the ways out. An error names a commit of a transaction VanillaBP owns which failed on a
-version conflict, and the exception is passed on unchanged so the BPMS applies its retry semantics.
-There is deliberately no retry inside the framework: it would repeat whatever the handler did before
-the commit failed, a call to a remote API for instance, while hiding that anything went wrong. The
-wiki page
+Your application sees two messages and gets no new property. The first is a warning per BPMN
+process whose model can produce concurrent tokens while its workflow aggregate has no version
+attribute. It names the elements and the ways out. The second is an error. It names a commit of a
+transaction VanillaBP owns which failed on a version conflict. The exception is passed on unchanged,
+so the BPMS applies its own retry rules. There is no retry inside the framework, on purpose. It
+would repeat whatever the handler did before the commit failed, for example a call to a remote API,
+and it would hide that anything went wrong. The wiki page
 [Workflow aggregates](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-aggregates#two-writers-on-one-aggregate)
 describes the four ways an application can avoid the collision.
 
 #### An expression in your model is named at the start
 
-A version-1 model full of expressions deploys as it did. What is new is that the start says what the
+A version-1 model full of expressions deploys as before. What is new is that the start says what the
 expressions cost. An expression which walks a path (`${order.shipping.express}`) or calls something
-(`${count(order.items) > 3}`) is a warning per BPMN process, because it binds the model to the shape
-of your Java objects and to the expression language of that BPMS. An expression which only computes
-(`${not bigItem}`) is a notice. An expression which is the name of one variable, which is what the
-wiki page
+(`${count(order.items) > 3}`) leads to a warning per BPMN process. It ties the model to the shape of
+your Java objects and to the expression language of that BPMS. An expression which only computes
+(`${not bigItem}`) leads to a notice. An expression which is just the name of one variable is not
+mentioned at all. That is what the wiki page
 [Workflow aggregates](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-aggregates#decoupling-bpmn-from-the-data-model)
-has recommended all along, is not mentioned at all.
+has recommended all along.
 
-Nothing about the deployment changes and no model has to be rewritten. Where a process reads the way
-it is meant to, one line ends the message:
+Nothing about the deployment changes, and no model has to be rewritten. If a process reads the way it
+is meant to, one line ends the message:
 
 ```yaml
 vanillabp:
@@ -717,27 +728,27 @@ vanillabp:
           accept-expressions-in-the-model: true
 ```
 
-The same line at the workflow module or at `vanillabp` covers everything below it, and the most
+The same line at the workflow module or at `vanillabp` covers everything below it. The most
 specific level wins.
 
 #### What the startup says about the versions your BPMS still holds
 
-The first boot of the upgraded application reads the process versions its BPMS still holds, asks
-whether this application serves their task definitions and counts the workflows running on them.
-Version 1 said nothing of the sort, so what an upgrade brings along is named for the first time: a
-task of an older version which no `@WorkflowTask` method serves is a warning, and an error where
-workflows still run on that version.
+The first boot of the upgraded application reads the process versions which its BPMS still holds.
+It asks whether this application serves their task definitions, and it counts the workflows which
+run on them. Version 1 said nothing like this. So what an upgrade brings along is named for the
+first time. A task of an older version which no `@WorkflowTask` method serves is a warning. If
+workflows still run on that version, it is an error.
 
 `vanillabp.adapters.<id>.outfaded-versions` names the versions you decided to stop serving, in the
-grammar of the `version` attribute, and `outfaded-versions-in-use` says whether a workflow still
-running on one of them is worth a log line or the end of the boot. Both are resolvable per workflow
-module and workflow.
+grammar of the `version` attribute. `outfaded-versions-in-use` says what a workflow which still runs
+on one of them is worth: a log line, or the end of the boot. Both can be set per workflow module and
+workflow.
 
 A workflow module may rename a BPMN process and keep serving the workflows which still run under the
-old name, which version 1 could do as well by declaring the old id as a secondary process. The check
-covers that case now, so the first boot after the upgrade says more about a renamed process than any
-boot before it. Mind the numbering while you fade those versions out: every BPMN process id is
-counted from one by the BPMS, so version 2 of the old id and version 2 of the new one are different
+old name. Version 1 could do this as well, by declaring the old id as a secondary process. The check
+now covers that case. So the first boot after the upgrade says more about a renamed process than any
+boot before. Mind the numbering while you fade those versions out. The BPMS counts the versions of
+every BPMN process id from one. So version 2 of the old id and version 2 of the new id are different
 models, and `outfaded-versions` for the old ones belongs at the workflow level under the old id. The
 wiki page
 [Renaming a BPMN process](https://github.com/vanillabp/adapter-platform-integration/wiki/Renaming-a-BPMN-process)
@@ -745,131 +756,129 @@ walks through both ways of doing it.
 
 #### What your running workflows bring with them
 
-Whether a feature of version 2 reaches a workflow which was already running depends on where the
-BPMS keeps what the feature hangs on. Camunda 7 attaches everything while its engine parses a process
-definition, so every version the engine holds is reached, the ones version 1 deployed included.
-Camunda 8 writes its listeners into the model it deploys and a running instance stays on the version
-it was started on, so a workflow which was already running never gets them. Wherever a feature rests
-on something written into the model, that is the line along which it holds or does not.
+Does a feature of version 2 reach a workflow which was already running? That depends on where the
+BPMS keeps what the feature depends on. Camunda 7 attaches everything while its engine parses a
+process definition. So every version the engine holds is reached, including the ones version 1
+deployed. Camunda 8 writes its listeners into the model it deploys, and a running instance stays on
+the version it was started on. So a workflow which was already running never gets them. Whenever a
+feature rests on something written into the model, this decides whether it holds or not.
 
-The stores start empty and none of them needs adopting. Outbox entries are written per operation, so
-a workflow started under version 1 needs none. The election cache is empty after any restart and its
-entries are hints, so the first operation on each workflow pays one probing walk. The check for a
-renamed adapter id stays quiet, and rightly so, because version 1 persisted no adapter id: it had one
-adapter and its id was its type.
+The stores start empty, and none of them needs to take over old data. Outbox entries are written per
+operation, so a workflow started under version 1 needs none. The election cache is empty after any
+restart, and its entries are only hints. So the first operation on each workflow pays for one round
+of asking the adapters. The check for a renamed adapter id stays quiet, and rightly so. Version 1
+stored no adapter id, because it had one adapter and its id was its type.
 
-Two things an upgrading application should look at in its own code, both on Camunda 8. Version 1
-handed the whole workflow aggregate to every command, so instances started back then carry a
-variable for everything its JSON serialization could read. A `@JsonProperty` renaming the aggregate's
-id attribute breaks every probe for such an instance, because version 1 wrote the JSON name and
-version 2 reads the name the persistence layer reports. And an attribute version 1 serialized as a
-field keeps its last version-1 value for good, because version 2 reads getters only. Give such an
+An application which upgrades should look at two things in its own code, both on Camunda 8. Version 1
+handed the whole workflow aggregate to every command. So instances started back then carry a variable
+for everything its JSON serialization could read. A `@JsonProperty` which renames the aggregate's id
+attribute breaks every probe for such an instance. Version 1 wrote the JSON name, but version 2 reads
+the name which the persistence layer reports. And an attribute which version 1 serialized as a field
+keeps its last version-1 value for good, because version 2 reads getters only. Give such an
 attribute a getter and share it.
 
 ### What the upgrade costs under load
 
 An application on version 1 wrote no outbox entry and kept no record of a task delivery. The word
-outbox appears nowhere in the sources of the last version 1 releases, `camunda7-spring-boot-adapter`
-1.6.0 and `camunda8-spring-boot-adapter` 1.10.0 on `io.vanillabp:spring-boot-support` 1.4.0, so
-everything below is work version 2 does around code you do not touch.
+outbox appears nowhere in the sources of the last version 1 releases: `camunda7-spring-boot-adapter`
+1.6.0 and `camunda8-spring-boot-adapter` 1.10.0 on `io.vanillabp:spring-boot-support` 1.4.0. So
+everything below is work which version 2 does around code you do not touch.
 
-It is counted in rows, in transactions and in threads. No millisecond appears on purpose, because a
+It is counted in rows, in transactions and in threads. There are no milliseconds here, on purpose. A
 time measured on a machine of today is read as a promise half a year later.
 
-A workflow start costs one outbox entry, written in your transaction, and your transaction still
-commits once. The call to the BPMS then runs after that commit, in a transaction of its own and on
-a thread which is not yours.
+A workflow start costs one outbox entry, written in your transaction. Your transaction still commits
+once. The call to the BPMS then runs after that commit, in a transaction of its own and on a thread
+which is not yours.
 
 On Camunda 8 that transaction is new. Version 1 sent the start from the thread which had just
-committed yours and retried in memory, so nothing was written down and a process which died in
-between lost the start. On Camunda 7 the count is what it was: version 1 also wrote a row in your
-transaction, a job of its own engine, and the job executor carried it out afterwards. What moved
-there is the table the row goes into and the thread which picks it up.
+committed yours, and it retried in memory. So nothing was written down, and a process which died in
+between lost the start. On Camunda 7 the count is the same as before. Version 1 also wrote a row in
+your transaction, a job of its own engine, and the job executor carried it out afterwards. What
+changed there is the table the row goes into, and the thread which picks it up.
 
-Answering a message is where an application on Camunda 7 pays, and so is completing or cancelling
-a task. Version 1 called the embedded engine while your transaction was open, so your commit
-covered that work. Version 2 writes an entry for it, which is one row and one transaction more than
-before. On Camunda 8 those operations went out from the committing thread under version 1 and are
-entries now, like the start.
+An application on Camunda 7 pays when it answers a message, and also when it completes or cancels a
+task. Version 1 called the embedded engine while your transaction was open, so your commit covered
+that work. Version 2 writes an entry for it. That is one row and one transaction more than before.
+On Camunda 8, version 1 sent those operations from the committing thread. Now they are entries, like
+the start.
 
 Every task delivery costs one record. It is written in the transaction of your handler, so the
-delivery pays no transaction of its own, and a repeated delivery is answered from that record
-instead of running your `@WorkflowTask` method again.
+delivery needs no transaction of its own. A repeated delivery is answered from that record, and your
+`@WorkflowTask` method does not run again.
 
 What your handler does is not in these numbers. On version 1 it ran inside the engine's job
-transaction on Camunda 7 and inside the transaction your own `@Transactional` opened on Camunda 8.
-Now it runs inside a transaction VanillaBP opens around it. How long that transaction stays open is
-still your handler's business.
+transaction on Camunda 7, and inside the transaction of your own `@Transactional` on Camunda 8. Now
+it runs inside a transaction which VanillaBP opens around it. How long that transaction stays open
+is still up to your handler.
 
-The threads are the number to size. Version 1 on Camunda 7 ran its own engine calls on the engine's
-job executor, which the Spring Boot starter starts with three threads and grows to ten, and version
-1 on Camunda 8 used the thread which committed, so it was as wide as the request threads of the
-application. Version 2 dispatches on four threads, `vanillabp.outbox.dispatch-threads`. On
-Camunda 7 that is a second pool rather than a replacement: the engine's job executor is still there
-and still delivers your tasks, and the dispatch carries the calls VanillaBP makes into the engine.
-An application which had raised the job executor because it was the narrow point now has two
-numbers to raise. Count both pools into the connections of the database your workflow aggregates
-live in.
+The threads are the number to size. On Camunda 7, version 1 ran its own engine calls on the engine's
+job executor. The Spring Boot starter starts it with three threads and grows it to ten. On Camunda 8,
+version 1 used the thread which committed, so it had as many threads as the application has request
+threads. Version 2 dispatches on four threads, `vanillabp.outbox.dispatch-threads`. On Camunda 7
+this is a second pool, not a replacement. The engine's job executor is still there and still
+delivers your tasks. The dispatch carries the calls which VanillaBP makes into the engine. If you
+had raised the job executor because it was the bottleneck, you now have two numbers to raise. Count
+both pools into the connections of the database your workflow aggregates live in.
 
-The version 2 side of all this is counted by `WhatAnUpgradeFromVersionOneCostsTest` in
-`spring-boot-integration/integration-tests/upgrade-cost-integration-test`, which pins the rows, the
-commits and the four dispatch threads. The version 1 side is read off the released artifacts named
-above. How long the two take on one machine is a measurement of its own and not a sentence of this
-file.
+`WhatAnUpgradeFromVersionOneCostsTest` in
+`spring-boot-integration/integration-tests/upgrade-cost-integration-test` counts the version 2 side
+of all this. It pins the rows, the commits and the four dispatch threads. The version 1 side is read
+from the released artifacts named above. How long the two take on one machine is a separate
+measurement, and this file does not state it.
 
 ### What operations has to watch
 
-The outbox is the one new thing in the picture. Entries which cannot be dispatched are retried with
-a growing distance, `vanillabp.outbox.attempt-frequency` to the first retry and doubling up to
-`vanillabp.outbox.max-attempt-frequency`, and an entry is blocked after
-`vanillabp.outbox.block-after-attempts` tries. An entry whose BPMS does not report its workflow
-yet, such as a Camunda 8 cluster whose exporter is behind, uses no tries while it waits. It is
-blocked once `vanillabp.outbox.wait-for-visibility-at-most` passed since it was written, about four
-hours by default. A blocked entry waits for somebody, so watching for
-one is an operations duty. Dispatched entries are marked done and cleaned up after
+The outbox is the one new thing in the picture. Entries which cannot be dispatched are retried, with
+a growing pause in between. The first retry comes after `vanillabp.outbox.attempt-frequency`, and
+the pause doubles up to `vanillabp.outbox.max-attempt-frequency`. An entry is blocked after
+`vanillabp.outbox.block-after-attempts` tries. Sometimes the BPMS does not report the workflow of an
+entry yet, for example a Camunda 8 cluster whose exporter is behind. Such an entry uses up no tries
+while it waits. It is blocked once `vanillabp.outbox.wait-for-visibility-at-most` has passed since
+it was written, about four hours by default. A blocked entry waits for somebody, so operations has
+to watch for blocked entries. Dispatched entries are marked as done and cleaned up after
 `vanillabp.outbox.retention`, seven days by default.
 
 The entries are dispatched on a few threads of their own, `vanillabp.outbox.dispatch-threads`, four
-by default. Which thread takes an entry is decided by the workflow aggregate, so what belongs to one
-workflow keeps its order while different workflows travel at the same time. Version 1 progressed a
-workflow in the thread which was already there, a job executor thread on Camunda 7 or the committing
-thread on Camunda 8, so this is a new place where your database connections are used. Count the
-threads into the pool of the database your workflow aggregates live in.
+by default. The workflow aggregate decides which thread takes an entry. So what belongs to one
+workflow keeps its order, while different workflows move at the same time. Version 1 moved a
+workflow forward in the thread which was already there: a job executor thread on Camunda 7, or the
+committing thread on Camunda 8. So this is a new place which uses your database connections. Count
+the threads into the pool of the database your workflow aggregates live in.
 
-The outbox removes what it does not need any more in a window at night, four to five in the morning
-where nothing else is configured (`vanillabp.outbox.housekeeping.start` and `.end`). Inside it the
-dispatched entries whose retention passed and the payloads no entry names any more are removed, as
-much as fits; outside it neither costs anything. Three meters say whether the window is wide enough
-(`vanillabp.outbox.housekeeping.remaining`, `.removed` and `.window.used`), and a window which was
-used up with something still left over is the sign to widen it. Only one node of a cluster
-house-keeps a store per night, and a node which is down for the whole window does not house-keep
-that night.
+The outbox removes what it no longer needs in a window at night. If nothing else is configured, that
+is from four to five in the morning (`vanillabp.outbox.housekeeping.start` and `.end`). Inside the
+window it removes the dispatched entries whose retention has passed, and the payloads which no entry
+names any more, as much as fits. Outside the window neither costs anything. Three meters say whether
+the window is wide enough (`vanillabp.outbox.housekeeping.remaining`, `.removed` and `.window.used`).
+If the window was used up and something is still left over, widen it. Only one node of a cluster
+cleans up a store per night. A node which is down for the whole window does not clean up that night.
 
-The window is read in a time zone, and an application whose JVM stands on UTC - which is what a
-container does unless somebody sets its zone - is warned about it once while it starts, because
-"four in the morning" is then four UTC. It starts either way. Set `TZ` on the container or the
-environment variable `VANILLABP_OUTBOX_HOUSEKEEPING_ZONE` to say something else, write `UTC` there
-if UTC is what you mean, and the line goes away.
+The window is read in a time zone. A container runs its JVM on UTC unless somebody sets its zone. If
+your JVM runs on UTC, the application warns about it once while it starts, because "four in the
+morning" then means four UTC. It starts either way. To use another zone, set `TZ` on the container,
+or the environment variable `VANILLABP_OUTBOX_HOUSEKEEPING_ZONE`. If UTC is what you mean, write
+`UTC` there, and the line goes away.
 
 The records of processed task deliveries have a retention of their own,
-`vanillabp.delivery.retention`, which follows the outbox retention where it is not set. The two
-windows point in different directions: on the outbox side the retention only decides how long a
-dispatched entry stays readable during support, while on the delivery side it decides whether a
-redelivery arriving later runs your `@WorkflowTask` method a second time. An installation which
-lowered the outbox retention to keep its table small was shortening a correctness window with the
-same hand, and it can now keep the small table and give the records the period they need.
+`vanillabp.delivery.retention`. If it is not set, it follows the outbox retention. The two
+retentions decide different things. On the outbox side, the retention only decides how long a
+dispatched entry stays readable for support. On the delivery side, it decides whether a redelivery
+which arrives later runs your `@WorkflowTask` method a second time. Some installations lowered the
+outbox retention to keep the table small. In doing so, they also shortened the window which
+keeps a task from running twice. Now they can keep the small table and still give the records the
+period they need.
 
-An application on several nodes should provide one bean implementing
-`io.vanillabp.integration.spi.WorkflowAdapterCache`, so the nodes share which BPMS holds which
-workflow. The built-in cache is in memory and bounded by
-`vanillabp.workflow-adapter-cache.max-entries` and `.time-to-live`. Entries are hints, so losing one
-costs an extra probing walk and never correctness. VanillaBP deliberately ships no distributed
-implementation.
+An application on several nodes should provide one bean which implements
+`io.vanillabp.integration.spi.WorkflowAdapterCache`. Then the nodes share which BPMS holds which
+workflow. The built-in cache lives in memory, and `vanillabp.workflow-adapter-cache.max-entries` and
+`.time-to-live` limit it. Entries are only hints. So losing one costs an extra round of asking the
+adapters, and never correctness. VanillaBP ships no distributed implementation, on purpose.
 
-Where Micrometer is on the classpath VanillaBP publishes what it does with your work under
-`vanillabp.*`, and where your platform has a health endpoint the adapters contribute what they know
-about their BPMS under the name `vanillabp`. Every task delivery and every dispatch runs inside a
-set of MDC keys naming the adapter, the workflow module, the BPMN process, the workflow aggregate,
-the task and the delivery. The wiki page
+If Micrometer is on the classpath, VanillaBP publishes what it does with your work under
+`vanillabp.*`. If your platform has a health endpoint, the adapters add what they know about their
+BPMS under the name `vanillabp`. Every task delivery and every dispatch runs with a set of MDC keys.
+They name the adapter, the workflow module, the BPMN process, the workflow aggregate, the task and
+the delivery. The wiki page
 [Observability](https://github.com/vanillabp/adapter-platform-integration/wiki/Observability) names
-every meter and the question it answers, and carries a log pattern to paste.
+every meter and the question it answers. It also has a log pattern you can copy.

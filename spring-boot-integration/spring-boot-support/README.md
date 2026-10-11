@@ -2,20 +2,19 @@
 
 # VanillaBP Spring Boot support
 
-This module extends the [VanillaBP SPI](https://github.com/vanillabp/spi-for-java)
-for a great developer experience.
+This module adds to the [VanillaBP SPI](https://github.com/vanillabp/spi-for-java) (service
+provider interface) to make the developer's work easier.
 
 ## Features
 
-1. A couple of dependencies to build pure workflow modules, not directly depending on
-   a specific VanillaBP adapter. Besides the VanillaBP SPI this includes
-   `io.vanillabp:vanillabp-integration-spi` containing interfaces business code may
-   implement — most notably `io.vanillabp.integration.spi.AggregatePersistenceAware`
-   for custom aggregate persistence. This interface is platform-independent: business
-   code implements the very same interface regardless of running on Spring Boot or
-   Quarkus. Adapter authors, in contrast, implement the interfaces of the adapter SPI
-   (`io.vanillabp:vanillabp-adapter-spi`) which is intentionally not exposed
-   to business code.
+1. A few dependencies to build pure workflow modules. Such a module does not depend directly on
+   a specific VanillaBP adapter. Besides the VanillaBP SPI, this includes
+   `io.vanillabp:vanillabp-integration-spi`. It has interfaces which business code may
+   implement. The most important one is `io.vanillabp.integration.spi.AggregatePersistenceAware`
+   for your own aggregate persistence. This interface does not depend on the platform. Business
+   code implements the same interface on Spring Boot and on Quarkus. Adapter authors implement
+   other interfaces, those of the adapter SPI (`io.vanillabp:vanillabp-adapter-spi`). On purpose,
+   business code does not see the adapter SPI.
 
 ## Noteworthy & Contributors
 
