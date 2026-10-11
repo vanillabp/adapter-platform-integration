@@ -19,10 +19,10 @@ import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What an adapter asking about a path hears where nothing behind the SPI answers. Every
- * one of these questions decides NOTHING by default, which is the answer a check has to
- * be able to act on: a path missing from the answer never means "checked and found
- * working", and a path with no type never means "this type is safe".
+ * What an adapter hears when it asks about a path and nothing behind the SPI answers. By
+ * default, each of these questions decides NOTHING. A check has to be able to act on that
+ * answer. A path missing from the answer never means "checked and found working". A path
+ * with no type never means "this type is safe".
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowAggregateSyncPathDefaultsTest {
