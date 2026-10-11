@@ -2,18 +2,18 @@ package io.vanillabp.integration.adapter.spi.values;
 
 /**
  * What one BPMS does with one Java type, in one direction. The core asks every adapter
- * of a workflow while the application starts and puts the answers into the message it
- * writes about a value which is not portable.
+ * of a workflow while the application starts. It puts the answers into its message about
+ * a value which is not portable.
  * <p>
- * The third answer is the important one. An adapter which cannot say what its BPMS does
- * says so, and that never ends a startup: Camunda 8 drops the scale of a decimal inside
- * the broker, and only a round trip through a running cluster shows it. An application
- * whose BPMS is unreachable at boot time still has to boot.
+ * The third answer is the important one. If an adapter cannot say what its BPMS does, it
+ * says so, and that never stops a startup. For example, Camunda 8 drops the scale of a
+ * decimal inside the broker, and only a round trip through a running cluster shows it.
+ * An application whose BPMS cannot be reached at startup still has to start.
  *
  * @param kind What the BPMS does with the type
- * @param explanation One sentence for the startup message, in the adapter's own words,
- *          naming what happens to the value. <code>null</code> where
- *          {@link Kind#SURVIVES} needs no words
+ * @param explanation One sentence for the startup message, in the adapter's own words.
+ *          It says what happens to the value. <code>null</code> for {@link Kind#SURVIVES},
+ *          which needs no words
  */
 public record ValueTypeVerdict(
                                Kind kind,
@@ -36,14 +36,14 @@ public record ValueTypeVerdict(
     CHANGED,
 
     /**
-     * The adapter cannot say. A startup never ends on this answer.
+     * The adapter cannot say. This answer never stops a startup.
      */
     CANNOT_SAY
 
   }
 
   /**
-   * The answer of an adapter whose BPMS gives the value back as it was given.
+   * The answer of an adapter whose BPMS returns the value as it got it.
    *
    * @return The BPMS holds the type as it is
    */

@@ -7,25 +7,25 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Immutable description of one piece of phase-two work, scheduled via
- * {@link PhaseTwoOutbox#schedule(PhaseTwoCall)} within the local transaction and
- * dispatched after that transaction was committed. That is the second phase of a
- * two-phase committed BPMS call, and equally an operation an extension registered for
- * itself: the type says WHEN the work runs, not who runs it.
+ * An immutable description of one piece of phase-two work. It is scheduled via
+ * {@link PhaseTwoOutbox#schedule(PhaseTwoCall)} inside the local transaction, and
+ * dispatched after that transaction has committed. That is the second phase of a BPMS
+ * call with a two-phase commit. It can also be an operation an extension registered for
+ * itself. The type says WHEN the work runs, not who runs it.
  * <p>
- * The workflow-aggregate ID is carried in its serialized {@link String} form - the
- * serialized form is the ONLY form in transport. Conversion back to the aggregate's
- * ID type happens exactly once, at dispatch time, by the core's router using a
- * converter registered by the platform integration.
+ * The workflow-aggregate ID is carried in its serialized {@link String} form. The
+ * serialized form is the ONLY form in transport. It is converted back to the ID type of
+ * the aggregate exactly once, at dispatch time. The router of the core does that with a
+ * converter which the platform integration registers.
  *
- * The operation is carried by NAME: stores persist it, and the core's router
- * resolves it in the {@link PhaseOperationRegistry} at dispatch time. Build
- * calls through {@link #of} (scheduling side - derives the idempotency key from
- * the operation) or {@link #forDispatch} (a store rebuilding a call from a
+ * The operation is carried by NAME. Stores persist it, and the router of the core
+ * looks it up in the {@link PhaseOperationRegistry} at dispatch time. Build
+ * calls through {@link #of} (scheduling side; it derives the idempotency key from
+ * the operation) or through {@link #forDispatch} (a store which rebuilds a call from a
  * persisted entry).
  *
  * <p>
- * Which operations carry an idempotency key and which deliberately carry none is decision 2 in the
+ * Which operations carry an idempotency key, and which carry none on purpose, is decision 2 in the
  * repository's DECISIONS.md.
  *
  * @param operation The NAME of the operation to execute (see
@@ -34,28 +34,26 @@ import java.util.Optional;
  * @param bpmnProcessId The BPMN process ID of the workflow
  * @param workflowAggregateId The workflow-aggregate ID in serialized (String) form,
  *        or <code>null</code> for an operation which is not about one workflow
- * @param adapterId The ID of the elected BPMS adapter - set for
- *        {@link PhaseOperation#START_WORKFLOW} (the adapter elected in phase one
- *        is persisted and used in phase two), <code>null</code> for probing
- *        operations which determine the adapter at dispatch time
+ * @param adapterId The ID of the elected BPMS adapter. It is set for
+ *        {@link PhaseOperation#START_WORKFLOW}: the adapter elected in phase one is
+ *        persisted and used in phase two. It is <code>null</code> for operations which
+ *        find the adapter by asking at dispatch time
  * @param args Additional operation-specific arguments (empty for
  *        {@link PhaseOperation#START_WORKFLOW})
- * @param idempotencyKey The key deduplicating this call, derived by the operation
- *        when the call was built and bounded to
- *        {@link #MAX_IDEMPOTENCY_KEY_LENGTH} characters - {@link Optional#empty()}
- *        for operations which must not be deduplicated and for calls rebuilt by a
- *        store at dispatch time (where the key was persisted and is no longer
- *        needed)
+ * @param idempotencyKey The key which deduplicates this call. The operation derived it
+ *        when the call was built, and it has at most {@link #MAX_IDEMPOTENCY_KEY_LENGTH}
+ *        characters. It is {@link Optional#empty()} for operations which must not be
+ *        deduplicated, and for calls which a store rebuilt at dispatch time (the key was
+ *        persisted, and nobody needs it any more)
  * @param payload The bytes the caller wants the handler to see at dispatch time, or
  *        <code>null</code> for a call without one. They do NOT travel in the outbox
- *        entry: the store writes them into a {@link PhaseTwoPayloadStore} in the same
- *        transaction and the entry names them by
- *        {@link #ARG_PAYLOAD_REFERENCE}, which is what keeps an outbox entry a row of
- *        identifiers
- * @param replacesWhatIsStillWaiting Whether this call takes the place of an entry of
- *        the same idempotency key which is still waiting for its dispatch, instead of
- *        being discarded against it - see {@link #replacingWhatIsStillWaiting()}. It is
- *        a property of the planning and not of the entry: no store persists it, no
+ *        entry. The store writes them into a {@link PhaseTwoPayloadStore} in the same
+ *        transaction, and the entry names them by {@link #ARG_PAYLOAD_REFERENCE}. That
+ *        keeps an outbox entry a row of identifiers
+ * @param replacesWhatIsStillWaiting Whether this call takes the place of an entry with the
+ *        same idempotency key which still waits for its dispatch, instead of being
+ *        discarded against it. See {@link #replacingWhatIsStillWaiting()}. It is a
+ *        property of the planning and not of the entry. No store persists it, no
  *        derivation rule sees it, and a call rebuilt at dispatch time never carries it
  */
 public record PhaseTwoCall(
@@ -72,130 +70,131 @@ public record PhaseTwoCall(
   /**
    * The number of characters an idempotency key may have before it is replaced by a
    * hash of itself ({@link StoredKey}). It is the smallest limit of the stores
-   * VanillaBP ships: gruelbox refuses a unique request ID longer than this before any
-   * database sees it, while the <code>IDEMPOTENCY_KEY</code> column of the own stores
-   * holds 512 characters. Bounding at the smallest one keeps a call schedulable
-   * whichever store the application runs.
+   * VanillaBP ships. gruelbox refuses a unique request ID longer than this before any
+   * database sees it. The <code>IDEMPOTENCY_KEY</code> column of our own stores holds
+   * 512 characters. With the smallest limit, a call can be scheduled whichever store the
+   * application runs.
    */
   public static final int MAX_IDEMPOTENCY_KEY_LENGTH = 250;
 
   /**
    * The number of characters the <code>AGGREGATE_ID</code> column of the outbox stores
-   * holds. An id longer than this cannot be persisted at all - not as a hash either,
-   * because the column is what somebody reads during support - so such a call is
-   * refused where it is built, with a message naming the column instead of letting a
-   * driver report a truncation in the middle of the application's transaction.
+   * holds. A longer id cannot be persisted at all. A hash does not help either, because
+   * somebody reads the column during support. So such a call is refused where it is
+   * built, with a message which names the column. Otherwise a driver would report a
+   * truncation in the middle of the transaction of the application.
    */
   public static final int MAX_AGGREGATE_ID_LENGTH = 1024;
 
   /**
    * The number of characters the <code>ARGS</code> column of the VanillaBP JDBC store
-   * holds, measured against the SERIALIZED form ({@link #serializeArgs(Map)}), because
-   * that is what is persisted: a value well under the limit can exceed it once its
+   * holds. It is measured against the SERIALIZED form ({@link #serializeArgs(Map)}),
+   * because that form is persisted. A value well under the limit can exceed it once its
    * characters are encoded.
    * <p>
-   * Enforced for every store, although gruelbox serializes a call differently and may
-   * have no such bound. An application which moves from one store to the other must not
-   * discover this limit at that moment, which is the same reasoning that bounds the
-   * idempotency key at the smallest limit of the stores rather than at the one the store
-   * in use happens to have.
+   * It is enforced for every store, although gruelbox serializes a call in another way
+   * and may have no such limit. An application which moves from one store to the other
+   * must not discover this limit at that moment. For the same reason the idempotency key
+   * is limited by the smallest limit of the stores, not by the limit of the store in
+   * use.
    */
   public static final int MAX_ARGS_LENGTH = 2048;
 
   /**
-   * The largest payload a call may carry, in bytes. One mebibyte, which is wide enough
-   * for the state of a workflow aggregate written as JSON and narrow enough that a
-   * database holding a backlog of them stays a database somebody can back up.
+   * The largest payload a call may carry, in bytes. One mebibyte is wide enough for the
+   * state of a workflow aggregate written as JSON. And it is narrow enough that a
+   * database with a backlog of them can still be backed up.
    * <p>
-   * It stands HERE and in no store, so an application meets the same limit whichever
-   * store it runs and never discovers a narrower one by moving from one to the other -
-   * the reasoning that bounds the idempotency key at the smallest limit of the stores.
-   * MongoDB's own limit of 16 MB per document is far above it, and so is what a
+   * It is defined HERE and in no store. So an application meets the same limit whichever
+   * store it runs, and never finds a narrower one by moving from one store to the other.
+   * The idempotency key is limited by the smallest limit of the stores for the same
+   * reason. The limit of MongoDB of 16 MB per document is far above it, and so is what a
    * <code>BLOB</code> holds on every database VanillaBP ships statements for.
    */
   public static final int MAX_PAYLOAD_SIZE = 1024 * 1024;
 
   /**
-   * The {@link #args()} key carrying the task ID of
+   * The {@link #args()} key which carries the task ID of
    * {@link PhaseOperation#COMPLETE_TASK} / {@link PhaseOperation#CANCEL_TASK}
-   * calls. Part of the persisted contract - never change the literal.
+   * calls. It is part of the persisted contract, so never change the literal.
    */
   public static final String ARG_TASK_ID = "taskId";
 
   /**
-   * The {@link #args()} key carrying the BPMN error code of
-   * {@link PhaseOperation#CANCEL_TASK} calls. Part of the persisted contract -
-   * never change the literal.
+   * The {@link #args()} key which carries the BPMN error code of
+   * {@link PhaseOperation#CANCEL_TASK} calls. It is part of the persisted contract,
+   * so never change the literal.
    */
   public static final String ARG_BPMN_ERROR_CODE = "bpmnErrorCode";
 
   /**
-   * The {@link #args()} key carrying the message name of
+   * The {@link #args()} key which carries the message name of
    * {@link PhaseOperation#CORRELATE_MESSAGE} /
-   * {@link PhaseOperation#START_WORKFLOW_BY_MESSAGE} calls. Part of the
-   * persisted contract - never change the literal.
+   * {@link PhaseOperation#START_WORKFLOW_BY_MESSAGE} calls. It is part of the
+   * persisted contract, so never change the literal.
    */
   public static final String ARG_MESSAGE_NAME = "messageName";
 
   /**
-   * The {@link #args()} key carrying the optional correlation id of
-   * {@link PhaseOperation#CORRELATE_MESSAGE} calls. Part of the persisted
-   * contract - never change the literal.
+   * The {@link #args()} key which carries the optional correlation id of
+   * {@link PhaseOperation#CORRELATE_MESSAGE} calls. It is part of the persisted
+   * contract, so never change the literal.
    */
   public static final String ARG_CORRELATION_ID = "correlationId";
 
   /**
-   * The {@link #args()} key carrying the signal name of
-   * {@link PhaseOperation#SEND_SIGNAL} calls. Part of the persisted contract -
-   * never change the literal.
+   * The {@link #args()} key which carries the signal name of
+   * {@link PhaseOperation#SEND_SIGNAL} calls. It is part of the persisted contract,
+   * so never change the literal.
    */
   public static final String ARG_SIGNAL_NAME = "signalName";
 
   /**
-   * The {@link #args()} key carrying the reference of the call's payload, written by
-   * {@link #of} where a payload was passed and absent where none was. Part of the
-   * persisted contract - never change the literal.
+   * The {@link #args()} key which carries the reference of the payload of the call.
+   * {@link #of} writes it if a payload was passed. If none was, it is absent. It is part
+   * of the persisted contract, so never change the literal.
    * <p>
-   * The reference and not the bytes: a payload lies in a store of its own
-   * ({@link PhaseTwoPayloadStore}) and the entry names it, so the columns an outbox
-   * entry is made of stay the identifiers they were meant to be. It travels in the
-   * args because that is what every store already persists and hands back at dispatch
-   * time, and because a reference IS an identifier. It is added AFTER the idempotency
-   * key was derived, so no derivation rule can ever see it - a fresh reference per call
-   * would otherwise make every call unique and deduplicate nothing.
+   * The entry holds the reference and not the bytes. A payload lies in a store of its own
+   * ({@link PhaseTwoPayloadStore}) and the entry names it. So the columns of an outbox
+   * entry stay the identifiers they were meant to be. It travels in the args, because
+   * every store already persists them and hands them back at dispatch time, and because
+   * a reference IS an identifier. It is added AFTER the idempotency key was derived, so
+   * no derivation rule can ever see it. Otherwise a new reference per call would make
+   * every call unique, and nothing would be deduplicated.
    */
   public static final String ARG_PAYLOAD_REFERENCE = "payloadReference";
 
   /**
-   * The {@link #args()} key carrying the activation a
-   * {@link PhaseOperation#CORRELATE_MESSAGE} was planned in, absent where it was
-   * planned outside any ({@link RunningActivation}). Part of the persisted contract -
-   * never change the literal.
+   * The {@link #args()} key which carries the activation a
+   * {@link PhaseOperation#CORRELATE_MESSAGE} was planned in. It is absent if the call was
+   * planned outside any activation ({@link RunningActivation}). It is part of the
+   * persisted contract, so never change the literal.
    * <p>
-   * It travels for two reasons. The idempotency key is derived from it, which is what
-   * keeps multi-instance siblings of one workflow aggregate from sharing a key (see
-   * decision 23 in the repository's DECISIONS.md); and the adapter is handed it at
-   * DISPATCH time, long after the thread which knew it has moved on, because a BPMS
-   * deduplicating messages in a net of its own needs the same distinction there.
+   * It travels for two reasons. First, the idempotency key is derived from it. That keeps
+   * multi-instance siblings of one workflow aggregate from sharing a key (see
+   * decision 23 in the repository's DECISIONS.md). Second, the adapter gets it at
+   * DISPATCH time, long after the thread which knew it has moved on. A BPMS which
+   * deduplicates messages in a way of its own needs the same distinction there.
    */
   public static final String ARG_ACTIVATION_ID = "activationId";
 
   /**
-   * The {@link #args()} key carrying the moment a call which STARTS a workflow was planned, as
-   * an ISO-8601 instant. Part of the persisted contract - never change the literal.
+   * The {@link #args()} key which carries the moment a call which STARTS a workflow was
+   * planned, as an ISO-8601 instant. It is part of the persisted contract, so never change
+   * the literal.
    * <p>
-   * An aggregate may carry a second workflow once its first one ended. Where the first attempt
-   * to dispatch that second start failed, the dispatch which repeats it has to tell the first
-   * workflow from the one this entry is about, and the first one started before the entry was
-   * planned. The moment travels in the args because every store persists them and hands them
-   * back, so no store needs a column for it. No rule deriving an idempotency key reads it, so
-   * two starts planned at different moments still share their key.
+   * An aggregate may carry a second workflow once its first one ended. If the first attempt to
+   * dispatch that second start failed, the dispatch which repeats it has to tell the first
+   * workflow apart from the one this entry is about. The first one started before the entry
+   * was planned. The moment travels in the args, because every store persists them and hands
+   * them back, so no store needs a column for it. No rule which derives an idempotency key
+   * reads it. So two starts planned at different moments still share their key.
    */
   public static final String ARG_PLANNED_AT = "plannedAt";
 
   /**
-   * Refuses a call which does not name its operation or the BPMN process it belongs to,
-   * and copies what a caller could still change afterwards - the arguments and the payload
+   * Refuses a call which does not name its operation or the BPMN process it belongs to.
+   * It copies what a caller could still change afterwards: the arguments and the payload
    * bytes.
    */
   public PhaseTwoCall {
@@ -206,13 +205,13 @@ public record PhaseTwoCall(
     // aggregate ID (a broadcast signal)
     args = args == null ? Map.of() : Map.copyOf(args);
     idempotencyKey = Objects.requireNonNullElseGet(idempotencyKey, Optional::empty);
-    // copied on the way in and on the way out, so nobody changes bytes another thread
-    // is about to write to a database
+    // copied on the way in and on the way out, so nobody changes bytes which another
+    // thread is about to write to a database
     payload = payload == null ? null : payload.clone();
   }
 
   /**
-   * The payload of this call, or <code>null</code> where it carries none.
+   * The payload of this call, or <code>null</code> if it carries none.
    *
    * @return A copy of the bytes, so a caller reading them cannot change what the call
    *         holds
@@ -226,7 +225,7 @@ public record PhaseTwoCall(
   /**
    * Whether this call carries a payload.
    *
-   * @return Whether there are bytes to store, respectively bytes to hand to the handler
+   * @return Whether there are bytes to store or to hand to the handler
    */
   public boolean hasPayload() {
 
@@ -235,9 +234,9 @@ public record PhaseTwoCall(
   }
 
   /**
-   * The reference the payload of this call is stored under, or <code>null</code> where
-   * the call carries none. It is what a {@link PhaseTwoPayloadStore} is asked with at
-   * dispatch time.
+   * The reference the payload of this call is stored under, or <code>null</code> if the
+   * call carries none. At dispatch time, a {@link PhaseTwoPayloadStore} is asked with
+   * it.
    *
    * @return The reference or <code>null</code>
    */
@@ -248,8 +247,8 @@ public record PhaseTwoCall(
   }
 
   /**
-   * The same call carrying the bytes a store read for its reference - what a store
-   * builds at dispatch time once it looked the payload up.
+   * The same call, with the bytes a store read for its reference. A store builds this at
+   * dispatch time, once it has looked up the payload.
    *
    * @param payload The bytes read from the payload store
    * @return A copy of this call carrying them
@@ -263,25 +262,25 @@ public record PhaseTwoCall(
   }
 
   /**
-   * The same call, asking the store to put it in the place of the entry of the same
-   * idempotency key which is still waiting for its dispatch - payload included - rather
-   * than to discard it against that entry. Hand the result to
+   * The same call, but it asks the store to put it in the place of the entry with the
+   * same idempotency key which still waits for its dispatch, payload included. Without it,
+   * the store discards the call against that entry. Pass the result to
    * {@link PhaseTwoOutbox#scheduleReplacingWhatIsStillWaiting(PhaseTwoCall)}.
    * <p>
-   * Without this word nothing changes: the older entry stays and the younger call is
-   * dropped, which is right as long as a call only carries the intention and the
-   * dispatch reads the state fresh. It stops being right once the call carries the
-   * state itself. Under a backlog the oldest report would then win, and that is when the
-   * answer matters most - see decision 68 in the repository's DECISIONS.md.
+   * Without this, nothing changes. The older entry stays and the younger call is dropped.
+   * That is right as long as a call only carries the intention, and the dispatch reads the
+   * state fresh. It stops being right once the call carries the state itself. Under a
+   * backlog the oldest report would then win, and that is when the answer matters most.
+   * See decision 68 in the repository's DECISIONS.md.
    * <p>
-   * An entry a dispatch has already taken for itself is NOT replaced. It runs to its
-   * end and the younger call becomes an entry of its own, so two calls reach the
-   * handler instead of one. The store says which of the two it did.
+   * An entry which a dispatch has already taken is NOT replaced. It runs to its end, and
+   * the younger call becomes an entry of its own. So two calls reach the handler instead
+   * of one. The store says which of the two it did.
    * <p>
    * Only an EXTENSION may ask for it. The operations VanillaBP itself plans write into
-   * the BPMS and read the state they need when they are dispatched, so there is nothing
-   * a younger call could carry for them - asking is a mistake and is refused here,
-   * where the stack trace still points at the code which asked.
+   * the BPMS and read the state they need when they are dispatched. So a younger call
+   * could carry nothing for them. Asking is a mistake, and it is refused here, where the
+   * stack trace still points at the code which asked.
    *
    * @return A copy of this call which replaces what is still waiting
    * @throws IllegalArgumentException If the operation is one of VanillaBP's own
@@ -307,9 +306,9 @@ public record PhaseTwoCall(
   }
 
   /**
-   * Two calls are the same call when they describe the same operation with the same
-   * bytes. Written out because the equality a record generates compares an array by its
-   * identity, which would make two calls carrying the very same payload unequal.
+   * Two calls are the same call if they describe the same operation with the same
+   * bytes. This is written out, because the equality a record generates compares an array
+   * by its identity. Then two calls with the very same payload would be unequal.
    */
   @Override
   public boolean equals(
@@ -348,8 +347,8 @@ public record PhaseTwoCall(
   }
 
   /**
-   * Names the payload by its length and not by its bytes: the bytes belong to the
-   * application, and a log line printing them is a log line leaking them.
+   * Names the payload by its length and not by its bytes. The bytes belong to the
+   * application, and a log line which prints them leaks them.
    */
   @Override
   public String toString() {
@@ -369,7 +368,7 @@ public record PhaseTwoCall(
   }
 
   /**
-   * Builds a call to be scheduled, deriving its idempotency key from the given
+   * Builds a call to be scheduled. It derives its idempotency key from the given
    * operation (see the derivation rules documented on {@link PhaseOperation}).
    *
    * @param operation The operation to execute
@@ -398,13 +397,13 @@ public record PhaseTwoCall(
 
   /**
    * Builds a call to be scheduled which carries a payload: the state its caller saw at
-   * the moment it planned the operation. The bytes are stored beside the entry and the
-   * entry names them, so what the caller passes here reaches the handler at dispatch
+   * the moment it planned the operation. The bytes are stored next to the entry, and the
+   * entry names them. So what the caller passes here reaches the handler at dispatch
    * time unchanged.
    * <p>
-   * The format is the caller's: VanillaBP carries bytes and reads none of them. A call
-   * without a payload writes no row in the payload store and reads none at its
-   * dispatch, so passing <code>null</code> costs exactly what it did before payloads
+   * The caller decides the format. VanillaBP carries the bytes and reads none of them. A
+   * call without a payload writes no row in the payload store and reads none at its
+   * dispatch. So passing <code>null</code> costs exactly what it cost before payloads
    * existed.
    *
    * @param operation The operation to execute
@@ -432,15 +431,15 @@ public record PhaseTwoCall(
     validateAggregateIdLength(operation, workflowModuleId, bpmnProcessId, workflowAggregateId);
     validateArgsLength(operation, workflowModuleId, bpmnProcessId, args);
     validatePayloadSize(operation, workflowModuleId, bpmnProcessId, payload);
-    // the key is derived from the call itself, so the call is built twice: once
-    // to derive from, once carrying the result
+    // the key is derived from the call itself, so the call is built twice: once to
+    // derive the key from, once with the result
     final var withoutKey = new PhaseTwoCall(
         operation
             .name(), workflowModuleId, bpmnProcessId, workflowAggregateId, adapterId, args, Optional
                 .empty(), null, false);
-    // bounded HERE and not in the derivation rules, so no operation added later can
-    // forget it - a key too long for the store fails the application's own
-    // transaction, at the moment it starts a workflow or correlates a message
+    // limited HERE and not in the derivation rules, so no operation added later can
+    // forget it. A key too long for the store fails the transaction of the application,
+    // at the moment it starts a workflow or correlates a message
     final var boundedKey = operation
         .idempotencyKey()
         .derive(withoutKey)
@@ -453,12 +452,12 @@ public record PhaseTwoCall(
   }
 
   /**
-   * Adds the reference of a payload to the arguments the entry persists. Called after
-   * the idempotency key was derived, see {@link #ARG_PAYLOAD_REFERENCE}.
+   * Adds the reference of a payload to the arguments the entry persists. It is called
+   * after the idempotency key was derived, see {@link #ARG_PAYLOAD_REFERENCE}.
    *
    * @param args The arguments of the call
    * @param payload The payload or <code>null</code>
-   * @return The arguments, unchanged where there is no payload
+   * @return The arguments, unchanged if there is no payload
    */
   private static Map<String, String> withPayloadReference(
       final Map<String, String> args,
@@ -475,8 +474,8 @@ public record PhaseTwoCall(
 
   /**
    * Refuses a payload no store should be asked to hold. It sits next to the other two
-   * guards and for the same reason: this is where the bytes are still at hand and where
-   * the stack trace still points at the code which passed them.
+   * checks, for the same reason: here the bytes are still at hand, and the stack trace
+   * still points at the code which passed them.
    */
   private static void validatePayloadSize(
       final PhaseOperation operation,
@@ -504,9 +503,9 @@ public record PhaseTwoCall(
   }
 
   /**
-   * Refuses an aggregate ID no store can hold. The check sits here because this is
-   * where the ID is still at hand and where the stack trace still points at the
-   * business code which owns it.
+   * Refuses an aggregate ID no store can hold. The check sits here, because here the ID
+   * is still at hand, and the stack trace still points at the business code which owns
+   * it.
    */
   private static void validateAggregateIdLength(
       final PhaseOperation operation,
@@ -535,10 +534,10 @@ public record PhaseTwoCall(
   }
 
   /**
-   * Refuses args no store can hold, measured on the serialized form for the reason
-   * given at {@link #MAX_ARGS_LENGTH}. Sits next to the aggregate-ID guard and for the
-   * same reason: this is where the values are still at hand and where the stack trace
-   * still points at the business code which passed them.
+   * Refuses args no store can hold. They are measured on the serialized form, for the
+   * reason given at {@link #MAX_ARGS_LENGTH}. It sits next to the check of the aggregate
+   * ID, for the same reason: here the values are still at hand, and the stack trace still
+   * points at the business code which passed them.
    */
   private static void validateArgsLength(
       final PhaseOperation operation,
@@ -550,8 +549,8 @@ public record PhaseTwoCall(
     if ((serialized == null) || (serialized.length() <= MAX_ARGS_LENGTH)) {
       return;
     }
-    // the longest argument is the one worth naming: it is the value the caller has to
-    // change, and with several args the total says nothing about which one it is
+    // name the longest argument: it is the value the caller has to change. With
+    // several args, the total says nothing about which one it is
     final var longest = args
         .entrySet()
         .stream()
@@ -580,9 +579,9 @@ public record PhaseTwoCall(
   }
 
   /**
-   * Rebuilds a call from a persisted outbox entry. The idempotency key is not
-   * part of it: the store persisted it when the entry was written and nothing
-   * downstream of the store reads it again.
+   * Rebuilds a call from a persisted outbox entry. The idempotency key is not part of
+   * it. The store persisted it when the entry was written, and nothing after the store
+   * reads it again.
    *
    * @param operation The persisted operation NAME
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
@@ -590,7 +589,7 @@ public record PhaseTwoCall(
    * @param workflowAggregateId The workflow-aggregate ID in serialized form
    * @param adapterId The persisted adapter ID or <code>null</code>
    * @param args The persisted arguments (may be <code>null</code>)
-   * @return The call, ready to be handed to the core's router
+   * @return The call, ready to be handed to the router of the core
    */
   public static PhaseTwoCall forDispatch(
       final String operation,
@@ -605,8 +604,8 @@ public record PhaseTwoCall(
   }
 
   /**
-   * Rebuilds a call from a persisted outbox entry, carrying the payload the store read
-   * for the entry's {@link #ARG_PAYLOAD_REFERENCE}.
+   * Rebuilds a call from a persisted outbox entry, with the payload which the store read
+   * for the {@link #ARG_PAYLOAD_REFERENCE} of the entry.
    *
    * @param operation The persisted operation NAME
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
@@ -614,9 +613,9 @@ public record PhaseTwoCall(
    * @param workflowAggregateId The workflow-aggregate ID in serialized form
    * @param adapterId The persisted adapter ID or <code>null</code>
    * @param args The persisted arguments (may be <code>null</code>)
-   * @param payload The bytes read from the payload store, or <code>null</code> where
-   *        the entry names none
-   * @return The call, ready to be handed to the core's router
+   * @param payload The bytes read from the payload store, or <code>null</code> if the
+   *        entry names none
+   * @return The call, ready to be handed to the router of the core
    */
   public static PhaseTwoCall forDispatch(
       final String operation,
@@ -634,10 +633,10 @@ public record PhaseTwoCall(
   }
 
   /**
-   * Serializes an args map into a single String for stores flattening calls into
-   * scalar columns/parameters (form-encoding: URL-encoded keys/values joined by
-   * <code>=</code> and <code>&amp;</code>). Part of the persisted contract - never
-   * change the encoding for existing operations.
+   * Serializes an args map into a single String, for stores which flatten calls into
+   * scalar columns or parameters. The form encoding joins URL-encoded keys and values
+   * with <code>=</code> and <code>&amp;</code>. It is part of the persisted contract, so
+   * never change the encoding for existing operations.
    *
    * @param args The args map (may be empty)
    * @return The serialized form or <code>null</code> for an empty map

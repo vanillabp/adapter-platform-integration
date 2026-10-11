@@ -1,8 +1,8 @@
 package io.vanillabp.integration.extension.spi.handler;
 
 /**
- * One multi-instance scope a handler invocation runs in, keyed by the BPMN element
- * carrying the multi-instance characteristics.
+ * One multi-instance scope a handler invocation runs in. Its key is the BPMN element
+ * which has the multi-instance characteristics.
  *
  * @param element The current element of the collection iterated over
  * @param index The zero-based index of the current iteration

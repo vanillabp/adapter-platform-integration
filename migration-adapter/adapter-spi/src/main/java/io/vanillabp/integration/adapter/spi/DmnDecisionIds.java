@@ -20,28 +20,28 @@ import org.w3c.dom.Element;
 import org.xml.sax.SAXException;
 
 /**
- * Reads and rewrites the decision ids of a DMN file, which is the one thing about a
- * decision table VanillaBP has to touch - and the one thing which is the same for every
- * BPMS, because DMN is a standard: a decision is <code>&lt;decision id="..."&gt;</code>
- * and a decision built on another one names it as
+ * Reads and rewrites the decision ids of a DMN file. This is the only thing about a
+ * decision table which VanillaBP has to touch. It is also the same for every BPMS,
+ * because DMN is a standard. A decision is <code>&lt;decision id="..."&gt;</code>, and a
+ * decision built on another one names it as
  * <code>&lt;requiredDecision href="#..."/&gt;</code>.
  * <p>
- * Why it is rewritten at all: where a workflow module is kept apart from another one by
- * PREFIXING its identifiers rather than by an isolation of the BPMS
- * ({@link NameClashAvoidance#USE_PREFIX}), two modules bringing
- * a decision of the same id would overwrite each other in the BPMS. A decision id is
- * scoped MODULE-WIDE, not per process
- * ({@link NameClashAvoidanceSupport#scopedIdentifier(String, String, String)}): several
- * processes of a module legitimately call the same decision.
+ * Why it is rewritten at all: a workflow module may be kept apart from others by
+ * PREFIXING its identifiers, not by an isolation of the BPMS
+ * ({@link NameClashAvoidance#USE_PREFIX}). Then two modules which bring a decision with
+ * the same id would overwrite each other in the BPMS. A decision id is scoped for the
+ * whole MODULE, not per process
+ * ({@link NameClashAvoidanceSupport#scopedIdentifier(String, String, String)}), because
+ * several processes of a module may call the same decision.
  * <p>
- * What an ADAPTER has to do with the result is the half this class cannot do: the
- * reference from a business rule task to a decision is engine-specific
- * (<code>camunda:decisionRef</code>, <code>zeebe:calledDecision</code>), so the adapter
+ * This class cannot do the other half, so the ADAPTER has to. The reference from a
+ * business rule task to a decision depends on the engine
+ * (<code>camunda:decisionRef</code>, <code>zeebe:calledDecision</code>). So the adapter
  * rewrites it with the same function while it prepares the BPMN.
  * <p>
- * Only ids this file DECLARES are rewritten, and only references pointing at one of them.
- * An input data element, a business knowledge model or a reference to a decision of
- * another file keeps its id: what is not deployed here is not renamed here.
+ * Only ids this file DECLARES are rewritten, and only references which point at one of
+ * them. An input data element, a business knowledge model or a reference to a decision of
+ * another file keeps its id. What is not deployed here is not renamed here.
  */
 public final class DmnDecisionIds {
 
@@ -82,7 +82,7 @@ public final class DmnDecisionIds {
    * of them.
    *
    * @param dmn The DMN file
-   * @param scoping What a decision id becomes - typically
+   * @param scoping What a decision id becomes, usually
    *          <code>id -&gt; scoping.scopedIdentifier(workflowModuleId, id, adapterId)</code>
    * @return The rewritten file
    * @throws IllegalArgumentException If the file cannot be read as DMN
@@ -107,8 +107,8 @@ public final class DmnDecisionIds {
     }
 
     // a reference is written as a fragment of a URI, so only the local part is a
-    // decision id of this file - a href into another file names that file first and is
-    // none of this rewrite's business
+    // decision id of this file. A href into another file names that file first, and
+    // this rewrite leaves it alone
     forEachElement(document, element -> {
       final var href = element.getAttribute(HREF);
       if (!href.startsWith("#")) {
@@ -156,8 +156,8 @@ public final class DmnDecisionIds {
     try {
       final var factory = DocumentBuilderFactory.newInstance();
       factory.setNamespaceAware(true);
-      // the file comes from the application's own resources, but a parser reading it
-      // must not fetch anything a document points at
+      // the file comes from the application's own resources, but the parser must still
+      // not fetch anything the document points at
       factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
       factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
       factory.setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "");
@@ -193,8 +193,8 @@ public final class DmnDecisionIds {
   }
 
   /**
-   * Reads a stream into memory - a DMN travels as bytes through the pipeline, because
-   * nothing but the ids above has to be understood.
+   * Reads a stream into memory. A DMN travels through the pipeline as bytes, because only
+   * the ids above have to be understood.
    *
    * @param dmn The stream, NOT closed by this method (the pipeline owns it)
    * @return The bytes

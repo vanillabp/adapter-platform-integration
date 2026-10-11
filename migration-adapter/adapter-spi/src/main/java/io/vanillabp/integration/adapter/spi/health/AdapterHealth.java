@@ -5,22 +5,23 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * What one BPMS adapter says about the BPMS it talks to, reported by
- * {@link io.vanillabp.integration.adapter.spi.AdapterDeploymentService#checkHealth()}
- * and translated by the platform integration into whatever that platform publishes
- * (a Spring Boot Actuator health indicator, a Quarkus readiness check).
+ * What one BPMS adapter says about the BPMS it talks to. It is reported by
+ * {@link io.vanillabp.integration.adapter.spi.AdapterDeploymentService#checkHealth()}.
+ * The platform integration translates it into whatever that platform publishes (a Spring
+ * Boot Actuator health indicator, a Quarkus readiness check).
  * <p>
- * An adapter which has nothing to contribute returns <code>null</code> instead of a
- * health: absent is honest, {@link Status#UP} would be a claim nobody checked.
+ * An adapter which has nothing to say returns <code>null</code> instead of a health.
+ * Nothing is honest. {@link Status#UP} would claim something nobody checked.
  * <p>
- * Two rules follow from VanillaBP's configuration UX and are part of this contract:
+ * Two rules come from the way VanillaBP handles configuration, and they are part of this
+ * contract:
  * <ul>
- * <li>an adapter which is not configured yet reports {@link Status#UNKNOWN}, never
- * {@link Status#DOWN} - the application booted with a guiding warning on purpose, and
- * a health endpoint must not turn that into an outage;</li>
- * <li>the {@link #details()} name the adapter id and the address it tried, so an
- * operator can act on the endpoint's output without reading the application's
- * configuration.</li>
+ * <li>An adapter which is not configured yet reports {@link Status#UNKNOWN}, never
+ * {@link Status#DOWN}. The application started with a warning which guides the developer,
+ * on purpose. A health endpoint must not turn that into an outage.</li>
+ * <li>The {@link #details()} name the adapter id and the address it tried. So an operator
+ * can act on the output of the endpoint without reading the configuration of the
+ * application.</li>
  * </ul>
  *
  * @param adapterId The id of the adapter instance
@@ -62,23 +63,23 @@ public record AdapterHealth(
   }
 
   /**
-   * Builds the details map of an adapter health, dropping entries without a value so
-   * the endpoint never shows an empty line.
+   * Builds the details map of an adapter health. It drops entries without a value, so the
+   * endpoint never shows an empty line.
    */
   public static class DetailsBuilder {
 
     private final Map<String, String> details = new LinkedHashMap<>();
 
     /**
-     * Starts an empty set of details. {@link AdapterHealth#detailsBuilder()} says the same
-     * and reads better where the health is built in one expression.
+     * Starts an empty set of details. {@link AdapterHealth#detailsBuilder()} does the same.
+     * It reads better where the health is built in one expression.
      */
     public DetailsBuilder() {
     }
 
     /**
-     * Adds one detail, or drops it where the adapter has nothing to show for that name -
-     * so a caller may offer a value it is not sure about instead of asking first.
+     * Adds one detail, or drops it if the adapter has nothing to show for that name. So a
+     * caller may pass a value it is not sure about, and does not have to check first.
      *
      * @param name The name of the detail
      * @param value The value, ignored if <code>null</code> or blank
@@ -96,9 +97,8 @@ public record AdapterHealth(
     }
 
     /**
-     * Closes the set, so what the endpoint is given cannot be changed afterwards. The
-     * details keep the order the adapter added them in, because that is the order
-     * somebody reading the endpoint expects to find them in.
+     * Closes the set, so nobody can change it afterwards. The details keep the order in
+     * which the adapter added them. Somebody who reads the endpoint expects that order.
      *
      * @return The details which had a value, in the order they were added
      */
@@ -124,8 +124,8 @@ public record AdapterHealth(
   /**
    * The health of an adapter whose BPMS answered.
    *
-   * @param adapterId The id of the adapter instance, so an operator can tell two instances
-   *          of one BPMS apart
+   * @param adapterId The id of the adapter instance. With it an operator can tell two
+   *          instances of one BPMS apart
    * @param adapterType The adapter's type (e.g. <code>camunda8</code>)
    * @param description One sentence for a human, e.g. which cluster answered
    * @param details Named values an operator needs, built with {@link #detailsBuilder()}
@@ -142,10 +142,10 @@ public record AdapterHealth(
   }
 
   /**
-   * The health of an adapter which could not reach its BPMS or found it broken. It is the
-   * only status which makes an application unhealthy, so the description says what failed
-   * and the details say which address was tried - an adapter reports this instead of
-   * throwing, which the core would otherwise have to turn into the same thing.
+   * The health of an adapter which could not reach its BPMS, or found it broken. It is the
+   * only status which makes an application unhealthy. So the description says what failed,
+   * and the details say which address was tried. An adapter reports this instead of
+   * throwing. Otherwise the core would have to turn the exception into the same thing.
    *
    * @param adapterId The id of the adapter instance
    * @param adapterType The adapter's type (e.g. <code>camunda8</code>)
@@ -165,8 +165,8 @@ public record AdapterHealth(
 
   /**
    * The health of an adapter which checked nothing, because it is not configured yet or
-   * its check is switched off. Never the answer of a BPMS which did not answer: that is
-   * {@link #down}, and reporting it as unknown hides an outage.
+   * its check is switched off. It is never the answer for a BPMS which did not answer.
+   * That is {@link #down}, and reporting it as unknown hides an outage.
    *
    * @param adapterId The id of the adapter instance
    * @param adapterType The adapter's type (e.g. <code>camunda8</code>)

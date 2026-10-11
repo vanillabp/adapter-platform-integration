@@ -8,12 +8,12 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.TaskDelivery;
 
 /**
- * What phase two of an operation is given. It is phase one's request with the
- * workflow-aggregate replaced by its ID: phase two runs after the caller's transaction
- * committed, on the outbox dispatcher's thread, so the aggregate an adapter needs for
- * what it sends to the BPMS is loaded there and then.
+ * What phase two of an operation gets. It is the request of phase one, with the ID of the
+ * workflow-aggregate instead of the aggregate. Phase two runs after the caller's
+ * transaction has committed, on the thread of the outbox. So the aggregate an adapter
+ * needs for what it sends to the BPMS is loaded there and then.
  * <p>
- * Phase two acts, at-least-once - see the contract on
+ * Phase two acts, at least once. See the contract on
  * {@link PhaseOperationHandler#phaseTwo(PhaseTwoRequest)}.
  *
  * @param <A> The workflow-aggregate type
@@ -23,28 +23,28 @@ import io.vanillabp.integration.spi.TaskDelivery;
  * @param workflowAggregateId The ID of the workflow aggregate in its own type,
  *        <code>null</code> for an operation which is not about one workflow (a
  *        broadcast signal)
- * @param args The operation's arguments, read through the accessors below rather than
+ * @param args The operation's arguments. Read them through the accessors below, not
  *        by key
- * @param workflowStartReport Where phase two of a START says which workflow the BPMS created,
- *        reported through {@link #reportStartedWorkflow(String)} rather than read from here.
+ * @param workflowStartReport Where phase two of a START says which workflow the BPMS created.
+ *        Report it through {@link #reportStartedWorkflow(String)}, do not read it from here.
  *        {@link WorkflowStartReport#NOBODY_LISTENS} for every other operation
- * @param workflowId The BPMS' own id of the workflow the operation is about, where VanillaBP
- *        wrote down that THIS adapter started it, otherwise <code>null</code>. Handed to an
- *        operation about a workflow only. It is a hint, like the id the election hands to
- *        {@link MigratableProcessService#awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object, String)}:
- *        an adapter may
- *        address the workflow by it instead of searching for it, and where the BPMS does not know
- *        that id it does what it would have done without one
+ * @param workflowId The BPMS' own id of the workflow the operation is about, if VanillaBP
+ *        wrote down that THIS adapter started it, otherwise <code>null</code>. Only an
+ *        operation about a workflow gets it. It is a hint, like the id the election hands to
+ *        {@link MigratableProcessService#awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object, String)}.
+ *        An adapter may
+ *        address the workflow by it instead of searching for it. If the BPMS does not know
+ *        that id, the adapter does what it would have done without one
  * @param taskRecord The row of the delivery log about the task the operation names
- *        ({@link #taskId()}), where that row names THIS adapter, otherwise <code>null</code>.
- *        Handed to an operation about a workflow which names a task, which is a task-scoped
- *        push of a changed aggregate. The row exists only for a task the adapter left open
- *        ({@code TaskDelivery#outcome()} is <code>COMPLETION_PENDING</code>), and
- *        {@code TaskDelivery#taskClosedAt()} says whether the application closed it since. It
- *        names the BPMS' own id of the workflow the task runs in, its element and its kind, so
- *        an adapter can address the task without searching for it. Like
- *        {@link #workflowId()} it is a hint: an adapter whose BPMS does not know what the row
- *        names does what it would have done without one
+ *        ({@link #taskId()}), if that row names THIS adapter, otherwise <code>null</code>.
+ *        Only an operation about a workflow which names a task gets it. That is a push of a
+ *        changed aggregate into the scope of a task. The row exists only for a task the
+ *        adapter left open ({@code TaskDelivery#outcome()} is <code>COMPLETION_PENDING</code>).
+ *        {@code TaskDelivery#taskClosedAt()} says whether the application has closed it
+ *        since. The row names the BPMS' own id of the workflow the task runs in, its element
+ *        and its kind. So an adapter can address the task without searching for it. Like
+ *        {@link #workflowId()} it is a hint. If the BPMS does not know what the row names, the
+ *        adapter does what it would have done without one
  */
 public record PhaseTwoRequest<A>(
                                  String workflowModuleId,
@@ -57,10 +57,10 @@ public record PhaseTwoRequest<A>(
                                  TaskDelivery taskRecord) {
 
   /**
-   * Copies the arguments, so what a handler reads cannot be changed by whoever built the
-   * request, and reads a <code>null</code> map as an empty one. A handler may therefore
-   * ask for any argument and gets <code>null</code> for one its operation does not carry.
-   * A request without a report sink gets the one which drops what it is told.
+   * Copies the arguments, so whoever built the request cannot change what a handler reads.
+   * A <code>null</code> map counts as an empty one. So a handler may ask for any argument,
+   * and it gets <code>null</code> for one its operation does not carry. A request without a
+   * report sink gets the sink which drops what it is told.
    */
   public PhaseTwoRequest {
     args = args == null ? Map.of() : Map.copyOf(args);
@@ -70,9 +70,9 @@ public record PhaseTwoRequest<A>(
   }
 
   /**
-   * A request nobody listens to the start of, which is what every caller built before the
-   * report existed. The sink stands LAST for that reason, the way a component appended to
-   * {@code io.vanillabp.integration.spi.TaskDelivery} did.
+   * A request where nobody listens to the start. Every caller built this before the report
+   * existed. That is why the sink stands LAST, like the component appended to
+   * {@code io.vanillabp.integration.spi.TaskDelivery}.
    *
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
    * @param bpmnProcessId The BPMN process ID of the workflow
@@ -93,8 +93,8 @@ public record PhaseTwoRequest<A>(
   }
 
   /**
-   * A request which knows no workflow id, which is what every caller built before the id
-   * existed. The id stands LAST for that reason.
+   * A request which knows no workflow id. Every caller built this before the id existed.
+   * That is why the id stands LAST.
    *
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
    * @param bpmnProcessId The BPMN process ID of the workflow
@@ -116,8 +116,8 @@ public record PhaseTwoRequest<A>(
   }
 
   /**
-   * A request which knows no row of the task it names, which is what every caller built before
-   * the row was handed over. The row stands LAST for that reason.
+   * A request which knows no row of the task it names. Every caller built this before the row
+   * was handed over. That is why the row stands LAST.
    *
    * @param workflowModuleId The ID of the workflow module the workflow belongs to
    * @param bpmnProcessId The BPMN process ID of the workflow
@@ -142,13 +142,13 @@ public record PhaseTwoRequest<A>(
   }
 
   /**
-   * Says which workflow of the BPMS the start just created, so VanillaBP can answer later which
-   * workflow this aggregate belongs to without asking any BPMS. Called by the handler of a
-   * START operation, once, with the id of the instance the aggregate IS (on a BPMS with call
-   * activities the super-parent). Every other handler leaves it alone, and so does an adapter
-   * which has nothing to report: the call is then simply not made.
+   * Says which workflow of the BPMS the start just created. Then VanillaBP can later answer
+   * which workflow this aggregate belongs to, without asking any BPMS. The handler of a START
+   * operation calls it once, with the id of the instance the aggregate IS (on a BPMS with
+   * call activities, the top-most parent). No other handler calls it. An adapter which has
+   * nothing to report does not call it either.
    *
-   * @param workflowId The BPMS' own id of the started workflow, <code>null</code> where the
+   * @param workflowId The BPMS' own id of the started workflow, <code>null</code> if the
    *          adapter names none
    */
   public void reportStartedWorkflow(
@@ -160,21 +160,21 @@ public record PhaseTwoRequest<A>(
 
   /**
    * Says which workflow of the BPMS the start just created AND on which version of its process
-   * definition, so VanillaBP can answer both later without asking any BPMS. Everything
+   * definition. Then VanillaBP can answer both later without asking any BPMS. Everything
    * {@link #reportStartedWorkflow(String)} says holds here as well. Call one of the two, not
    * both.
    * <p>
    * An adapter whose BPMS counts versions calls this one. VanillaBP knows which adapters count
-   * versions, from the catalog an adapter registers while it wires its BPMN. Where such an
-   * adapter reports a start without a version, VanillaBP says so once per adapter and BPMN
-   * process in a WARN, and still writes the id down.
+   * versions, from the catalog an adapter registers while it wires its BPMN. If such an
+   * adapter reports a start without a version, VanillaBP logs a WARN once per adapter and BPMN
+   * process, and still writes the id down.
    *
-   * @param workflowId The BPMS' own id of the started workflow, <code>null</code> where the
+   * @param workflowId The BPMS' own id of the started workflow, <code>null</code> if the
    *          adapter names none
    * @param processVersion The version of the process definition the workflow was started on, as
-   *          the BPMS counts it and in the same form
+   *          the BPMS counts it. Use the same form which
    *          {@code io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#getProcessVersion()}
-   *          reports it for a task of that workflow. <code>null</code> where the BPMS does not say
+   *          reports for a task of that workflow. <code>null</code> if the BPMS does not say
    */
   public void reportStartedWorkflow(
       final String workflowId,
@@ -185,8 +185,8 @@ public record PhaseTwoRequest<A>(
   }
 
   /**
-   * Which task the operation addresses - the value phase one was given, which the outbox
-   * persisted in between.
+   * Which task the operation addresses. It is the value phase one got, and the outbox stored
+   * it in between.
    *
    * @return The ID of the task the operation is about, or <code>null</code>, see
    *         {@link PhaseOneRequest#taskId()}
@@ -209,7 +209,7 @@ public record PhaseTwoRequest<A>(
   }
 
   /**
-   * Which message the operation sends, PLAIN as the model carries it - the adapter scopes
+   * Which message the operation sends, PLAIN as the model carries it. The adapter scopes
    * it, see {@link PhaseOneRequest#messageName()}.
    *
    * @return The BPMN message name of a correlation or of a message start event
@@ -234,7 +234,7 @@ public record PhaseTwoRequest<A>(
 
   /**
    * Which signal is broadcast. A broadcast is about no single workflow, so
-   * {@link #workflowAggregateId()} is <code>null</code> next to it.
+   * {@link #workflowAggregateId()} is <code>null</code> with it.
    *
    * @return The PLAIN BPMN signal name of a broadcast
    */
@@ -245,18 +245,18 @@ public record PhaseTwoRequest<A>(
   }
 
   /**
-   * What the BPMS called the element instance the operation was planned in, or
-   * <code>null</code> where it was planned outside any (a REST endpoint) respectively
-   * by an adapter which does not name its activations. It travels only for operations
-   * which say so ({@code PhaseOperation#carriesActivation()}).
+   * What the BPMS called the element instance the operation was planned in. It is
+   * <code>null</code> if the operation was planned outside of any (e.g. in a REST endpoint),
+   * or by an adapter which does not name its activations. Only operations which say so
+   * carry it ({@code PhaseOperation#carriesActivation()}).
    * <p>
-   * A BPMS which deduplicates in a net of its own - Camunda 8 does, by the message id
-   * the adapter derives - needs the same distinction VanillaBP makes on its own side:
-   * three elements of a multi-instance call activity are three operations for the
-   * outbox and would be ONE message for such a cluster, because a called process is a
-   * secondary workflow of the same aggregate and everything else about the three
-   * correlations is equal. An adapter with such a net puts this value into whatever it
-   * derives its own key from; an adapter without one ignores it.
+   * Some BPMS remove duplicates on their own. Camunda 8 does, by the message id the adapter
+   * derives. Such a BPMS needs the same distinction VanillaBP makes on its own side. Three
+   * elements of a multi-instance call activity are three operations for the outbox. For
+   * such a cluster they would be ONE message, because a called process is a secondary
+   * workflow of the same aggregate, and everything else about the three correlations is
+   * equal. An adapter with such a check puts this value into whatever it derives its own
+   * key from. An adapter without one ignores it.
    *
    * @return The activation or <code>null</code>
    */

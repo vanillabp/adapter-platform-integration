@@ -1,27 +1,27 @@
 package io.vanillabp.integration.extension.spi;
 
 /**
- * An implementation is responsible for preparing the BPMN and wiring it with the business code.
- * The implementation may be provided by custom VanillaBP extensions or by platform integration adapters.
+ * An implementation prepares the BPMN and wires it with the business code. VanillaBP extensions
+ * and the adapters of the platform integration provide implementations.
  * <p>
- * A BPMS adapter does not implement this interface directly: the adapter SPI extends it and adds
- * everything reading and deploying a model takes.
+ * A BPMS adapter does not implement this interface directly. The adapter SPI extends it and adds
+ * everything which is needed to read and deploy a model.
  * <p>
  * <b>The adapter of the BPMS runs before every extension.</b> It has wired a BPMN process before
- * any extension sees that process, and it is processing workflows before any extension is started.
- * On the way down the order is mirrored: extensions are stopped first and the adapters last. So an
- * extension hooks what it adds to a model in RELATIVE to what the adapter already put there, for
- * example behind the last listener of a kind, rather than at a position it has to guess. Something
- * which has to see an element before the adapter touched it needs an entry point of its own and has
+ * any extension sees that process. And it processes workflows before any extension is started.
+ * On shutdown the order is the other way round: extensions are stopped first, the adapters last.
+ * So an extension adds its parts to a model RELATIVE to what the adapter already put there, for
+ * example behind the last listener of a kind. It does not have to guess a position. If something
+ * has to see an element before the adapter touched it, it needs an entry point of its own and has
  * to ask for one.
  * <p>
- * <b>What is not promised is the order of two extensions among themselves.</b> They are sorted by
- * {@link #getOrder()}, and two extensions which do not know each other cannot agree on a number, so
- * two of the same order run in the order the platform happened to collect their beans in. Nothing
- * promises that this order stays. An extension which only depends on running after the adapter is
- * unaffected by all of it, which is why VanillaBP has no <code>MIN_VALUE</code> and
+ * <b>The order of two extensions among themselves is not promised.</b> They are sorted by
+ * {@link #getOrder()}. Two extensions which do not know each other cannot agree on a number. So
+ * two of the same order run in the order in which the platform happened to collect their beans.
+ * Nothing promises that this order stays. An extension which only needs to run after the adapter
+ * is not affected by any of this. That is why VanillaBP has no <code>MIN_VALUE</code> and
  * <code>MAX_VALUE</code> for anybody to claim. Both halves are decision 52 in the repository's
- * DECISIONS.md, and the wiki page <code>Extensions</code> is where an extension author reads them.
+ * DECISIONS.md, and an extension author reads about them on the wiki page <code>Extensions</code>.
  *
  * @param <BPMN> The BPMN model type
  * @param <PC> The context to store all information needed by the adapter for wiring and deploying BPMN
@@ -30,11 +30,11 @@ public interface ExtensionWiringService<BPMN, PC> {
 
   /**
    * The BPMN model class this service can wire. It decides whether the service is asked
-   * about a model at all: the deployment asks it where this type is the same as, or a
-   * supertype of, the model type of the adapter which read the file, so a service written
-   * for another BPMS is skipped instead of being handed a model it cannot read.
+   * about a model at all. The deployment asks the service if this type is the same as the
+   * model type of the adapter which read the file, or a supertype of it. So a service
+   * written for another BPMS is skipped. It does not get a model it cannot read.
    * <p>
-   * Answer with a class literal. This value is what the deployment matches, never the type
+   * Answer with a class literal. The deployment matches this value, never the type
    * argument of the implementing class.
    *
    * @return The model type
@@ -42,23 +42,23 @@ public interface ExtensionWiringService<BPMN, PC> {
   Class<BPMN> getModelType();
 
   /**
-   * The class of the context this service is handed while a model is wired and while the
-   * workflows of a module are started. It is matched the way {@link #getModelType()} is
-   * and both have to fit, so a service is either wired and started or neither of the two.
+   * The class of the context this service gets while a model is wired, and while the
+   * workflows of a module are started. It is matched like {@link #getModelType()}, and
+   * both have to fit. So a service is either wired and started, or neither.
    *
    * @return The process context type
    */
   Class<PC> getProcessContextType();
 
   /**
-   * The order among the EXTENSIONS of one model type, ascending. It says nothing about the adapter,
-   * which runs before all of them either way (see the type javadoc), and two extensions of the same
-   * order run in the order the platform collected them in, which nobody promises.
+   * The order among the EXTENSIONS of one model type, ascending. It says nothing about the
+   * adapter, which runs before all of them anyway (see the type javadoc). Two extensions of the
+   * same order run in the order the platform collected them in, and nobody promises that order.
    *
    * @return The order of this service. Defaults to <code>0</code>, so an extension implements it
-   *         only where it has to run before or after another one. A BPMS adapter leaves it at the
-   *         default: the core takes the adapters out of this list before it sorts, so an adapter's
-   *         number is never read, and which adapter of a workflow module goes first comes from
+   *         only if it has to run before or after another one. A BPMS adapter leaves the default.
+   *         The core takes the adapters out of this list before it sorts, so the number of an
+   *         adapter is never read. Which adapter of a workflow module goes first comes from
    *         <code>vanillabp.prioritized-adapters</code> instead
    */
   default int getOrder() {
@@ -68,16 +68,16 @@ public interface ExtensionWiringService<BPMN, PC> {
   }
 
   /**
-   * Names this extension, e.g. <code>business-cockpit</code>. The name is how the boot finds the
-   * version descriptor <code>META-INF/vanillabp/extension-&lt;name&gt;.properties</code> the
-   * extension ships, which says which VanillaBP platform integration the extension was built
-   * against. An extension which names itself and ships that file is kept from running against a
-   * platform integration it does not belong to. One which names itself and ships no file starts
-   * anyway, and the boot says once that this pair is unknown. One which does not name itself is
-   * not judged at all, because the only thing the boot could say about it is the name of a class
+   * Names this extension, e.g. <code>business-cockpit</code>. At startup, the name is used to find
+   * the version file <code>META-INF/vanillabp/extension-&lt;name&gt;.properties</code> which the
+   * extension ships. The file says which VanillaBP platform integration the extension was built
+   * against. If an extension names itself and ships that file, it cannot run against a platform
+   * integration it does not belong to. If it names itself and ships no file, it starts anyway,
+   * and the startup says once that this pair is unknown. If it does not name itself, it is not
+   * checked at all, because the startup could only say the name of a class about it
    * (see decision 71 in the repository's DECISIONS.md).
    * <p>
-   * A BPMS adapter does not answer this question: it is found by its adapter type instead.
+   * A BPMS adapter does not answer this question. It is found by its adapter type instead.
    *
    * @return The name of this extension, or <code>null</code> if it does not say
    */
@@ -104,17 +104,17 @@ public interface ExtensionWiringService<BPMN, PC> {
       PC context);
 
   /**
-   * Start running the workflows BPMN processes previously deployed. For a BPMS adapter
-   * this is where workers, subscriptions and job executors open; before it nothing of that
-   * module runs.
+   * Starts running the workflows of the BPMN processes deployed before. For a BPMS adapter,
+   * this is where workers, subscriptions and job executors open. Before this call, nothing of
+   * that module runs.
    * <p>
-   * It is called once per workflow module, after every adapter of that module finished
-   * deploying, and the adapters of a module are started before any extension of it. The
-   * call runs on the thread which boots the application, so an adapter which needs threads
-   * of its own starts them here and bounds their number itself - every running handler
-   * holds a database connection. Throwing ends the boot, and unlike a failure while
-   * deploying it is not softened by
-   * <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code>.
+   * It is called once per workflow module, after every adapter of that module has finished
+   * deploying. The adapters of a module are started before any extension of it. The call
+   * runs on the thread which starts the application. So an adapter which needs threads of
+   * its own starts them here, and limits their number itself, because every running handler
+   * holds a database connection. If the call throws, the application does not start. Unlike
+   * a failure while deploying, <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code>
+   * does not soften this.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmsProcessingContext The processing context specific to the BPMS
@@ -124,9 +124,9 @@ public interface ExtensionWiringService<BPMN, PC> {
       PC bpmsProcessingContext);
 
   /**
-   * Stop running the workflows BPMN processes previously started. Called on graceful
-   * shutdown of the application, before the platform's web or messaging
-   * infrastructure is stopped. The default implementation does nothing.
+   * Stops running the workflows of the BPMN processes started before. It is called on a
+   * graceful shutdown of the application, before the web or messaging infrastructure of
+   * the platform is stopped. The default implementation does nothing.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmsProcessingContext The processing context specific to the BPMS

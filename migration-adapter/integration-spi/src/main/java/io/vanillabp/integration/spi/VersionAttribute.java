@@ -5,21 +5,21 @@ import java.util.Arrays;
 import java.util.stream.Stream;
 
 /**
- * Whether a workflow aggregate carries the attribute a persistence layer increments per
- * write, which is what turns a second writer from a silent overwrite into an exception.
- * The implementation behind the default of
+ * Whether a workflow aggregate has the attribute which a persistence layer increments on
+ * each write. That attribute turns a second writer from a silent overwrite into an
+ * exception. This is the implementation behind the default of
  * {@link AggregatePersistenceAware#detectsConcurrentModification()}.
  * <p>
- * One question, asked once, for every persistence layer VanillaBP supports. JPA calls the
- * annotation <code>Version</code>, Spring Data calls it <code>Version</code>, and Panache
- * on Quarkus does too, so the SIMPLE name is what decides. Writing the question per
- * technology would be the same question several times, and the core must not depend on any
- * of those APIs to ask it.
+ * It is one question, asked once, for every persistence layer VanillaBP supports. JPA calls
+ * the annotation <code>Version</code>, Spring Data calls it <code>Version</code>, and Panache
+ * on Quarkus does too. So the SIMPLE name decides. Writing the question per technology
+ * would ask the same question several times, and the core must not depend on any of those
+ * APIs to ask it.
  * <p>
- * A persistence layer following the same convention under another name is not recognised,
- * and neither is a store which notices a second writer some other way. Both override
- * {@link AggregatePersistenceAware#detectsConcurrentModification()} and answer for
- * themselves; the cost of not doing so is a warning given where none was needed.
+ * A persistence layer which follows the same convention under another name is not
+ * recognised. Neither is a store which notices a second writer in another way. Both
+ * override {@link AggregatePersistenceAware#detectsConcurrentModification()} and answer
+ * for themselves. If they do not, the cost is a warning where none was needed.
  */
 public final class VersionAttribute {
 
@@ -33,8 +33,8 @@ public final class VersionAttribute {
   }
 
   /**
-   * Whether the given class or one of its super classes declares a version attribute,
-   * looking at fields as well as at methods (JPA property access).
+   * Whether the given class or one of its super classes declares a version attribute. It
+   * looks at fields and at methods (JPA property access).
    *
    * @param workflowAggregateClass The workflow aggregate's class
    * @return Whether a version attribute was found

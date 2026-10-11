@@ -7,36 +7,35 @@ import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
- * Holds the value of a gauge whose measurement costs something, so that reading the
- * metric does not.
+ * Holds the value of a gauge whose measurement is expensive, so that reading the metric
+ * is cheap.
  * <p>
- * <b>The rule this exists for.</b> A gauge is read every time somebody collects, and
+ * <b>Why this exists.</b> A gauge is read every time somebody collects metrics, and
  * nobody expects looking to be expensive. Prometheus scrapes every fifteen seconds by
  * default, a dashboard asks in between, and every instance of the application answers
- * separately - a gauge backed by a database query turns a dashboard into load on the
- * very system it is watching. VanillaBP's promise is therefore that reading a metric
- * never costs more than reading a number, and this class is how it is kept: whatever
- * really has to be asked is asked at most once per
- * {@code vanillabp.metrics.gauge-cache}, and everybody else gets the number that came
- * back.
+ * on its own. So a gauge backed by a database query turns a dashboard into load on the
+ * very system it watches. VanillaBP promises that reading a metric never costs more
+ * than reading a number, and this class keeps that promise. Whatever really has to be
+ * asked is asked at most once per {@code vanillabp.metrics.gauge-cache}. Everybody else
+ * gets the number which came back.
  * <p>
- * It lives in the adapter SPI because the promise is not the platform's alone. A BPMS
- * adapter registering a gauge of its own - the backlog of a queue, the size of
- * something the BPMS holds - keeps the same promise with the same class. A value which
- * is already in memory (a counter, the free permits of a semaphore) needs none of this
- * and should not be wrapped: caching it would only make it stale.
+ * It is in the adapter SPI because the promise is not only the platform's. A BPMS
+ * adapter which registers a gauge of its own keeps the same promise with the same class.
+ * Examples are the backlog of a queue, or the size of something the BPMS holds. A value
+ * which is already in memory (a counter, the free permits of a semaphore) needs none of
+ * this. Do not wrap it, because caching it would only make it stale.
  * <p>
  * <b>What it guarantees.</b>
  * <ul>
  * <li>Within one time-to-live the supplier runs exactly once, however many collectors
- * ask. A second thread arriving while the first one is asking waits for that answer
- * rather than starting a second query.</li>
- * <li>A supplier which throws does not reach the metrics backend and does not poison
- * the gauge: the failure is answered with "no measurement" for the rest of the window
- * and the next window asks again. A database which was down for a minute is therefore
- * back in the metric a minute later, without anybody having hammered it meanwhile.</li>
- * <li>A time-to-live of zero (or a negative one) switches the holding off, which is
- * what a test wants when it has just changed something and needs to see it.</li>
+ * ask. If a second thread arrives while the first one is asking, it waits for that
+ * answer. It does not start a second query.</li>
+ * <li>A supplier which throws does not reach the metrics backend and does not break
+ * the gauge. The answer is "no measurement" for the rest of the window, and the next
+ * window asks again. So a database which was down for a minute is back in the metric a
+ * minute later, and nobody hammered it in the meantime.</li>
+ * <li>A time-to-live of zero (or a negative one) switches the holding off. A test wants
+ * this when it has just changed something and needs to see it.</li>
  * </ul>
  * <p>
  * Why every measurement which is not already in memory is held for a window is decision 18 in the
@@ -45,8 +44,8 @@ import java.util.function.Supplier;
 public final class CachedGaugeValue {
 
   /**
-   * What the supplier answered and when, as one object so a reader never sees a value
-   * from one measurement with the timestamp of another.
+   * What the supplier answered and when, in one object. So a reader never sees the value
+   * of one measurement with the timestamp of another.
    */
   private record Measurement(
                              long takenAtNanos,
@@ -58,27 +57,27 @@ public final class CachedGaugeValue {
   private final Supplier<OptionalLong> measure;
 
   /**
-   * The clock, in nanoseconds of an arbitrary origin - injectable so a test does not
-   * have to wait for a window to pass.
+   * The clock, in nanoseconds from any starting point. A test can inject its own, so it
+   * does not have to wait for a window to pass.
    */
   private final LongSupplier nanoClock;
 
   /**
-   * Serializes the measuring, so concurrent collectors produce one query and not one
-   * each.
+   * Lets only one thread measure at a time. So concurrent collectors cause one query, not
+   * one each.
    */
   private final ReentrantLock measuring = new ReentrantLock();
 
   private volatile Measurement current;
 
   /**
-   * Holds one measurement for the given window, so however many collectors read the gauge
-   * meanwhile, the supplier runs once.
+   * Holds one measurement for the given window. However many collectors read the gauge in
+   * that time, the supplier runs once.
    *
-   * @param timeToLive How long one measurement is reused; zero or negative switches
+   * @param timeToLive How long one measurement is reused. Zero or negative switches
    *          the holding off
-   * @param measure What really has to be asked, answering
-   *          {@link OptionalLong#empty()} where it cannot say
+   * @param measure What really has to be asked. It answers
+   *          {@link OptionalLong#empty()} if it cannot say
    */
   public CachedGaugeValue(
       final Duration timeToLive,
@@ -89,8 +88,8 @@ public final class CachedGaugeValue {
   }
 
   /**
-   * The same with a clock of its own, which is what a test uses: it can then age a
-   * measurement instead of waiting for the window to pass.
+   * The same with a clock of its own. A test uses it to age a measurement, instead of
+   * waiting for the window to pass.
    *
    * @param timeToLive How long one measurement is reused
    * @param measure What really has to be asked
@@ -110,8 +109,8 @@ public final class CachedGaugeValue {
   }
 
   /**
-   * Wraps an expensive measurement into a supplier a gauge can read on every
-   * collection.
+   * Wraps an expensive measurement into a supplier which a gauge can read every time
+   * metrics are collected.
    *
    * @param timeToLive How long one measurement is reused
    * @param measure What really has to be asked
@@ -127,10 +126,10 @@ public final class CachedGaugeValue {
   }
 
   /**
-   * The value a gauge reports right now: the held measurement while it is young
-   * enough, a fresh one otherwise.
+   * The value a gauge reports right now. It is the held measurement while that is young
+   * enough, and a fresh one otherwise.
    *
-   * @return The value, or {@link OptionalLong#empty()} where the measurement could not
+   * @return The value, or {@link OptionalLong#empty()} if the measurement could not
    *         be taken
    */
   public OptionalLong get() {
@@ -146,8 +145,8 @@ public final class CachedGaugeValue {
 
     measuring.lock();
     try {
-      // somebody else may have measured while this thread waited for the lock - that
-      // answer is what this collection reports, instead of asking a second time
+      // another thread may have measured while this one waited for the lock. Then this
+      // collection reports that answer and does not ask a second time
       final var measured = current;
       if (isYoungEnough(measured)) {
         return measured.value();
@@ -169,8 +168,8 @@ public final class CachedGaugeValue {
   }
 
   /**
-   * Asks the supplier, turning a failure into "no measurement". A gauge must never be
-   * the reason an application fails, and a metrics backend calling it must never see
+   * Asks the supplier and turns a failure into "no measurement". A gauge must never be
+   * the reason why an application fails. A metrics backend which calls it must never see
    * an exception.
    */
   private OptionalLong takeMeasurement() {

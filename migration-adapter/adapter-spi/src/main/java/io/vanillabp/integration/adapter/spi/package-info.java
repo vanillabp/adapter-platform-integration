@@ -1,6 +1,6 @@
 /**
- * The SPI a BPMS adapter implements. Everything in this package and its sub-packages is
- * called by the VanillaBP core; business code never sees a type from here.
+ * The SPI a BPMS adapter implements. The VanillaBP core calls everything in this package and
+ * its sub-packages. Business code never sees a type from here.
  * <p>
  * An adapter implements two interfaces, one instance of each per configured adapter id:
  * <ul>
@@ -12,21 +12,21 @@
  * per {@link io.vanillabp.integration.spi.PhaseOperation}) and what it is asked ABOUT (the
  * awareness probes and the viewer methods).</li>
  * </ul>
- * Read those two type javadocs first. The second one carries the election contract and the
- * two-phase contract in full, and the rest of this package is reached from the two.
+ * Read the javadoc of these two types first. The second one has the full election contract
+ * and the full two-phase contract. The rest of this package is reached from these two.
  * <p>
- * What the platform hands an adapter arrives in one
- * {@link io.vanillabp.integration.adapter.spi.AdapterCollaborators}, built per adapter id and
- * taken as a constructor argument. What an adapter calls back while it deploys is
- * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring} and
- * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport}; what it calls per
- * delivery is
+ * Everything the platform hands an adapter comes in one
+ * {@link io.vanillabp.integration.adapter.spi.AdapterCollaborators}. It is built per adapter
+ * id, and the adapter takes it as a constructor argument. While it deploys, an adapter calls
+ * back {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring} and
+ * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport}. Per delivery it
+ * calls
  * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker}.
  * <p>
- * The narrative version of all of it, written for a team building an adapter without access
- * to this repository, is <code>ADAPTER-AUTHORS.md</code> of the
- * <code>migration-adapter</code> module: which interface to write first, what the core does
- * on an adapter's behalf so that no adapter builds it twice, what stops a boot, and the
+ * <code>ADAPTER-AUTHORS.md</code> of the <code>migration-adapter</code> module tells all of
+ * this as one text. It is written for a team which builds an adapter without access to this
+ * repository. It says which interface to write first, and what the core does for an adapter
+ * so that no adapter builds it twice. It also says what stops a start, and it has the
  * checklist before a first release.
  */
 package io.vanillabp.integration.adapter.spi;

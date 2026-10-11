@@ -1,20 +1,20 @@
 package io.vanillabp.integration.spi.startup;
 
 /**
- * What a startup finding is about, which is the same as where its fix lies.
+ * What a startup finding is about. That is the same as the place where its fix lies.
  * <p>
  * Almost every message VanillaBP writes while an application starts ends with an
  * instruction, and that instruction names one place: a property key, a Java class, a BPMN
- * model, a table, a dependency. So the topics are those places, and the order below is the
- * order a developer walks them in - what is on the class path first, then what the
- * configuration says about it, then the code, then the models, then what the BPMS already
- * holds from earlier deployments, then what the database still holds, then the machines
- * underneath.
+ * model, a table, a dependency. So the topics are those places. The order below is the
+ * order in which a developer walks through them. First what is on the class path, then
+ * what the configuration says about it, then the code, then the models, then what the
+ * BPMS still holds from earlier deployments, then what the database still holds, and
+ * last the machines underneath.
  * <p>
- * Grouping by severity was the obvious alternative and says almost nothing: a box exists
- * only on a start which survived, and nearly everything such a start can write is a
- * warning. Grouping by adapter or by the phase of the boot names something true about
- * VanillaBP rather than about the reader.
+ * Grouping by severity was the obvious alternative, and it says almost nothing. A box
+ * exists only on a start which survived, and nearly everything such a start can write is
+ * a warning. Grouping by adapter or by the phase of the boot names something true about
+ * VanillaBP, but not about the reader.
  * <p>
  * See decision 96 in the repository's DECISIONS.md.
  */
@@ -35,13 +35,13 @@ public enum StartupTopic {
   /** What a modeller has to change, and what this start deployed and what it did not. */
   BPMN_MODELS("BPMN MODELS"),
 
-  /** Versions a BPMS still holds, tenants, workflows running on a version nobody serves. */
+  /** Versions a BPMS still holds, tenants, workflows on a version nobody serves. */
   DEPLOYED_VERSIONS("DEPLOYED VERSIONS"),
 
   /** Outbox entries, delivery records, adapter ids only the database still knows. */
   STORED_STATE("STORED STATE"),
 
-  /** Tables, a MongoDB which is no replica set, a cache cluster of one node. */
+  /** Tables, a MongoDB which is not a replica set, a cache cluster of one node. */
   INFRASTRUCTURE("INFRASTRUCTURE");
 
   private final String heading;
@@ -54,8 +54,8 @@ public enum StartupTopic {
   }
 
   /**
-   * The words this topic carries in the box, upper case because they are the one thing a
-   * reader scans for.
+   * The words this topic shows in the box. They are in upper case, because they are the one
+   * thing a reader scans for.
    *
    * @return The heading
    */

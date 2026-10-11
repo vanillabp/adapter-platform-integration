@@ -13,26 +13,27 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * The bookkeeping every {@link ProcessVersionCatalog} needs, so an adapter only has to
- * answer "which versions of this process does the BPMS have right now" - see
+ * The bookkeeping every {@link ProcessVersionCatalog} needs. With it an adapter only has
+ * to answer "which versions of this process does the BPMS have right now". See
  * {@link #fetchDeployedVersions(String, String)}.
  * <p>
  * What is kept here:
  * <ul>
- * <li>the versions learned from a BPMS query and the versions the adapter
+ * <li>The versions learned from a BPMS query, and the versions the adapter
  * {@link #record(String, String, DeployedProcessVersion) recorded} from the result of
- * its deploy command - the deploy command names the version the BPMS assigned to the
- * model deployed right now, which the query would have to be asked for otherwise;</li>
- * <li>the on-demand query for a version identifier not seen yet: during a rolling
- * deployment another cluster node may deploy a new version before this node does, and
- * the BPMS delivers a task of that version to this node meanwhile;</li>
- * <li>a floor between two queries for the SAME unknown value
- * ({@value #DEFAULT_REFRESH_INTERVAL_SECONDS} seconds by default), so a version
- * specification naming a tag which does not exist cannot turn every task delivery into a
- * BPMS query, while a version showing up for the first time is looked up right away.</li>
+ * its deploy command. The deploy command names the version the BPMS gave the model
+ * deployed right now. Otherwise the query would have to be asked for it.</li>
+ * <li>The query on demand for a version identifier not seen yet. During a rolling
+ * deployment, another cluster node may deploy a new version before this node does. In
+ * the meantime the BPMS delivers a task of that version to this node.</li>
+ * <li>A minimum time between two queries for the SAME unknown value
+ * ({@value #DEFAULT_REFRESH_INTERVAL_SECONDS} seconds by default). So a version
+ * specification which names a tag that does not exist cannot turn every task delivery
+ * into a BPMS query. A version which shows up for the first time is still looked up
+ * right away.</li>
  * </ul>
- * A query failing is not an error of the running workflow: it is logged and the version
- * stays unknown, which lets the version specifications made of numbers keep working.
+ * A failing query is not an error of the running workflow. It is logged and the version
+ * stays unknown, so version specifications made of numbers keep working.
  */
 public abstract class CachingProcessVersionCatalog implements ProcessVersionCatalog {
 
@@ -52,17 +53,17 @@ public abstract class CachingProcessVersionCatalog implements ProcessVersionCata
     private final Map<String, DeployedProcessVersion> byVersion = new LinkedHashMap<>();
 
     /**
-     * By version tag - the NEWEST version carrying it, since a tag may be reused by a
-     * later deployment.
+     * By version tag. It holds the NEWEST version with that tag, because a later
+     * deployment may reuse a tag.
      */
     private final Map<String, DeployedProcessVersion> byVersionTag = new HashMap<>();
 
     private Instant fetchedAt;
 
     /**
-     * When the BPMS was last asked about a version identifier or tag it did not know -
-     * per value, so a version showing up for the first time is looked up right away
-     * while a tag which does not exist cannot be asked for over and over.
+     * When the BPMS was last asked about a version identifier or tag it did not know, per
+     * value. So a version which shows up for the first time is looked up right away, but
+     * a tag which does not exist is not asked for over and over.
      */
     private final Map<String, Instant> missedAt = new HashMap<>();
 
@@ -93,7 +94,7 @@ public abstract class CachingProcessVersionCatalog implements ProcessVersionCata
   private final Duration refreshInterval;
 
   /**
-   * The catalog an adapter builds, with the floor of
+   * The catalog an adapter builds. It waits at least
    * {@value #DEFAULT_REFRESH_INTERVAL_SECONDS} seconds between two questions about the
    * same unknown version identifier or tag.
    */
@@ -104,9 +105,9 @@ public abstract class CachingProcessVersionCatalog implements ProcessVersionCata
   }
 
   /**
-   * The same with a floor of its own. {@link Duration#ZERO} asks the BPMS about every
-   * unknown value again, which is what a test wants where it deploys a version and reads
-   * it back in the next line.
+   * The same with a minimum time of its own. {@link Duration#ZERO} asks the BPMS again
+   * about every unknown value. A test wants this when it deploys a version and reads it
+   * back in the next line.
    *
    * @param refreshInterval How long an unknown version identifier or tag stays unknown
    *          before the BPMS is asked about it again
@@ -119,9 +120,9 @@ public abstract class CachingProcessVersionCatalog implements ProcessVersionCata
   }
 
   /**
-   * Asks the BPMS for all versions of the given process, oldest first. Called at
-   * startup for every process whose annotations name a version tag, and at runtime
-   * whenever a version identifier or tag is not known yet.
+   * Asks the BPMS for all versions of the given process, oldest first. It is called at
+   * startup for every process whose annotations name a version tag. At runtime it is
+   * called whenever a version identifier or tag is not known yet.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The PLAIN BPMN process ID
@@ -132,9 +133,9 @@ public abstract class CachingProcessVersionCatalog implements ProcessVersionCata
       String bpmnProcessId);
 
   /**
-   * Adds a version the adapter learned without asking the BPMS - the result of the
-   * deploy command reports the version the BPMS assigned to the model just deployed,
-   * and the model itself carries its version tag.
+   * Adds a version which the adapter learned without asking the BPMS. The result of the
+   * deploy command reports the version the BPMS gave the model just deployed. The model
+   * itself carries its version tag.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The PLAIN BPMN process ID
@@ -185,9 +186,9 @@ public abstract class CachingProcessVersionCatalog implements ProcessVersionCata
       if (known != null) {
         return known;
       }
-      // not seen yet: another cluster node may have deployed a version this node
-      // does not know of (rolling deployment), so the BPMS is asked - but not once
-      // per task delivery, which is what the interval per value is for
+      // not seen yet: another cluster node may have deployed a version this node does
+      // not know (rolling deployment). So the BPMS is asked, but not once per task
+      // delivery. The interval per value prevents that
       final var missedAt = versions.missedAt.get(versionOrVersionTag);
       if ((missedAt != null) && Instant.now().isBefore(missedAt.plus(refreshInterval))) {
         return null;
@@ -225,8 +226,8 @@ public abstract class CachingProcessVersionCatalog implements ProcessVersionCata
     if (fetched == null) {
       return;
     }
-    // the fetched order is the deployment order and replaces what was recorded from
-    // deploy results before - those are part of the fetched list anyway
+    // the fetched order is the order of deployment. It replaces what was recorded from
+    // deploy results before, because those are part of the fetched list anyway
     final var recorded = new ArrayList<>(versions.byVersion.values());
     versions.byVersion.clear();
     versions.byVersionTag.clear();

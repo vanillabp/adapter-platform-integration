@@ -3,49 +3,51 @@ package io.vanillabp.integration.spi;
 import java.time.Duration;
 
 /**
- * A phase-two operation which cannot run yet, but most probably can in a moment - and
+ * A phase-two operation which cannot run yet, but most probably can in a moment. It
  * says how long that moment is.
  * <p>
- * The one case today is a workflow whose BPMS has not made it searchable yet: the
+ * Today there is one case: a workflow which its BPMS has not made searchable yet. The
  * operation is worth repeating, and the time it needs is the visibility window of the
- * adapter holding it. A store dispatches an entry on the lane of its workflow aggregate,
- * and waiting for that window there would hold every other entry of that lane, whatever
- * workflow it belongs to. So the entry is given back instead - one update rather than a
- * parked thread.
+ * adapter which holds it. A store dispatches an entry on the lane of its workflow
+ * aggregate. Waiting for that window there would hold every other entry of that lane,
+ * whatever workflow it belongs to. So the entry is given back instead. That costs one
+ * update instead of a parked thread.
  * <p>
  * A store recognises it through {@link #retryAfter(Throwable)}, which walks the causes
- * the way {@link PhaseTwoPermanentFailure#isPermanent(Throwable)} does, and uses the
- * duration in place of its configured backoff for THIS attempt - the growing backoff of
- * a failed dispatch never stretches this window, because the two are written by
- * different branches of the same failure handling.
+ * the way {@link PhaseTwoPermanentFailure#isPermanent(Throwable)} does. For THIS attempt
+ * it uses the duration instead of its configured backoff. The growing backoff of a
+ * failed dispatch never stretches this window, because different branches of the same
+ * failure handling write the two.
  * <p>
  * <b>It is not an attempt.</b> A store counts no attempt for this answer, so
- * <code>vanillabp.outbox.block-after-attempts</code> does not end it. What stops a workflow
- * which never becomes visible is time: once
- * <code>vanillabp.outbox.wait-for-visibility-at-most</code> passed since the entry was
- * written, the next answer of this kind blocks the entry. That time is about four hours by
- * default, the span the attempts take with the growing backoff, so a read model which is
- * behind gets as long as a BPMS which is away. Counting the answers blocked entries after
- * fifty windows, which were eight minutes of a stopped Camunda 8 exporter.
+ * <code>vanillabp.outbox.block-after-attempts</code> does not end it. Time stops a
+ * workflow which never becomes visible. Once
+ * <code>vanillabp.outbox.wait-for-visibility-at-most</code> has passed since the entry was
+ * written, the next answer of this kind blocks the entry. By default that time is about
+ * four hours. That is how long the attempts take with the growing backoff, so a read
+ * model which is behind gets as long as a BPMS which is away. When the answers were
+ * counted, entries were blocked after fifty windows, which were eight minutes of a
+ * stopped Camunda 8 exporter.
  * <p>
- * Because the answer is not counted, the store does not remember it either: the next
+ * Because the answer is not counted, the store does not remember it either. The next
  * dispatch of the entry looks like its first one. So throw this only before the operation
  * reached the BPMS. An operation which may have reached it and then failed is an ordinary
  * failure, and it is counted. See decision 113 in the repository's DECISIONS.md.
  * <p>
  * <b>What this promises an adapter.</b> Every store VanillaBP ships makes the entry due
- * after the window, and none of them shortens it or stretches it: the relational store of
- * the core, the two MongoDB stores and the gruelbox store which a Spring Boot application
- * with JPA gets from <code>io.vanillabp:gruelbox-phase-two-outbox</code>. A window longer than <code>vanillabp.outbox.attempt-frequency</code> is
- * therefore waited out, and a window shorter than it is not waited past, so an adapter
- * naming thirty seconds gets the same answer whichever store the application chose
+ * after the window, and none of them makes it shorter or longer. These stores are the
+ * relational store of the core, the two MongoDB stores, and the gruelbox store which a
+ * Spring Boot application with JPA gets from <code>io.vanillabp:gruelbox-phase-two-outbox</code>.
+ * So a window longer than <code>vanillabp.outbox.attempt-frequency</code> is waited out,
+ * and a window shorter than it is not waited past. An adapter which names thirty seconds
+ * gets the same answer whichever store the application chose
  * (decision 93 of <code>adapter-platform-integration</code>). The stores VanillaBP ships add no
- * wait of their own on top: the poller of a store sleeps until its earliest entry is due and
- * learns the new due time when the attempt ends. <code>vanillabp.outbox.poll-interval</code> only
- * caps that sleep, for a node which goes away while it holds work.
+ * wait of their own on top. The poller of a store sleeps until its earliest entry is due,
+ * and learns the new due time when the attempt ends. <code>vanillabp.outbox.poll-interval</code>
+ * only limits that sleep, for a node which goes away while it holds work.
  * <p>
- * The price of that promise is the adapter's to pay. The entry sits for the window it named
- * and for one of its attempts, so a window of ten seconds for a read model which is a second
+ * The adapter pays the price of that promise. The entry waits for the window it named and
+ * for one of its attempts. So a window of ten seconds for a read model which is one second
  * behind costs nine seconds per call. Name what your BPMS really needs.
  */
 public class PhaseTwoRetryLater extends RuntimeException {
@@ -54,8 +56,8 @@ public class PhaseTwoRetryLater extends RuntimeException {
 
   /**
    * How long the store should wait before it dispatches the entry again. It is the window
-   * the adapter asked for and not a backoff a store computed, which is why a store may use
-   * it in place of its own.
+   * the adapter asked for, not a backoff which a store computed. That is why a store may
+   * use it instead of its own.
    */
   private final Duration retryAfter;
 
@@ -88,11 +90,11 @@ public class PhaseTwoRetryLater extends RuntimeException {
   }
 
   /**
-   * Reads the waiting time out of whatever wrapped the failure, which is how a store asks.
+   * Reads the waiting time out of whatever wrapped the failure. A store asks this way.
    *
    * @param failure The failure a dispatch ended with
-   * @return How long to wait before the next attempt, or <code>null</code> where the
-   *         failure says nothing about it and the store's own backoff applies
+   * @return How long to wait before the next attempt, or <code>null</code> if the
+   *         failure says nothing about it and the own backoff of the store applies
    */
   public static Duration retryAfter(
       final Throwable failure) {
