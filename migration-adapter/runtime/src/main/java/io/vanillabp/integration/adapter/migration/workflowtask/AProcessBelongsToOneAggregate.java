@@ -9,16 +9,18 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 /**
- * The refusal both platforms answer an application with where <code>&#64;WorkflowService</code>
- * classes of different workflow aggregates declare the same BPMN process of one workflow module.
- * Which aggregate the tasks of such a process load, and whether the process is a workflow of its
- * own or a step of another one, would otherwise depend on the order the classes are found in.
- * Why that ends the start, see decision 125 in the repository's {@code DECISIONS.md}.
+ * The refusal with which both platforms answer an application where
+ * <code>&#64;WorkflowService</code> classes of different workflow aggregates declare the same
+ * BPMN process of one workflow module. Otherwise the order in which the classes are found
+ * would decide which aggregate the tasks of such a process load, and whether the process is
+ * a workflow of its own or a step of another one. Decision 125 in the repository's
+ * DECISIONS.md says why that ends the start.
  * <p>
- * The text lives in the core because three places say it: Spring Boot once it knows the
- * workflow module of every class, Quarkus while the application is built, and the registry of
- * task handlers, which every platform passes. The first two are there to say it early. The last
- * one is there for a platform which does not check.
+ * The text lives in the core because three places say it. Spring Boot says it once it knows
+ * the workflow module of every class. Quarkus says it while the application is built. And
+ * the registry of task handlers says it, and every platform passes through that. The first
+ * two are there to say it early. The last one is there for a platform which does not
+ * check.
  */
 public final class AProcessBelongsToOneAggregate {
 
@@ -47,7 +49,7 @@ public final class AProcessBelongsToOneAggregate {
    * Ends the start where at least one BPMN process is declared for more than one workflow
    * aggregate. Every such process is named in the one message.
    *
-   * @param declarations Every BPMN process every workflow service class declares
+   * @param declarations Every BPMN process which every workflow service class declares
    * @throws IllegalStateException If a process is declared for more than one aggregate
    */
   public static void refuseProcessesOfSeveralAggregates(
@@ -77,9 +79,9 @@ public final class AProcessBelongsToOneAggregate {
   }
 
   /**
-   * The message for one BPMN process, where the classes declaring it name more than one
+   * The message for one BPMN process, where the classes which declare it name more than one
    * aggregate. The classes which start the process come first, and the classes are sorted by
-   * name, so the text does not depend on the order they were found in.
+   * name. So the text does not depend on the order in which they were found.
    *
    * @param declarations The declarations of ONE BPMN process of one workflow module
    * @return The message, empty where all classes name the same aggregate
@@ -90,8 +92,8 @@ public final class AProcessBelongsToOneAggregate {
     final var sorted = declarations
         .stream()
         .distinct()
-        // the classes which start the process first, then by name, so the text does not
-        // depend on the order the classes were found in
+        // the classes which start the process first, then by name. So the text does not
+        // depend on the order in which the classes were found
         .sorted(Comparator
             .comparing(Declaration::asBpmnProcess, Comparator.reverseOrder())
             .thenComparing(Declaration::workflowServiceClass))
@@ -134,7 +136,7 @@ public final class AProcessBelongsToOneAggregate {
   }
 
   /**
-   * What to do, for the way the classes declare the process: one of them as its
+   * What to do, depending on how the classes declare the process: one of them as its
    * <code>bpmnProcess</code> and others as secondary, several as their
    * <code>bpmnProcess</code>, or all as secondary.
    */
@@ -153,7 +155,7 @@ public final class AProcessBelongsToOneAggregate {
         .toList();
 
     if (aggregatesOfBpmnProcess.size() == 1) {
-      // one aggregate starts the process, the others call it
+      // one aggregate starts the process, and the others call it
       final var owner = aggregatesOfBpmnProcess.getFirst();
       final var starters = classesOf(asBpmnProcess, declaration -> true);
       final var callers = classesOf(
@@ -182,7 +184,7 @@ public final class AProcessBelongsToOneAggregate {
           .formatted(processId, callActivityAdvice(processId));
     }
 
-    // every class lists the process as secondary: two workflows call it
+    // every class lists the process as secondary, so two workflows call it
     return """
         '%1$s' can be a step of only one workflow. Keep it in 'secondaryBpmnProcesses' of the class \
         whose workflow it is a step of, and remove it from the others.
@@ -196,9 +198,9 @@ public final class AProcessBelongsToOneAggregate {
   }
 
   /**
-   * The same in every case: what it means to call a workflow of its own by a call activity,
-   * and what is usually better. The data the called workflow gets are named in words every
-   * BPMS understands, since not every BPMS has process variables.
+   * The same in every case: what it means to call a workflow of its own through a call
+   * activity, and what is usually better. The data which the called workflow gets are named in
+   * words which every BPMS understands, because not every BPMS has process variables.
    */
   private static String callActivityAdvice(
       final String processId) {

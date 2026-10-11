@@ -22,22 +22,22 @@ import io.vanillabp.spi.service.TaskParam;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * Scans a <code>&#64;WorkflowService</code> class for
- * <code>&#64;WorkflowTask</code> annotated methods and builds
- * {@link WorkflowTaskHandler}s including the parameter binders (workflow aggregate,
- * <code>&#64;TaskId</code>, <code>&#64;TaskEvent</code>, <code>&#64;TaskParam</code>,
- * multi-instance annotations). Runs once at startup per workflow service class and
- * BPMN process - defects yield guiding exceptions naming the method and the fix.
+ * Scans a <code>&#64;WorkflowService</code> class for methods with
+ * <code>&#64;WorkflowTask</code>, and builds {@link WorkflowTaskHandler}s with their
+ * parameter binders (workflow aggregate, <code>&#64;TaskId</code>,
+ * <code>&#64;TaskEvent</code>, <code>&#64;TaskParam</code>, multi-instance annotations). It
+ * runs once at startup for each workflow service class and BPMN process. For a defect it
+ * throws an exception which names the method and the fix.
  * <p>
- * A method naming no <code>version</code> serves the range of the
- * <code>&#64;BpmnProcess</code> its handlers are registered for (see
+ * A method which names no <code>version</code> serves the range of the
+ * <code>&#64;BpmnProcess</code> for which its handlers are registered (see
  * {@link InheritedVersions}).
  */
 class WorkflowTaskScanner {
 
   /**
-   * A workflow task is the handler with the widest binding surface: everything the core
-   * knows how to bind may stand in its parameter list, plus the two parameters only a
+   * A workflow task is the handler which binds the most parameters. Everything the core
+   * knows how to bind may be in its parameter list, plus the two parameters which only a
    * task has.
    */
   private static final Set<CoreHandlerParameter> CORE_PARAMETERS = Set
@@ -59,13 +59,13 @@ class WorkflowTaskScanner {
       final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
 
     final var handlers = new LinkedList<WorkflowTaskHandler>();
-    // transaction annotations of the application covering a handler break the
-    // TaskException contract and cannot be worked around at runtime - all offending
-    // methods of this class are reported in one exception below
+    // transaction annotations of the application which cover a handler break the contract
+    // of TaskException, and that cannot be worked around at runtime. All offending methods
+    // of this class are reported in one exception below
     final var transactionDefects = new LinkedList<String>();
     final var transactionRemedies = new java.util.LinkedHashSet<String>();
     for (final var method : workflowServiceClass.getMethods()) {
-      // @WorkflowTask is repeatable: one method may serve several tasks
+      // @WorkflowTask is repeatable, so one method may serve several tasks
       final var annotations = method.getAnnotationsByType(WorkflowTask.class);
       if (annotations.length == 0) {
         continue;
@@ -85,10 +85,9 @@ class WorkflowTaskScanner {
       final var asynchronousTask = Arrays
           .stream(method.getParameters())
           .anyMatch(parameter -> parameter.isAnnotationPresent(TaskId.class));
-      // the events the method subscribes to: the union of its @TaskEvent
-      // parameters' filters; without a @TaskEvent parameter only CREATED is
-      // delivered (a CANCELED invocation would surprise handlers not asking
-      // for lifecycle events)
+      // the events to which the method subscribes: the union of the filters of its
+      // @TaskEvent parameters. Without a @TaskEvent parameter only CREATED is delivered. A
+      // CANCELED call would surprise handlers which do not ask for lifecycle events
       final var subscribedEvents = java.util.EnumSet.noneOf(TaskEvent.Event.class);
       Arrays
           .stream(method.getParameters())
@@ -99,9 +98,9 @@ class WorkflowTaskScanner {
       if (subscribedEvents.isEmpty()) {
         subscribedEvents.add(TaskEvent.Event.CREATED);
       }
-      // The process variables the method reads - the core is the only place
-      // these names exist, and an adapter whose BPMS ships a variable payload with
-      // every delivery needs them to keep that payload at what is read
+      // the process variables which the method reads. Only the core knows these names. An
+      // adapter whose BPMS ships a payload of variables with every delivery needs them, to
+      // keep that payload down to what is read
       final var taskParameters = Arrays
           .stream(method.getParameters())
           .map(parameter -> parameter.getAnnotation(TaskParam.class))
@@ -110,9 +109,9 @@ class WorkflowTaskScanner {
           .distinct()
           .sorted()
           .toList();
-      // Which iterations the method wants the ITEM of. Only the core sees this, and an
-      // adapter reading its own BPMN needs it to say while it deploys that a model
-      // iterates without ever naming the value of the round
+      // the iterations whose ITEM the method wants. Only the core sees this. An adapter
+      // which reads its own BPMN needs it, to say while it deploys that a model iterates
+      // without ever naming the value of the round
       final var multiInstanceElements = Arrays
           .stream(method.getParameters())
           .map(parameter -> parameter.getAnnotation(MultiInstanceElement.class))
@@ -179,17 +178,17 @@ class WorkflowTaskScanner {
   }
 
   /**
-   * The key the CONFIGURATION knows a <code>&#64;WorkflowTask</code> method under, which is
-   * the task definition where the annotation names one, the activity id where it names that
-   * instead, and the method's name where it names neither.
+   * The key under which the CONFIGURATION knows a <code>&#64;WorkflowTask</code> method. It
+   * is the task definition where the annotation names one, the activity id where it names
+   * that instead, and the method's name where it names neither.
    * <p>
-   * This is not the same as the task definition the handler is wired by: a method naming
-   * only an activity id is wired by that id and has no task definition at all, while the
+   * This is not the same as the task definition by which the handler is wired. A method which
+   * names only an activity id is wired by that id and has no task definition at all. But the
    * configuration still has to call it something.
    *
    * @param method The annotated method
    * @param annotation Its annotation
-   * @return The key a task section of the configuration is written under
+   * @return The key under which a task section of the configuration is written
    */
   static String taskConfigurationKeyOf(
       final Method method,
@@ -217,13 +216,13 @@ class WorkflowTaskScanner {
       final InheritedVersions inherited) {
 
     final var location = "%s#%s".formatted(workflowServiceClass.getName(), method.getName());
-    // a public method of a package-private bean class is not accessible through
-    // plain reflection - lift the check once at scan time
+    // plain reflection cannot reach a public method of a package-private bean class, so
+    // switch the access check off once, while scanning
     method.trySetAccessible();
     final var explicitTaskDefinition = !annotation.taskDefinition().equals(WorkflowTask.USE_METHOD_NAME);
     final var explicitActivityId = !annotation.id().equals(WorkflowTask.USE_METHOD_NAME);
-    // neither attribute set: the method's name matches the task definition OR the
-    // activity ID (convention); explicit attributes wire exactly what is given
+    // neither attribute is set: then the method's name matches the task definition OR the
+    // activity ID (convention). Explicit attributes wire exactly what they name
     final String taskDefinition;
     final String activityId;
     if (!explicitTaskDefinition && !explicitActivityId) {
@@ -245,14 +244,14 @@ class WorkflowTaskScanner {
   }
 
   /**
-   * Which elements ONE <code>&#64;MultiInstanceElement</code> parameter asks the item of.
-   * A parameter naming its element answers itself; a parameter using a resolver bean is
-   * answered by that bean, which is asked when the answer is first needed - the beans of
-   * the application are not all built while a workflow service is scanned.
+   * Which elements ONE <code>&#64;MultiInstanceElement</code> parameter asks the item of. A
+   * parameter which names its element answers itself. For a parameter with a resolver bean,
+   * that bean answers. It is asked when the answer is first needed, because not all beans of
+   * the application are built while a workflow service is scanned.
    * <p>
-   * A resolver bean nobody defined answers nothing here. The binder built for the same
-   * parameter says what is missing and how to define it, and saying it twice, in two
-   * voices, from a question about a model would only make that message harder to find.
+   * A resolver bean which nobody defined answers nothing here. The binder built for the same
+   * parameter says what is missing and how to define it. Saying it twice, in two voices,
+   * from a question about a model, would only make that message harder to find.
    */
   private static Supplier<java.util.Collection<String>> elementNamesOf(
       final MultiInstanceElement annotation,
@@ -264,7 +263,7 @@ class WorkflowTaskScanner {
     }
     final var resolverClass = annotation.resolverBean();
     if (resolverClass.equals(NoResolver.class)) {
-      // neither the name nor a resolver: refused by the binder of this very parameter
+      // neither the name nor a resolver. The binder of this same parameter refuses it
       return List::of;
     }
     return () -> {
@@ -309,8 +308,8 @@ class WorkflowTaskScanner {
     final var location = "parameter '%s' of @WorkflowTask method '%s#%s'"
         .formatted(parameter.getName(), workflowServiceClass.getName(), method.getName());
 
-    // the two parameters only a task has - the rest is what every kind of handler
-    // method may take, and comes from the binders all three scanners share
+    // the two parameters which only a task has. The rest is what every kind of handler
+    // method may take, and it comes from the binders which all three scanners share
     if (parameter.isAnnotationPresent(TaskId.class)) {
       if (!parameter.getType().equals(String.class)) {
         throw new IllegalStateException(
