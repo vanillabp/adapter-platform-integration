@@ -21,12 +21,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * What an extension is told, and where it may be told it: the four levels of
- * {@code vanillabp.extensions.<extension>.*} and the adapter section of each of them,
- * resolved by the same rule an adapter setting follows (decision 7 in the repository's
- * DECISIONS.md) and by the walk every plug-in uses (decision 53).
+ * {@code vanillabp.extensions.<extension>.*}, and the adapter section of each of them. They
+ * are resolved by the same rule as an adapter setting (decision 7 in the repository's
+ * DECISIONS.md), and by the walk which every plug-in uses (decision 53 in the repository's
+ * DECISIONS.md).
  * <p>
- * The platform-neutral half of the story. That both platforms bind all eight positions is
- * held by {@code ExtensionSettingsPositionsTest} on Spring Boot and by
+ * This is the half which does not depend on a platform. That both platforms bind all eight
+ * positions is held by {@code ExtensionSettingsPositionsTest} on Spring Boot and by
  * {@code ExtensionSettingsPositionsTest} on Quarkus.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -45,9 +46,9 @@ public class ExtensionSettingsResolutionTest {
   private static final String OTHER_ADAPTER = "on-premise";
 
   /**
-   * One value set at every level, one value set at the adapter section of every level,
-   * and one value set only at the root - so every assertion says both which position won
-   * and that the rest of the section survived.
+   * One value set at every level, one value set at the adapter section of every level, and
+   * one value set only at the root. So every assertion says which position won, and that the
+   * rest of the section survived.
    */
   private static MigrationAdapterProperties properties() {
 
@@ -225,7 +226,7 @@ public class ExtensionSettingsResolutionTest {
 
     final var properties = properties();
 
-    // the workflow says nothing about this adapter, so the workflow's general section
+    // the workflow says nothing about this adapter. So the general section of the workflow
     // wins over what the module told the adapter
     assertEquals(
         "of the workflow",

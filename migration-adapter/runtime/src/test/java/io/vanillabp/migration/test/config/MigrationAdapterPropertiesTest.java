@@ -68,8 +68,8 @@ public class MigrationAdapterPropertiesTest {
   @Test
   public void testNoResourceLocationGivenIsDerivedByConvention() {
 
-    // No resources-location configured is the NORMAL case - the location
-    // follows the convention '<workflow module>/processes/<adapter id>'
+    // no configured resources-location is the NORMAL case. The location follows the
+    // convention '<workflow module>/processes/<adapter id>'
     final var properties = new MigrationAdapterProperties();
     properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setWorkflowModules(Map.of("fake-module", WorkflowModuleAdapterProperties
@@ -91,11 +91,10 @@ public class MigrationAdapterPropertiesTest {
   @Test
   public void testResourcesLocationOfTheApplicationsOwnWorkflowModule() {
 
-    // the single workflow module declared by the application's MAIN artifact: its
-    // BPMN lives below 'processes/' - no module id in the path. The module's OWN
-    // location is searched first, because a workflow module tested
-    // inside its own Maven module is the main artifact as well while its files sit
-    // below the module id
+    // the single workflow module which the MAIN artifact of the application declares. Its
+    // BPMN lives below 'processes/', with no module id in the path. The OWN location of the
+    // module is searched first. A workflow module tested inside its own Maven module is the
+    // main artifact as well, while its files sit below the module id
     final var properties = new MigrationAdapterProperties();
     properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
@@ -118,8 +117,8 @@ public class MigrationAdapterPropertiesTest {
   @Test
   public void testOneLocationOnlyForAModuleWhichIsNotTheMainArtifact() {
 
-    // a module shipped as its own artifact keeps ONE location: the root of the
-    // application is another module's business
+    // a module shipped as its own artifact keeps ONE location. The root of the application
+    // is the business of another module
     final var properties = new MigrationAdapterProperties();
     properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
@@ -197,13 +196,13 @@ public class MigrationAdapterPropertiesTest {
 
     properties.validateProperties(adaptersLoaded, List.of("configured-module", "global-module"));
 
-    // the adapter-specific location wins over everything
+    // the location for the adapter wins over everything
     final var specific = properties
         .getAdapterResourcesLocationsFor("configured-module", "adapter-test")
         .getFirst();
     assertEquals("classpath*:specific", specific.location());
     assertFalse(specific.vanillaBpBpmn());
-    // the global location wins over the convention (VanillaBP-neutral BPMN)
+    // the global location wins over the convention (BPMN which is neutral to VanillaBP)
     final var global = properties
         .getAdapterResourcesLocationsFor("global-module", "adapter-test")
         .getFirst();
@@ -213,7 +212,7 @@ public class MigrationAdapterPropertiesTest {
   }
 
   /**
-   * An application keeping the BPMN of all its workflow modules in one place per BPMS
+   * An application which keeps the BPMN of all its workflow modules in one place per BPMS
    * writes the location at the adapter. The key used to bind and do nothing.
    */
   @Test
@@ -247,7 +246,7 @@ public class MigrationAdapterPropertiesTest {
         .getFirst();
     assertEquals("classpath*:per-adapter", perAdapter.location());
     assertFalse(perAdapter.vanillaBpBpmn(), "a location at the adapter is specific to the BPMS");
-    // ... while a module naming its own location keeps it
+    // ... while a module which names its own location keeps it
     assertEquals(
         "classpath*:specific",
         properties
@@ -450,8 +449,8 @@ public class MigrationAdapterPropertiesTest {
         IllegalStateException.class,
         () -> properties.validateProperties(List.of("adapter1", "adapter2"), List.of("test-module")));
 
-    // SEVERAL adapter types in the classpath are never guessed - the
-    // message asks for the ORDER, not for adapter sections
+    // SEVERAL adapter types in the classpath are never guessed. The message asks for the
+    // ORDER, not for adapter sections
     assertTrue(
         exception.getMessage().contains("Several VanillaBP adapters were found in classpath"),
         exception::getMessage);
@@ -486,7 +485,7 @@ public class MigrationAdapterPropertiesTest {
   @Test
   public void testAdapterSectionsAreDerivedFromPrioritizedAdapters() {
 
-    // several BPMS: naming the ORDER is enough as long as the ids ARE adapter types
+    // several BPMS: naming the ORDER is enough, as long as the ids ARE adapter types
     final var properties = new MigrationAdapterProperties();
     properties.setPrioritizedAdapters(List.of("adapter2", "adapter1"));
 
@@ -502,7 +501,7 @@ public class MigrationAdapterPropertiesTest {
   @Test
   public void testCustomAdapterIdWithoutTypeIsNeverDerived() {
 
-    // a custom id carries no information about its type - it cannot be derived
+    // a custom id carries no information about its type, so it cannot be derived
     final var properties = new MigrationAdapterProperties();
     properties.setPrioritizedAdapters(List.of("my-bpms"));
 
@@ -518,9 +517,9 @@ public class MigrationAdapterPropertiesTest {
   @Test
   public void testWorkflowLevelConfigurationIsAccepted() {
 
-    // regression for the former "not yet supported" rejection: a
-    // workflow-level prioritized-adapters override passes the validation and is
-    // resolved by getPrioritizedAdaptersFor
+    // regression for the former "not yet supported" rejection. A prioritized-adapters
+    // override at workflow level passes the check, and getPrioritizedAdaptersFor resolves
+    // it
     final var properties = new MigrationAdapterProperties();
     properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
@@ -546,8 +545,8 @@ public class MigrationAdapterPropertiesTest {
   @Test
   public void testWorkflowLevelPrioritizedAdapterUnknownIsRejected() {
 
-    // a workflow-level prioritized-adapters list referencing an unknown adapter id
-    // fails the boot - same behavior as the module level
+    // a prioritized-adapters list at workflow level which references an unknown adapter id
+    // fails the boot. The module level behaves the same
     final var properties = new MigrationAdapterProperties();
     properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
@@ -578,8 +577,8 @@ public class MigrationAdapterPropertiesTest {
   @Test
   public void testWorkflowAndTaskLevelAdapterKeysUnknownAreRejected() {
 
-    // adapter-specific keys at the workflow and task level referencing unknown
-    // adapter ids fail the boot - same behavior as the module level
+    // keys for an adapter at the workflow and task level which reference unknown adapter ids
+    // fail the boot. The module level behaves the same
     final var properties = new MigrationAdapterProperties();
     properties.setAdapters(Map.of("adapter-test", AdapterConfigProperties.ofType("adapter2")));
     properties.setPrioritizedAdapters(List.of("adapter-test"));
@@ -667,11 +666,11 @@ public class MigrationAdapterPropertiesTest {
         .build()));
     properties.validateAndLink();
 
-    // union: module-level list first, workflow-level-only adapters appended
+    // union: the list of the module first, then the adapters only the workflow names
     assertEquals(
         List.of("adapter-a", "adapter-b"),
         properties.getDeploymentAdaptersFor("test-module"));
-    // module without workflow-level overrides: identical to the module-level list
+    // a module without overrides at workflow level: the same as the list of the module
     assertEquals(
         List.of("adapter-a", "adapter-b", "adapter-c"),
         properties.getDeploymentAdaptersFor("other-module"));
@@ -713,9 +712,9 @@ public class MigrationAdapterPropertiesTest {
     properties.setAdapters(Map.of("c8-cloud", AdapterConfigProperties.ofType("adapter2")));
     properties.setWorkflowModules(Map.of("test-module", testModule));
 
-    // both the Quarkus-style (C8_CLOUD) and the Spring-uniform-style (C8CLOUD)
-    // mangling of the dashed id have to be accepted, as well as static keys and
-    // platform-owned sections without dynamic id segments
+    // both manglings of the dashed id have to be accepted: the one of Quarkus (C8_CLOUD) and
+    // the uniform one of Spring (C8CLOUD). So do static keys, and sections which the
+    // platform owns without dynamic id segments
     properties.validateEnvironmentVariableUsage(List.of(
         "VANILLABP_ADAPTERS_C8_CLOUD_TYPE",
         "VANILLABP_ADAPTERS_C8CLOUD_TYPE",
@@ -782,7 +781,7 @@ public class MigrationAdapterPropertiesTest {
         exception.getMessage().contains("'loan__approval'") && exception.getMessage().contains("'__'"),
         exception::getMessage);
 
-    // the very same module id is fine as long as nothing uses prefixes
+    // the very same module id is fine, as long as nothing uses prefixes
     MigrationAdapterProperties
         .builder()
         .adapters(java.util.Map.of("c8", AdapterConfigProperties.ofType("camunda8")))
@@ -795,16 +794,16 @@ public class MigrationAdapterPropertiesTest {
   }
 
   /**
-   * Which adapter ids one adapter TYPE serves - the question a platform answers to
-   * register one set of beans per configured engine, and an extension bridging to a
-   * BPMS to register one bridge per engine.
+   * Which adapter ids one adapter TYPE serves. A platform asks this to register one set of
+   * beans per configured engine. An extension which bridges to a BPMS asks it to register one
+   * bridge per engine.
    * <p>
-   * The cases are the ones {@code AdapterBeanRegistrarSupportTest} pinned on Spring
-   * Boot, asked of the core method both platforms now delegate to. What they are about
-   * is the two halves of the convention: a section without a {@code type} takes its id
-   * as the type, and an id named in {@code prioritized-adapters} which IS an adapter
-   * type needs no section at all - the migration setup, where dropping the second half
-   * left the old adapter without beans.
+   * The cases are the ones which {@code AdapterBeanRegistrarSupportTest} pinned on Spring
+   * Boot, now asked of the core method to which both platforms delegate. They are about the
+   * two halves of the convention. A section without a {@code type} takes its id as the type.
+   * And an id named in {@code prioritized-adapters} which IS an adapter type needs no section
+   * at all. That is the migration setup. Dropping the second half left the old adapter
+   * without beans.
    */
   @Nested
   @DisplayName("The adapter ids of one type")
@@ -825,8 +824,8 @@ public class MigrationAdapterPropertiesTest {
     @DisplayName("A section carrying nothing but the adapter's own keys takes its id as the type")
     public void aSectionWithoutATypeIsTheType() {
 
-      // the section bound nothing the core model knows, so there is no entry for it -
-      // which must not decide whether the id exists
+      // the section bound nothing which the core model knows, so there is no entry for it.
+      // That must not decide whether the id exists
       assertEquals(
           List.of("camunda7"),
           configured(List.of("camunda7"), Map.of()).adapterIdsOfType("camunda7"));
@@ -903,7 +902,7 @@ public class MigrationAdapterPropertiesTest {
     properties.setWorkflowModules(Map.of("test-module", WorkflowModuleAdapterProperties
         .builder()
         .workflowModuleId("test-module")
-        // the location the deployment really reads stays where it is read
+        // the location which the deployment really reads stays where it is read
         .adapters(Map.of("adapter-test", AdapterProperties
             .builder()
             .resourcesLocation("classpath*:test-module/processes/test")
@@ -946,8 +945,8 @@ public class MigrationAdapterPropertiesTest {
   class ADeliverySettingIsRefusedBelowTheLevelItIsReadAt {
 
     /**
-     * The configuration both tests below start from: one workflow module with one
-     * workflow and one task in it, each of them given the delivery section the test
+     * The configuration from which both tests below start. It has one workflow module with
+     * one workflow and one task in it. Each of them gets the delivery section which the test
      * fills.
      */
     private MigrationAdapterProperties applicationWriting(

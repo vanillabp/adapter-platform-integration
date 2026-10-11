@@ -19,9 +19,9 @@ import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxPropertie
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Pins the outbox defaults ONCE, in the core - they are user-visible (documented in
- * the wiki) and consumed by all platform outbox implementations. Changing a default
- * has to be an explicit decision, not a side effect.
+ * Pins the outbox defaults ONCE, in the core. Users see them (the wiki documents them), and
+ * all outbox implementations of the platforms use them. Changing a default has to be an
+ * explicit decision, not a side effect.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PhaseTwoOutboxPropertiesTest {
@@ -55,8 +55,8 @@ public class PhaseTwoOutboxPropertiesTest {
     // 480 seconds would be next, so the cap decides from here on
     assertEquals(Duration.ofMinutes(5), properties.attemptDelay(4));
     assertEquals(Duration.ofMinutes(5), properties.attemptDelay(49));
-    // the exponent is bounded before it is computed: 2^63 overflows, and
-    // block-after-attempts is configurable
+    // the exponent is bounded before it is computed. 2^63 overflows, and
+    // block-after-attempts can be configured
     assertEquals(Duration.ofMinutes(5), properties.attemptDelay(1_000));
 
   }
@@ -72,8 +72,8 @@ public class PhaseTwoOutboxPropertiesTest {
       total = total.plus(properties.attemptDelay(attempt));
     }
 
-    // said in numbers, because this is the outage length the defaults are chosen for:
-    // a cluster upgrade has to end inside it, not a network hiccup
+    // said in numbers, because the defaults are chosen for this length of an outage. A
+    // cluster upgrade has to end inside it, not just a network hiccup
     assertEquals(Duration.ofMinutes(237).plusSeconds(30), total);
     assertTrue(total.compareTo(Duration.ofHours(3)) > 0, "an outage of three hours is survived");
 
@@ -86,13 +86,13 @@ public class PhaseTwoOutboxPropertiesTest {
     final var properties = new PhaseTwoOutboxProperties();
 
     assertNull(properties.getWaitForVisibilityAtMost(), "nothing is set by default");
-    // the first attempt runs at once and the fiftieth failed one blocks the entry, so
-    // forty-nine distances lie between: the four hours the attempt budget is chosen for,
-    // given to a read model which is behind as well
+    // the first attempt runs at once, and the fiftieth failed one blocks the entry. So
+    // forty-nine waits lie between. A read model which is behind gets the same four hours
+    // for which the attempt budget is chosen
     assertEquals(Duration.ofMinutes(232).plusSeconds(30), properties.waitForVisibilityAtMost());
 
-    // the span follows the attempt settings, so an application which gives a failing
-    // BPMS less time gives a lagging read model less time too
+    // the span follows the attempt settings. So an application which gives a failing BPMS
+    // less time also gives a lagging read model less time
     properties.setBlockAfterAttempts(3);
     assertEquals(Duration.ofSeconds(90), properties.waitForVisibilityAtMost());
 

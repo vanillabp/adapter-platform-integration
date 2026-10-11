@@ -18,9 +18,9 @@ import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Two stores of one database pointed at the same table or collection. Six names can be
- * set and nothing about them says that they have to differ, so the boot says it: each of
- * the two stores would read, count and delete what the other wrote.
+ * Two stores of one database which point at the same table or collection. Six names can be
+ * set, and nothing about them says that they have to differ. So the boot says it. Otherwise
+ * each of the two stores would read, count and delete what the other wrote.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OutboxStoresRefuseASharedNameTest {

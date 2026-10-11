@@ -17,9 +17,9 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterCachePro
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Pins the election cache's defaults and its startup validation: what was
- * a fixed 10.000 entries / 1 hour became configurable WITHOUT changing what an
- * unconfigured application gets.
+ * Pins the defaults of the election cache and its startup check. What used to be a fixed
+ * 10.000 entries and 1 hour became configurable, WITHOUT changing what an unconfigured
+ * application gets.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowAdapterCachePropertiesTest {

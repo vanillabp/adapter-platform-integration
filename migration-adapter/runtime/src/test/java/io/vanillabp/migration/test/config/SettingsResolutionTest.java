@@ -16,14 +16,13 @@ import io.vanillabp.integration.extension.spi.settings.SettingsResolution;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The walk over the eight positions, asked with a TYPED tree rather than with the flat
- * text VanillaBP binds below <code>vanillabp.extensions</code>. That is the shape the
- * Business Cockpit hands in: it keeps its own section name and its own types, and only
- * the order of the positions comes from here (decision 53 in the repository's
- * DECISIONS.md).
+ * The walk over the eight positions, asked with a TYPED tree and not with the flat text
+ * which VanillaBP binds below <code>vanillabp.extensions</code>. The Business Cockpit hands
+ * in this shape. It keeps its own section name and its own types, and only the order of the
+ * positions comes from here (decision 53 in the repository's DECISIONS.md).
  * <p>
- * That the core's own tree gives the same answers is held by
- * {@code ExtensionSettingsResolutionTest}.
+ * {@code ExtensionSettingsResolutionTest} holds that the own tree of the core gives the same
+ * answers.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SettingsResolutionTest {
@@ -37,8 +36,8 @@ public class SettingsResolutionTest {
   private static final String ADAPTER = "saas";
 
   /**
-   * What a plug-in with a section of its own binds: a typed value, not a string keyed by
-   * the rest of a path.
+   * What a plug-in with a section of its own binds: a typed value, not a string keyed by the
+   * rest of a path.
    *
    * @param title What the plug-in calls this scope
    */
@@ -46,8 +45,8 @@ public class SettingsResolutionTest {
   }
 
   /**
-   * One level of such a tree: what it says, what it says about one adapter, and the
-   * levels below it.
+   * One level of such a tree: what it says, what it says about one adapter, and the levels
+   * below it.
    *
    * @param settings What this level says
    * @param ofAdapters What this level says per adapter
