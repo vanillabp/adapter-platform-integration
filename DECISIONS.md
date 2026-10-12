@@ -1560,40 +1560,90 @@ Phase two of an operation may be rejected instead of failing. On Camunda 8, the 
 cluster may not have written the workflow yet. The adapter says so and names how long that usually
 takes (`PhaseTwoRetryLater`). This is the normal case there, not an exception.
 
-Two answers are possible, and only one of them works. A store may end the attempt and plan the entry
-again. The three stores VanillaBP wrote itself do that. Or the dispatch may ask again on the spot.
-The gruelbox store did that, in slices of half a second. So a message correlated right after a start
-went through in the second the cluster needed, not in the next `attempt-frequency`.
+**A rejected attempt ends.** Two answers are possible, and only one of them works. A store may end
+the attempt and plan the entry again. Or the dispatch may ask again on the spot. The gruelbox store
+once did that, in slices of half a second. So a message correlated right after a start went through
+in the second the cluster needed, not in the next `attempt-frequency`.
 
-Asking again on the spot cannot work, because the attempt is not alone in its transaction. Gruelbox
-opens one around the dispatch and ticks the entry off in it. The dispatch joins that transaction, so
-that everything a handler writes stands or falls with the entry (entry 11). A rejected attempt rolls
-that transaction back. A transaction which somebody joined and rolled back is marked rollback-only
-for good, in Spring as in JTA. So the attempt behind it reached the BPMS and then lost its commit.
-What happened next depended on a race with the flushing thread. Either the entry stayed open, and the
-consumer got the same call a second time. Or the update which counts the attempt wrote the processed
-flag of the rolled-back attempt. Then the operation was recorded as done, although its effects were
-gone. Both cost what a handler had written, and neither said so. Gruelbox said what it could see:
+Asking again on the spot cannot work, because the attempt is not alone in its transaction. The
+dispatch joins the transaction of the store, so that everything a handler writes stands or falls
+with the entry (entry 11). A rejected attempt rolls that transaction back. A transaction which
+somebody joined and rolled back is marked rollback-only for good, in Spring as in JTA. So the
+attempt behind it reached the BPMS and then lost its commit. On gruelbox, what happened next depended
+on a race with the flushing thread. Either the entry stayed open, and the consumer got the same call
+a second time. Or the update which counts the attempt wrote the processed flag of the rolled-back
+attempt. Then the operation was recorded as done, although its effects were gone. Both cost what a
+handler had written, and neither said so. Gruelbox said what it could see:
 `Failed to update attempt count`.
 
-So a rejected attempt ends. The entry goes back to the store. Afterwards, the window which the
-adapter named is written onto its row. This happens in the listener which also blocks a permanent
-failure, because that is the one moment when the failed attempt is committed and the row can be
-touched again. So the short due time is kept, which is what the waiting was for. No thread and no
-database connection is held while a cluster catches up. The attempt is counted like any other, so
-`block-after-attempts` still ends a workflow which never becomes visible.
+So the entry goes back to the store, and the window which the adapter named becomes its next due
+time. No thread and no database connection is held while a cluster catches up. The poller is told
+the new due time (decision 42). So the entry is dispatched when the window it asked for ends. This
+ends the dispatch which slept while it held the transaction of the store. With it goes the question
+of how many such sleepers a connection pool survives.
 
-The poller is told the new due time (decision 42). So the entry is dispatched when the window it
-asked for ends. This ends the dispatch which slept while it held the transaction of the store. With
-it goes the question of how many such sleepers a connection pool survives.
+**The window means the same thing on every store.** Every store writes the window as the adapter
+named it. Once the gruelbox store read it as an upper limit instead, and wrote it only where it was
+shorter than `vanillabp.outbox.attempt-frequency`. So the same adapter on the same application
+answered differently, depending on which store the application had chosen. An adapter which names a
+window knows something about its BPMS which a store, configured once for every workflow, does not
+know. Asking earlier than that costs no attempt, but it only asks in vain. The price is that an
+adapter can push an entry past a backoff which a store keeps shorter on purpose. That is the
+adapter's call to make: the window is a statement about the BPMS, not a hint.
 
-`ARejectedDispatchIsPlannedAgainTest` holds both ends. The call reaches the consumer once and the
-entry is ticked off. And the workflow which can be found is served first, while the other one waits.
-`GruelboxWritesTheDueTimeADispatchAskedForTest` holds the due time in the row. It lives in the
-repository of the gruelbox store since decision 102. VanillaBP's own JDBC store writes the window when
-the attempt ends, without a listener.
+A store adds no wait of its own on top. The poller of each store sleeps until the earliest moment
+its store owes something (decision 42), and it is told the new due time when an attempt ends. So the
+entry goes out when the window ends. `vanillabp.outbox.poll-interval` only caps that sleep, for a
+node which goes away while it holds work. A store written somewhere else decides on its own whether
+it polls or plans its wake-up. One which polls adds its poll on top.
 
-*Superseded in part by decision 113: the sentence saying the attempt is counted like any other, since an answer `PhaseTwoRetryLater` uses no attempt now and `wait-for-visibility-at-most` ends a workflow which never becomes visible.*
+**Waiting uses time, not attempts.** An answer `PhaseTwoRetryLater` uses no attempt. The store writes
+the window as the next due time and leaves `ATTEMPTS` as it was. The entry is blocked once
+`vanillabp.outbox.wait-for-visibility-at-most` has passed since it was written. The key is not set
+by default, and then the limit is the time which the attempts of
+`vanillabp.outbox.block-after-attempts` take with the growing backoff: forty-nine distances between
+fifty attempts, 3 hours and 52.5 minutes with the defaults.
+
+When every answer "not yet" still counted an attempt, this was measured on 2026-10-04 against
+`camunda/camunda:8.10.0`, with the exporter paused for twelve minutes and the application running on.
+The adapter answered once every ten seconds, and the first entry was blocked after eight minutes and
+eleven seconds. 153 entries of `aggregateChanged` ended up blocked, and none of them came back after
+the exporter caught up. Only an update of the row by hand opened them again. A database which was
+away for the same twelve minutes blocked nothing, because the growing backoff spreads fifty attempts
+over four hours. So a stopped exporter did more harm after eight minutes than a dead database after
+four hours.
+
+A read model which is behind is no failure of the entry. The attempt budget is there to stop an entry
+which keeps failing, and it is measured in failures. A wait is measured in time, so it gets a budget
+of time. The default gives a read model as long as a BPMS which is away. That is the outage for which
+the attempt budget was chosen.
+
+How it works:
+
+- `PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough` is the one rule. The relational store
+  of the core and the MongoDB store of each platform ask it when a dispatch is answered with
+  `PhaseTwoRetryLater`. So all of them behave the same. The gruelbox store, which lives in its own
+  repository since decision 102, follows the same rule.
+- The clock starts at `CREATED_AT` or `createdAt`. No column was added. A younger call which
+  replaces a waiting entry writes that moment anew, so the replacement starts the clock again. That
+  is right, because it is a new call. Earlier failures of the entry count toward that time as well.
+  An entry which failed for three hours and then waits for a read model is blocked after one more
+  hour. That is accepted, because the same entry spends both waits.
+- The answer is handled before the attempt budget is looked at. An entry which used up attempts
+  earlier is not blocked by an answer "not yet".
+- The block itself counts one attempt, with the same write every other block uses.
+- The answer is not counted and the lease is given back. So the next dispatch of the entry looks like
+  a first one, and a START is then not checked against the BPMS before it runs again. So an adapter
+  throws `PhaseTwoRetryLater` only before its operation reached the BPMS. The core throws it only
+  before it calls an adapter. The Camunda 8 adapter throws it for a push into a task's scope which
+  its read model does not report yet, and that is before anything reaches the BPMS.
+- A value of zero or less ends the startup with a message which names the key.
+
+The promise is written where an adapter author meets it: in the javadoc of `PhaseTwoRetryLater`, and
+on the outbox page of both platform wikis. `ARejectedDispatchIsPlannedAgainTest` holds both ends of a
+rejected attempt. The call reaches the consumer once and the entry is ticked off. And the workflow
+which can be found is served first, while the other one waits. The tests which hold the due time in
+the row of the gruelbox store live in the repository of that store.
 
 ### 50. An extension may say while it is wired that a handler never writes
 
@@ -2930,36 +2980,8 @@ Version 1 is not affected. It did not support a process which the BPMS starts on
 
 ### 93. An adapter's retry window means the same thing on every store
 
-An adapter which rejects a phase-two call with `PhaseTwoRetryLater` says how long its BPMS needs
-before asking again can help. The relational store of the core and both MongoDB stores wrote that
-window onto the entry as it was named. The gruelbox store read it as an upper limit instead. It wrote
-the window only where it was shorter than `vanillabp.outbox.attempt-frequency`, and otherwise kept
-its own distance. So the same adapter on the same application answered differently, depending on
-which store the application had chosen. And the difference lived in the name of a test, not anywhere
-an adapter author reads.
-
-The gruelbox store now always writes the window. An adapter which names a window knows something
-about its BPMS which a store, configured once for every workflow, does not know. Asking earlier than
-that costs a failed attempt out of the budget which blocks the entry. The price is that an adapter
-can push an entry past a backoff which a store keeps shorter on purpose. That is the adapter's call
-to make: the window is a statement about the BPMS, not a hint.
-
-A store adds no wait of its own on top. The poller of each store sleeps until the earliest moment its
-store owes something (decision 42), and it is told the new due time when an attempt ends (decision
-49). So the entry goes out when the window ends. `vanillabp.outbox.poll-interval` only caps that
-sleep, for a node which goes away while it holds work. A store written somewhere else decides on its
-own whether it polls or plans its wake-up. One which polls adds its poll on top.
-
-The promise is written where an adapter author meets it: in the javadoc of `PhaseTwoRetryLater`, and
-on the outbox page of both platform wikis.
-`GruelboxWritesTheDueTimeADispatchAskedForTest#aLongerWindowIsWrittenToo` holds the case which used
-to go the other way. It lives in the repository of the gruelbox store since decision 102.
-
-*Superseded in part by decision 113: the part of a sentence saying that asking earlier costs a failed attempt, since asking earlier costs no attempt now and only asks in vain.*
-
-*The paragraph about what a store adds on top said "the poll it takes to pick a due entry up, at
-most `vanillabp.outbox.poll-interval`". That was the rhythm before decision 42, and it was
-corrected on 2026-10-10.*
+*Merged into decision 49 on 2026-10-12, before the 2.0 release.* Decision 49 now says that every
+store writes the window an adapter names as it was named, and adds no wait of its own on top.
 
 ### 94. A held version says which of its elements never name the item of a round
 
@@ -4085,62 +4107,9 @@ the workflow id from the row of an open task, as an operation does.*
 
 ### 113. Waiting for a read model uses time, not attempts
 
-An entry whose dispatch an adapter answers with `PhaseTwoRetryLater` uses no attempt. The store
-writes the window which the adapter named as the next due time, and leaves `ATTEMPTS` as it was. The
-entry is blocked once `vanillabp.outbox.wait-for-visibility-at-most` has passed since it was written.
-The key is not set by default, and then the limit is the time which the attempts of
-`vanillabp.outbox.block-after-attempts` take with the growing backoff: forty-nine distances between
-fifty attempts, 3 hours and 52.5 minutes with the defaults.
-
-Until now every answer "not yet" counted an attempt, like a failure. On 2026-10-04 this was measured
-against `camunda/camunda:8.10.0`, with the exporter paused for twelve minutes and the application
-running on. The adapter answered once every ten seconds, and the first entry was blocked after eight
-minutes and eleven seconds. 153 entries of `aggregateChanged` ended up blocked, and none of them came
-back after the exporter caught up. Only an update of the row by hand opened them again. A database
-which was away for the same twelve minutes blocked nothing, because the growing backoff spreads fifty
-attempts over four hours. So a stopped exporter did more harm after eight minutes than a dead
-database after four hours.
-
-A read model which is behind is no failure of the entry. The attempt budget is there to stop an entry
-which keeps failing, and it is measured in failures. A wait is measured in time, so it gets a budget
-of time. The default gives a read model as long as a BPMS which is away. That is the outage for which
-the attempt budget was chosen.
-
-How it works:
-
-- `PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough` is the one rule. The relational store
-  of the core and the MongoDB store of each platform ask it when a dispatch is answered with
-  `PhaseTwoRetryLater`. So all three behave the same.
-- The clock starts at `CREATED_AT` or `createdAt`. No column was added. A younger call which
-  replaces a waiting entry writes that moment anew, so the replacement starts the clock again. That
-  is right, because it is a new call. Earlier failures of the entry count toward that time as well.
-  An entry which failed for three hours and then waits for a read model is blocked after one more
-  hour. That is accepted, because the same entry spends both waits.
-- The answer is handled before the attempt budget is looked at. An entry which used up attempts
-  earlier is not blocked by an answer "not yet".
-- The block itself counts one attempt, with the same write every other block uses.
-- The answer is not counted and the lease is given back. So the next dispatch of the entry looks like
-  a first one, and a START is then not checked against the BPMS before it runs again. So an adapter
-  throws `PhaseTwoRetryLater` only before its operation reached the BPMS. The javadoc of
-  `PhaseTwoRetryLater` says so. The core throws it only before it calls an adapter. The Camunda 8
-  adapter throws it for a push into a task's scope which its read model does not report yet, and
-  that is before anything reaches the BPMS.
-- A value of zero or less ends the startup with a message which names the key.
-
-Two sentences of earlier entries stop being true, and this entry replaces them. Both entries stay as
-they are and carry a note which points here.
-
-- Decision 49, the sentence "The attempt is counted like any other, so `block-after-attempts` still
-  ends a workflow which never becomes visible." An answer `PhaseTwoRetryLater` is no attempt now,
-  and what ends such a workflow is `wait-for-visibility-at-most`.
-- Decision 93, the part of a sentence "asking earlier than that costs a failed attempt out of the
-  budget which blocks the entry". Asking earlier costs no attempt now. It only asks in vain, and the
-  window stays the adapter's statement about its BPMS.
-
-The gruelbox store lives in its own repository since decision 102. It still counts the answer as an
-attempt and has to follow in that repository.
-
-*Superseded in part by the repository of the gruelbox store: the last paragraph, saying that store still counts the answer as an attempt, since it now spends time instead of attempts as well, by the same rule `PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough`.*
+*Merged into decision 49 on 2026-10-12, before the 2.0 release.* Decision 49 now says that an
+answer `PhaseTwoRetryLater` uses no attempt, and that `wait-for-visibility-at-most` blocks an entry
+which waits too long.
 
 ### 114. Phase two of a task-scoped push gets the row of its task
 
