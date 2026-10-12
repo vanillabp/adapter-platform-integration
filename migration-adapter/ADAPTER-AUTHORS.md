@@ -68,6 +68,15 @@ cannot tell anything apart, so it refuses the second id outright. Two ids may sh
 purpose. That setup is supported, and the scope contract of section 4 keeps them from answering for
 each other.
 
+Ids of OTHER types are not handed to you there. Some types still run on the same kind of system:
+Camunda 7 and its forks CIB seven and Operaton all use the same tables. So the core also asks every
+id `getAddressedSystem()` and ends the boot when two ids of any type answer with the same key
+(decision 129). Answer if another adapter type could ever work on your system, and build the key
+the way that type builds it: name the kind of system and the values which address it, never your
+type. Give a `description` for the message, and a `howToSeparate` with the property keys, because
+here the core writes the message and quotes both. If no other type can share your system, keep the
+default, which answers nothing.
+
 The id is an identity, not a label. Every outbox entry and every delivery record carries the id it
 was written for. If you rename an id, the work which those records still hold open has no owner any
 more. The symptom shows up much later: a workflow which was saved and never started (decision 17).
@@ -175,6 +184,7 @@ can join you.
 | `defaultNameClashAvoidance()`                                      | while deploying                                                                    | what "nothing configured" means for your BPMS; every existing adapter answers `BY_ADAPTER`, the behaviour of version 1                | an application which upgrades without touching its configuration no longer finds its running workflows                                                                                                                        |
 | `warnAboutUnscopedIdentifiers(module, fromDefault)`                | once per module and id, when the mode is `NONE`                                    | name the alternatives which YOUR BPMS offers                                                                                          | the default names only what every BPMS can offer                                                                                                                                                                              |
 | `validateDistinctAdapterInstances(ids)`                            | once per type at startup, only with more than one id                               | fail the boot where two ids of your type cannot be told apart                                                                         | two ids address one backend without a word, and the election has nothing to tell them apart by                                                                                                                                |
+| `getAddressedSystem()`                                             | once per id at startup, after the check per type                                   | the key of the system this id works on, if another type could work on it too                                                          | a second type on your tables or cluster runs next to you, and nothing fails until the work of one ends up in the other                                                                                                        |
 | `checkHealth()`                                                    | the platform's health endpoint, on the request thread                              | the cheapest question your BPMS answers, and return within a bounded time                                                             | an exception becomes `DOWN` as a last resort; a connection without configuration is `UNKNOWN`, never `DOWN`                                                                                                                   |
 
 Four of those rows have a default which is a real answer. So leaving them alone is a decision, not
@@ -1414,6 +1424,9 @@ you:
 - a `canLocateWorkflows()` of `false` next to a second adapter, in a workflow module whose
   `guessing-adapters` is not `ACCEPTED`,
 - a name-clash mode which you refused while deploying.
+
+One case is judged by the platform from your answer: two ids of any type whose
+`getAddressedSystem()` gives the same key.
 
 Everything else is either a warning or silence. A missing `registerDeployedVersion` switches the
 version checks off. A `processVersionCatalogOf` left at `null` keeps the check for renamed processes

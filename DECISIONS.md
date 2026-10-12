@@ -4688,3 +4688,38 @@ built still counts 1024 characters. On Oracle and DB2 an ID with characters outs
 that check and be longer than 1024 bytes, and then the insert fails. This is documented in the
 schema README, together with what an application can do about it. It is not checked in bytes,
 because then an ID which every other database stores would be refused everywhere.
+
+### 129. Two adapter ids of any type must not work on the same system
+
+Proposed by story 984. It adds a check across adapter types to the one which each adapter type
+runs for its own ids (`validateDistinctAdapterInstances`).
+
+The core asks an adapter type whether its ids address different systems, but only when the type has
+two or more ids. Two ids of different types are never compared. Until now that was fine. Camunda 7
+was the only embedded engine of its family. The fork adapters for CIB seven and Operaton change that.
+They use the same tables (`ACT_*`). A `camunda7` id and a `cibseven` id on the same datasource
+without a prefix would pass the check of each type. Then two engines run on one set of tables, and
+each job executor takes the jobs of the other one. Nothing fails at startup. And it is exactly the
+setup of a migration from Camunda 7 to a fork, so the users who need the forks are the ones who would
+meet it.
+
+**The core compares across types.** `AdapterDeploymentService#getAddressedSystem()` returns the
+system an id works on, as an `AddressedSystem`. Its key is what two ids are compared by. After the
+check per type, the core groups every id by that key. Two ids with the same key end the start,
+whatever their types are. All such groups go into one message, so one restart shows them all.
+
+**The adapter builds the key, the core writes the message.** Adapters which can share a system have
+to build the key the same way. So the key names the kind of system and the values which address it,
+and never an adapter type. The record also carries a description of the system and the advice how
+to separate two ids, with the property keys. The message names every id with its type, the system,
+and the advice once per distinct text, with the types which gave it.
+
+**The default answers nothing.** Camunda 8 and the Process-Engine-API cannot share a system with
+another type today, so they keep the default and need no change. The check per type stays as it was,
+with its own messages, and it runs first. Ids of different types on different systems pass. That is
+the migration case.
+
+**Why not in the adapter.** The Camunda 7 adapter could read the datasource and the table prefix of
+every `camunda7`, `cibseven` and `operaton` id itself. Then each adapter of the family would need to
+know all the others, and a future one would be missed. One rule in the core covers every adapter
+which answers, and the message can name both types.
