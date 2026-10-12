@@ -1460,8 +1460,9 @@ business of the process service, not of the records.
   (Camunda 8: the job key; Process-Engine-API: the task ID; Camunda 7: none, see below).
   `TaskDeliveryKey` (package `workflowtask`) adds the adapter ID, workflow module, BPMN process
   and event to it. So an ID only has to be unique within its own BPMS. Where the result would get
-  longer than a store can index, it is hashed (512 characters, MySQL's limit for a unique key with
-  utf8mb4).
+  longer than a store can index, it is hashed. The limit is 512 bytes of UTF-8. That stays below
+  MySQL's limit for a unique key with utf8mb4, and it fits the column on Oracle and DB2, which count
+  a `VARCHAR` in bytes.
 - An adapter which reports no ID still gets a key. It has `TaskDeliveryKey.NOT_DEDUPLICATED` and a
   random value where the ID would stand, and `TaskDeliveryIdentity.deduplicates()` says `false`
   for it. The row is what matters. It names the adapter which holds the task and the kind of id
@@ -2758,10 +2759,12 @@ MongoDB ones, and for a store which an application brings itself:
   redelivery. The same place counts it as `vanillabp.outbox.discarded`, tagged by operation, so you
   can put an alarm on the case instead of reading logs. The core takes the count, not each store.
   That is why gruelbox and the VanillaBP stores report the same number. The key is limited to 250
-  characters and hashed beyond that (`StoredKey`, shared with the inbound delivery key), because
-  gruelbox refuses a longer unique request ID. An aggregate ID longer than the 1024 characters of
-  the `AGGREGATE_ID` column is refused where the call is built, with a message which names the
-  column. The rules for deriving the key per operation are documented on `PhaseOperation` and are a
+  bytes of UTF-8 and hashed beyond that (`StoredKey`, shared with the inbound delivery key), because
+  gruelbox refuses a unique request ID longer than 250 characters, and Oracle and DB2 count bytes.
+  An aggregate ID longer than the 1024 characters of the `AGGREGATE_ID` column is refused where the
+  call is built, with a message which names the column. That check counts characters. On Oracle and
+  DB2 an ID with characters outside ASCII can be longer than 1024 bytes and still pass it. The
+  insert fails there, see "Which databases" in the schema README. The rules for deriving the key per operation are documented on `PhaseOperation` and are a
   persisted contract.
 - **The youngest call may replace the one still waiting** (decision 68 of this repository). Some
   calls carry the state their caller saw (the payload of decision 62). Such a call loses that state

@@ -42,7 +42,7 @@ import java.util.Optional;
  *        {@link PhaseOperation#START_WORKFLOW})
  * @param idempotencyKey The key which deduplicates this call. The operation derived it
  *        when the call was built, and it has at most {@link #MAX_IDEMPOTENCY_KEY_LENGTH}
- *        characters. It is {@link Optional#empty()} for operations which must not be
+ *        bytes of UTF-8. It is {@link Optional#empty()} for operations which must not be
  *        deduplicated, and for calls which a store rebuilt at dispatch time (the key was
  *        persisted, and nobody needs it any more)
  * @param payload The bytes the caller wants the handler to see at dispatch time, or
@@ -68,12 +68,14 @@ public record PhaseTwoCall(
                            boolean replacesWhatIsStillWaiting) {
 
   /**
-   * The number of characters an idempotency key may have before it is replaced by a
+   * The number of bytes of UTF-8 an idempotency key may have before it is replaced by a
    * hash of itself ({@link StoredKey}). It is the smallest limit of the stores
-   * VanillaBP ships. gruelbox refuses a unique request ID longer than this before any
-   * database sees it. The <code>IDEMPOTENCY_KEY</code> column of our own stores holds
-   * 512 characters. With the smallest limit, a call can be scheduled whichever store the
-   * application runs.
+   * VanillaBP ships. gruelbox refuses a unique request ID longer than 250 characters
+   * before any database sees it. The <code>IDEMPOTENCY_KEY</code> column of our own
+   * stores holds 512. With the smallest limit, a call can be scheduled whichever store the
+   * application runs. A key within 250 bytes is also within 250 characters, so the count
+   * in bytes serves gruelbox as well as Oracle and DB2, which count a <code>VARCHAR</code>
+   * in bytes.
    */
   public static final int MAX_IDEMPOTENCY_KEY_LENGTH = 250;
 
@@ -83,6 +85,11 @@ public record PhaseTwoCall(
    * somebody reads the column during support. So such a call is refused where it is
    * built, with a message which names the column. Otherwise a driver would report a
    * truncation in the middle of the transaction of the application.
+   * <p>
+   * This check counts characters. Oracle and DB2 count the column in bytes. There an ID
+   * with characters outside ASCII may pass this check and still be longer than 1024 bytes
+   * of UTF-8, and the insert fails. The ID is not cut and not hashed for the reason above.
+   * The schema README says what to do about it.
    */
   public static final int MAX_AGGREGATE_ID_LENGTH = 1024;
 

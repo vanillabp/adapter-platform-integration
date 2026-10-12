@@ -28,7 +28,7 @@ package io.vanillabp.integration.spi;
  * first one. The row is then overwritten and not refused. That is what
  * {@link TaskDeliveryLog#recordWorkflowStart} is for.
  * <p>
- * A key longer than {@value #MAX_LENGTH} characters is replaced by a hash of itself, through
+ * A key longer than {@value #MAX_LENGTH} bytes of UTF-8 is replaced by a hash of itself, through
  * {@link StoredKey}. The reason is the same as for the key of a task delivery: a store indexes
  * the key, and a unique index has a maximum key length. The two limits are the same number
  * on purpose, and a test checks them against each other.
@@ -43,7 +43,7 @@ public final class WorkflowStartKey {
   public static final String MARKER = "(workflow-start)";
 
   /**
-   * Up to this length the key is stored as it reads. A longer one is hashed. It is the same
+   * Up to this number of bytes of UTF-8 the key is stored as it reads. A longer one is hashed. It is the same
    * number which limits the key of a task delivery, because both live in the same column.
    */
   public static final int MAX_LENGTH = 512;
