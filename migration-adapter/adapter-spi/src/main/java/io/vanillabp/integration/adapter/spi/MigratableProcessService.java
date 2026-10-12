@@ -13,7 +13,7 @@ import io.vanillabp.spi.process.ProcessDefinition;
 import io.vanillabp.spi.process.WorkflowHistory;
 
 /**
- * To be implemented by a platform integration adapter.
+ * To be implemented by each BPMS adapter (for example the Camunda 8 adapter).
  *
  * <h2>The election contract</h2>
  *

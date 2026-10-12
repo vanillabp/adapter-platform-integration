@@ -35,19 +35,19 @@ import io.vanillabp.integration.spi.TransactionRunner;
 /**
  * The registry, owned by the core, of the annotated handler methods of the application,
  * per workflow module and BPMN process ID. It also implements the adapter-facing
- * {@link WorkflowTaskWiring}, {@link WorkflowTaskInvoker} and
- * {@link BpmsInitiatedStartInvoker}. The platform integration registers every workflow
+ * {@link WorkflowTaskWiring}, {@link WorkflowTaskInvoker}, {@link BpmsInitiatedStartInvoker}
+ * and {@link WorkflowEndedInvoker}. The platform integration registers every workflow
  * service class under all BPMN process IDs which the class declares
  * ({@code @WorkflowService.bpmnProcess} and {@code secondaryBpmnProcesses}). Adapters check
  * the wiring during <code>wireBpmn</code>, and they dispatch task calls at runtime.
  * <p>
  * This class holds the <code>&#64;WorkflowTask</code> methods. {@link BpmsInitiatedStarts}
  * holds the <code>&#64;WorkflowStartedByBpms</code> methods of the same classes, and
- * {@link WorkflowEndedHandlers} the <code>&#64;WorkflowEnded</code> methods. The other two
- * interfaces hand their calls on to those. Both mechanisms scan the same classes and share
- * the value conversion - generalizing
- * them into ONE pluggable handler contract is the subject of the extension-enablement
- * story.
+ * {@link WorkflowEndedHandlers} the <code>&#64;WorkflowEnded</code> methods. The two
+ * invoker interfaces for starts and ends hand their calls on to those. The methods of the
+ * extensions are kept in the
+ * {@link io.vanillabp.integration.adapter.migration.handler.ExtensionHandlerRegistry}. All of
+ * them are found in the same classes, by the same scan, and share the value conversion.
  */
 public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInvoker, BpmsInitiatedStartInvoker, WorkflowEndedInvoker, DeclaredBpmnProcesses {
 
@@ -107,8 +107,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   /**
    * What the BPMS know about the deployed versions of the BPMN processes. It is needed to
    * place a version TAG, named by a <code>version</code> attribute, in the order of the
-   * deployments. All three handler kinds share it, because all three annotations have that
-   * attribute.
+   * deployments. All four kinds of handler share it: the three annotations of the core and
+   * the methods of the extensions. All of them have that attribute.
    */
   private final ProcessVersions processVersions;
 
@@ -1885,8 +1885,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   /**
    * The methods registered for that BPMN process which serve NO version worth serving: the
-   * versions which the BPMS holds, minus the ones the configuration faded out. All three
-   * annotations have a <code>version</code> attribute, so all three are asked.
+   * versions which the BPMS holds, minus the ones the configuration faded out. All four
+   * kinds of handler have a <code>version</code> attribute, so all four are asked.
    * <p>
    * The verdict is reached for the WHOLE workflow module, not for the given process alone. A
    * class declares one <code>bpmnProcess</code> and any number of

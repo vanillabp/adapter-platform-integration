@@ -40,8 +40,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 /**
  * What happens when a workflow starts: the adapter which created the instance reports its id into
  * the request of phase two, and the core writes the pair "this aggregate, that workflow" down.
- * From then on the id can be read without asking any BPMS, which is what the election of an
- * operation about a workflow does today - it probes every configured adapter and remembers nothing.
+ * From then on the id can be read without asking any BPMS. The election of an operation about a
+ * workflow reads this row first, and it probes the adapters only where there is no row.
  * <p>
  * An adapter which reports nothing is in here as well. It has to keep behaving exactly as it
  * did: no row, no id, and the probing which was there before.

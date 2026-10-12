@@ -447,14 +447,30 @@ public class PhaseTwoOutboxReaderTest {
 
     givenAnOutbox(Shape.VANILLABP);
     givenAnEntry(Shape.VANILLABP, "the-entry", "AProcess", State.WAITING, 1);
+    givenAnEntry(Shape.VANILLABP, "the-entry-beside-it", "AProcess", State.WAITING, 1);
 
     final var reader = readerOf(Shape.VANILLABP);
 
-    // This is a write. A test can only read back that it ran at all, because this reader
-    // does not report the moment of the next attempt.
     reader.makeDueNow("START_WORKFLOW|a-module|AProcess|the-entry");
 
-    assertEquals(1, reader.entries().size());
+    // The reader does not report the moment of the next attempt. So the test reads the
+    // column itself. Both entries were written without that moment.
+    assertTrue(nextAttemptOf("the-entry").isPresent(), "the entry of the key is made due");
+    assertTrue(nextAttemptOf("the-entry-beside-it").isEmpty(), "the entry beside it is not touched");
+
+  }
+
+  private Optional<Instant> nextAttemptOf(
+      final String id) throws SQLException {
+
+    try (var connection = dataSource.getConnection(); var select = connection
+        .prepareStatement("SELECT NEXT_ATTEMPT_AT FROM %s WHERE ID = ?".formatted(OUTBOX_OF_THIS_TEST))) {
+      select.setString(1, id);
+      try (var result = select.executeQuery()) {
+        assertTrue(result.next(), "the entry exists");
+        return Optional.ofNullable(result.getTimestamp(1)).map(java.sql.Timestamp::toInstant);
+      }
+    }
 
   }
 

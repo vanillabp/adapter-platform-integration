@@ -28,10 +28,10 @@ import java.util.List;
  * handler wants the item. So a model which hands over no item is refused while it is
  * deployed;</li>
  * <li>{@link #workflowTaskCompletesAsynchronously(String, String, String)}: refuse a
- * wiring which cannot keep a task open;</li>
- * <li>{@link #workflowTaskCompletesAsynchronously(String, String, String)} and
- * {@link #workflowsShareTheWorkflowAggregate(String, String, String)}: what the model
- * has to be rewritten for;</li>
+ * wiring which cannot keep a task open, and learn what the model has to be rewritten
+ * for;</li>
+ * <li>{@link #workflowsShareTheWorkflowAggregate(String, String, String)}: also what the
+ * model has to be rewritten for;</li>
  * <li>{@link #reportConcurrentTokenElements(String, String, Collection)}: the elements
  * which can put a second token into a workflow;</li>
  * <li>{@link #reportCompensation(String, String, Collection)}: the compensation throw
@@ -275,9 +275,9 @@ public interface WorkflowTaskWiring {
    * the module. A workflow service class may declare several processes through
    * {@code secondaryBpmnProcesses}. So a method which matches nothing in one process may
    * rightly serve another. This check covers the other direction, which
-   * {@link #validateTaskWiring} cannot decide per process. Called
-   * by the adapter at the END of <code>deployResources</code>; throwing there
-   * honors the <code>deployment-failure</code> policy.
+   * {@link #validateTaskWiring} cannot decide per process. The core calls it once the last
+   * adapter of the workflow module finished deploying. An adapter must not call it (see the
+   * type).
    *
    * @param workflowModuleId The workflow module ID
    * @throws IllegalStateException Names every method which matches no task of any

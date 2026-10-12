@@ -130,8 +130,8 @@ public interface TaskInvocationContext {
 
   /**
    * The event being processed. BPMS adapters deliver {@link TaskEvent.Event#CREATED}
-   * when a task is to be processed; {@link TaskEvent.Event#CANCELED} arrives with
-   * the complete/cancel feature.
+   * when a task is to be processed, and {@link TaskEvent.Event#CANCELED} when a task which
+   * was delivered before is canceled.
    *
    * @return The task event
    */
