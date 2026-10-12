@@ -3,6 +3,7 @@ package io.vanillabp.integration.adapter.spi;
 import java.io.InputStream;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import io.vanillabp.integration.adapter.spi.health.AdapterHealth;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
@@ -284,6 +285,9 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
    * ids cannot be told apart, the start must fail with a guiding message which names the
    * property that makes them distinct.
    * <p>
+   * Ids of DIFFERENT types are not handed in here. The core compares them by
+   * {@link #getAddressedSystem()}.
+   * <p>
    * The default does nothing. Some adapters cannot compare their instances, because the
    * application provides the connection. Such an adapter should say so in its
    * documentation, and not pretend.
@@ -293,6 +297,27 @@ public interface AdapterDeploymentService<BPMN, PC> extends ExtensionWiringServi
    */
   default void validateDistinctAdapterInstances(
       final List<String> adapterIdsOfThisType) {
+
+  }
+
+  /**
+   * The system this adapter id works on, for the check across adapter types. The core asks
+   * every configured id once at startup, after
+   * {@link #validateDistinctAdapterInstances(List)} and before any deployment. Two ids with
+   * the same {@link AddressedSystem#key()} end the start, also if their types differ. See
+   * {@code DeploymentServiceTest$DistinctAdapterInstancesTests}, which checks that.
+   * <p>
+   * An adapter answers if another adapter type could work on the same system. Embedded
+   * engines of one family are the case: Camunda 7 and its forks all use the same tables. Two
+   * types which can never meet answer nothing.
+   * <p>
+   * The default answers nothing. Then this id is not compared with others.
+   *
+   * @return The system this adapter id works on, or empty if this adapter has no such notion
+   */
+  default Optional<AddressedSystem> getAddressedSystem() {
+
+    return Optional.empty();
 
   }
 

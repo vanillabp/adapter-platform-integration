@@ -23,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Stream;
@@ -44,6 +45,7 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperti
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.adapter.spi.AddressedSystem;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
@@ -1839,7 +1841,8 @@ public class DeploymentServiceTest {
    * systems. Whether two configurations differ is BPMS knowledge, so the adapter decides. The
    * SPI documents WHEN the adapter is asked: once per type, on the first deployment service
    * of that type, with the ids in priority order, and before anything reaches a BPMS. This
-   * test holds that.
+   * test holds that. Ids of DIFFERENT types are compared by the core itself, by the key of the
+   * system each id works on (see decision 129 in the repository's DECISIONS.md).
    */
   @Nested
   @DisplayName("Several ids of one adapter type Tests")
@@ -1938,6 +1941,101 @@ public class DeploymentServiceTest {
       verify(adapter1DeploymentService, never())
           .readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean());
       verify(adapter2DeploymentService, never())
+          .readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean());
+
+    }
+
+    @Test
+    @DisplayName("Two ids of DIFFERENT types on the same system end the boot before any BPMN was read")
+    public void twoTypesOnTheSameSystemEndTheBoot() {
+
+      final var properties = propertiesWithGlobalPriorities(List.of("adapter-test2", "adapter-test1"));
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
+      when(adapter1DeploymentService.getAdapterType()).thenReturn("camunda7");
+      when(adapter2DeploymentService.getAdapterType()).thenReturn("cibseven");
+      // both types build the key of their family the same way, and so give the same advice
+      final var sameTables = new AddressedSystem(
+          "tables|default|none", "datasource <default>, table prefix <none>", "an own 'vanillabp.adapters.<id>.table-prefix'");
+      when(adapter1DeploymentService.getAddressedSystem()).thenReturn(Optional.of(sameTables));
+      when(adapter2DeploymentService.getAddressedSystem()).thenReturn(Optional.of(sameTables));
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
+
+      final var exception = assertThrows(
+          IllegalStateException.class,
+          () -> testee.deployResources(List.of("test-module"), oneBpmnFile()));
+      final var message = exception.getMessage();
+      // in priority order, with their types
+      assertTrue(
+          message.contains("The adapters 'adapter-test2' (type 'cibseven'), 'adapter-test1' (type 'camunda7') "
+              + "work on the SAME system: datasource <default>, table prefix <none>."),
+          message);
+      assertTrue(
+          message.contains("  - for type 'cibseven', 'camunda7': an own 'vanillabp.adapters.<id>.table-prefix'"),
+          message);
+      assertTrue(message.contains("or remove all but one of these adapters"), message);
+
+      verify(adapter1DeploymentService, never())
+          .readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean());
+      verify(adapter2DeploymentService, never())
+          .readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean());
+
+    }
+
+    @Test
+    @DisplayName("Each type's own advice is listed when two types on one system give different advice")
+    public void eachAdviceIsListedWithItsType() {
+
+      final var properties = propertiesWithGlobalPriorities(List.of("adapter-test1", "adapter-test2"));
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
+      when(adapter1DeploymentService.getAdapterType()).thenReturn("camunda7");
+      when(adapter2DeploymentService.getAdapterType()).thenReturn("operaton");
+      when(adapter1DeploymentService.getAddressedSystem())
+          .thenReturn(Optional.of(new AddressedSystem("tables|default|none", "the default tables", "advice A")));
+      when(adapter2DeploymentService.getAddressedSystem())
+          .thenReturn(Optional.of(new AddressedSystem("tables|default|none", "the default tables", "advice B")));
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
+
+      final var message = assertThrows(
+          IllegalStateException.class,
+          () -> testee.deployResources(List.of("test-module"), oneBpmnFile()))
+          .getMessage();
+      assertTrue(message.contains("  - for type 'camunda7': advice A"), message);
+      assertTrue(message.contains("  - for type 'operaton': advice B"), message);
+
+    }
+
+    @Test
+    @DisplayName("Two ids of DIFFERENT types on different systems pass, which is the migration case")
+    public void twoTypesOnDifferentSystemsPass() {
+
+      final var properties = propertiesWithGlobalPriorities(List.of("adapter-test1", "adapter-test2"));
+      when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
+      when(adapter1DeploymentService.getAdapterType()).thenReturn("camunda7");
+      when(adapter2DeploymentService.getAdapterType()).thenReturn("cibseven");
+      when(adapter1DeploymentService.getAddressedSystem())
+          .thenReturn(Optional.of(new AddressedSystem("tables|default|none", "the default tables", "advice")));
+      when(adapter2DeploymentService.getAddressedSystem())
+          .thenReturn(Optional.of(new AddressedSystem("tables|default|CIB_", "the tables 'CIB_'", "advice")));
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of());
+      when(adapter2DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of());
+
+      final var testee = new DeploymentService(
+          properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
+
+      testee.deployResources(List.of("test-module"), oneBpmnFile());
+
+      verify(adapter1DeploymentService)
+          .readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean());
+      verify(adapter2DeploymentService)
           .readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean());
 
     }

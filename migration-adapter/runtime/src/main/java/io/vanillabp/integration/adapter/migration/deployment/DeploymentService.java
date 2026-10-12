@@ -11,11 +11,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.adapter.spi.AddressedSystem;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import io.vanillabp.integration.spi.parts.PartKind;
 import io.vanillabp.integration.spi.parts.VanillaBpParts;
@@ -261,7 +263,8 @@ public class DeploymentService {
     checkPartsBelongTogether();
 
     // several ids of one adapter type only make sense if they address DIFFERENT systems,
-    // and the ADAPTER decides that
+    // and the ADAPTER decides that. Ids of different types are compared by the key of the
+    // system they work on
     validateDistinctAdapterInstances();
 
     // which file each executable BPMN process came from, per workflow module. The reports
@@ -510,6 +513,106 @@ public class DeploymentService {
                       .map(AdapterDeploymentService::getAdapterId)
                       .toList());
     });
+
+    refuseAdaptersWorkingOnTheSameSystem();
+
+  }
+
+  /**
+   * Compares the system every adapter id works on, across all adapter types
+   * ({@link AdapterDeploymentService#getAddressedSystem()}). The check per type above cannot
+   * see two types on one system: a Camunda 7 engine and an engine of a Camunda 7 fork on the
+   * same tables, for example. Then each job executor runs the jobs of the other one, and
+   * nothing fails at startup. So two ids with the same key end the start here. All such
+   * groups are named in one message, so that one restart is enough to see them all. See
+   * decision 129 in the repository's DECISIONS.md.
+   */
+  private void refuseAdaptersWorkingOnTheSameSystem() {
+
+    final var prioritizedAdapters = properties.getPrioritizedAdapters();
+    final var servicesBySystem = new LinkedHashMap<String, List<AdapterDeploymentService<?, ?>>>();
+    final var systemsByAdapterId = new HashMap<String, AddressedSystem>();
+    deploymentServices
+        .stream()
+        // in the order of their priority, because the message names them
+        .sorted(Comparator.comparingInt(service -> {
+          final var priority = prioritizedAdapters.indexOf(service.getAdapterId());
+          return priority == -1
+              ? Integer.MAX_VALUE
+              : priority;
+        }))
+        .forEach(service -> service
+            .getAddressedSystem()
+            .ifPresent(system -> {
+              systemsByAdapterId.put(service.getAdapterId(), system);
+              servicesBySystem
+                  .computeIfAbsent(system.key(), key -> new LinkedList<>())
+                  .add(service);
+            }));
+
+    final var sharedSystems = servicesBySystem
+        .values()
+        .stream()
+        .filter(servicesSharingOneSystem -> servicesSharingOneSystem.size() > 1)
+        .map(servicesSharingOneSystem -> describeSharedSystem(
+            servicesSharingOneSystem,
+            systemsByAdapterId))
+        .toList();
+    if (sharedSystems.isEmpty()) {
+      return;
+    }
+    throw new IllegalStateException(String.join(System.lineSeparator() + System.lineSeparator(),
+        sharedSystems));
+
+  }
+
+  private static String describeSharedSystem(
+      final List<AdapterDeploymentService<?, ?>> servicesSharingOneSystem,
+      final Map<String, AddressedSystem> systemsByAdapterId) {
+
+    final var adapters = servicesSharingOneSystem
+        .stream()
+        .map(service -> "'%s' (type '%s')".formatted(service.getAdapterId(), service.getAdapterType()))
+        .collect(Collectors.joining(", "));
+    // adapters of one family give the same advice, so each advice is listed once, with
+    // the types which gave it
+    final var typesByAdvice = new LinkedHashMap<String, List<String>>();
+    servicesSharingOneSystem
+        .forEach(service -> {
+          final var types = typesByAdvice.computeIfAbsent(
+              systemsByAdapterId.get(service.getAdapterId()).howToSeparate(),
+              advice -> new LinkedList<>());
+          if (!types.contains(service.getAdapterType())) {
+            types.add(service.getAdapterType());
+          }
+        });
+    final var advice = typesByAdvice
+        .entrySet()
+        .stream()
+        .map(adviceAndTypes -> "  - for type %s: %s".formatted(
+            adviceAndTypes
+                .getValue()
+                .stream()
+                .map("'%s'"::formatted)
+                .collect(Collectors.joining(", ")),
+            adviceAndTypes.getKey()))
+        .collect(Collectors.joining(System.lineSeparator()));
+
+    return """
+        The adapters %s work on the SAME system: %s. Two adapters on one system get in each \
+        other's way. Two embedded engines on the same tables, for example, each run the jobs \
+        of the other one. Nothing fails at startup, the damage shows later. So this \
+        application does not start. Give each adapter id a system of its own:
+        %s
+        or remove all but one of these adapters."""
+        .formatted(
+            adapters,
+            systemsByAdapterId
+                .get(servicesSharingOneSystem
+                    .getFirst()
+                    .getAdapterId())
+                .description(),
+            advice);
 
   }
 

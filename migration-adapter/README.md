@@ -669,6 +669,7 @@ sequenceDiagram
   P->>DS: deploy(module)
   DS->>DS: adapters = prioritized(module) ∪ every workflow-level override
   DS->>AD: validateDistinctAdapterInstances(ids)  [does nothing by default, asked when more than one id has this type]
+  DS->>AD: getAddressedSystem()  [every id; two ids of any type with the same key end the start]
   DS->>AD: defaultNameClashAvoidance()  [all three: BY_ADAPTER since 2026-08-22]
   DS->>AD: warnAboutUnscopedIdentifiers(module) if mode is NONE
   loop per BPMN file of the module
