@@ -2341,40 +2341,34 @@ gruelbox-phase-two-outbox's DECISIONS.md, and only the pointer above stays here.
 
 ### 69. A business key counts only where it carries the workflow aggregate's id
 
-VanillaBP names a workflow by its workflow aggregate and by nothing else. Some BPMS keep a business
-key of their own. Wherever VanillaBP starts the workflow, such a BPMS gets that id written into its
-key. Camunda 7 has done so from the beginning. Camunda 8 does it from cluster 8.9 on, the first line
-with a `businessId` on an instance. A workflow started past VanillaBP can carry a key which somebody
-else chose, and the variable with the aggregate's id as well. Then two values say different things
-about one instance.
+The id of a workflow is the id of its workflow aggregate. VanillaBP names a workflow by that and by
+nothing else. The application assigns it, and nobody else does: at its own start through the
+aggregate it hands over, and at a start the BPMS performed through the `@WorkflowStartedByBpms`
+method. The BPMS is told about it afterwards and keeps it. Camunda 7 keeps it as the business key.
+Camunda 8 and the Process-Engine-API keep it as a process variable named after the aggregate's id
+attribute. Where VanillaBP starts a workflow on Camunda 8 from cluster 8.9 on, the id is also
+written into the `businessId` of the instance. 8.9 is the first line which has one.
 
-Nobody noticed that before, and the reason is worth writing down: **there was no channel for a
-business key at all.** Every inbound contract named the workflow with a single string. The javadoc of
+**A business key counts only where it carries the workflow aggregate's id.** A workflow started past
+VanillaBP can carry a key which somebody else chose, and the variable with the aggregate's id as
+well. Then two values say different things about one instance. A key which says something else is
+not a second identity. It is a defect in whatever started that workflow.
+
+Nobody noticed that before, because there was no channel for a business key at all. Every inbound
+contract named the workflow with a single string. The javadoc of
 `TaskInvocationContext.getWorkflowAggregateId()` treated "the Camunda 7 business key" and "the
-Camunda 8 aggregate-ID process variable" as the same thing. An adapter whose BPMS keeps a second
-value had nowhere to put it. So this is an addition to the adapter SPI, not the repair of a check
-which was wrong.
-
-The rule is one sentence: a business key counts only where it carries the workflow aggregate's id.
-A key which says something else is not a second identity. It is a defect in whatever started that
-workflow.
+Camunda 8 aggregate-ID process variable" as the same thing. So the channel is an addition to the
+adapter SPI, not the repair of a check which was wrong.
 
 Two places hand a workflow over together with the aggregate's id, and the check sits at both. A task
 delivery and the notification that a workflow ended both report that id, so the comparison costs
 nothing. `WorkflowTaskRegistry.invokeWorkflowTask` and `WorkflowTaskRegistry.workflowEnded` ask for
-it before they do anything else with what the BPMS handed over.
-
-*This entry named a third place until decision 98: a start the BPMS performed on its own, where the
-key the instance already carried was held against the id VanillaBP gave the aggregate inside the
-transaction the start opened. That comparison is gone, because the application names the workflow
-at such a start and there is no second value left to compare. What the BPMS holds IS the name
-VanillaBP looks the workflow up by, so a start is refused where no workflow aggregate carries that
-name, which is decision 98's own rule rather than this check.*
-
-The election is not a third place. The awareness probes send the aggregate's id out and get a
-`WorkflowAwareness` back. So a workflow which another adapter now holds is taken over at its next
-delivery, and that is the first of the two places. The same holds for a workflow taken over from
-version 1.
+it before they do anything else with what the BPMS handed over. A start the BPMS performed is no
+third place, because there the application names the workflow and there is no second value to
+compare (see below). The election is not a third place either. The awareness probes send the
+aggregate's id out and get a `WorkflowAwareness` back. So a workflow which another adapter now holds
+is taken over at its next delivery, and that is the first of the two places. The same holds for a
+workflow taken over from version 1.
 
 A disagreement produces a refusal, and VanillaBP raises no incident of its own. It ends the
 invocation the way it ends one for a task nobody serves. Each BPMS then does what it does for any
@@ -2385,10 +2379,9 @@ which VanillaBP cannot vouch for. The message names both values, the workflow mo
 process, the adapter and the BPMS' own instance.
 
 What says nothing does not contradict. A deviation needs two values which both say something and
-disagree. So a missing business key, a missing aggregate id, or both, are silence.
-
-An absent business key is the state of every Camunda 8 workflow up to cluster 8.8, of every workflow
-on the Process-Engine-API, and of every workflow which a timer started.
+disagree. So a missing business key, a missing aggregate id, or both, are silence. An absent business
+key is the state of every Camunda 8 workflow up to cluster 8.8, of every workflow on the
+Process-Engine-API, and of every workflow which a timer started.
 
 The sentence about an absent aggregate id keeps the upgrade from version 1 working. It is also the
 one somebody could later "tighten" away. Version 1 on Camunda 7 wrote NO process variables at all,
@@ -2397,58 +2390,112 @@ application was upgraded carries its identity in the business key and nowhere el
 reads the id from the variable finds none. If a missing variable counted as a deviation, every
 migrated workflow would run into an incident at its first delivery. That is the worst way an upgrade
 can break. The rule is written so that this is silence and not conflict, and
-`aWorkflowTakenOverFromVersionOneIsNotADeviation` holds it.
+`aWorkflowTakenOverFromVersionOneIsNotADeviation` holds it. Version 1 on Camunda 8 had no business
+key at all. So no workflow which ran under version 1 becomes a refusal here, on either engine, and
+nothing is written in `UPGRADE.md`.
 
 There is no way to switch the check off. Two values which name one instance differently are a defect
 in the integration, not a matter of taste. So a property would only let an application keep running
 on an identity nobody can vouch for. There is nothing to trade off either. The check compares two
 strings which the delivery already carries, with no question to the BPMS.
 
-`BusinessKeyIsTheAggregateIdTest` holds both places, the empty key, the key which carries the id,
-and that a start refused for its name leaves no aggregate behind.
+**On Camunda 7 the business key is the only name, so nothing there can disagree.** That is right, not
+a gap. `Camunda7ProcessService` writes the aggregate's id into the business key at the start.
+`Camunda7WorkflowTaskBehavior`, `Camunda7UserTaskEventListener` and `Camunda7TaskELResolver` read
+that same key back as `getWorkflowAggregateId()`. The adapter writes no separate variable for the
+id: `sharedValues` carries the attributes which the sync model shares, and nothing else. So the key
+IS the id, and `getBusinessKey()` stays at its default of `null` there. The check sees an empty key
+and returns. A key which somebody chose at a start past VanillaBP is refused at the start instead,
+because no workflow aggregate carries that name (see below).
 
-Nothing is written in `UPGRADE.md`. The reason is more precise than "version 1 filled the business
-key from the aggregate's id as well". A version-1 instance on Camunda 7 carries a business key and no
-variable, and the rule reads that as silence, not as conflict. Version 1 on Camunda 8 had no business
-key at all. So no workflow which ran under version 1 becomes a refusal here, on either engine.
+One risk stays, and it is accepted with open eyes. A key which somebody chose may happen to look like
+an id which an aggregate already has. Then it is attached to that workflow without a word. On Camunda
+7 nothing can catch it, because catching it needs two values and there is one. Giving Camunda 7 a
+second value, an aggregate-id variable next to the key, was weighed and dropped. It is a new promise,
+not a repair. It costs a variable at every sync point. It differs from what version 1 did. And it
+would only report earlier what the missing aggregate reports anyway.
+
+The check does work on a BPMS which keeps both values. Camunda 8 has the `businessId` from cluster
+8.9 on and carries the aggregate's id in a process variable. Today the adapter reports the business
+key on no line. So the check sleeps until the lines which can carry the value, 8.9 and 8.10, report
+it. The wiki says so on both sides, instead of describing the end state as if it were here.
+
+**A workflow the BPMS starts builds its own aggregate, and the platform builds none.** A workflow
+started by a timer, a signal or a conditional start event has no aggregate, and somebody has to build
+one. Once VanillaBP did it. It created an instance of the aggregate class, derived an id from the
+trigger, and copied the process variables of the model into attributes of the same name by
+reflection. That is a trap. An object which comes into existence without the application does not
+carry the application's values. Lombok writes the defaults of `@Builder.Default` in the builder. So
+an instance built with the no-argument constructor carries `null` where the application would have
+a value. A private constructor makes the instantiation impossible at all, and a mandatory field
+breaks it at the next change of the class. For a workflow the BPMS started, this is the FIRST thing
+that ever happens to that workflow.
+
+So `@WorkflowStartedByBpms` is required, and its method returns the aggregate. The platform saves
+what it is given and nothing else. The id is the application's choice as well, like any other value
+of the aggregate. Nothing derives it: not from the trigger time, not from a generated fallback, and
+not from a business key which happens to fit the id type. The trigger carries no time, because no
+BPMS hands a start listener the time for which it scheduled the start. An application which needs
+that time models a process variable, fills it by an expression and reads it as a `@TaskParam`.
+
+This also removes the third direction in which values could travel. The rule about portable values
+(`PortableValuesCheck`) covers the aggregate on its way to the BPMS and the `@TaskParam` on its way
+back. From the BPMS into an aggregate was the third direction. It existed only because the platform
+did something which belongs to the application.
+
+**What the start listener reads.** The listener hangs on EVERY start event of a process, including
+the plain one. It decides from the STATE of the workflow, not from the kind of the event:
+
+- the BPMS holds a name, and a workflow aggregate carries it: the workflow is already ours, and
+  nothing is built. That is the application's own start. A second delivery of the same notification
+  gets the same answer, and that is how at-least-once delivery stays harmless, for a timer, a signal
+  and a condition alike.
+- the BPMS holds no name: somebody started this workflow past VanillaBP. The
+  `@WorkflowStartedByBpms` method builds the aggregate and names it, and the adapter writes that
+  name into the BPMS.
+- the BPMS holds a name which no workflow aggregate carries: the start is refused. The message says
+  that VanillaBP names a workflow, names the value the BPMS holds, and says where it is kept.
+- an unnamed start reaches a process without such a method: the start is refused, and the message
+  carries the method to write. That is a runtime refusal, so the BPMS makes an incident of it.
+
+Reading the kind of the start event instead cannot work. Anybody with access to the engine can start
+any process, and a timer start event says nothing about who started the instance this time.
+
+**Where the name is read from.** One question, two places to look.
+`BpmsInitiatedStartContext.getBusinessKey()` is the answer of a BPMS which keeps a business key of
+its own, and the core reads it first. Otherwise the core reads the process variable named after the
+aggregate's id attribute out of `getVariables()`. Both are the same value in two places. So one rule
+serves every BPMS, and an adapter has nothing extra to report. A name which does not even fit the
+type of the id attribute, such as a text against a numeric id, is a name which no workflow aggregate
+carries. It gets the same refusal. There is no separate case for it, because there is no separate
+outcome.
+
+**What runs at boot.** Take a process whose BPMS fires a start event by itself (a timer, a signal, a
+condition) and which has no `@WorkflowStartedByBpms` method. It ends the boot, with a message which
+names the process, the start event and the method to write. What the BPMS can start on its own is in
+the model, and the scan knows which methods exist. So both halves are there while the application
+boots, and nobody finds out at three in the morning, when the timer fires and nothing happens. A
+plain or message start event is not judged that way. It has the shape of the application's own
+start, so demanding a method for it would refuse every ordinary process. A foreign start through one
+of them is refused when it happens.
+
+**What it costs.** One load of the workflow aggregate per start of a workflow, where the application's
+own start used to cost nothing. The workflow's first task loads the same aggregate a moment later
+anyway. On Camunda 8 it also costs one job per start, which the adapter's own decision measures.
+
+This supersedes decision 24 of the `camunda7-adapter`. It said that a workflow started past
+VanillaBP keeps the business key it was started with, and gets its aggregate under that key. A key
+which VanillaBP did not write is refused now. Version 1 is not affected by any of this, because it did not support a process which the BPMS starts on its own.
+
+`BusinessKeyIsTheAggregateIdTest` holds both places of the check, the empty key, the key which
+carries the id, and that a start refused for its name leaves no aggregate behind.
+`BpmsInitiatedStartExecution` carries the rule of the start, and `BpmsInitiatedStartTest` holds the
+four answers of the listener.
 
 ### 70. On Camunda 7 the business key is the only name, so nothing there can disagree
 
-Decision 69 gave the adapter SPI a channel for a business key, and a check which refuses a key that
-says something other than the workflow aggregate's id. Reading the adapters afterwards showed that
-the check cannot reach Camunda 7 at all. And that is right, not a gap.
-
-Camunda 7 keeps one name, and VanillaBP uses it. `Camunda7ProcessService` writes the aggregate's id
-into the business key at the start. `Camunda7WorkflowTaskBehavior`, `Camunda7UserTaskEventListener`
-and `Camunda7TaskELResolver` read that same key back as `getWorkflowAggregateId()`. The adapter
-writes no separate variable for the id either: `sharedValues` carries the attributes which the sync
-model shares, and nothing else. So the key is not a second claim about the instance. It IS the id,
-and `getBusinessKey()` stays at its default of `null` there. The check sees an empty key and
-returns, which is what it should do.
-
-Here is where the case goes instead. Say somebody starts a workflow past VanillaBP on Camunda 7. It
-carries the key that somebody chose. VanillaBP reads it as an aggregate's id, and there is no
-aggregate of that name. That is the same shape as a start which the engine performs on its own. It is
-decided by the rule Stephan set for it: an own start is recognised by the fact that the id has no
-aggregate. So Camunda 7 needs no work for decision 69. The case of a foreign start belongs to that
-rule and to the story which builds it.
-
-*Decision 98 changed that rule. A name no workflow aggregate carries is refused now, and a start the
-engine performs on its own is one which arrives without a name. A key somebody chose on Camunda 7 is
-therefore refused at the start rather than read as an aggregate's id.*
-
-One risk stays, and it is accepted with open eyes. A key which somebody chose may happen to look like
-an id which an aggregate already has. Then it is attached to that workflow without a word. A key
-comparison would have caught it. On Camunda 7 nothing can, because catching it needs two values and
-there is one. Giving Camunda 7 a second value, an aggregate-id variable next to the key, was weighed
-and dropped. It is a new promise, not a repair. It costs a variable at every sync point. It differs
-from what version 1 did. And it would only report earlier what the missing aggregate reports anyway.
-
-The check does work on a BPMS which keeps both. Camunda 8 has a `businessId` on an instance from
-cluster 8.9 on, and carries the aggregate's id in a process variable. So both values exist there,
-and the comparison has something to do. Today the adapter reports neither, on any line. So the check
-sleeps until the lines which can carry the value, 8.9 and 8.10, report it. The wiki says so on both
-sides, instead of describing the end state as if it were here.
+*Merged into decision 69 on 2026-10-12, before the 2.0 release.* Decision 69 now says why the
+check of a business key cannot reach Camunda 7, and which risk that leaves.
 
 ### 71. Parts which do not belong together stop the boot, and an unknown pair only warns
 
@@ -2937,46 +2984,9 @@ and the documentation says so.
 
 ### 92. A workflow the BPMS starts builds its own aggregate, and the platform builds none
 
-A workflow started by a timer, a signal or a conditional start event has no aggregate, and somebody
-has to build one. Until now VanillaBP did it. It created an instance of the aggregate class, derived
-an id from the trigger, and copied the process variables of the model into attributes of the same
-name by reflection (`AggregatePropertyWriter`). An application could take over with
-`@WorkflowStartedByBpms`, in two shapes, and that annotation was optional.
-
-It is the same trap which was turned down for the `null` sub-objects of an aggregate. An object
-which comes into existence without the application does not carry the application's values. Lombok
-writes the defaults of `@Builder.Default` in the builder. So an instance built with the no-argument
-constructor carries `null` where the application would have a value. A private constructor makes the
-instantiation impossible at all, and a mandatory field breaks it at the next change of the class. For
-a workflow the BPMS started, this is not a detail somewhere in the middle. It is the FIRST thing that
-ever happens to that workflow.
-
-So the annotation is required, the enriching shape is gone, and the method returns the aggregate.
-The platform saves what it is given and nothing else. The id is the application's choice as well.
-The trigger carries a timer's time, and taking it as the id makes a repeated notification harmless.
-A signal and a condition carry no such value, and an application which needs one brings its own.
-
-*Decision 98 replaced the part about the timer's time. The trigger carries no time any more, and a
-repeated notification is recognised by the name the BPMS holds.*
-
-The check runs while the models are deployed, not when the start fires. What the BPMS can start on
-its own is in the model, and the scan knows which methods exist. So both halves are there while the
-application boots. This avoids finding out at three in the morning, when the timer fires and nothing
-happens. A process with such a start event and no method ends the startup, with a message which
-names the process, the start event and the method to write.
-
-This also removes the third direction in which values could travel. The rule about portable values
-(`PortableValuesCheck`) covers the aggregate on its way to the BPMS and the `@TaskParam` on its way
-back. From the BPMS into an aggregate was the third direction. It existed only because the platform
-did something which belongs to the application.
-
-Two earlier entries close with a sentence about `AggregatePropertyWriter`. Decision 55 says that the
-same conversion writes the attributes of an aggregate which a start by the BPMS builds. Decision 57
-says the same about value types and their texts. Both sentences are about a class which no longer
-exists. What those decisions decide is untouched, because it is about `@TaskParam`. Only their
-closing consequence is gone.
-
-Version 1 is not affected. It did not support a process which the BPMS starts on its own.
+*Merged into decision 69 on 2026-10-12, before the 2.0 release.* Decision 69 now says that the
+`@WorkflowStartedByBpms` method builds the aggregate of a workflow the BPMS started, and what ends
+the boot where it is missing.
 
 ### 93. An adapter's retry window means the same thing on every store
 
@@ -3140,79 +3150,8 @@ uses yet.
 
 ### 98. The application names the workflow, and the BPMS holds that name
 
-The id of a workflow is the id of its workflow aggregate. The application assigns it, in the
-`@WorkflowStartedByBpms` method, and nobody else does. The BPMS is told about it afterwards and keeps
-it. Camunda 7 keeps it as the business key. Camunda 8 and the Process-Engine-API keep it as a process
-variable named after the aggregate's id attribute.
-
-**Why the id belongs to the application.** Decision 92 handed the workflow aggregate of a started
-workflow to the application, because an object which comes into existence without the application
-does not carry the application's values. The id was left half way. The core still read a name out of
-the BPMS and still tried to turn it into an id of the aggregate. Then it compared it with the id the
-application had chosen. Two parties named one workflow, and the core refused every start where they
-disagreed. The Camunda 7 adapter carried the proof in its own suite. Its Quarkus lifecycle test
-starts a process past VanillaBP with a key of its own, and that start had been failing since 504
-landed.
-
-An id is a value like any other. It belongs where the other values of the aggregate come from. So the
-derivation is gone: `getNaturalIdentity`, the trigger time as an id, the generated fallback, and the
-conversion which took a business key over where it happened to fit the id type. What is left is one
-sentence a reader can keep in mind.
-
-**What the listener reads.** The listener hangs on EVERY start event of a process, including the
-plain one. It decides from the STATE of the workflow, not from the kind of the event:
-
-- the BPMS holds a name, and a workflow aggregate carries it: the workflow is already ours, and
-  nothing is built. That is the application's own start. A second delivery of the same notification
-  gets the same answer, and that is how at-least-once delivery stays harmless.
-- the BPMS holds no name: somebody started this workflow past VanillaBP. The
-  `@WorkflowStartedByBpms` method builds the aggregate and names it, and the adapter writes that
-  name into the BPMS.
-- the BPMS holds a name which no workflow aggregate carries: the start is refused. The message says
-  that VanillaBP names a workflow, names the value the BPMS holds, and says where it is kept.
-- an unnamed start reaches a process without such a method: the start is refused, and the message
-  carries the method to write. That is a runtime refusal, so the BPMS makes an incident of it.
-
-The old rule read the kind of the start event instead. That could not work. Anybody with access to
-the engine can start any process, and a timer start event says nothing about who started the
-instance this time.
-
-**Where the name is read from.** One question, two places to look.
-`BpmsInitiatedStartContext.getBusinessKey()` is the answer of a BPMS which keeps a business key of
-its own, and the core reads it first. Otherwise the core reads the process variable named after the
-aggregate's id attribute out of `getVariables()`. Both are the same value in two places. So one rule
-serves every BPMS, and an adapter has nothing extra to report.
-
-A name which does not even fit the type of the id attribute, such as a text against a numeric id, is
-a name which no workflow aggregate carries. It gets the same refusal. There is no separate case for
-it, because there is no separate outcome.
-
-**What still runs at boot.** Take a process whose BPMS fires a start event by itself (a timer, a
-signal, a condition) and which has no `@WorkflowStartedByBpms` method. It still ends the boot, which
-is decision 92. Such a start can only ever arrive unnamed, so otherwise the application would find
-out at three in the morning.
-
-A plain or message start event is not judged that way. It has the shape of the application's own
-start, so demanding a method for it would refuse every ordinary process. A foreign start through one
-of them is refused when it happens.
-
-**What it costs.** One load of the workflow aggregate per start of a workflow, where the application's
-own start used to cost nothing. The workflow's first task loads the same aggregate a moment later
-anyway. On Camunda 8 it also costs one job per start, which the adapter's own decision measures.
-
-**What this supersedes.** Decision 24 of the `camunda7-adapter`. It said that a workflow started past
-VanillaBP keeps the business key it was started with, and gets its aggregate under that key. That is
-no longer so: a key which VanillaBP did not write is refused.
-
-Also the part of decision 92 which said that the trigger carries a timer's time, and that taking it
-as the id makes a repeated notification harmless. There is no trigger time any more. No BPMS hands a
-start listener the time for which it scheduled the start, so an adapter would have to invent it. An
-application which needs the time models a process variable, fills it by an expression and reads it
-as a `@TaskParam`. Repeated notifications are handled by the name the BPMS holds instead, and that
-works for a signal and a condition as well.
-
-`BpmsInitiatedStartExecution` carries the rule, and `BpmsInitiatedStartTest` holds the four answers
-of the listener.
+*Merged into decision 69 on 2026-10-12, before the 2.0 release.* Decision 69 now says that the
+application names the workflow, what the start listener reads, and where it reads the name from.
 
 ### 99. A task for a workflow this application does not own is refused, loudly
 
