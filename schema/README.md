@@ -89,6 +89,15 @@ The untested ones ship because the Camunda 7 engine supports them. So VanillaBP 
 databases than the engine. Their files say in their header that they were generated, and the wiki
 says which ones a test covers.
 
+Oracle and DB2 count the length of a `VARCHAR` in bytes, the others count characters. So the keys
+VanillaBP builds (`IDEMPOTENCY_KEY`, `DEDUP_KEY`, `DELIVERY_KEY`) are measured in bytes of UTF-8,
+and a key which is too long is hashed. It fits on every database. `AGGREGATE_ID` holds your ID as
+it is, and it is never cut or hashed, because somebody reads it during support. On Oracle and DB2
+an ID of up to 1024 characters with characters outside ASCII (an umlaut, an emoji) can be longer
+than 1024 bytes, and then the insert fails. If your IDs can be like that, widen the column in a
+migration of your own. On Oracle you can also give the column character semantics
+(`VARCHAR2(1024 CHAR)`), and on DB2 a column in `CODEUNITS32`.
+
 ## Why the versions live in separate files
 
 Once a changeset was applied to somebody's database, it must never change. Otherwise Liquibase

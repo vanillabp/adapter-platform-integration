@@ -22,6 +22,16 @@ import java.util.HexFormat;
  * a URN, grows past all of that. Hashing only costs the readability of a key which
  * nobody can read at that length anyway.
  * <p>
+ * <strong>The limit counts bytes of UTF-8, not characters.</strong> Oracle and DB2 count
+ * a <code>VARCHAR</code> in bytes. So a key of 512 characters with an umlaut in it does
+ * not fit a column of 512 there, and the insert would fail instead of the key being
+ * hashed. UTF-8 is the encoding of a database which can hold any character, and it never
+ * needs fewer bytes than there are characters. So a key which fits in bytes also fits a
+ * database which counts characters, and a store which counts characters (like gruelbox)
+ * is still served. The key is never cut. It is kept whole or hashed whole, so two keys
+ * which differ anywhere stay different. Decision 128 in the repository's {@code DECISIONS.md}
+ * has the reasoning.
+ * <p>
  * <strong>The output is a persisted contract.</strong> Records of a running installation
  * are matched by these strings. So a changed digest, prefix or limit would silently stop
  * matching after an upgrade. Both callers fix the format with fixed inputs and expected
@@ -40,20 +50,42 @@ public final class StoredKey {
   }
 
   /**
-   * Limits the given key. It is returned unchanged while it fits, and hashed otherwise.
+   * Limits the given key. It is returned unchanged while its UTF-8 form fits, and hashed
+   * otherwise.
    *
    * @param key The key as it was built
-   * @param maxLength The number of characters the store can hold
-   * @return The key or a hash of it, at most
-   *         {@value #HASH_PREFIX}-plus-64 characters long
+   * @param maxBytes The number of bytes of UTF-8 the store can hold
+   * @return The key or a hash of it. The hash is
+   *         {@value #HASH_PREFIX}-plus-64 characters of ASCII, so it has as many bytes as
+   *         characters
    */
   public static String of(
       final String key,
-      final int maxLength) {
+      final int maxBytes) {
 
-    return key.length() <= maxLength
+    return fits(key, maxBytes)
         ? key
         : hashed(key);
+
+  }
+
+  /**
+   * Whether the UTF-8 form of the key has at most the given number of bytes. A character
+   * takes at least one byte and at most three, and a pair of surrogates (one character
+   * outside the Basic Multilingual Plane) takes four. So most keys are decided by their
+   * length alone, and only the others are encoded.
+   */
+  private static boolean fits(
+      final String key,
+      final int maxBytes) {
+
+    if (key.length() > maxBytes) {
+      return false;
+    }
+    if (key.length() <= maxBytes / 3) {
+      return true;
+    }
+    return key.getBytes(StandardCharsets.UTF_8).length <= maxBytes;
 
   }
 

@@ -400,6 +400,8 @@ is part of that refusal now. The discovery itself is unchanged.*
 
 ### 22. An idempotency key says an operation is planned once, not that it ever happened
 
+*Decision 128 measures the limit of a stored key in UTF-8 bytes instead of characters.*
+
 The key of a phase-two operation deduplicates against the entries which have not been dispatched
 yet. It protects the window which entry 2 opened. That window lies between the application's commit
 and the BPMS command. In it, a crash has to leave the operation repeatable, and a redelivery must
@@ -4903,3 +4905,38 @@ BPMS gave the model, as decision 126 does for the tasks. If two adapters deploy 
 one process, they share the reported elements. That is a known limit. Two different models of one
 process are rare. And the elements which an extension reports for one of them are usually in the
 other one too.
+
+### 128. Stored keys are measured in UTF-8 bytes
+
+Proposed by story 968. It changes how decision 22 measures the limit
+of an idempotency key, and it follows decision 118.
+
+VanillaBP stores three keys it builds itself: the idempotency key of a phase-two call, the key of a
+task delivery and the key of a workflow start. `StoredKey` keeps a key as it is while it fits its
+column, and hashes it once it does not. Until now it counted characters. Oracle and DB2 count a
+`VARCHAR` in bytes by default. So a key of 512 characters with an umlaut in it did not fit the
+column there. The insert failed, and the key was not hashed.
+
+**The limit counts bytes of UTF-8.** The numbers stay the same: 250 for the idempotency key, 512 for
+the key of a delivery and of a start. Only the way they are measured changes. UTF-8 is the encoding
+of a database which can hold any character, and it never needs fewer bytes than there are
+characters. So a key which fits in bytes also fits a database which counts characters, and gruelbox,
+which refuses a unique request ID longer than 250 characters, is served as before. MongoDB keeps
+strings in UTF-8 and has no limit of its own here. It gets the same keys, so every store shows a
+person the same key.
+
+**A key is kept whole or hashed whole.** It is never cut, so it is never split inside a character,
+and two keys which differ anywhere still differ. The hash is the same as before: `sha256:` and 64
+hex digits, all ASCII.
+
+**What changes for stored rows.** A key of ASCII characters is stored as before, readable or hashed.
+A key with characters outside ASCII which was under the limit in characters but over it in bytes is
+now hashed. Version 1 had none of these tables, and 2.0 is not released yet, so no installation has
+such rows.
+
+**What is not covered.** `AGGREGATE_ID` holds the ID of the workflow aggregate as it is. It is not
+cut and not hashed, because a person reads it during support. The check where a phase-two call is
+built still counts 1024 characters. On Oracle and DB2 an ID with characters outside ASCII can pass
+that check and be longer than 1024 bytes, and then the insert fails. This is documented in the
+schema README, together with what an application can do about it. It is not checked in bytes,
+because then an ID which every other database stores would be refused everywhere.

@@ -42,8 +42,9 @@ import lombok.extern.slf4j.Slf4j;
  * <code>CREATE TABLE IF NOT EXISTS</code>. The timestamp type is chosen per database. The
  * delivery key is limited to
  * {@value io.vanillabp.integration.adapter.migration.workflowtask.TaskDeliveryKey#MAX_LENGTH}
- * characters, so the key-length limit of MySQL (3072 bytes with utf8mb4) is respected. The
- * core hashes longer keys before they ever reach a store.
+ * bytes of UTF-8. So the key-length limit of MySQL (3072 bytes with utf8mb4) is respected, and
+ * so is the column on Oracle and DB2, which count a <code>VARCHAR</code> in bytes. The core
+ * hashes longer keys before they ever reach a store.
  * <p>
  * Decision 6 in the repository's DECISIONS.md says why a record is written at all, and why it
  * has two timestamps. Decision 16 says where the schema comes from, and why the startup check

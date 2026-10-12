@@ -25,7 +25,7 @@ import io.vanillabp.integration.spi.TaskDelivery;
  * to no delivery. So nothing is ever looked up by it, and a reader of the store sees from the
  * key itself that this row answers no repetition.
  * <p>
- * A key longer than {@link #MAX_LENGTH} characters is replaced by a hash of itself. Stores
+ * A key longer than {@link #MAX_LENGTH} bytes of UTF-8 is replaced by a hash of itself. Stores
  * index the key, and the key length of a unique index is limited (MySQL: 3072 bytes, which
  * is 768 characters with utf8mb4). Hashing keeps long identifiers working. It only costs
  * the readability of a record which nobody can read at that length anyway. {@link StoredKey}
@@ -38,7 +38,7 @@ import io.vanillabp.integration.spi.TaskDelivery;
 public final class TaskDeliveryKey {
 
   /**
-   * Up to this length a key is stored as it is. A longer one is hashed.
+   * Up to this number of bytes of UTF-8 a key is stored as it is. A longer one is hashed.
    */
   public static final int MAX_LENGTH = 512;
 
