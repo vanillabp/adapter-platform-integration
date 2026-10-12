@@ -18,9 +18,8 @@ import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The open tasks of one workflow aggregate, which is what an extension asks before it
- * shows what a workflow is waiting for. The SQL is shared by both platforms, so this is
- * where it is pinned, on H2.
+ * The open tasks of one workflow aggregate. An extension asks this before it shows what a
+ * workflow is waiting for. Both platforms share the SQL, so it is pinned here, on H2.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OpenTasksOfAggregateTest {

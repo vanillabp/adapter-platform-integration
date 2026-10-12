@@ -36,17 +36,17 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * Two branches of one workflow write the same workflow aggregate. What is
- * pinned here is the CORE's part of it:
+ * Two branches of one workflow write the same workflow aggregate. This pins the part of the
+ * CORE:
  * <ul>
- * <li>a version conflict on the commit VanillaBP owns is recognized by asking the
- * platform, named by one guiding message and then propagated UNCHANGED - nothing is
- * retried, the BPMS decides what happens next;</li>
- * <li>a failure the platform does not classify as a conflict passes without any
- * message;</li>
- * <li>elements which can produce a second token are warned about while wiring - once
- * per BPMN process, and only where the aggregate has no version attribute, since a
- * version attribute turns the silent overwrite into the exception above.</li>
+ * <li>A version conflict on the commit which VanillaBP owns is recognized by asking the
+ * platform. One guiding message names it, and then it is passed on UNCHANGED. Nothing is
+ * tried again, and the BPMS decides what happens next.</li>
+ * <li>A failure which the platform does not classify as a conflict passes without any
+ * message.</li>
+ * <li>Elements which can produce a second token are warned about while wiring. This happens
+ * once per BPMN process, and only where the aggregate has no version attribute. A version
+ * attribute turns the silent overwrite into the exception above.</li>
  * </ul>
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -59,9 +59,9 @@ public class AggregateWriteConflictTest {
   private static final String TASK = "task";
 
   /**
-   * Stands in for <code>jakarta.persistence.Version</code> respectively
-   * <code>org.springframework.data.annotation.Version</code>, which the core must not
-   * depend on - it recognizes them by their name.
+   * Stands in for <code>jakarta.persistence.Version</code> and for
+   * <code>org.springframework.data.annotation.Version</code>. The core must not depend on
+   * them, so it recognizes them by their name.
    */
   @Retention(RetentionPolicy.RUNTIME)
   @Target({
@@ -127,9 +127,8 @@ public class AggregateWriteConflictTest {
   }
 
   /**
-   * A platform whose commit fails: the work runs, and what the commit produces is
-   * thrown at the caller of the runner - which is where a version conflict of a
-   * persistence layer appears.
+   * A platform whose commit fails. The work runs, and what the commit produces is thrown at
+   * the caller of the runner. A version conflict of a persistence layer appears there.
    */
   static class FailingCommitTransactionRunner implements TransactionRunner {
 
@@ -204,10 +203,10 @@ public class AggregateWriteConflictTest {
             messages,
             () -> registry.invokeWorkflowTask(MODULE, PROCESS, context("aggregate-1"))));
 
-    // the exception is NOT wrapped: adapters map it to their BPMS' retry semantics
+    // the exception is NOT wrapped. Adapters map it to the retry semantics of their BPMS
     assertSame(conflict, thrown);
     assertEquals(1, transactionRunner.classifierAsked);
-    // no retry inside VanillaBP - the handler ran exactly once
+    // no retry inside VanillaBP, so the handler ran exactly once
     assertEquals(1, aggregate.invocations);
     assertEquals(1, messages.size());
     final var message = messages.getFirst();
@@ -324,12 +323,12 @@ public class AggregateWriteConflictTest {
         () -> {
           // an adapter which cannot read models reports nothing
           registry.reportConcurrentTokenElements(MODULE, PROCESS, List.of());
-          // a BPMN process no workflow service serves (reported by the wiring check)
+          // a BPMN process which no workflow service serves (the wiring check reports it)
           registry.reportConcurrentTokenElements(MODULE, "UnknownProcess", List.of("Gateway_Fork"));
         });
 
     assertTrue(messages.isEmpty(), messages.toString());
-    // the version attribute of a super class counts as well, and the question the check
+    // the version attribute of a super class counts as well. The question which the check
     // asks the persistence is answered from it
     assertTrue(VersionAttribute.isDeclaredBy(VersionedAggregate.class));
     assertFalse(VersionAttribute.isDeclaredBy(Aggregate.class));
@@ -373,8 +372,8 @@ public class AggregateWriteConflictTest {
   }
 
   /**
-   * The configuration the last registry of this test was built on - the collection a
-   * check reports into hangs on it.
+   * The configuration on which the last registry of this test was built. The collection into
+   * which a check reports hangs on it.
    */
   private MigrationAdapterProperties lastProperties;
 
@@ -425,9 +424,9 @@ public class AggregateWriteConflictTest {
   }
 
   /**
-   * Collects the messages the given class logged at WARN or above while the work ran
-   * ("normal" logging is switched off during tests). What a check of the START says does
-   * not come this way any more - see {@link #reportedWhile(List, Runnable)}.
+   * Collects the messages which the given class logged at WARN or above while the work ran
+   * ("normal" logging is switched off during tests). What a check of the START says no
+   * longer comes this way. See {@link #reportedWhile(List, Runnable)}.
    */
   private void loggedBy(
       final Class<?> loggingClass,

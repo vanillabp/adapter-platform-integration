@@ -12,37 +12,36 @@ import java.util.Set;
 import io.vanillabp.spi.service.TaskException;
 
 /**
- * Finds transaction annotations of the application covering a
- * <code>&#64;WorkflowTask</code> method. Such an annotation joins the transaction
- * VanillaBP runs the method in and marks it rollback-only as soon as a
- * {@link TaskException} passes it, which discards everything the handler wrote onto the
- * workflow aggregate although the workflow takes the BPMN error path. A rollback-only
- * mark cannot be cleared, so the only thing VanillaBP can do is refuse to boot and say
- * why.
+ * Finds transaction annotations of the application which cover a
+ * <code>&#64;WorkflowTask</code> method. Such an annotation joins the transaction in which
+ * VanillaBP runs the method. It marks that transaction rollback-only as soon as a
+ * {@link TaskException} passes it. That throws away everything which the handler wrote onto
+ * the workflow aggregate, although the workflow takes the BPMN error path. A rollback-only
+ * mark cannot be cleared. So all VanillaBP can do is refuse to boot and say why.
  * <p>
- * Which annotations exist, and whether the running platform honors them at all, is
- * supplied by the platform integration as {@link TransactionAnnotationSpec}s. This class
- * owns the judgement and nothing else: the search order, meta-annotations, the
- * propagation and the specificity of the rollback rules. Annotations are matched by type
- * NAME and their members are read reflectively, so the core depends on neither platform.
+ * The platform integration supplies which annotations exist, and whether the running
+ * platform honors them at all, as {@link TransactionAnnotationSpec}s. This class owns the
+ * judgement and nothing else: the search order, meta-annotations, the propagation and how
+ * specific the rollback rules are. Annotations are matched by type NAME, and their members
+ * are read by reflection. So the core depends on neither platform.
  * <p>
- * Two annotations are accepted: one whose propagation does not join an existing
- * transaction, and one whose rollback rules exclude {@link TaskException} (the pattern a
- * VanillaBP 1 application carries, which keeps working).
+ * Two annotations are accepted. One whose propagation does not join an existing
+ * transaction. And one whose rollback rules exclude {@link TaskException}. That is the
+ * pattern of a VanillaBP 1 application, and it keeps working.
  */
 final class ApplicationTransactionCheck {
 
   private static final int NO_MATCH = Integer.MAX_VALUE;
 
   /**
-   * What the check found for one <code>&#64;WorkflowTask</code> method: a defect failing
+   * What the check found for one <code>&#64;WorkflowTask</code> method: a defect which fails
    * the startup, a hint about an annotation without effect on this platform, or neither.
    *
    * @param defect The description of the offending annotation, or <code>null</code>
-   * @param remedy How the offending annotation may be written instead, or
-   *          <code>null</code> if it has no rollback rules
-   * @param notHonored The description of an annotation this platform does not honor, or
-   *          <code>null</code>
+   * @param remedy How the offending annotation may be written instead, or <code>null</code>
+   *          if it has no rollback rules
+   * @param notHonored The description of an annotation which this platform does not honor,
+   *          or <code>null</code>
    */
   record Findings(
                   String defect,
@@ -59,7 +58,7 @@ final class ApplicationTransactionCheck {
       final List<TransactionAnnotationSpec> specs) {
 
     final var searchOrder = searchOrder(workflowServiceClass, method);
-    // most specific declaration wins, like Spring's
+    // the most specific declaration wins, the same way as Spring's
     // AnnotationTransactionAttributeSource and CDI's interceptor bindings resolve it
     for (final var element : searchOrder) {
       final var found = findTransactionAnnotation(element, specs);
@@ -81,8 +80,8 @@ final class ApplicationTransactionCheck {
                     .notHonoredHint()));
       }
       if (!joinsTransaction(annotation) || excludesTaskException(annotation)) {
-        // an accepted annotation ends the search: a less specific one is overridden
-        // by it, exactly like the platforms resolve it
+        // an accepted annotation ends the search. It overrides a less specific one, exactly
+        // like the platforms resolve it
         return new Findings(null, null, null);
       }
       return new Findings(
@@ -101,7 +100,7 @@ final class ApplicationTransactionCheck {
   }
 
   /**
-   * Builds the message of the exception failing the startup. The remedies are stated
+   * Builds the message of the exception which fails the startup. The remedies are stated
    * once for all offending methods.
    *
    * @param defects The defects found, in the order the methods were scanned
@@ -151,8 +150,8 @@ final class ApplicationTransactionCheck {
   }
 
   /**
-   * The elements a transaction annotation may sit on, most specific first: the method,
-   * the same method as declared by a superclass or interface, then the class, its
+   * The elements on which a transaction annotation may sit, most specific first: the method,
+   * the same method as a superclass or interface declares it, then the class, its
    * superclasses and its interfaces.
    */
   private static List<AnnotatedElement> searchOrder(
@@ -186,8 +185,8 @@ final class ApplicationTransactionCheck {
   }
 
   /**
-   * The class itself, its superclasses up to (excluding) {@link Object} and all
-   * interfaces it implements, transitively.
+   * The class itself, its superclasses up to {@link Object} (which is left out), and all
+   * interfaces it implements, also indirectly.
    */
   private static Set<Class<?>> hierarchyOf(
       final Class<?> type) {
@@ -214,10 +213,10 @@ final class ApplicationTransactionCheck {
   }
 
   /**
-   * A transaction annotation found on an element, either declared there or carried by an
-   * annotation declared there (a custom annotation meta-annotated with
-   * <code>&#64;Transactional</code> is a common house style, and a purely name-based
-   * scan would miss it).
+   * A transaction annotation found on an element. It is either declared there, or carried by
+   * an annotation declared there. A custom annotation meta-annotated with
+   * <code>&#64;Transactional</code> is a common house style, and a scan by name alone would
+   * miss it.
    */
   private record FoundAnnotation(
                                  Annotation annotation,
@@ -301,7 +300,7 @@ final class ApplicationTransactionCheck {
         .filter(Enum.class::isInstance)
         .map(Enum.class::cast)
         .map(Enum::name)
-        // all known annotations default to REQUIRED, which joins
+        // all known annotations default to REQUIRED, which joins the running transaction
         .map(found
             .spec()
             .joiningPropagations()::contains)
@@ -310,10 +309,10 @@ final class ApplicationTransactionCheck {
   }
 
   /**
-   * Both platforms apply the MOST SPECIFIC rollback rule, so a no-rollback rule naming
-   * {@link TaskException} wins over a broader rollback rule but loses against an equally
-   * or more specific one. Spring resolves ties in favor of rolling back, and a pair of
-   * equally specific contradicting rules is a defect either way.
+   * Both platforms apply the MOST SPECIFIC rollback rule. So a no-rollback rule which names
+   * {@link TaskException} wins over a broader rollback rule. It loses against an equally or
+   * more specific one. Spring decides ties in favor of rolling back. And a pair of equally
+   * specific rules which contradict each other is a defect either way.
    */
   private static boolean excludesTaskException(
       final FoundAnnotation found) {
@@ -337,10 +336,9 @@ final class ApplicationTransactionCheck {
   }
 
   /**
-   * The inheritance distance of the most specific exception type covering a
-   * {@link TaskException} among the given class-valued members, or {@link #NO_MATCH} if
-   * none does. A superclass of {@link TaskException} covers it, like the platforms
-   * resolve it.
+   * The inheritance distance of the most specific exception type among the given members
+   * with class values which covers a {@link TaskException}, or {@link #NO_MATCH} if none
+   * does. A superclass of {@link TaskException} covers it, like the platforms resolve it.
    */
   private static int bestMatch(
       final FoundAnnotation found,
@@ -367,8 +365,8 @@ final class ApplicationTransactionCheck {
   }
 
   /**
-   * Members taking class NAMES match a pattern against the name of the exception and of
-   * its supertypes, so the distance is determined the same way as for the members taking
+   * Members which take class NAMES match a pattern against the name of the exception and of
+   * its supertypes. So the distance is found the same way as for the members which take
    * classes.
    */
   private static int bestNameMatch(
@@ -407,8 +405,8 @@ final class ApplicationTransactionCheck {
           .getMethod(memberName)
           .invoke(annotation));
     } catch (final ReflectiveOperationException e) {
-      // an annotation of that name without that member: not the annotation the spec
-      // describes, so nothing can be concluded from it
+      // an annotation of that name without that member is not the annotation the spec
+      // describes. So nothing can be concluded from it
       return Optional.empty();
     }
 

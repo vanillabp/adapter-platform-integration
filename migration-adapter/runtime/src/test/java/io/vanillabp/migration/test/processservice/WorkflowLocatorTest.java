@@ -23,18 +23,18 @@ import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The election matrix of the {@link WorkflowLocator}: the walk -
- * ACTIVE stops it, UNKNOWN_TO_BPMS falls through to the next adapter, COMPLETED is
- * reported to the caller, BPMS_UNAVAILABLE never falls back (retry then fail) -
- * plus the optional cache: consulted first, populated on success, repaired on
- * stale hits, never consulted-around on an unavailable cached adapter.
+ * The election matrix of the {@link WorkflowLocator}. First the walk: ACTIVE stops it.
+ * UNKNOWN_TO_BPMS falls through to the next adapter. COMPLETED is reported to the caller.
+ * BPMS_UNAVAILABLE never falls back; it is tried again and then fails. Then the optional
+ * cache: it is asked first, filled on success, and repaired on stale hits. When the cached
+ * adapter is unavailable, the walk never goes around it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowLocatorTest {
 
   /**
-   * What a probe is asked about. Any scope does here: the adapters of this
-   * test answer from what the test told them, not from a deployment.
+   * What a probe is asked about. Any scope does here. The adapters of this test answer from
+   * what the test told them, not from a deployment.
    */
   private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
       .of("test-module", "TestProcess");
@@ -44,15 +44,15 @@ public class WorkflowLocatorTest {
   private static final String PROCESS = "TestProcess";
 
   /**
-   * A second process of the same workflow service, called by the primary one. What its
-   * deliveries taught the core is written down under THIS id, while the application
+   * A second process of the same workflow service, which the primary one calls. What its
+   * deliveries taught the core is written down under THIS id. But the application
    * addresses the primary service.
    */
   private static final String SECONDARY_PROCESS = "CalledProcess";
 
   /**
-   * A process service answering a fixed awareness sequence (one element per probe
-   * call) - the last element repeats.
+   * A process service which answers a fixed sequence of awareness, one element per probe
+   * call. The last element repeats.
    */
   static class ProbeAdapter implements MigratableProcessService<Object> {
 
@@ -64,14 +64,13 @@ public class WorkflowLocatorTest {
 
     /**
      * How often the core asked this adapter for its window. An adapter which implements
-     * the question it always had is asked through the default, and this counter is what
-     * says so.
+     * the question it always had is asked through the default. This counter says so.
      */
     final AtomicInteger delayQuestions = new AtomicInteger();
 
     /**
-     * What this adapter reports as the window its BPMS needs before a workflow it
-     * holds becomes findable - none unless a test sets one.
+     * What this adapter reports as the window its BPMS needs before a workflow it holds can
+     * be found. There is none, unless a test sets one.
      */
     private io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay visibilityDelay = io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay
         .none();
@@ -144,15 +143,16 @@ public class WorkflowLocatorTest {
   }
 
   /**
-   * An adapter which answers the window PER WORKFLOW: none at all for the one workflow it
-   * knows something about - its own probe reported that one gone moments ago, so there is
-   * nothing left to wait for - and its usual window for everything else.
+   * An adapter which answers the window PER WORKFLOW. For the one workflow it knows
+   * something about, there is no window at all. Its own probe reported that one gone moments
+   * ago, so there is nothing left to wait for. For everything else, it has its usual
+   * window.
    */
   static class AdapterAnsweringPerWorkflow extends ProbeAdapter {
 
     /**
      * Which workflow id the core handed over, in the order it asked. A <code>null</code>
-     * entry is a regular answer: the hint carried no id.
+     * entry is a regular answer, because the hint carried no id.
      */
     final List<String> askedAbout = new java.util.ArrayList<>();
 
@@ -189,8 +189,8 @@ public class WorkflowLocatorTest {
   }
 
   /**
-   * A walk which may take its time - the shape of a read of the viewer API, which is the
-   * caller every waiting this class does belongs to.
+   * A walk which may take its time, like a read of the viewer API. All the waiting this
+   * class does belongs to that caller.
    */
   private static WorkflowLocator.Location<Object> locate(
       final io.vanillabp.integration.spi.WorkflowAdapterCache cache,
@@ -211,7 +211,7 @@ public class WorkflowLocatorTest {
 
   /**
    * The locator of the PRIMARY process of a workflow service which also serves a called
-   * process - what the platform integration builds and hands the served ids to.
+   * process. The platform integration builds it and hands the served ids to it.
    */
   private static WorkflowLocator primaryLocatorOfAServiceWithACalledProcess(
       final WorkflowAdapterCache cache) {
@@ -298,7 +298,7 @@ public class WorkflowLocatorTest {
   @DisplayName("BPMS_UNAVAILABLE recovering within the retries continues the walk")
   public void unavailableRecoversWithinRetries() {
 
-    // first probe unavailable, first retry active
+    // the first probe is unavailable, the first retry is active
     final var flaky = new ProbeAdapter(
         "flaky", WorkflowAwareness.BPMS_UNAVAILABLE, WorkflowAwareness.ACTIVE);
 
@@ -325,7 +325,7 @@ public class WorkflowLocatorTest {
         failure.getMessage().contains("down-adapter"),
         "expected the unavailable adapter to be named but got: "
             + failure.getMessage());
-    // initial probe + the retries
+    // the first probe plus the retries
     assertEquals(1 + WorkflowLocator.UNAVAILABLE_RETRIES, down.probes.get());
     assertEquals(0, second.probes.get(), "falling back to another adapter is forbidden");
 
@@ -357,13 +357,13 @@ public class WorkflowLocatorTest {
     final var first = new ProbeAdapter("first", WorkflowAwareness.UNKNOWN_TO_BPMS);
     final var second = new ProbeAdapter("second", WorkflowAwareness.ACTIVE);
 
-    // first election: full walk, second adapter wins and is cached
+    // first election: the full walk. The second adapter wins and is cached
     final var firstLocation = locate(cache, first, second);
     assertSame(second, firstLocation.adapter());
     assertEquals("second", cache.get(MODULE, PROCESS, "42").orElseThrow());
 
-    // second election: the cached adapter is probed directly, the first-priority
-    // adapter is not asked again
+    // second election: the cached adapter is probed directly. The adapter with the first
+    // priority is not asked again
     final var secondLocation = locate(cache, first, second);
     assertSame(second, secondLocation.adapter());
     assertEquals(1, first.probes.get(), "the cache hit must skip the walk");
@@ -384,7 +384,7 @@ public class WorkflowLocatorTest {
 
     assertEquals(WorkflowAwareness.ACTIVE, location.awareness());
     assertSame(first, location.adapter());
-    // the stale hint is probed once; the walk then stops at the first adapter
+    // the stale hint is probed once. Then the walk stops at the first adapter
     assertEquals(1, second.probes.get());
     assertEquals(1, first.probes.get());
     assertEquals("first", cache.get(MODULE, PROCESS, "42").orElseThrow(), "the entry must be repaired");
@@ -405,8 +405,8 @@ public class WorkflowLocatorTest {
     assertEquals(WorkflowAwareness.COMPLETED, location.awareness());
     assertSame(second, location.adapter());
     assertEquals(0, first.probes.get(), "the cache hit must skip the walk");
-    // dropping it would send the next operation on that workflow through the full walk,
-    // which is where a BPMS that forgot the instance turns a no-op into an exception
+    // dropping it would send the next operation on that workflow through the full walk.
+    // There a BPMS which forgot the instance turns a no-op into an exception
     assertEquals(
         "second",
         cache.get(MODULE, PROCESS, "42").orElseThrow(),
@@ -481,9 +481,9 @@ public class WorkflowLocatorTest {
   @DisplayName("A hinted adapter which does not know the workflow YET is asked again until it does")
   public void hintedAdapterIsAskedAgainWithinItsVisibilityWindow() {
 
-    // the everyday sequence on an eventually consistent BPMS: the workflow was
-    // started moments ago (which is why the hint exists), and the read model the
-    // probe searches has not caught up
+    // the everyday sequence on an eventually consistent BPMS. The workflow was started
+    // moments ago, which is why the hint exists. And the read model which the probe
+    // searches has not caught up
     final var cache = new InMemoryWorkflowAdapterCache();
     cache.put(MODULE, PROCESS, "42", "remote");
     final var remote = new ProbeAdapter(
@@ -524,8 +524,9 @@ public class WorkflowLocatorTest {
   @DisplayName("An adapter which answers per workflow is told which workflow it is asked about")
   public void anAdapterAnsweringPerWorkflowIsToldWhichWorkflow() {
 
-    // the workflow this adapter knows is gone: it holds no window for it, so the election
-    // answers at once instead of sitting out the window a freshly started workflow needs
+    // this adapter knows that the workflow is gone. It holds no window for it. So the
+    // election answers at once, instead of sitting out the window of a freshly started
+    // workflow
     final var cache = new InMemoryWorkflowAdapterCache();
     cache.put(MODULE, PROCESS, "42", "remote", "workflow-77");
     final var remote = new AdapterAnsweringPerWorkflow(
@@ -536,8 +537,8 @@ public class WorkflowLocatorTest {
 
     assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, location.awareness());
     assertEquals(List.of("workflow-77"), remote.askedAbout, "the id the hint carries travels with the question");
-    // asking again every five milliseconds for five seconds is what the old answer costs,
-    // so the number of probes is what says that the shorter window was the one used
+    // the old answer costs a question every five milliseconds for five seconds. So the
+    // number of probes says that the shorter window was used
     assertEquals(1, remote.probes.get(), "no window left to wait out, so the adapter is asked once");
     assertEquals(
         0,
@@ -572,18 +573,18 @@ public class WorkflowLocatorTest {
   @DisplayName("A workflow nobody knows fails IMMEDIATELY - no window is waited out without a hint")
   public void unknownWorkflowWithoutHintFailsFast() {
 
-    // a wrong ID must not turn into a timeout: the waiting happens on a hinted
-    // adapter only, and there is no hint here
+    // a wrong ID must not turn into a timeout. The waiting happens only on a hinted
+    // adapter, and there is no hint here
     final var remote = new ProbeAdapter("remote", WorkflowAwareness.UNKNOWN_TO_BPMS)
         .waitingFor(java.time.Duration.ofSeconds(30));
 
     final var location = locate(new InMemoryWorkflowAdapterCache(), remote);
 
     assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, location.awareness());
-    // waiting out the window means asking again every twenty milliseconds, so the number
-    // of probes is what says whether the walk waited. A wall clock would be the same
-    // claim read from a worse instrument: a machine carrying several builds stops this
-    // JVM for seconds at a time, and a stopped JVM looks like a walk which waited
+    // waiting out the window means asking again every twenty milliseconds. So the number
+    // of probes says whether the walk waited. A wall clock would read the same claim from a
+    // worse instrument. A machine with several builds stops this JVM for seconds at a time,
+    // and a stopped JVM looks like a walk which waited
     assertEquals(1, remote.probes.get(), "the adapter is asked exactly once");
 
   }
@@ -619,8 +620,8 @@ public class WorkflowLocatorTest {
     assertThrows(
         IllegalStateException.class,
         () -> locate(cache, remote));
-    // the fixed unavailable-policy applies (1 probe + 2 retries), and nothing waits
-    // for a workflow to become visible: an unreachable BPMS answers nothing at all
+    // the fixed policy for an unavailable BPMS applies (1 probe + 2 retries). Nothing waits
+    // for a workflow to become visible, because a BPMS out of reach answers nothing at all
     assertEquals(3, remote.probes.get());
 
   }
@@ -635,7 +636,7 @@ public class WorkflowLocatorTest {
         IllegalStateException.class,
         () -> locate(null, WorkflowLocator.Patience.NONE, down));
 
-    // a retry sleeps and then asks again, so one probe is what says that nothing slept
+    // a retry sleeps and then asks again. So one probe says that nothing slept
     assertEquals(1, down.probes.get(), "the adapter is asked exactly once");
     assertTrue(failure.getMessage().contains("down-adapter"), failure.getMessage());
 
@@ -653,9 +654,9 @@ public class WorkflowLocatorTest {
     final var location = locate(cache, WorkflowLocator.Patience.NONE, remote);
 
     assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, location.awareness());
-    // one probe is what says that the caller's transaction did not sit out the window
+    // one probe says that the transaction of the caller did not sit out the window
     assertEquals(1, remote.probes.get(), "the adapter is asked exactly once");
-    // what the caller needs to tell "not visible yet" from "nobody knows it"
+    // the caller needs this to tell "not visible yet" from "nobody knows it"
     assertTrue(location.isUnknownButExpected());
     assertEquals("remote", location.hintedAdapterId());
     assertEquals(
@@ -691,7 +692,7 @@ public class WorkflowLocatorTest {
     final var location = locate(cache, WorkflowLocator.Patience.RETRY_UNAVAILABLE, remote);
 
     assertEquals(WorkflowAwareness.UNKNOWN_TO_BPMS, location.awareness());
-    // one probe is what says that nothing waited for the read model
+    // one probe says that nothing waited for the read model
     assertEquals(1, remote.probes.get(), "a task the BPMS does not know stays unknown");
 
   }
@@ -714,7 +715,7 @@ public class WorkflowLocatorTest {
   public void aCacheWithoutTheMarkKeepsWorking() {
 
     // exactly the three methods an application implemented before ended workflows were
-    // marked - it has to compile and to behave as it always did
+    // marked. It has to compile and to behave as it always did
     final var cache = new WorkflowAdapterCache() {
 
       private final java.util.Map<String, String> entries = new java.util.HashMap<>();
@@ -778,7 +779,7 @@ public class WorkflowLocatorTest {
   public void aHintOfACalledProcessIsReadAndItsWindowIsWaitedOut() {
 
     // the delivery of a task of the called process wrote the hint, so it sits under THAT
-    // id; the application pushes its changed aggregate through the primary service, and
+    // id. The application pushes its changed aggregate through the primary service. And
     // the read model of the BPMS has not caught up
     final var cache = new InMemoryWorkflowAdapterCache();
     cache.put(MODULE, SECONDARY_PROCESS, "42", "remote");

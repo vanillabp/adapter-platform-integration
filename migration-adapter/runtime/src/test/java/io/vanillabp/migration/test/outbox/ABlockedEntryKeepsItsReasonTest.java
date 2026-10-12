@@ -42,14 +42,14 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackgroundOutput;
 
 /**
- * A blocked entry of the JDBC outbox names its reason in the table, so whoever finds it does
- * not have to look for the line in a log which may be rotated by then. The column is
+ * A blocked entry of the JDBC outbox names its reason in the table. So whoever finds it
+ * does not have to look for the line in a log, which may be rotated by then. The column is
  * <code>LAST_FAILURE</code>, and every write which ends an attempt sets it.
  * <p>
- * The cases are the ways an entry gets blocked - a permanent failure, the last of the
- * allowed attempts, a wait for the BPMS which ran out - plus the way back: an entry opened
- * again with the statement of the wiki page keeps its reason until the next attempt, and an
- * attempt which goes through empties it.
+ * The cases are the ways an entry gets blocked: a permanent failure, the last of the allowed
+ * attempts, and a wait for the BPMS which ran out. Then there is the way back. An entry
+ * opened again with the statement of the wiki page keeps its reason until the next attempt.
+ * An attempt which goes through empties it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -58,14 +58,14 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 public class ABlockedEntryKeepsItsReasonTest {
 
   /**
-   * How long a test waits for something it expects to happen. It is a guard against a machine
-   * which leaves the JVM without a turn, not a measurement of speed.
+   * How long a test waits for something it expects to happen. It guards against a machine
+   * which leaves the JVM without a turn. It does not measure speed.
    */
   private static final Duration UNTIL_IT_HAPPENED = Duration.ofSeconds(30);
 
   /**
-   * The distance between attempts and the length of a claim. Short, so the attempts of a test
-   * follow each other quickly.
+   * The time between attempts and the length of a claim. It is short, so the attempts of a
+   * test follow each other quickly.
    */
   private static final Duration SHORT = Duration.ofMillis(200);
 
@@ -84,8 +84,8 @@ public class ABlockedEntryKeepsItsReasonTest {
   private static final String SELECT_ENTRY = "SELECT STATUS, ATTEMPTS, %s FROM %s WHERE ID = ?";
 
   /**
-   * The statement the wiki page "Blocked outbox entries" gives an operator to open a blocked
-   * entry again, word for word apart from the table.
+   * The statement which the wiki page "Blocked outbox entries" gives an operator to open a
+   * blocked entry again. It is the same word for word, apart from the table.
    */
   private static final String OPEN_AGAIN = """
       UPDATE %s \
@@ -120,7 +120,7 @@ public class ABlockedEntryKeepsItsReasonTest {
    * A router whose process service answers each dispatch the way the test says.
    *
    * @param answer What the adapter does on the dispatch with the given number, counted from
-   *          one; it throws to fail the dispatch
+   *          one. It throws to fail the dispatch
    */
   private PhaseTwoRouter aRouterAnswering(
       final Answer answer) {
@@ -272,8 +272,8 @@ public class ABlockedEntryKeepsItsReasonTest {
     final var table = "OUTBOX_REASON_ATTEMPTS";
     final var connections = databaseNamed("reason-attempts");
     final var id = new String[1];
-    // what the entry said while its second attempt ran, which is what an operator reads on an
-    // entry that is still being repeated
+    // what the entry said while its second attempt ran. An operator reads this on an entry
+    // which is still being repeated
     final List<String> reasonBeforeTheSecondAttempt = new CopyOnWriteArrayList<>();
     final var dispatcher = dispatcherOf(connections, allowingTwoAttempts(), aRouterAnswering(call -> {
       if (call == 2) {

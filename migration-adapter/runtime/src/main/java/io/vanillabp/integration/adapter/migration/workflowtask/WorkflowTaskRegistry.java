@@ -33,20 +33,19 @@ import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
- * The core-owned registry of the annotated handler methods of the application per
- * (workflow module, BPMN process ID), and the implementation of the adapter-facing
+ * The registry, owned by the core, of the annotated handler methods of the application,
+ * per workflow module and BPMN process ID. It also implements the adapter-facing
  * {@link WorkflowTaskWiring}, {@link WorkflowTaskInvoker} and
- * {@link BpmsInitiatedStartInvoker}. The platform
- * integration registers every workflow service class under all BPMN process IDs it
- * declares ({@code @WorkflowService.bpmnProcess} and {@code secondaryBpmnProcesses});
- * adapters validate the wiring during <code>wireBpmn</code> and dispatch task
- * invocations at runtime.
+ * {@link BpmsInitiatedStartInvoker}. The platform integration registers every workflow
+ * service class under all BPMN process IDs which the class declares
+ * ({@code @WorkflowService.bpmnProcess} and {@code secondaryBpmnProcesses}). Adapters check
+ * the wiring during <code>wireBpmn</code>, and they dispatch task calls at runtime.
  * <p>
- * <code>&#64;WorkflowTask</code> methods are held here; the
- * <code>&#64;WorkflowStartedByBpms</code> methods of the same classes are held by
- * {@link BpmsInitiatedStarts} and the <code>&#64;WorkflowEnded</code> methods by
- * {@link WorkflowEndedHandlers}, to which the other two interfaces delegate. Both
- * mechanisms scan the same classes and share the value conversion - generalizing
+ * This class holds the <code>&#64;WorkflowTask</code> methods. {@link BpmsInitiatedStarts}
+ * holds the <code>&#64;WorkflowStartedByBpms</code> methods of the same classes, and
+ * {@link WorkflowEndedHandlers} the <code>&#64;WorkflowEnded</code> methods. The other two
+ * interfaces hand their calls on to those. Both mechanisms scan the same classes and share
+ * the value conversion - generalizing
  * them into ONE pluggable handler contract is the subject of the extension-enablement
  * story.
  */
@@ -60,9 +59,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * One model an adapter deployed: which adapter, and which BPMN process of which module.
-   * The adapter is part of the key, because each adapter of a module deploys and reports its
-   * own version.
+   * One model which an adapter deployed: which adapter, and which BPMN process of which
+   * module. The adapter is part of the key, because each adapter of a module deploys and
+   * reports its own version.
    */
   private record DeployedModelKey(
                                   String adapterId,
@@ -79,8 +78,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     private MigrationProcessService<?> processService;
 
     /**
-     * Whether {@link #validateTaskWiring} ran for this (module, process) - i.e.
-     * an adapter wired a deployed BPMN process against these handlers.
+     * Whether {@link #validateTaskWiring} ran for this module and process. That means an
+     * adapter wired a deployed BPMN process against these handlers.
      */
     private volatile boolean wiringValidated = false;
 
@@ -95,33 +94,33 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   private final TransactionRunner transactionRunner;
 
   /**
-   * The core's sync model - used to answer
+   * The core's sync model. It answers
    * {@link #syncedWorkflowAggregateValues(String, String, String, io.vanillabp.integration.adapter.spi.AggregateSyncMode)}
-   * for adapters holding no aggregate, and to VALIDATE the model of every
-   * registered workflow-aggregate class at startup. May be <code>null</code>
-   * (tests): no values are then shared and nothing is validated.
+   * for adapters which hold no aggregate. And it CHECKS the model of every registered
+   * workflow-aggregate class at startup. It may be <code>null</code> in tests. Then no values
+   * are shared, and nothing is checked.
    */
   private final io.vanillabp.integration.adapter.spi.WorkflowAggregateSync aggregateSync;
 
   private final Map<RegistryKey, RegistryEntry> entries = new ConcurrentHashMap<>();
 
   /**
-   * What the BPMS know about the deployed versions of the BPMN processes - needed to
-   * place a version TAG named by a <code>version</code> attribute in the deployment
-   * order. Shared by all three handler kinds, since all three annotations
-   * carry that attribute.
+   * What the BPMS know about the deployed versions of the BPMN processes. It is needed to
+   * place a version TAG, named by a <code>version</code> attribute, in the order of the
+   * deployments. All three handler kinds share it, because all three annotations have that
+   * attribute.
    */
   private final ProcessVersions processVersions;
 
   /**
    * The <code>&#64;WorkflowStartedByBpms</code> methods of the same workflow service
-   * classes - what a workflow started by the BPMS itself needs.
+   * classes. A workflow which the BPMS itself started needs them.
    */
   private final BpmsInitiatedStarts bpmsInitiatedStarts;
 
   /**
-   * The messages the adapters reported as starting each deployed BPMN process, which is
-   * what the process services check <code>startWorkflowByMessage</code> against.
+   * The messages which the adapters reported as starting each deployed BPMN process. The
+   * process services check <code>startWorkflowByMessage</code> against them.
    */
   private final io.vanillabp.integration.adapter.migration.workflowstart.StartMessages startMessages;
 
@@ -132,30 +131,30 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   /**
    * The methods of the same workflow service classes which belong to an extension's own
-   * annotation. Empty in an application without extensions - the scan only happens for
-   * contracts somebody registered.
+   * annotation. It is empty in an application without extensions. The scan only happens for
+   * contracts which somebody registered.
    */
   private final io.vanillabp.integration.adapter.migration.handler.ExtensionHandlerRegistry extensionHandlers;
 
   /**
-   * The transaction annotations of the running platform, supplied by the
-   * platform integration: which annotations create a transaction boundary here, and
-   * which of them this platform does not honor at all. An EMPTY list switches the
-   * startup check off, which is what test doubles registering workflow services
-   * directly use.
+   * The transaction annotations of the running platform, supplied by the platform
+   * integration. They say which annotations create a transaction boundary here, and which of
+   * them this platform does not honor at all. An EMPTY list switches the startup check off.
+   * Test doubles which register workflow services directly use that.
    */
   private final List<TransactionAnnotationSpec> transactionAnnotations;
 
   /**
-   * How a rollback rule excluding a {@code TaskException} is written on THIS platform,
-   * derived from the specs of the annotations it actually honors. Handed to the runtime
-   * check, which cannot identify the annotation that marked the transaction (it sits on
-   * some bean of the handler's call chain) and therefore names the developer's options.
+   * How a rollback rule which excludes a {@code TaskException} is written on THIS platform.
+   * It is derived from the specs of the annotations the platform really honors. It is handed
+   * to the runtime check. That check cannot tell which annotation marked the transaction,
+   * because it sits on some bean of the handler's call chain. So it names the developer's
+   * options.
    */
   private final List<String> rollbackRuleRemedies;
 
   /**
-   * The hint about BPMN processes producing concurrent tokens while their workflow
+   * The hint about BPMN processes which produce concurrent tokens while their workflow
    * aggregate has no version attribute.
    */
   private final io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck concurrentTokenCheck;
@@ -166,22 +165,22 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   private final io.vanillabp.integration.adapter.migration.expressions.ModelExpressionCheck modelExpressionCheck;
 
   /**
-   * Where a finding of this registry is left, so the whole start says it once.
+   * Where a finding of this registry goes, so that the whole start says it once.
    */
   private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
 
   /**
-   * The bound <code>vanillabp.*</code> tree - needed to answer whether a workflow module
-   * releases the records of its processed task deliveries when a workflow ends. May be
-   * <code>null</code> (tests): nothing is released then.
+   * The bound <code>vanillabp.*</code> tree. It answers whether a workflow module releases
+   * the records of its processed task deliveries when a workflow ends. It may be
+   * <code>null</code> in tests. Then nothing is released.
    */
   private final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties;
 
   /**
-   * The workflow service classes whose handler methods were already looked over for the
-   * two ways of writing one which nobody can see (see {@link HandlerMethodsNobodySees}).
-   * A class arrives here once per BPMN process it declares, and the report is about the
-   * class rather than about the process, so it is written once.
+   * The workflow service classes whose handler methods were already checked for the two
+   * ways of writing one which nobody can see (see {@link HandlerMethodsNobodySees}). A class
+   * arrives here once for each BPMN process it declares. The report is about the class and
+   * not about the process, so it is written once.
    */
   private final java.util.Set<Class<?>> classesLookedOverForInvisibleHandlers = java.util.concurrent.ConcurrentHashMap
       .newKeySet();
@@ -193,8 +192,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   private final io.vanillabp.integration.adapter.migration.sync.FullSyncCheck fullSyncCheck;
 
   /**
-   * The second half of the startup verdict about the values of a workflow: the sync model
-   * says WHICH of them travel, this one says whether their types survive the way there and
+   * The second half of the startup verdict about the values of a workflow. The sync model
+   * says WHICH of them travel. This check says whether their types survive the way there and
    * back.
    */
   private final PortableValuesCheck portableValuesCheck;
@@ -215,18 +214,18 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   private final ImplementedExternallyCheck implementedExternally;
 
   /**
-   * The tasks of every claimed model an adapter wired during this start. The version this start
-   * deployed is checked against them once the BPMS has told which version that is, and that is
-   * only known after the wiring.
+   * The tasks of every claimed model which an adapter wired during this start. The version
+   * which this start deployed is checked against them once the BPMS has said which version
+   * that is. That is only known after the wiring.
    */
   private final Map<DeployedModelKey, List<BpmnTaskSpec>> tasksOfDeployedModels = new ConcurrentHashMap<>();
 
   /**
    * The bare registry: handlers are wired and invoked, and no startup check runs.
    * <p>
-   * What a platform integration knows is missing here - the sync model, the transaction
-   * annotations, the configuration - and every check resting on one of them stays silent. A
-   * test which only needs a delivery to reach a method builds this one.
+   * Everything a platform integration knows is missing here: the sync model, the
+   * transaction annotations, the configuration. Every check which depends on one of them
+   * stays silent. A test which only needs a delivery to reach a method builds this one.
    *
    * @param transactionRunner The transaction every handler runs in
    */
@@ -238,11 +237,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The registry with the sync model, so what leaves for the BPMS is decided and validated.
+   * The registry with the sync model. So it decides and checks what leaves for the BPMS.
    *
    * @param transactionRunner The transaction every handler runs in
-   * @param aggregateSync The core's sync model - <code>null</code> shares no values and
-   *          validates no aggregate class
+   * @param aggregateSync The core's sync model. <code>null</code> shares no values and
+   *          checks no aggregate class
    */
   public WorkflowTaskRegistry(
       final TransactionRunner transactionRunner,
@@ -257,8 +256,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    *
    * @param transactionRunner The transaction every handler runs in
    * @param aggregateSync The core's sync model
-   * @param transactionAnnotations The transaction annotations of the platform - an empty
-   *          list switches the startup check about them off
+   * @param transactionAnnotations The transaction annotations of the platform. An empty list
+   *          switches the startup check about them off
    */
   public WorkflowTaskRegistry(
       final TransactionRunner transactionRunner,
@@ -270,14 +269,14 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The registry with the configuration, which is what the version and delivery settings are
-   * read from.
+   * The registry with the configuration. The version and delivery settings are read from
+   * it.
    *
    * @param transactionRunner The transaction every handler runs in
    * @param aggregateSync The core's sync model
    * @param transactionAnnotations The transaction annotations of the platform
-   * @param properties The VanillaBP configuration - <code>null</code> leaves every setting
-   *          at its default
+   * @param properties The VanillaBP configuration. <code>null</code> leaves every setting at
+   *          its default
    */
   public WorkflowTaskRegistry(
       final TransactionRunner transactionRunner,
@@ -296,10 +295,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
    * @param aggregateSync The core's sync model
    * @param transactionAnnotations The transaction annotations of the platform
    * @param properties The VanillaBP configuration
-   * @param scoping The core's name-clash-avoidance support, which is where the identifiers
-   *          of a version a BPMS still holds are held against what this deployment
-   *          declares. Without it that one check stays silent; everything else works as it
-   *          does with it
+   * @param scoping The core's name-clash-avoidance support. With it, the identifiers of a
+   *          version which a BPMS still holds are checked against what this deployment
+   *          declares. Without it that one check stays silent. Everything else works the same
    */
   public WorkflowTaskRegistry(
       final TransactionRunner transactionRunner,
@@ -311,8 +309,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     this.transactionRunner = transactionRunner;
     this.findings = io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties
         .startupFindingsOf(properties);
-    // built here rather than beside their declaration: each of them reports into the
-    // box, and where the box is only follows from the configuration handed in
+    // built here and not next to their declaration. Each of them reports into the box, and
+    // where the box is only follows from the configuration handed in
     this.processVersions = new ProcessVersions(findings);
     this.bpmsInitiatedStarts = new BpmsInitiatedStarts(processVersions, this);
     this.startMessages = new io.vanillabp.integration.adapter.migration.workflowstart.StartMessages(this);
@@ -334,8 +332,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         processVersions, outfadedVersions, this::tasksNotServedInVersion, this::handlersNotServingAnyVersion, this, this::reportConcurrentTokenElementsOfHeldVersions, scoping == null
             ? null
             : scoping::reportIdentifiersOfHeldVersion, this::itemsAHeldVersionNeverNames, this::elementsTheDeployedVersionLeavesUnserved, properties == null
-                // a registry built without a configuration is a test fixture, and it has no
-                // start to close either
+                // a registry built without a configuration is a test fixture. It has no start to
+                // close either
                 ? new io.vanillabp.integration.adapter.migration.startup.StartupFindings()
                 : properties.startupFindings());
     this.rollbackRuleRemedies = transactionAnnotations
@@ -349,11 +347,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The name of the aggregate's ID attribute, which an application's own persistence
-   * does not have to answer: the name is needed by adapters storing the ID in a process
-   * variable, and an application not using one never implements it. Asked here so that
-   * the full-sync check can leave the ID out of what an aggregate gives away - it
-   * reaches the BPMS whatever the sync model says.
+   * The name of the aggregate's ID attribute. An application's own persistence does not
+   * have to answer it. Adapters which store the ID in a process variable need the name, and
+   * an application which uses no such adapter never implements it. It is asked here so that
+   * the full-sync check can leave the ID out of what an aggregate gives away. The ID reaches
+   * the BPMS whatever the sync model says.
    *
    * @param processService The process service of the BPMN process
    * @return The name, or <code>null</code> where the persistence does not answer one
@@ -374,19 +372,19 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Registers all <code>&#64;WorkflowTask</code> methods of the given workflow
-   * service class for the given BPMN process. Called by the platform integration at
-   * startup, once per (workflow service class, declared BPMN process ID).
+   * Registers all <code>&#64;WorkflowTask</code> methods of the given workflow service class
+   * for the given BPMN process. The platform integration calls it at startup, once for each
+   * pair of workflow service class and declared BPMN process ID.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
    * @param workflowServiceClass The <code>&#64;WorkflowService</code> class
-   * @param workflowServiceBean Supplies the bean instance of that class (resolved
-   *          lazily to avoid materializing beans at registration time)
+   * @param workflowServiceBean Supplies the bean instance of that class. It is resolved
+   *          lazily, so that no bean is created at registration time
    * @param beanResolver Resolves beans by class (used for
    *          <code>&#64;MultiInstanceElement(resolverBean = ...)</code>)
-   * @param processService The process service of the BPMN process (aggregate
-   *          persistence and ID conversion)
+   * @param processService The process service of the BPMN process (aggregate persistence and
+   *          ID conversion)
    */
   public void registerWorkflowService(
       final String workflowModuleId,
@@ -397,20 +395,19 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final MigrationProcessService<?> processService) {
 
     // every process service of a declared id checks its message starts against what the
-    // adapters report, also one whose class is ignored below: the application may still
-    // call it
+    // adapters report. That includes one whose class is ignored below, because the
+    // application may still call it
     processService.checkStartMessagesAgainst(startMessages);
 
-    // STARTUP validation of the sync model: an aggregate whose
-    // attributes are annotated both ways without the class stating its own mode is
-    // ambiguous, and an attribute shared as a type whose text carries no value is
-    // refused - the developer learns both when the application boots, not when the
-    // first workflow reaches a sync point
+    // the sync model is checked at STARTUP. An aggregate whose attributes are annotated both
+    // ways, without the class stating its own mode, is ambiguous. An attribute which is
+    // shared as a type whose text has no value is refused. The developer learns both when
+    // the application boots, not when the first workflow reaches a sync point
     if (aggregateSync != null) {
       aggregateSync.validateSyncModel(processService.getWorkflowAggregateClass());
     }
-    // the second half of the same moment: an aggregate which keeps NOTHING back hands
-    // every attribute to the BPMS, and this workflow has to have said that it may
+    // the second half of the same moment. An aggregate which keeps NOTHING back hands every
+    // attribute to the BPMS, and this workflow has to have said that it may
     fullSyncCheck.refuseSharingEverythingUnlessAllowed(
         workflowModuleId,
         bpmnProcessId,
@@ -418,9 +415,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         processService.getWorkflowAggregateClass(),
         aggregateIdAttributeOf(processService));
 
-    // and the third: the sync annotations decided which values leave, so now their TYPES
-    // can be judged. That order is the rule and not an accident of the startup sequence -
-    // judged first, the check would judge the types of values which never travel
+    // and the third. The sync annotations decided which values leave, so now their TYPES can
+    // be judged. That order is the rule, not an accident of the startup sequence. Judged
+    // first, the check would judge the types of values which never travel
     portableValuesCheck.refuseValuesWhichDoNotTravelWell(
         workflowModuleId,
         bpmnProcessId,
@@ -431,19 +428,19 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
     reportHandlerMethodsNobodySees(workflowServiceClass);
 
-    // which generation of the model this class serves for THIS process - the methods
-    // naming no version of their own serve it, which is how one class per generation
-    // works without repeating the range on every method
+    // which generation of the model this class serves for THIS process. The methods which
+    // name no version of their own serve it. That is how one class per generation works,
+    // without repeating the range on every method
     final var inherited = InheritedVersions.declaredFor(workflowServiceClass, bpmnProcessId);
     final var entry = entries.computeIfAbsent(
         new RegistryKey(workflowModuleId, bpmnProcessId),
         key -> new RegistryEntry());
     synchronized (entry) {
-      // a BPMN process belongs to exactly one workflow aggregate, see
-      // decision 125 in the repository's DECISIONS.md. Both platforms refuse this
-      // earlier, Quarkus while building and Spring Boot once it knows the workflow modules,
-      // so this is the safety net for a platform which does not: keeping the class found
-      // first would let the order of the class scan decide what the process is
+      // a BPMN process belongs to exactly one workflow aggregate, see decision 125 in the
+      // repository's DECISIONS.md. Both platforms refuse this earlier: Quarkus while it
+      // builds, Spring Boot once it knows the workflow modules. So this is the safety net
+      // for a platform which does not. Keeping the class found first would let the order of
+      // the class scan decide what the process is
       if ((entry.processService != null) && !entry.processService.getWorkflowAggregateClass()
           .equals(processService.getWorkflowAggregateClass())) {
         final var declarations = new java.util.LinkedList<AProcessBelongsToOneAggregate.Declaration>();
@@ -464,8 +461,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
           transactionAnnotations,
           inherited,
           findings);
-      // one by one, so two methods of the SAME class wired to one task definition are
-      // compared against each other as well
+      // one by one, so that two methods of the SAME class which are wired to one task
+      // definition are compared with each other as well
       handlers
           .forEach(handler -> {
             failOnDuplicateWiring(
@@ -482,8 +479,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         entry.declaredAsPrimary = true;
       }
     }
-    // the adapters report their catalogs of versions to this registry while they wire their
-    // BPMN, and the process service needs them to judge a row written without a version
+    // the adapters report their lists of versions to this registry while they wire their
+    // BPMN. The process service needs them to judge a row written without a version
     processService.setProcessVersions(processVersions);
 
     bpmsInitiatedStarts
@@ -516,9 +513,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Whether the class names that process in its <code>secondaryBpmnProcesses</code> and not as
-   * its <code>bpmnProcess</code>. A class without the annotation is a test double registering
-   * handlers directly, and it counts as declaring its process as the primary one.
+   * Whether the class names that process in its <code>secondaryBpmnProcesses</code>, and not
+   * as its <code>bpmnProcess</code>. A class without the annotation is a test double which
+   * registers handlers directly. It counts as declaring its process as the primary one.
    */
   private static boolean declaresOnlyAsSecondary(
       final Class<?> workflowServiceClass,
@@ -535,14 +532,14 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Whether that process is a called process: the application declares it only as a secondary
-   * process, and an adapter deployed a model for it during this boot. Such a process is no
-   * workflow of its own. It runs on the workflow aggregate of the process which called it, so
-   * its start and its end do not reach the application.
+   * Whether that process is a called process. That is so when the application declares it
+   * only as a secondary process, and an adapter deployed a model for it during this boot.
+   * Such a process is no workflow of its own. It runs on the workflow aggregate of the
+   * process which called it. So its start and its end do not reach the application.
    * <p>
-   * A secondary id without a model is the id a renamed process left behind. The BPMS still
-   * holds workflows which were started under that id, so they keep their start and their end.
-   * Why, see decision 124 in the repository's {@code DECISIONS.md}.
+   * A secondary id without a model is the id which a renamed process left behind. The BPMS
+   * still holds workflows which were started under that id. So they keep their start and
+   * their end. Decision 124 in the repository's DECISIONS.md says why.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
@@ -558,9 +555,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The handler methods of the extensions - offered as a bean by both platform
-   * integrations, so an extension registers its contracts and invokes its methods
-   * through it.
+   * The handler methods of the extensions. Both platform integrations offer this as a bean.
+   * An extension registers its contracts and calls its methods through it.
    *
    * @return The registry, never <code>null</code>
    */
@@ -572,11 +568,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   /**
    * Writes the report about the handler methods of a workflow service class which the scan
-   * cannot reach, once per class. It is a WARN rather than the end of the boot: an
-   * application whose BPMN model really carries the task such a method was meant to serve
-   * does not start anyway, because the wiring validation asks for a method it does not
-   * find, and this is the sentence which says why that method is not there although the
-   * developer can read it in their own source.
+   * cannot reach, once per class. It is a WARN and does not end the boot. Suppose the BPMN
+   * model really has the task which such a method was meant to serve. Then the application
+   * does not start anyway, because the wiring check asks for a method it does not find. This
+   * sentence says why that method is missing, although the developer can read it in their
+   * own source.
    *
    * @param workflowServiceClass The class about to be scanned for handlers
    */
@@ -611,7 +607,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The workflow aggregate a BPMN process of a workflow module works on, or
+   * The workflow aggregate on which a BPMN process of a workflow module works, or
    * <code>null</code> if no workflow service declared that process.
    */
   private Class<?> workflowAggregateClassOf(
@@ -638,9 +634,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         .filter(existing -> existing != handler)
         .filter(existing -> sameWiring(existing.getTaskDefinition(),
             handler.getTaskDefinition()) || sameWiring(existing.getActivityId(), handler.getActivityId()))
-        // overlapping version ranges are ambiguous; disjoint ones are a legitimate
-        // way to serve several process versions ('1-2' next to '>2' is fine, '1-3'
-        // next to '2' is not)
+        // overlapping version ranges are ambiguous. Ranges which do not overlap are a valid
+        // way to serve several process versions ('1-2' next to '>2' is fine, '1-3' next to
+        // '2' is not)
         .filter(existing -> existing.overlapsVersions(handler, resolver))
         .findFirst();
     if (duplicate.isPresent()) {
@@ -678,8 +674,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if ((entry == null) || (entry.processService == null)) {
-      // a process no @WorkflowService class serves is reported by the wiring
-      // validation already - there is no aggregate class to ask here
+      // the wiring check already reports a process which no @WorkflowService class serves.
+      // There is no aggregate class to ask here
       return;
     }
     concurrentTokenCheck
@@ -700,8 +696,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if ((entry == null) || (entry.processService == null)) {
-      // a process no @WorkflowService class serves has no aggregate to warn about, the
-      // same as for the elements reported next to this
+      // a process which no @WorkflowService class serves has no aggregate to warn about.
+      // The same is true for the elements reported next to this
       return;
     }
     concurrentTokenCheck
@@ -722,10 +718,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if (entry == null) {
-      // a process no @WorkflowService class serves is a model this application does not
-      // own - it travels to the BPMS because it shares a file with the process which IS
-      // served, and asking for its expressions to be rewritten asks for a file nobody
-      // here can change. The deployment reports such a process on its own
+      // a process which no @WorkflowService class serves is a model which this application
+      // does not own. It travels to the BPMS because it shares a file with the process which
+      // IS served. Asking for its expressions to be rewritten would ask for a file which
+      // nobody here can change. The deployment reports such a process on its own
       return;
     }
     modelExpressionCheck.reportModelExpressions(workflowModuleId, bpmnProcessId, expressions);
@@ -733,10 +729,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The same for the versions a BPMS still holds with workflows running on them, read by the
-   * startup check for old process versions - the elements of an older model reach an aggregate
-   * exactly as the elements of the deployed one do, and those workflows are the ones which run
-   * longest.
+   * The same for the versions which a BPMS still holds with running workflows. The startup
+   * check for old process versions reads them. The elements of an older model reach an
+   * aggregate exactly like the elements of the deployed one. And those workflows are the
+   * ones which run longest.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
@@ -789,19 +785,19 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final String bpmnProcessId,
       final Collection<BpmnTaskSpec> tasks) {
 
-    // what the modeller wrote on the elements: nothing here decides anything by it, and
-    // an extension asking for it would otherwise parse the same BPMN bytes again
+    // what the modeller wrote on the elements. Nothing here decides anything by it. An
+    // extension which asks for it would otherwise parse the same BPMN bytes again
     extensionHandlers.rememberBpmnTaskNames(workflowModuleId, bpmnProcessId, tasks);
-    // the names a line of 'implemented-externally' may use, held against the configuration
-    // once the module is deployed
+    // the names which a line of 'implemented-externally' may use. They are checked against
+    // the configuration once the module is deployed
     implementedExternally.rememberTasks(workflowModuleId, bpmnProcessId, tasks);
 
     final var key = new RegistryKey(workflowModuleId, bpmnProcessId);
     final var entry = entries.get(key);
     if (entry == null) {
-      // nobody claimed this process, so there is nothing to validate it against. An adapter
-      // does not wire such a process at all, and the deployment has ended the start over it
-      // already unless the application marked it as somebody else's
+      // nobody claimed this process, so there is nothing to check it against. An adapter
+      // does not wire such a process at all. And the deployment has already ended the start
+      // because of it, unless the application marked it as somebody else's
       return;
     }
     final var handlers = List.copyOf(entry.handlers);
@@ -809,19 +805,20 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     implementedExternally.rememberClaimed(workflowModuleId, bpmnProcessId);
     tasksOfDeployedModels.put(new DeployedModelKey(adapterId, workflowModuleId, bpmnProcessId), List.copyOf(tasks));
 
-    // mark every matched handler as wired - the reverse direction (methods
-    // matching no task of ANY process of the module) is validated per module via
-    // validateNoUnwiredWorkflowTaskMethods after all processes were wired
+    // mark every matched handler as wired. The reverse direction (methods which match no
+    // task of ANY process of the module) is checked per module, in
+    // validateNoUnwiredWorkflowTaskMethods, after all processes were wired
     handlers
         .stream()
         .filter(handler -> tasks.stream().anyMatch(task -> matches(handler, task)))
         .forEach(WorkflowTaskHandler::markWired);
 
-    // every task needs a method or a line saying that something else serves it, a user task
-    // as well: version 1 asked for the method, and a task nobody here serves is either a
-    // forgotten method or somebody else's work, which only the application can tell apart.
-    // A line at the task itself next to a method would have the task answered twice, so that
-    // ends the boot as well. A line above the task covers only the tasks without a method
+    // every task needs a method, or a line which says that something else serves it. That
+    // includes a user task. Version 1 asked for the method. A task which nobody here serves
+    // is either a forgotten method or somebody else's work, and only the application can
+    // tell which. A line at the task itself next to a method would answer the task twice, so
+    // that ends the boot as well. A line above the task covers only the tasks without a
+    // method
     final var unmatchedTasks = new LinkedList<BpmnTaskSpec>();
     final var servedTwice = new LinkedList<BpmnTaskSpec>();
     for (final var task : tasks) {
@@ -842,8 +839,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     final var message = new StringBuilder(
         "Task wiring of BPMN process '%s' of workflow module '%s' is incomplete!"
             .formatted(bpmnProcessId, workflowModuleId));
-    // a registered process always has the class which registered it, so the message
-    // can name where the missing method belongs
+    // a registered process always has the class which registered it. So the message can name
+    // where the missing method belongs
     final var serviceClasses = entry.workflowServiceClasses
         .stream()
         .map(Class::getName)
@@ -918,15 +915,15 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   /**
    * Says once per workflow module which <code>&#64;WorkflowTask</code> methods would be
-   * called with values missing where VanillaBP works a cancellation out for itself.
+   * called with missing values where VanillaBP works out a cancellation itself.
    * <p>
-   * A derived cancellation carries no job of the element, because the element is gone by
-   * the time anybody notices it. So a <code>&#64;TaskParam</code> and a multi-instance value
-   * reach such a method as <code>null</code>, and a value which is silently absent is the
-   * kind of thing an application finds out in production. Only the methods which really
-   * declare one are named, and only those which asked for the event at all - a method
-   * without a <code>&#64;TaskEvent</code> parameter never sees a cancellation and has
-   * nothing to read here.
+   * A derived cancellation has no job of the element, because the element is gone by the
+   * time anybody notices. So a <code>&#64;TaskParam</code> and a multi-instance value reach
+   * such a method as <code>null</code>. A value which is silently missing is the kind of
+   * thing an application finds out in production. Only the methods which really declare one
+   * are named. And only those which asked for the event at all. A method without a
+   * <code>&#64;TaskEvent</code> parameter never sees a cancellation, and has nothing to read
+   * here.
    */
   @Override
   public void reportWhatACancelationCannotCarry(
@@ -997,14 +994,14 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   public void validateNoUnwiredWorkflowTaskMethods(
       final String workflowModuleId) {
 
-    // the other direction of the same question about the configuration: a line saying that
-    // something else serves a task no deployed model has. Asked here because this is the
-    // moment every adapter of the module has handed over its models
+    // the other direction of the same question about the configuration: a line which says
+    // that something else serves a task which no deployed model has. It is asked here,
+    // because this is the moment when every adapter of the module has handed over its models
     implementedExternally.warnAboutLinesNoModelNeeds(workflowModuleId);
 
-    // a method may be registered under several BPMN processes (secondary
-    // processes, several handler objects) - it is unwired only if NO
-    // registration of it was matched by any wired process
+    // a method may be registered under several BPMN processes (secondary processes, several
+    // handler objects). It is unwired only if NO registration of it was matched by any wired
+    // process
     final var wiredMethods = new java.util.HashSet<String>();
     final var validatedMethods = new java.util.HashSet<String>();
     final var unwiredByMethod = new java.util.LinkedHashMap<String, WorkflowTaskHandler>();
@@ -1026,9 +1023,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
               }
             }));
     wiredMethods.forEach(unwiredByMethod::remove);
-    // a method whose class' BPMN processes were ALL never wired (no BPMN deployed
-    // - e.g. it arrives later during a migration) is not a defect: only methods
-    // of at least one actually-wired process are reported
+    // a method whose BPMN processes were ALL never wired (no BPMN deployed, for example
+    // because it arrives later during a migration) is not a defect. Only methods of at least
+    // one process which was really wired are reported
     unwiredByMethod.keySet().retainAll(validatedMethods);
     if (unwiredByMethod.isEmpty()) {
       return;
@@ -1049,30 +1046,29 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Whether the method exists for OLDER versions of its process only - it
-   * then matches no task of the model this boot deployed, and that is the point of it
-   * rather than a defect.
+   * Whether the method exists only for OLDER versions of its process. Then it matches no
+   * task of the model this boot deployed. That is the point of it, not a defect.
    * <p>
-   * Without this, keeping a method for a version the BPMS still holds would be
-   * impossible: the reverse direction would demand that the deployed model still
-   * carries the task the newer model dropped, so an application could only serve an
-   * old version by keeping a dead task in its current BPMN.
+   * Without this, nobody could keep a method for a version which the BPMS still holds. The
+   * reverse direction would demand that the deployed model still has the task which the
+   * newer model dropped. So an application could only serve an old version by keeping a dead
+   * task in its current BPMN.
    * <p>
-   * A BPMN process id the application declares WITHOUT bringing a model for it - the id
-   * a renamed process left behind - is the same situation with a different boundary:
-   * this boot deployed no version of it at all, so the versions the BPMS holds under it
-   * are what its methods are kept for.
+   * A BPMN process id which the application declares WITHOUT bringing a model for it is the
+   * same case with a different limit. An example is the id which a renamed process left
+   * behind. This boot deployed no version of it at all. So its methods are kept for the
+   * versions which the BPMS holds under it.
    */
   private boolean servesOnlyOlderVersions(
       final RegistryKey key,
       final WorkflowTaskHandler handler) {
 
     if (isDeclaredWithoutDeployment(key.workflowModuleId(), key.bpmnProcessId())) {
-      // nothing was deployed under this id, so no model of this boot carries the task
-      // this method is wired to - which is what declaring the id says: the method
-      // serves what the BPMS still holds under it. A method serving none of those
-      // versions is reported, and where the BPMS holds nothing at all the check for old
-      // versions says so about the id itself rather than about every method kept for it
+      // nothing was deployed under this id. So no model of this boot has the task to which
+      // this method is wired. That is what declaring the id says: the method serves what the
+      // BPMS still holds under it. A method which serves none of those versions is reported.
+      // Where the BPMS holds nothing at all, the check for old versions says so about the id
+      // itself, and not about every method kept for it
       final var heldVersions = processVersions
           .registeredCatalogs(key.workflowModuleId(), key.bpmnProcessId())
           .stream()
@@ -1098,13 +1094,13 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         .distinct()
         .toList();
     if (deployedVersions.isEmpty()) {
-      // no BPMS counting versions: nothing to exempt, and the reverse direction
-      // stays as strict as it was
+      // no BPMS counts versions. So there is nothing to exempt, and the reverse direction
+      // stays as strict as before
       return false;
     }
     final var resolver = processVersions.resolverFor(key.workflowModuleId(), key.bpmnProcessId());
-    // a method serving the version deployed by ANY of the BPMS is expected to match
-    // a task of that model - only a method excluded everywhere is an old-version one
+    // a method which serves the version deployed by ANY of the BPMS has to match a task of
+    // that model. Only a method which is excluded everywhere is one for old versions
     return deployedVersions
         .stream()
         .noneMatch(version -> handler.matchesVersion(version, resolver));
@@ -1112,22 +1108,23 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Whether this method serves the delivery at hand, asked with BOTH keys a task is wired
-   * by. A method names one of them (<code>&#64;WorkflowTask(taskDefinition = ...)</code>
-   * respectively <code>&#64;WorkflowTask(id = ...)</code>) and a delivery reports both,
-   * the task definition the BPMS subscribed to and the id of the element it belongs to.
+   * Whether this method serves the delivery at hand. It asks with BOTH keys by which a task
+   * is wired. A method names one of them (<code>&#64;WorkflowTask(taskDefinition = ...)</code>
+   * or <code>&#64;WorkflowTask(id = ...)</code>). A delivery reports both: the task
+   * definition the BPMS subscribed to, and the id of the element it belongs to.
    * <p>
-   * The pair is the same one <code>validateTaskWiring</code> matches a method against while
-   * the application boots, and that is the point: a wiring the boot accepts has to be a
-   * wiring a delivery finds. Asking with the task definition alone accepted a method wired
-   * by the element id at deployment and failed it at the first delivery, which the
-   * application learnt from an incident.
+   * <code>validateTaskWiring</code> matches a method against the same pair while the
+   * application boots, and that is the point. A wiring which the boot accepts has to be a
+   * wiring which a delivery finds. Asking with the task definition alone accepted a method
+   * wired by the element id at deployment, and failed it at the first delivery. The
+   * application learnt about it from an incident.
    * <p>
-   * The element id is also compared against the reported task definition, for an adapter
-   * which names no element of its own: there the one value it reports IS the element id.
+   * The element id is also compared with the reported task definition. That is for an
+   * adapter which names no element of its own. There the one value it reports IS the element
+   * id.
    * <p>
-   * Why the routing learns the second key instead of the deployment refusing such a wiring
-   * is decision 67 in the repository's DECISIONS.md.
+   * Decision 67 in the repository's DECISIONS.md says why the routing learns the second key,
+   * instead of the deployment refusing such a wiring.
    *
    * @param handler One method registered for this BPMN process
    * @param context What the adapter reports about the delivery
@@ -1144,10 +1141,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * How a delivery names its BPMN element in the message about a method nobody found,
-   * and nothing where the adapter names none. The two keys are different values on most
-   * models, and a reader who only sees the task definition looks for a method under a
-   * name their model does not carry.
+   * How a delivery names its BPMN element in the message about a method which nobody found.
+   * It is empty where the adapter names no element. On most models the two keys are
+   * different values. A reader who only sees the task definition looks for a method under a
+   * name which their model does not have.
    *
    * @param context What the adapter reports about the delivery
    * @return The phrase to put after the task definition, possibly empty
@@ -1166,8 +1163,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final WorkflowTaskHandler handler,
       final BpmnTaskSpec task) {
 
-    // a listener is served by a method naming its task definition and by nothing else: the
-    // element id names the element, which may have a method of its own
+    // only a method which names the task definition serves a listener. The element id names
+    // the element, and that may have a method of its own
     return sameWiring(handler.getTaskDefinition(), task.taskDefinition()) || (!task.listener() && sameWiring(handler
         .getActivityId(), task.activityId()));
 
@@ -1179,8 +1176,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final String bpmnProcessId,
       final TaskInvocationContext context) {
 
-    // asked before anything else is done with this delivery: a workflow which names
-    // itself twice is not served, whichever method would have served it
+    // asked before anything else is done with this delivery. A workflow which names itself
+    // twice is not served, whichever method would have served it
     BusinessKeyCheck
         .refuseAKeyWhichIsNotTheAggregateId(
             context.getBusinessKey(),
@@ -1228,8 +1225,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
                         entry.handlers
                             .stream()
                             .anyMatch(WorkflowTaskHandler::inheritsVersions)),
-                    // A delivery from a version the configuration faded out
-                    // looks exactly like a wiring defect otherwise
+                    // otherwise a delivery from a version which the configuration faded
+                    // out looks exactly like a wiring defect
                     outfadedVersionHint(
                         workflowModuleId, bpmnProcessId, context.getAdapterId(), context.getProcessVersion()),
                     entry.handlers
@@ -1245,18 +1242,18 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Reports the tasks the BPMS does not have any more, asked by an adapter after it handed
-   * a delivery over - see
+   * Reports the tasks which the BPMS does not have any more. An adapter asks this after it
+   * handed a delivery over, see
    * {@link WorkflowTaskInvoker#reportTasksTheBpmsNoLongerHas(String, String, TaskInvocationContext, OpenTaskProbe)}.
    * <p>
-   * What it skips, and in this order, because each step is cheaper than the next: a BPMN
-   * process with no asynchronous task at all, which most applications are and which then
-   * pay nothing; a scope whose configuration switched the probing off; a delivery which
-   * names no workflow; and an application without a delivery log.
+   * It skips these cases, in this order, because each step is cheaper than the next. First,
+   * a BPMN process with no asynchronous task at all. Most applications are like that, and
+   * they then pay nothing. Then a scope whose configuration switched the probing off. Then a
+   * delivery which names no workflow. And last an application without a delivery log.
    * <p>
    * Nothing here may cost the caller its own work. The delivery is done by the time an
-   * adapter asks, and a probe which throws or a derived cancellation which fails must not
-   * turn a finished job into a failed one, so both stay inside this call.
+   * adapter asks. A probe which throws, or a derived cancellation which fails, must not turn
+   * a finished job into a failed one. So both stay inside this call.
    */
   @Override
   public void reportTasksTheBpmsNoLongerHas(
@@ -1272,8 +1269,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     if ((entry == null) || (entry.processService == null)) {
       return;
     }
-    // a BPMN process whose methods all complete when they return leaves no task open, so
-    // there is nothing this could ever find - and that is most applications
+    // a BPMN process whose methods all complete when they return leaves no task open. So
+    // there is nothing this could ever find, and that is the case for most applications
     if (entry.handlers.stream().noneMatch(WorkflowTaskHandler::isAsynchronousTask)) {
       return;
     }
@@ -1295,11 +1292,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     final var candidates = deliveryLog
         .openTasksOfWorkflow(workflowModuleId, workflowId)
         .stream()
-        // the task being worked on right now is not a candidate: it is open because this
+        // the task being worked on right now is not a candidate. It is open because this
         // very delivery left it open
         .filter(record -> !java.util.Objects.equals(record.taskId(), wakeUp.getTaskId()))
-        // and a record another BPMS wrote belongs to that BPMS, whose tasks this probe
-        // knows nothing about
+        // and a record which another BPMS wrote belongs to that BPMS. This probe knows nothing
+        // about its tasks
         .filter(record -> (wakeUp.getAdapterId() == null) || wakeUp.getAdapterId().equals(record.adapterId()))
         .filter(record -> record.taskId() != null)
         .limit(howMany)
@@ -1328,18 +1325,18 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   /**
    * Asks the probe about one record. Only {@link TaskExistence#GONE} produces a
-   * cancellation: a probe which cannot say is not a probe which said no, which is the one
-   * thing which keeps this safe for a BPMS whose API cannot tell a refusal from an outage
-   * (see decision 74 in the repository's DECISIONS.md).
+   * cancellation. A probe which cannot say is not a probe which said no. That alone keeps
+   * this safe for a BPMS whose API cannot tell a refusal from an outage (see decision 74 in
+   * the repository's DECISIONS.md).
    * <p>
-   * A probe which throws is read as "cannot say" and reported once. The delivery which led
-   * here is done, and an adapter whose BPMS hiccups must not lose it over a question nobody
-   * asked for.
+   * A probe which throws counts as "cannot say", and it is reported once. The delivery which
+   * led here is done. An adapter whose BPMS has a hiccup must not lose it over a question
+   * which nobody asked for.
    * <p>
-   * The record's task definition travels with the question, because the two ids do not say
-   * which kind of task is being asked about and some BPMS answer only for some kinds. A
-   * probe which implements the two-argument method alone gets it through the default and
-   * decides exactly as it did before.
+   * The record's task definition travels with the question. The two ids do not say which
+   * kind of task is asked about, and some BPMS answer only for some kinds. A probe which
+   * implements only the method with two arguments gets it through the default, and decides
+   * exactly as before.
    */
   private static boolean theBpmsNoLongerHas(
       final TaskDelivery record,
@@ -1395,9 +1392,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         .forEach(entry -> {
           final var bpmnProcessId = entry.getKey().bpmnProcessId();
           final var registryEntry = entry.getValue();
-          // a BPMS which said it keeps no catalog has answered every version question of
-          // this process, so the methods waiting for an answer are named here and the
-          // messages about an unknown version stay out of it
+          // a BPMS which said it keeps no list of versions has answered every version
+          // question of this process. So the methods which wait for an answer are named here,
+          // and the messages about an unknown version stay out of it
           processVersions
               .reportMethodsWhichNeverRun(
                   workflowModuleId,
@@ -1411,9 +1408,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
             deployedVersionsCheck.check(workflowModuleId, bpmnProcessId);
             return;
           }
-          // the BPMS is asked ONCE per process, right after the deployment: the
-          // version deployed by this boot is part of the answer, and a tag the
-          // application names is either known now or reported as unknown
+          // the BPMS is asked ONCE per process, right after the deployment. The version
+          // which this boot deployed is part of the answer. A tag which the application names
+          // is either known now, or reported as unknown
           processVersions.warmUp(workflowModuleId, bpmnProcessId);
           final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
           synchronized (registryEntry) {
@@ -1426,7 +1423,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
                         tag,
                         "method '%s'%s"
                             .formatted(handler.describe(), handler.describeVersionOrigin()))));
-            // ranges naming a tag could not be placed while registering - now they can
+            // ranges which name a tag could not be placed at registration. Now they can
             registryEntry.handlers
                 .forEach(handler -> failOnDuplicateWiring(
                     workflowModuleId,
@@ -1438,16 +1435,16 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
           deployedVersionsCheck.check(workflowModuleId, bpmnProcessId);
         });
 
-    // a method which never runs is a statement about the whole workflow module, so it
-    // is made once every BPMN process of the module was asked about its versions
+    // a method which never runs is a statement about the whole workflow module. So it is
+    // made once every BPMN process of the module was asked about its versions
     deployedVersionsCheck.reportDeadHandlers(workflowModuleId);
 
     bpmsInitiatedStarts.resolveProcessVersions(workflowModuleId);
     workflowEndedHandlers.resolveProcessVersions(workflowModuleId);
     extensionHandlers.resolveProcessVersions(workflowModuleId);
 
-    // last, because it compares version ranges: an id nothing was deployed under is
-    // wired by no adapter, so the start events its methods serve are judged here or
+    // last, because it compares version ranges. No adapter wires an id under which nothing
+    // was deployed. So the start events which its methods serve are judged here or
     // nowhere
     bpmsInitiatedStarts.validateAgainstVersionsTheBpmsHolds(workflowModuleId);
 
@@ -1476,11 +1473,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Ends the deployment of a called process which holds a start event the BPMS fires by itself.
-   * The start of a called process starts no workflow, so nothing would build the aggregate of
-   * the instance such a start event creates. The <code>&#64;WorkflowStartedByBpms</code> methods
-   * of the class are not judged against a called process, because they serve the process which
-   * starts the workflow.
+   * Ends the deployment of a called process which has a start event that the BPMS fires by
+   * itself. The start of a called process starts no workflow. So nothing would build the
+   * aggregate of the instance which such a start event creates. The
+   * <code>&#64;WorkflowStartedByBpms</code> methods of the class are not judged against a
+   * called process, because they serve the process which starts the workflow.
    */
   private static void refuseStartEventsTheBpmsFiresInACalledProcess(
       final String workflowModuleId,
@@ -1553,8 +1550,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     }
 
     if (isACalledProcess(workflowModuleId, bpmnProcessId)) {
-      // an adapter which asks startsAWorkflowOfItsOwn never gets here. A model deployed before
-      // the question existed still carries the listener, and its start is answered with the
+      // an adapter which asks startsAWorkflowOfItsOwn never gets here. A model deployed
+      // before the question existed still has the listener. Its start is answered with the
       // caller's aggregate, without a start row and without building anything
       return io.vanillabp.integration.adapter.migration.workflowstart.BpmsInitiatedStartExecution
           .theStartOfACalledProcess(entry.processService, context);
@@ -1567,9 +1564,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       return result;
     }
 
-    // the aggregate values shared with a remote BPMS - read AFTER the
-    // start's transaction committed, which is why an embedded BPMS (joining the
-    // caller's transaction, sync mode NONE) never gets here
+    // the aggregate values shared with a remote BPMS. They are read AFTER the transaction of
+    // the start committed. That is why an embedded BPMS (which joins the caller's
+    // transaction, sync mode NONE) never gets here
     final var variables = new java.util.LinkedHashMap<>(result.variables());
     variables
         .putAll(
@@ -1585,15 +1582,15 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Whether the end of a workflow of that BPMN process has to be reported at all - asked
-   * by the adapters while wiring, so a model pays for a listener respectively a worker
-   * only where the end is used.
+   * Whether the end of a workflow of that BPMN process has to be reported at all. The
+   * adapters ask this while they wire. So a model pays for a listener or a worker only where
+   * the end is used.
    * <p>
-   * Beside an application's <code>&#64;WorkflowEnded</code> method there are two more
-   * reasons to want it: a workflow module which releases the records of its processed
-   * task deliveries when a workflow ends needs the notification to do so, and so does an
-   * election cache which is to let go of the hint of an ended workflow early. That is
-   * why no adapter had to be touched for either of them.
+   * Besides an application's <code>&#64;WorkflowEnded</code> method, there are two more
+   * reasons to want it. A workflow module which releases the records of its processed task
+   * deliveries when a workflow ends needs the notification for that. So does an election
+   * cache which should let go of the hint of an ended workflow early. That is why no adapter
+   * had to change for either of them.
    */
   @Override
   public boolean workflowEndedHandlerExists(
@@ -1648,15 +1645,15 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
                       .collect(Collectors.joining(", "))));
     }
 
-    // the tasks first, each in a transaction of its own, then the end: a workflow which
-    // ended has nothing open any more, so everything the application still believes is
-    // open in it is gone and is reported as canceled
+    // the tasks first, each in a transaction of its own, then the end. A workflow which
+    // ended has nothing open any more. So everything which the application still believes
+    // is open in it is gone, and is reported as canceled
     reportTheTasksTheEndedWorkflowTookAway(workflowModuleId, entry, context);
 
     if (isACalledProcess(workflowModuleId, bpmnProcessId)) {
-      // the tasks of the called instance are gone, and that is all there is to say: the
-      // workflow goes on in the process which called it, so no method is called, the
-      // election hint stays and the records are released when the workflow at the top ends
+      // the tasks of the called instance are gone, and that is all there is to say. The
+      // workflow goes on in the process which called it. So no method is called, the
+      // election hint stays, and the records are released when the top workflow ends
       log
           .debug(
               "The called process '{}' of workflow module '{}' ended for workflow '{}' - that is a step "
@@ -1673,18 +1670,18 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Reports every task the core still believes is open in the ended workflow as
+   * Reports every task which the core still believes is open in the ended workflow as
    * {@link io.vanillabp.spi.service.TaskEvent.Event#CANCELED}, before the end itself is
    * reported.
    * <p>
-   * Only where the adapter named the workflow
+   * This only happens where the adapter named the workflow
    * ({@link WorkflowEndedContext#getWorkflowId()}). An adapter which names none keeps
-   * behaving exactly as it did, which is what an adapter whose BPMS cancels each element by
-   * itself wants - Camunda 7 would otherwise report the same task twice.
+   * behaving exactly as before. An adapter whose BPMS cancels each element by itself wants
+   * that. Otherwise Camunda 7 would report the same task twice.
    * <p>
    * A record of ANOTHER adapter is left alone. {@link TaskDelivery#adapterId()} says who
-   * delivered the task, so nothing has to be asked: during a migration one aggregate may
-   * carry work of two BPMS, and the end this adapter reports says nothing about the other
+   * delivered the task, so nothing has to be asked. During a migration one aggregate may
+   * have work of two BPMS. The end which this adapter reports says nothing about the other
    * one.
    */
   private void reportTheTasksTheEndedWorkflowTookAway(
@@ -1746,10 +1743,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     if (entry == null) {
       return List.of();
     }
-    // the UNION over every method serving this element: methods wired to one BPMN
-    // element differ in the process version they serve, and the delivery
-    // has to satisfy whichever of them runs. Sorted, because a subscription which
-    // names variables is compared to itself across restarts
+    // the UNION over every method which serves this element. Methods wired to one BPMN
+    // element differ in the process version they serve, and the delivery has to satisfy
+    // whichever of them runs. Sorted, because a subscription which names variables is
+    // compared with itself across restarts
     return entry.handlers
         .stream()
         .filter(candidate -> sameWiring(candidate.getTaskDefinition(),
@@ -1773,25 +1770,25 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Which elements of one task of one held version are iterated without naming the value
-   * of a round although a method serving that version reads it.
+   * Which elements of one task of one held version are iterated without naming the value of
+   * a round, although a method which serves that version reads it.
    * <p>
-   * The two halves meet here for the same reason
-   * {@link #tasksNotServedInVersion(String, String, String, Collection)} lives here: only
-   * the adapter can read the model a BPMS still holds, and only this registry knows what a
-   * method asks for and which versions it serves.
+   * The two halves meet here for the same reason as in
+   * {@link #tasksNotServedInVersion(String, String, String, Collection)}. Only the adapter
+   * can read the model which a BPMS still holds. Only this registry knows what a method asks
+   * for and which versions it serves.
    * <p>
-   * An element the method reads the item of which is NOT in the list handed over is no
-   * finding. The multi-instance chain crosses a call activity, so a task of a called
-   * process asks for an element of its caller, and the model at hand is the wrong place to
-   * look for it - the same rule the deployment-time question follows.
+   * An element whose item the method reads, but which is NOT in the given list, is no
+   * finding. The multi-instance chain crosses a call activity. So a task of a called process
+   * asks for an element of its caller, and the model at hand is the wrong place to look for
+   * it. The question at deployment time follows the same rule.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @param version The version identifier the BPMS reported
    * @param task The task, as the model that version holds describes it
-   * @return The element ids whose item a method serving that version reads and that
-   *         version's model never names
+   * @return The element ids whose item a method which serves that version reads, and which
+   *         that version's model never names
    */
   private Collection<String> itemsAHeldVersionNeverNames(
       final String workflowModuleId,
@@ -1831,10 +1828,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     if (entry == null) {
       return List.of();
     }
-    // the UNION over every method serving this element, for the reason
-    // taskParameterNames unions its answer: methods wired to one BPMN element differ in
-    // the process version they serve, and all of them read their item out of the model
-    // the adapter is asking about
+    // the UNION over every method which serves this element, for the same reason as in
+    // taskParameterNames. Methods wired to one BPMN element differ in the process version
+    // they serve, and all of them read their item from the model which the adapter asks
+    // about
     return entry.handlers
         .stream()
         .filter(candidate -> sameWiring(candidate.getTaskDefinition(),
@@ -1848,9 +1845,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The sentence a delivery from an OUTFADED version deserves - without it the
-   * developer reads "no method matches" and looks for a wiring defect, while the
-   * configuration says on purpose that this version is not served any more.
+   * The sentence which a delivery from an OUTFADED version deserves. Without it the developer
+   * reads "no method matches" and looks for a wiring defect. But the configuration says on
+   * purpose that this version is not served any more.
    */
   private String outfadedVersionHint(
       final String workflowModuleId,
@@ -1887,30 +1884,28 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The methods registered for that BPMN process which serve NO version worth serving -
-   * the versions the BPMS holds, minus the ones the configuration faded out.
-   * All three annotations carry a <code>version</code> attribute, so all three are
-   * asked.
+   * The methods registered for that BPMN process which serve NO version worth serving: the
+   * versions which the BPMS holds, minus the ones the configuration faded out. All three
+   * annotations have a <code>version</code> attribute, so all three are asked.
    * <p>
-   * The verdict is reached for the WHOLE workflow module, not for the given process
-   * alone: a class declares one <code>bpmnProcess</code> plus any number of
-   * <code>secondaryBpmnProcesses</code>, so each of its methods is registered several
-   * times, once per declared BPMN process and with the version range of that
-   * declaration. A method which serves the versions of ANY of them runs, which is why
-   * the versions worth serving arrive here per BPMN process of the module. The case
-   * this is for is a renamed BPMN process: the methods kept for the old id serve the
-   * versions the BPMS holds under it and none of the new id's, and calling them dead
-   * would be the opposite of what the declaration says.
+   * The verdict is reached for the WHOLE workflow module, not for the given process alone. A
+   * class declares one <code>bpmnProcess</code> and any number of
+   * <code>secondaryBpmnProcesses</code>. So each of its methods is registered several times,
+   * once for each declared BPMN process, with the version range of that declaration. A method
+   * which serves the versions of ANY of them runs. That is why the versions worth serving
+   * arrive here per BPMN process of the module. This is for a renamed BPMN process. The
+   * methods kept for the old id serve the versions which the BPMS holds under it, and none of
+   * the new id. Calling them dead would be the opposite of what the declaration says.
    * <p>
-   * Such a method never runs. It is a warning rather than a boot failure, because a
-   * version which does not exist YET is a normal state: an application may be rolled
-   * out before the model that needs it, and during a rolling deployment another node
-   * may still be deploying it.
+   * Such a method never runs. It is a warning and not a boot failure, because a version
+   * which does not exist YET is a normal state. An application may be rolled out before the
+   * model which needs it. And during a rolling deployment another node may still be
+   * deploying it.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID the methods are reported for
-   * @param servableVersionsByProcess The versions worth serving, per BPMN process of
-   *          that workflow module
+   * @param servableVersionsByProcess The versions worth serving, per BPMN process of that
+   *          workflow module
    * @return One description per dead method
    */
   public List<String> handlersNotServingAnyVersion(
@@ -1926,19 +1921,19 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The methods registered for that BPMN process which a delivery of a BPMS without a
-   * version catalog can never reach - the version half of
+   * The methods registered for that BPMN process which a delivery of a BPMS without a list of
+   * versions can never reach. This is the version half of
    * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#reportNoProcessVersionCatalog}.
    * <p>
-   * Same four kinds of handler as {@link #handlersNotServingAnyVersion}, same walk, and
-   * a different question asked of each method: not "which of the versions the BPMS holds
-   * does it serve", because there are none to hold, but "can a delivery of this BPMS meet
+   * It covers the same four kinds of handler as {@link #handlersNotServingAnyVersion}, with
+   * the same walk, but asks each method a different question. Not "which of the versions the
+   * BPMS holds does it serve", because there are none. But "can a delivery of this BPMS meet
    * its specification at all".
    * <p>
-   * The verdict is per BPMN process rather than per workflow module, unlike the one about
-   * dead methods. What is reported here is true of THIS BPMS, and the message says so, so
-   * a method which is the right one on a BPMS the application also runs on is named
-   * without being called dead.
+   * Unlike the verdict about dead methods, this one is per BPMN process and not per workflow
+   * module. What is reported here is true of THIS BPMS, and the message says so. So a method
+   * which is the right one on another BPMS of the application is named, but not called
+   * dead.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
@@ -1961,8 +1956,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * A walk over the methods of ONE kind of handler registered for one BPMN process,
-   * answering the question it is handed about each of them.
+   * A walk over the methods of ONE kind of handler registered for one BPMN process. It
+   * answers the given question about each of them.
    */
   @FunctionalInterface
   private interface HandlerWalk {
@@ -1974,8 +1969,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The four kinds of handler carrying a <code>version</code> attribute, each as a walk
-   * over the methods of one BPMN process of the given workflow module.
+   * The four kinds of handler with a <code>version</code> attribute, each as a walk over the
+   * methods of one BPMN process of the given workflow module.
    *
    * @param workflowModuleId The workflow module ID
    * @return One walk per kind of handler
@@ -2000,9 +1995,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Which methods of one kind of handler are dead in the given BPMN process - dead
-   * meaning that they serve no version worth serving there AND none in any other BPMN
-   * process of the workflow module they are registered for.
+   * Which methods of one kind of handler are dead in the given BPMN process. Dead means that
+   * they serve no version worth serving there, AND none in any other BPMN process of the
+   * workflow module they are registered for.
    *
    * @param bpmnProcessId The BPMN process the methods are reported for
    * @param servableVersionsByProcess The versions worth serving, per BPMN process
@@ -2045,7 +2040,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Whether a method serves one of the versions worth serving in a BPMN process - the
+   * Whether a method serves one of the versions worth serving in a BPMN process. This is the
    * question behind the report about methods which never run.
    *
    * @param workflowModuleId The workflow module ID
@@ -2066,8 +2061,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The <code>&#64;WorkflowTask</code> methods registered for one BPMN process, each with
-   * the verdict the given question reaches about its version specifications.
+   * The <code>&#64;WorkflowTask</code> methods registered for one BPMN process, each with the
+   * verdict which the given question reaches about its version specifications.
    */
   private List<HandlerVersions> workflowTaskHandlerVersions(
       final String workflowModuleId,
@@ -2138,11 +2133,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         .forEach(entry -> servedWiring
             .put(
                 entry.getKey().bpmnProcessId(),
-                // the task definition is what an adapter can compose its own identifier
-                // from. A method wired to a BPMN element id is matched through the model,
-                // and the model of that id is the one thing the application does not have,
-                // so it contributes nothing - which is why the SPI says that an id may be
-                // named with nothing served
+                // an adapter can build its own identifier from the task definition. A method
+                // wired to a BPMN element id is matched through the model. The model of that id
+                // is the one thing the application does not have. So it adds nothing. That is
+                // why the SPI says that an id may be named with nothing served
                 List
                     .copyOf(entry.getValue().handlers)
                     .stream()
@@ -2157,15 +2151,15 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   /**
    * The registry entries of a workflow module which hold <code>&#64;WorkflowTask</code>
-   * methods for a BPMN process nothing was deployed under during this boot - the id a
-   * renamed BPMN process left behind.
+   * methods for a BPMN process under which nothing was deployed during this boot. That is
+   * the id which a renamed BPMN process left behind.
    * <p>
-   * It answers fewer ids than the module declares, and both callers want the same fewer:
-   * a class serving a BPMN process this boot deployed is a class in play, and a further id
-   * IT declares is the renamed process this is about. A class whose processes were NONE of
-   * them deployed says nothing about a rename - it is a workflow service waiting for a
-   * model which has not arrived yet, and treating every id of it as renamed would bury
-   * the one case worth speaking about.
+   * It returns fewer ids than the module declares, and both callers want exactly those. A
+   * class which serves a BPMN process that this boot deployed is a class in use. A further
+   * id which IT declares is the renamed process this is about. A class of which NONE of the
+   * processes were deployed says nothing about a rename. It is a workflow service which waits
+   * for a model that has not arrived yet. Treating every id of it as renamed would bury the
+   * one case worth speaking about.
    *
    * @param workflowModuleId The workflow module ID
    * @return The entries, in no particular order
@@ -2192,15 +2186,15 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Which of the given tasks of ONE deployed version no <code>&#64;WorkflowTask</code>
-   * method serves - the version-aware sibling of {@link #validateTaskWiring}, used by
-   * the startup check for old process versions.
+   * Which of the given tasks of ONE deployed version no <code>&#64;WorkflowTask</code> method
+   * serves. It is the version-aware sibling of {@link #validateTaskWiring}. The startup check
+   * for old process versions uses it.
    * <p>
-   * Two differences to the wiring validation, and both matter. It asks per VERSION, so
-   * a method carrying <code>version = "3"</code> counts for version 3 and for nothing
-   * else. And it marks NOTHING as wired: serving an old version says nothing about the
-   * reverse direction {@link #validateNoUnwiredWorkflowTaskMethods} decides, and a
-   * method kept only for an old version must still match a task of the deployed model.
+   * It differs from the wiring check in two ways, and both matter. It asks per VERSION. So a
+   * method with <code>version = "3"</code> counts for version 3 and for nothing else. And it
+   * marks NOTHING as wired. Serving an old version says nothing about the reverse direction
+   * which {@link #validateNoUnwiredWorkflowTaskMethods} decides. A method kept only for an old
+   * version must still match a task of the deployed model.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
@@ -2221,11 +2215,11 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     final var resolver = processVersions.resolverFor(workflowModuleId, bpmnProcessId);
     return tasks
         .stream()
-        // the model a deployment brings has to have a method for every user task, an older
-        // version the BPMS only still holds does not: nobody can change that model any
-        // more, and the rule would otherwise keep a removed user task marked forever
+        // the model which a deployment brings must have a method for every user task. An older
+        // version which the BPMS only still holds does not need one. Nobody can change that
+        // model any more, and otherwise the rule would mark a removed user task forever
         .filter(task -> !task.optional())
-        // and a task the application says somebody else serves is served
+        // and a task which the application says somebody else serves is served
         .filter(task -> !implementedExternally.isMarked(null, workflowModuleId, bpmnProcessId, task))
         .filter(task -> handlers
             .stream()
@@ -2236,22 +2230,22 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   /**
    * Which tasks of the model this start deployed no <code>&#64;WorkflowTask</code> method
-   * serves in the version the BPMS gave that model. The wiring validation could not ask it:
-   * it runs before the deployment, when the version is not known yet. A delivery picks the
-   * method by version, so a task left out here fails at every delivery, see
-   * decision 126 in the repository's {@code DECISIONS.md}.
+   * serves, in the version the BPMS gave that model. The wiring check could not ask this. It
+   * runs before the deployment, when the version is not known yet. A delivery picks the
+   * method by version, so a task left out here fails at every delivery. See decision 126 in
+   * the repository's DECISIONS.md.
    * <p>
-   * The tasks are the ones the adapter handed over while wiring, so no model is read again.
-   * The wiring validation has accepted them, so a task without any method is one the
+   * The tasks are the ones which the adapter handed over while it wired, so no model is read
+   * again. The wiring check has accepted them. So a task without any method is one which the
    * application says somebody else serves. A task with methods needs one whose version range
-   * covers the deployed version, a user task as well.
+   * covers the deployed version. That includes a user task.
    *
    * @param adapterId The adapter which deployed the model
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @param version The version the BPMS gave the model this start deployed
-   * @return Every task no method serves in that version, each with the methods wired to it
-   *         and their version ranges, empty where every task is served
+   * @return Every task which no method serves in that version, each with the methods wired
+   *         to it and their version ranges. Empty where every task is served
    */
   public Map<BpmnTaskSpec, List<String>> tasksTheDeployedVersionLeavesUnserved(
       final String adapterId,
@@ -2281,7 +2275,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
           .filter(handler -> matches(handler, task))
           .toList();
       if (wired.isEmpty()) {
-        // the wiring validation let a task without a method pass only because a line of
+        // the wiring check let a task without a method pass only because a line of
         // 'implemented-externally' says that something else serves it
         continue;
       }
@@ -2303,19 +2297,20 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Which elements of the model this start deployed no method serves in the version the BPMS
-   * gave that model: the tasks of {@link #tasksTheDeployedVersionLeavesUnserved}, then the
-   * elements the extensions reported for a contract which asks for it (see
-   * decision 127 in the repository's {@code DECISIONS.md}).
+   * Which elements of the model this start deployed no method serves, in the version the
+   * BPMS gave that model. First the tasks of {@link #tasksTheDeployedVersionLeavesUnserved}.
+   * Then the elements which the extensions reported for a contract that asks for it (see
+   * decision 127 in the repository's DECISIONS.md).
    * <p>
-   * The tasks are kept per adapter, the elements of an extension per BPMN process. Each adapter
-   * holds both against the version its own BPMS gave the model.
+   * The tasks are kept per adapter, the elements of an extension per BPMN process. Each
+   * adapter checks both against the version which its own BPMS gave the model.
    *
    * @param adapterId The adapter which deployed the model
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @param version The version the BPMS gave the model this start deployed
-   * @return Every element no method serves in that version, empty where every one is served
+   * @return Every element which no method serves in that version. Empty where every one is
+   *         served
    */
   public List<DeployedProcessVersionsCheck.UnservedElement> elementsTheDeployedVersionLeavesUnserved(
       final String adapterId,
@@ -2352,9 +2347,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     if (entry == null) {
       return false;
     }
-    // ONE method wanting to keep the task open is enough - see the SPI: methods
-    // serving different process versions share the BPMN element, and the element
-    // either can stay open or it cannot
+    // ONE method which wants to keep the task open is enough (see the SPI). Methods which
+    // serve different process versions share the BPMN element, and the element either can
+    // stay open or it cannot
     return entry.handlers
         .stream()
         .filter(candidate -> sameWiring(candidate.getTaskDefinition(),
@@ -2364,10 +2359,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * Answered from the registry itself rather than through
-   * {@link #resolveWorkflowAggregateIdName(String, String)}: the name of the aggregate's ID
-   * property is asked of the persistence, and an application on a BPMS with a business key may
-   * leave it unanswered, which says nothing about whether a workflow service claims the
+   * Answered from the registry itself, and not through
+   * {@link #resolveWorkflowAggregateIdName(String, String)}. The name of the aggregate's ID
+   * property is asked of the persistence. An application on a BPMS with a business key may
+   * leave it unanswered. That says nothing about whether a workflow service claims the
    * process. See decision 120 in the repository's DECISIONS.md.
    */
   @Override
@@ -2416,9 +2411,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   }
 
   /**
-   * The shared values of an aggregate, read either after the caller's transaction
-   * committed (a remote BPMS completing a task) or within it (an embedded engine
-   * completing the task in the same transaction).
+   * The shared values of an aggregate. They are read after the caller's transaction
+   * committed (a remote BPMS which completes a task), or within it (an embedded engine which
+   * completes the task in the same transaction).
    */
   private Map<String, Object> syncedValues(
       final String workflowModuleId,
@@ -2441,10 +2436,10 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
           workflowModuleId);
       return Map.of();
     }
-    // for a remote BPMS the caller's transaction (the one the @WorkflowTask ran in) is
-    // COMMITTED at this point, so the aggregate is loaded in a new one; an embedded
-    // engine is still inside that transaction and reads there. A failure must never
-    // prevent the task from being completed: the BPMS would redeliver it forever.
+    // for a remote BPMS the caller's transaction (the one in which the @WorkflowTask ran) is
+    // COMMITTED at this point. So the aggregate is loaded in a new one. An embedded engine
+    // is still inside that transaction and reads there. A failure must never prevent the
+    // task from being completed, because the BPMS would redeliver it forever.
     final java.util.function.Supplier<Map<String, Object>> read = () -> {
       final var workflowAggregate = entry.processService.loadWorkflowAggregate(workflowAggregateId);
       if (workflowAggregate == null) {
@@ -2484,9 +2479,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final String workflowAggregateId,
       final io.vanillabp.integration.adapter.spi.AggregateSyncMode adapterDefault) {
 
-    // an embedded engine completes the task in the transaction the handler ran in, so
-    // the values have to be read from the aggregate as it is NOW - a new transaction
-    // would see the state before the handler or wait for the row this one holds
+    // an embedded engine completes the task in the transaction in which the handler ran. So
+    // the values have to be read from the aggregate as it is NOW. A new transaction would
+    // see the state before the handler, or wait for the row which this one holds
     return syncedValues(
         workflowModuleId,
         bpmnProcessId,
@@ -2496,9 +2491,9 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
 
   }
 
-  // the suppression is not a doubt about the deprecation, it is what keeps it quiet:
-  // 'forRemoval' raises the mandatory 'removal' lint at every implementation, and
-  // @Deprecated on the override does not silence it. Goes when the fallback goes.
+  // the suppression does not doubt the deprecation. It keeps it quiet. 'forRemoval' raises
+  // the mandatory 'removal' lint at every implementation, and @Deprecated on the override
+  // does not silence it. It goes when the fallback goes.
   @Deprecated(forRemoval = true)
   @SuppressWarnings("removal")
   @Override
@@ -2507,8 +2502,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       final String bpmnProcessId,
       final String propertyName) {
 
-    // the migration fallback: version 1 resolved attributes without a getter
-    // as well, so the reader looks at getters AND fields
+    // the migration fallback. Version 1 also resolved attributes without a getter, so the
+    // reader looks at getters AND fields
     final var entry = entries.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if ((entry == null) || (entry.processService == null)) {
       return false;
@@ -2530,8 +2525,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     if (entry == null) {
       return null;
     }
-    // runs within the CALLER's transaction: an embedded BPMS evaluates expressions
-    // inside an engine transaction, the aggregate has to join it
+    // runs within the CALLER's transaction. An embedded BPMS evaluates expressions inside
+    // an engine transaction, and the aggregate has to join it
     final var workflowAggregate = entry.processService.loadWorkflowAggregate(workflowAggregateId);
     if (workflowAggregate == null) {
       return null;
@@ -2589,9 +2584,8 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
           if (!verdict.pathIsCut()) {
             return;
           }
-          // the first segment is the one which may be a variable of the model rather
-          // than an attribute of the aggregate - the same boundary the question about a
-          // single name draws
+          // the first segment may be a variable of the model and not an attribute of the
+          // aggregate. The question about a single name draws the same line
           if ((verdict
               .kind() == io.vanillabp.integration.adapter.spi.WorkflowAggregateSync.PathVerdict.Kind.NO_SUCH_ATTRIBUTE) && (verdict
                   .segmentIndex() == 0)) {

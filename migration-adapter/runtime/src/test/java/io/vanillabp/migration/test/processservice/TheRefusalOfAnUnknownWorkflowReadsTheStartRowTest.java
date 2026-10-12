@@ -35,11 +35,11 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * A task arrives for a workflow aggregate this application does not store. Either another
- * application on the same BPMS owns the workflow, or this application owned it and its aggregate
- * was deleted. The row written when a workflow starts tells the two apart, so the refusal names
- * the situation the row points at. Where no such row can be read, it names both, as it always
- * did.
+ * A task arrives for a workflow aggregate which this application does not store. Either
+ * another application on the same BPMS owns the workflow, or this application owned it and
+ * its aggregate was deleted. The row written when a workflow starts tells the two apart. So
+ * the refusal names the situation to which the row points. Where no such row can be read, it
+ * names both, as it always did.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheRefusalOfAnUnknownWorkflowReadsTheStartRowTest {
@@ -54,7 +54,7 @@ public class TheRefusalOfAnUnknownWorkflowReadsTheStartRowTest {
 
   private static final String WORKFLOW = "2251799813685249";
 
-  /** A delivery log in memory which answers by key, which is all the start row needs. */
+  /** A delivery log in memory which answers by key. The start row needs nothing more. */
   static class DeliveryLogInMemory implements TaskDeliveryLog {
 
     final Map<String, TaskDelivery> rows = new HashMap<>();
@@ -77,7 +77,7 @@ public class TheRefusalOfAnUnknownWorkflowReadsTheStartRowTest {
 
   }
 
-  /** Runs the work where it is asked for, since this test has no transaction to open. */
+  /** Runs the work where it is asked for, because this test has no transaction to open. */
   static class RunItRightHere implements TransactionRunner {
 
     @Override
@@ -146,7 +146,8 @@ public class TheRefusalOfAnUnknownWorkflowReadsTheStartRowTest {
             + ADAPTER
             + ".name-clash-avoidance: use-prefix'"),
         message);
-    // a workflow older than the row can be ours all the same, and the reader is told how to know
+    // a workflow older than the row can be ours all the same, and the reader is told how to
+    // know
     assertTrue(message.contains("'vanillabp.delivery.workflow-start-retention'"), message);
     assertTrue(message.contains("started before VanillaBP 2"), message);
     assertFalse(message.contains("cannot tell them apart"), message);

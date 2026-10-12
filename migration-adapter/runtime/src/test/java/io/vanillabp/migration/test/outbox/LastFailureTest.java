@@ -14,8 +14,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * The text an outbox entry keeps about its last failed attempt: what goes into it, what is
- * left out, and how it is cut. The stores write it as it comes from here, so these cases hold
- * for the JDBC table and both MongoDB collections alike.
+ * left out, and how it is cut. The stores write it as it comes from here. So these cases
+ * hold for the JDBC table and for both MongoDB collections.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class LastFailureTest {
@@ -79,8 +79,8 @@ public class LastFailureTest {
   @DisplayName("A long text is cut to the maximum number of bytes, at a whole character, and the cut is marked")
   public void aLongTextIsCutInBytes() {
 
-    // two bytes each in UTF-8, so a cut by characters would leave a text twice as long as
-    // the column of a database which counts bytes
+    // two bytes each in UTF-8. A cut by characters would leave a text twice as long as the
+    // column of a database which counts bytes
     final var text = LastFailure.of(new IllegalStateException("ä".repeat(2 * LastFailure.MAX_BYTES)));
 
     final var bytes = text.getBytes(StandardCharsets.UTF_8).length;

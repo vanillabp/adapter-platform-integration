@@ -6,18 +6,18 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
 
 /**
- * Resolves the {@link PhaseTwoOutbox} used for a workflow aggregate, implemented by
- * the platform integrations and invoked by the core AT STARTUP (see
- * {@link MigrationProcessService#validatePhaseTwoOutboxAtStartup()}). The platform's
- * resolution order is:
+ * Resolves the {@link PhaseTwoOutbox} which is used for a workflow aggregate. The platform
+ * integrations implement it, and the core calls it AT STARTUP (see
+ * {@link MigrationProcessService#validatePhaseTwoOutboxAtStartup()}). The platform resolves
+ * in this order:
  * <ol>
- * <li>the most specific {@link PhaseTwoOutboxAware} bean covering the aggregate
- * class (selection via {@link AwareSelection}),</li>
- * <li>the platform's default selection: the single available outbox bean, or - if
- * several exist - the platform-default outbox matching the persistence technology
- * managing the aggregate,</li>
- * <li><code>null</code> if no outbox is available at all - the core then fails the
- * startup with a guiding message including {@link #remediesDescription()}.</li>
+ * <li>the most specific {@link PhaseTwoOutboxAware} bean which covers the aggregate class
+ * (picked by {@link AwareSelection}),</li>
+ * <li>the platform's default choice: the single available outbox bean, or, if there are
+ * several, the platform's default outbox which matches the persistence technology that
+ * manages the aggregate,</li>
+ * <li><code>null</code> if no outbox is available at all. Then the core fails the startup
+ * with a guiding message which includes {@link #remediesDescription()}.</li>
  * </ol>
  */
 public interface PhaseTwoOutboxResolver {
@@ -27,42 +27,42 @@ public interface PhaseTwoOutboxResolver {
    *
    * @param workflowAggregateClass The workflow aggregate's class
    * @return The outbox or <code>null</code> if none is available
-   * @throws IllegalStateException If several outboxes exist and none can be
-   *           attributed to the aggregate - the guiding message names the beans
-   *           found and the remedy (provide a {@link PhaseTwoOutboxAware} bean)
+   * @throws IllegalStateException If several outboxes exist and none can be assigned to the
+   *           aggregate. The guiding message names the beans found and the remedy (provide a
+   *           {@link PhaseTwoOutboxAware} bean)
    */
   PhaseTwoOutbox resolveFor(
       Class<?> workflowAggregateClass);
 
   /**
-   * Every store this application holds, the ones named for a single workflow aggregate by
-   * a {@link PhaseTwoOutboxAware} bean included. An application which provides all of its
-   * stores that way has no plain store bean at all, so asking for the store beans alone
-   * would say "none" about an application which has several.
+   * Every store which this application holds, including the ones which a
+   * {@link PhaseTwoOutboxAware} bean names for a single workflow aggregate. An application
+   * which provides all of its stores that way has no plain store bean at all. So asking for
+   * the store beans alone would say "none" about an application which has several.
    * <p>
-   * <strong>What the order means:</strong> nothing a caller may build on. The stores come
-   * in the order the platform enumerates its beans, the ones a
-   * {@link PhaseTwoOutboxAware} bean names after the plain store beans, and the order is
-   * stable within one boot of one application. It says nothing about priority: which store
-   * serves a workflow aggregate is {@link #resolveFor(Class)} and only that.
+   * <strong>What the order means:</strong> nothing a caller may build on. The stores come in
+   * the order in which the platform lists its beans. The ones which a
+   * {@link PhaseTwoOutboxAware} bean names come after the plain store beans. The order is
+   * stable within one boot of one application. It says nothing about priority. Only
+   * {@link #resolveFor(Class)} says which store serves a workflow aggregate.
    * <p>
-   * <strong>The collection is read-only</strong> and a store appears in it once, however
-   * many beans point at it. Callers use it to count the stores an application has and to
-   * recognise the one store all of its aggregates share; a caller which wants a store for
-   * an aggregate asks {@link #resolveFor(Class)}.
+   * <strong>The collection is read-only</strong>, and a store appears in it once, however many
+   * beans point at it. Callers use it to count the stores of an application, and to recognise
+   * the one store which all of its aggregates share. A caller who wants a store for an
+   * aggregate asks {@link #resolveFor(Class)}.
    * <p>
-   * A store the platform would never select is not in here - on Quarkus that is a platform
-   * default switched off by <code>vanillabp.outbox.jdbc.enabled</code> /
-   * <code>vanillabp.outbox.mongo.enabled</code> or left without a datasource.
+   * A store which the platform would never select is not in here. On Quarkus that is a
+   * platform default which <code>vanillabp.outbox.jdbc.enabled</code> or
+   * <code>vanillabp.outbox.mongo.enabled</code> switched off, or which has no datasource.
    *
    * @return The stores, read-only and possibly empty
    */
   Collection<PhaseTwoOutbox> allStores();
 
   /**
-   * Platform-specific remedy lines appended to the core's guiding message when no
-   * outbox is available but one is required (e.g. which starter/extension to add to
-   * enable a default implementation).
+   * Lines with remedies for this platform. They are added to the core's guiding message
+   * when no outbox is available but one is required (for example which starter or extension
+   * to add to enable a default implementation).
    *
    * @return The remedies, one per line
    */

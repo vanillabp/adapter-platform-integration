@@ -12,8 +12,8 @@ import io.vanillabp.integration.spi.PhaseOperation;
  * The phase operations of an adapter double which writes down what it was asked to do.
  * <p>
  * A test which used to verify that the core reached one method of the adapter asks this
- * instead: the map an adapter answers IS what the core calls, so what a test wants to
- * know is which handler ran with which arguments.
+ * instead. The map which an adapter answers IS what the core calls. So a test wants to know
+ * which handler ran with which arguments.
  *
  * @param <A> The workflow-aggregate type
  */
@@ -26,7 +26,7 @@ public final class RecordedPhaseOperations<A> {
    * @param workflowModuleId The workflow module it belonged to
    * @param bpmnProcessId The BPMN process it belonged to
    * @param aggregatePersistence The persistence it was handed
-   * @param workflowAggregate The aggregate (phase one) respectively its ID (phase two)
+   * @param workflowAggregate The aggregate (phase one) or its ID (phase two)
    * @param args The operation's arguments
    */
   public record Call(

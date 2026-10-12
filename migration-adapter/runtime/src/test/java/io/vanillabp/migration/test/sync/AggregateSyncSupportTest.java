@@ -23,22 +23,21 @@ import io.vanillabp.spi.service.SyncWithBPMS;
 import lombok.Getter;
 
 /**
- * The sync model: which attributes of a workflow aggregate are shared
- * with the BPMS. The rule under test is the inheritance chain - adapter default,
- * aggregate class, attribute, nested type - where every level only overrides what
- * it explicitly says.
+ * The sync model: which attributes of a workflow aggregate are shared with the BPMS. The
+ * rule under test is the chain of inheritance: adapter default, aggregate class, attribute,
+ * nested type. Every level only overrides what it says explicitly.
  * <p>
- * The CLASS level is DERIVED where the application annotated only
- * attributes: the adapter's default applies as long as an aggregate carries no
- * annotation at all, the first annotation hands control to the application (the
- * class mode is then the opposite of what its attributes state) and mixing both
- * annotations without a class annotation is an ambiguity reported at startup.
+ * The CLASS level is DERIVED where the application annotated only attributes. The default
+ * of the adapter applies as long as an aggregate carries no annotation at all. The first
+ * annotation hands control to the application, and the class mode is then the opposite of
+ * what its attributes state. Mixing both annotations without a class annotation is an
+ * ambiguity, and it is reported at startup.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AggregateSyncSupportTest {
 
   /**
-   * Where the checks of the sync model report - a test reads it instead of the log.
+   * Where the checks of the sync model report. A test reads it instead of the log.
    */
   private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings = new io.vanillabp.integration.adapter.migration.startup.StartupFindings();
 
@@ -88,7 +87,7 @@ public class AggregateSyncSupportTest {
     assertEquals("BIG", shared.get("size"), "enums are shared by name");
     assertEquals(Boolean.TRUE, shared.get("shippedAsBigItem"), "getters are attributes like any other");
 
-    // an embedded BPMS reads the aggregate live and shares nothing by default
+    // an embedded BPMS reads the aggregate live, and shares nothing by default
     assertEquals(Map.of(), none(aggregate));
 
   }
@@ -107,9 +106,9 @@ public class AggregateSyncSupportTest {
   @DisplayName("One @NoSyncWithBPMS attribute makes the CLASS opt-out - the adapter's default no longer applies")
   public void oneExcludedAttributeDerivesOptOut() {
 
-    // The first annotation hands control to the application. Naming
-    // what is NOT shared means everything else IS - even on an adapter defaulting
-    // to NONE, where the aggregate would otherwise have shared NOTHING.
+    // the first annotation hands control to the application. Naming what is NOT shared
+    // means that everything else IS shared. That holds even on an adapter whose default is
+    // NONE, where the aggregate would otherwise have shared NOTHING.
     final var expected = Map.<String, Object>of("content", "hello");
     assertEquals(expected, full(new OptOutByAttributeAggregate()));
     assertEquals(expected, none(new OptOutByAttributeAggregate()));
@@ -134,8 +133,8 @@ public class AggregateSyncSupportTest {
   @DisplayName("One @SyncWithBPMS attribute makes the CLASS opt-in - nothing else is shared")
   public void oneSharedAttributeDerivesOptIn() {
 
-    // naming what IS shared means the rest is not - a remote BPMS (default FULL)
-    // would otherwise have received 'secret', too
+    // naming what IS shared means that the rest is not. A remote BPMS (default FULL) would
+    // otherwise have received 'secret', too
     final var expected = Map.<String, Object>of("shippedAsNormalItem", Boolean.TRUE);
     assertEquals(expected, full(new OptInByAttributeAggregate()));
     assertEquals(expected, none(new OptInByAttributeAggregate()));
@@ -161,7 +160,7 @@ public class AggregateSyncSupportTest {
   @DisplayName("A class annotation overrides the adapter's default, attributes override the class")
   public void theClassAnnotationOverridesTheAdapterDefault() {
 
-    // even on a remote BPMS (default FULL) the class' @NoSyncWithBPMS wins ...
+    // even on a remote BPMS (default FULL) the @NoSyncWithBPMS of the class wins ...
     final var shared = full(new OptInAggregate());
 
     assertEquals(Map.of("shippedAsNormalItem", Boolean.TRUE), shared);
@@ -238,14 +237,14 @@ public class AggregateSyncSupportTest {
     // the aggregate opted out, so only the two annotated attributes are shared
     assertEquals(Set.of("inheritedItems", "narrowedItems"), shared.keySet());
 
-    // a DTO without an annotation of its own behaves like the attribute holding
-    // it: shared -> ALL of its attributes are shared
+    // a DTO without an annotation of its own behaves like the attribute which holds it:
+    // shared means that ALL of its attributes are shared
     @SuppressWarnings("unchecked")
     final var inherited = (List<Map<String, Object>>) shared.get("inheritedItems");
     assertEquals(1, inherited.size());
     assertEquals(Map.of("itemId", 1L, "size", "NORMAL"), inherited.getFirst());
 
-    // a DTO with an annotation of its own narrows what it exposes wherever it is used
+    // a DTO with an annotation of its own narrows what it exposes, wherever it is used
     @SuppressWarnings("unchecked")
     final var narrowed = (List<Map<String, Object>>) shared.get("narrowedItems");
     assertEquals(Map.of("itemId", 2L), narrowed.getFirst());
@@ -282,8 +281,8 @@ public class AggregateSyncSupportTest {
 
     final var shared = full(new DerivingNestedAggregate());
 
-    // the attribute is shared, but the DTO's own (derived) opt-in narrows what it
-    // exposes - without deriving it would have inherited "share everything"
+    // the attribute is shared, but the own (derived) opt-in of the DTO narrows what it
+    // exposes. Without deriving, it would have inherited "share everything"
     assertEquals(Map.of("item", Map.of("itemId", 7L)), shared);
 
   }
@@ -317,8 +316,8 @@ public class AggregateSyncSupportTest {
     assertTrue(message.contains("@NoSyncWithBPMS shares ONLY"), () -> message);
     assertTrue(message.contains("@SyncWithBPMS shares EVERYTHING EXCEPT"), () -> message);
 
-    // the very same message reaches a developer whose type is only reachable at
-    // runtime (the startup walk cannot see it) - the model itself refuses to guess
+    // the very same message reaches a developer whose type is only reachable at runtime,
+    // where the walk at startup cannot see it. The model itself refuses to guess
     assertTrue(
         assertThrowsExactly(IllegalStateException.class, () -> full(new AmbiguousAggregate()))
             .getMessage()
@@ -454,7 +453,7 @@ public class AggregateSyncSupportTest {
     }
 
     /**
-     * The back reference every ordinary JPA entity has.
+     * The back reference which every ordinary JPA entity has.
      */
 
   }
@@ -470,8 +469,8 @@ public class AggregateSyncSupportTest {
     assertEquals(3, items.size());
     for (final var item : items) {
       assertEquals(Set.of("order", "position"), item.keySet());
-      // the back reference is NOT followed: it would repeat the whole order (and
-      // with it all of its items) once per nesting level
+      // the back reference is NOT followed. It would repeat the whole order (and with it
+      // all of its items) once per nesting level
       assertTrue(
           item.get("order") instanceof String reference && reference
               .startsWith(BidirectionalOrder.class.getName()),
@@ -545,8 +544,8 @@ public class AggregateSyncSupportTest {
   public static class PathCustomer {
 
     /**
-     * A field without a getter: VanillaBP 1 resolved it, the sync model never shares it,
-     * and a path reading it below the first segment has to be reported the same way.
+     * A field without a getter. VanillaBP 1 resolved it, but the sync model never shares
+     * it. A path which reads it below the first segment has to be reported the same way.
      */
     private String nickname;
 
@@ -608,8 +607,8 @@ public class AggregateSyncSupportTest {
     }
 
     /**
-     * A decimal at the TOP level: shared as itself, and an adapter whose BPMS cannot
-     * store it unchanged has to be able to find out that it is one.
+     * A decimal at the TOP level. It is shared as itself. An adapter whose BPMS cannot store
+     * it unchanged has to be able to find out that it is one.
      */
     public java.math.BigDecimal getTotal() {
       return new java.math.BigDecimal("120.50");
@@ -658,7 +657,7 @@ public class AggregateSyncSupportTest {
     assertEquals(1, nested.segmentIndex());
     assertEquals("PathOrder", nested.segmentOwner());
 
-    // the migration case two levels down: a field without a getter is an attribute
+    // the migration case two levels down. A field without a getter is an attribute which
     // version 1 read and this version can never share
     final var withoutAGetter = find(PathAggregate.class, "order.customer.nickname");
     assertEquals(Kind.NOT_SHARED, withoutAGetter.kind());
@@ -677,8 +676,8 @@ public class AggregateSyncSupportTest {
     assertEquals(2, verdict.segmentIndex());
     assertEquals("PathCustomer", verdict.segmentOwner());
 
-    // the first segment is answered the same way; whether a name which is no attribute
-    // at all is worth a word is the caller's decision, not this walk's
+    // the first segment is answered the same way. The caller decides whether a name which
+    // is no attribute at all is worth a word, not this walk
     assertEquals(Kind.NO_SUCH_ATTRIBUTE, find(PathAggregate.class, "somethingTheModelProvides").kind());
 
   }
@@ -687,8 +686,8 @@ public class AggregateSyncSupportTest {
   @DisplayName("Nothing lives below a value which travels as a number, a text or an enum's name")
   public void aSingleValueCarriesNothingBelowIt() {
 
-    // the silent case a conditional event turns into an endless wait: the date reaches
-    // the BPMS as '2027-03-04', and a text has no 'year'
+    // the silent case which a conditional event turns into an endless wait. The date
+    // reaches the BPMS as '2027-03-04', and a text has no 'year'
     final var temporal = find(PathAggregate.class, "order.dueDate.year");
     assertEquals(Kind.NOTHING_BELOW, temporal.kind());
     assertEquals("year", temporal.segment());
@@ -752,8 +751,8 @@ public class AggregateSyncSupportTest {
   @DisplayName("A path reaching a shared value is answered with the type that attribute declares")
   public void aSharedValueIsAnsweredWithItsDeclaredType() {
 
-    // the case an adapter asks about: a decimal at the top level, which a BPMS may
-    // store in a format that hands something else back
+    // the case an adapter asks about: a decimal at the top level. A BPMS may store it in a
+    // format which hands something else back
     assertEquals(Optional.of(java.math.BigDecimal.class), typeAtTheEndOf(PathAggregate.class, "total"));
     // and the same question two levels down
     assertEquals(Optional.of(String.class), typeAtTheEndOf(PathAggregate.class, "order.customer.name"));
@@ -769,8 +768,8 @@ public class AggregateSyncSupportTest {
   @DisplayName("A path which finds no value in the BPMS has no type to name")
   public void aPathFindingNoValueNamesNoType() {
 
-    // nothing the sync model keeps back ever reaches the BPMS, so nothing of it has to
-    // survive the way there and back
+    // nothing which the sync model keeps back ever reaches the BPMS. So nothing of it has
+    // to survive the way there and back
     assertTrue(typeAtTheEndOf(PathAggregate.class, "hiddenOrder.customer.name").isEmpty());
     assertTrue(typeAtTheEndOf(PathAggregate.class, "order.internalCode").isEmpty());
     // a date travels as its text, so 'year' is no value of the BPMS at all
@@ -789,8 +788,8 @@ public class AggregateSyncSupportTest {
     assertTrue(typeAtTheEndOf(PathAggregate.class, "order.labels.kind").isEmpty());
     // an interface is whichever implementation the application assigned
     assertTrue(typeAtTheEndOf(PathAggregate.class, "order.address.city").isEmpty());
-    // the values are cut at the nesting limit, so a segment past it says nothing about
-    // what the BPMS holds, while the segment right at the limit is answered
+    // the values are cut at the nesting limit. So a segment past it says nothing about what
+    // the BPMS holds, while the segment right at the limit is answered
     assertEquals(
         Optional.of(CyclicAggregate.class),
         typeAtTheEndOf(CyclicAggregate.class,
@@ -851,7 +850,7 @@ public class AggregateSyncSupportTest {
   public void aTimeZoneIsSharedAsTheIdOfItsZone() {
 
     // the runtime hands out an implementation of its own for a time zone
-    // (sun.util.calendar.ZoneInfo), whose getters no application may read. Reading them
+    // (sun.util.calendar.ZoneInfo), and no application may read its getters. Reading them
     // ended the sync point with an InaccessibleObjectException, measured on 2026-09-16.
     final var shared = full(new ZonesAggregate());
 
@@ -1028,8 +1027,8 @@ public class AggregateSyncSupportTest {
   @DisplayName("A Calendar nobody shares lets the application boot")
   public void aCalendarNobodySharesIsNoDefect() {
 
-    // the class names what it shares, so everything it does not name stays at home -
-    // and the refusal asks the same chain the sync point asks
+    // the class names what it shares, so everything it does not name stays at home. And the
+    // refusal asks the same chain as the sync point
     assertEquals(
         Set.of("reference"),
         full(new AggregateSharingOnlyItsReference()).keySet(),

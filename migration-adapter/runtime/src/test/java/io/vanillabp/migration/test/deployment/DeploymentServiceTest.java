@@ -52,14 +52,14 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 public class DeploymentServiceTest {
 
   /**
-   * The configuration the last deployment of this test ran on. A check reports what it
-   * finds into the collection that configuration carries, so this is where the test
-   * reads what the deployment said.
+   * The configuration on which the last deployment of this test ran. A check reports what it
+   * finds into the collection of that configuration. So the test reads here what the
+   * deployment said.
    */
   private MigrationAdapterProperties lastProperties;
 
   /**
-   * Remembers the configuration a test built, so the assertions can read what the
+   * Remembers the configuration which a test built, so that the assertions can read what the
    * deployment reported into it.
    */
   private MigrationAdapterProperties remember(
@@ -112,8 +112,8 @@ public class DeploymentServiceTest {
   @BeforeEach
   public void initializeTests() {
 
-    // extension matching uses the adapters' DECLARED types - stub them for all
-    // tests (real adapters always provide them)
+    // extension matching uses the DECLARED types of the adapters. Stub them for all tests
+    // (real adapters always provide them)
     org.mockito.Mockito.lenient().when(adapter1DeploymentService.getModelType()).thenReturn(Integer.class);
     org.mockito.Mockito.lenient().when(adapter1DeploymentService.getProcessContextType()).thenReturn(Integer.class);
     org.mockito.Mockito.lenient().when(adapter2DeploymentService.getModelType()).thenReturn(Long.class);
@@ -129,18 +129,17 @@ public class DeploymentServiceTest {
     @DisplayName("Wiring services are sorted by order")
     public void wiringServicesAreSortedByOrder() {
 
-      // Configure mocks for order sorting
       when(adapter1WiringService.getOrder()).thenReturn(3);
       when(adapter2WiringService.getOrder()).thenReturn(1);
       when(extension1WiringService.getOrder()).thenReturn(2);
 
-      // Create DeploymentService with unsorted list
       final var properties = createPropertiesWithAdapter("adapter-test1");
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of(adapter1WiringService, extension1WiringService,
               adapter2WiringService));
 
-      // Verify: object was created (sorting is internal and can only be tested indirectly)
+      // the sorting is internal and can only be tested indirectly, so only the creation is
+      // checked
       assertNotNull(testee);
 
     }
@@ -156,8 +155,8 @@ public class DeploymentServiceTest {
     public void aRefusalFoundEarlierEndsTheStartBeforeTheDeployment() {
 
       final var properties = createPropertiesWithAdapter("adapter-test1");
-      // what the checks running before the deployment found: they ask the application
-      // about itself, and the deployment is the first step which reaches a BPMS
+      // what the checks before the deployment found. They ask the application about itself,
+      // and the deployment is the first step which reaches a BPMS
       properties
           .startupFindings()
           .refuse(
@@ -170,8 +169,8 @@ public class DeploymentServiceTest {
           () -> new DeploymentService(properties, List.of(adapter1DeploymentService), List.of())
               .deployResources(List.of("test-module"), bpmnFilesOnly(location -> Map.of())));
 
-      // the developer reads the message which named the gap in their application, not
-      // whatever the deployment would have run into afterwards
+      // the developer reads the message which named the gap in their application, not what
+      // the deployment would have run into afterwards
       assertTrue(
           failure.getMessage().contains("Nothing can dispatch what this workflow sends to its BPMS."),
           failure.getMessage());
@@ -183,32 +182,26 @@ public class DeploymentServiceTest {
     @DisplayName("Correct deployment service is found for configured adapter")
     public void findsCorrectDeploymentServiceForAdapter() {
 
-      // Configure properties and mocks
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService to return the correct adapter ID
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      // Create resources loader that returns a test BPMN file
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("test-process.bpmn",
               createDummyBpmnInputStream()));
 
-      // readBpmn should return an executable process
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
 
-      // prepareBpmn should return a context
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(100);
 
-      // Create DeploymentService and call deployResources
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of());
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // Verify that the correct DeploymentService was used
+      // the deployment service of the configured adapter was used
       verify(adapter1DeploymentService).readBpmn(
           eq("test-module"),
           eq("test-process.bpmn"),
@@ -221,17 +214,13 @@ public class DeploymentServiceTest {
     @DisplayName("IllegalStateException is thrown when no deployment service exists for adapter")
     public void throwsExceptionWhenNoDeploymentServiceFound() {
 
-      // Configure properties with an adapter for which no DeploymentService exists
       final var properties = createPropertiesWithAdapter("non-existent-adapter");
 
-      // Create DeploymentService without matching service
       final var testee = new DeploymentService(
           properties, List.of(), List.of());
 
-      // Dummy loader that should not be called
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(location -> Map.of());
 
-      // IllegalStateException is expected
       final var exception = assertThrows(
           IllegalStateException.class,
           () -> testee.deployResources(List.of("test-module"), resourcesLoader));
@@ -243,28 +232,23 @@ public class DeploymentServiceTest {
     @DisplayName("Warning is logged when BPMN contains no executable processes")
     public void logsWarningWhenBpmnHasNoExecutableProcesses() {
 
-      // Configure properties and mocks
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      // Create resources loader with a BPMN file
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("empty-process.bpmn",
               createDummyBpmnInputStream()));
 
-      // readBpmn should return an empty list (no executable processes)
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of());
 
-      // Create DeploymentService and call deployResources
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of());
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // Verify that a warning was logged
+      // a warning was reported
       final var reportedScopes = lastProperties
           .startupFindings()
           .findings()
@@ -282,30 +266,25 @@ public class DeploymentServiceTest {
     @DisplayName("BPMN is read, prepared, wired and deployed")
     public void fullDeploymentPipelineIsExecuted() {
 
-      // Configure properties and mocks
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      // Create resources loader with BPMN file
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("my-process.bpmn",
               createDummyBpmnInputStream()));
 
-      // Configure mock behavior for complete pipeline
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("MyProcess", 42)));
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(100);
 
-      // Create DeploymentService and call deployResources
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of());
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // Verify that all pipeline steps were called
+      // all steps of the pipeline were called
       verify(adapter1DeploymentService).readBpmn(
           eq("test-module"), eq("my-process.bpmn"), any(InputStream.class), eq(false));
       verify(adapter1DeploymentService).prepareBpmn(
@@ -323,8 +302,8 @@ public class DeploymentServiceTest {
       final var properties = createPropertiesWithAdapter("adapter-test1");
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      // a ByteArrayInputStream cannot say whether it was closed, so the test brings a
-      // stream which remembers it
+      // a ByteArrayInputStream cannot say whether it was closed. So the test brings a stream
+      // which remembers it
       final var closed = new java.util.concurrent.atomic.AtomicBoolean();
       final var decisionTable = new java.io.FilterInputStream(createDummyBpmnInputStream()) {
 
@@ -355,8 +334,8 @@ public class DeploymentServiceTest {
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // the context the processes produced is what the decision table is added to, and
-      // what the adapter returned from it is what gets deployed
+      // the decision table is added to the context which the processes produced. What the
+      // adapter returned from it is what gets deployed
       verify(adapter1DeploymentService).readDmn(
           eq("test-module"), eq(100), eq("rating.dmn"), any(InputStream.class));
       verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(200));
@@ -398,13 +377,11 @@ public class DeploymentServiceTest {
     @DisplayName("Multiple BPMN files are processed sequentially with shared context")
     public void multipleBpmnFilesShareProcessingContext() {
 
-      // Configure properties and mocks
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      // Create resources loader with two BPMN files (LinkedHashMap to preserve insertion order)
+      // two BPMN files, in a LinkedHashMap to keep their order
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(location -> {
         final var resources = new LinkedHashMap<String, InputStream>();
         resources.put("process1.bpmn", createDummyBpmnInputStream());
@@ -412,7 +389,7 @@ public class DeploymentServiceTest {
         return resources;
       });
 
-      // Mock behavior: first BPMN creates context, second uses it
+      // the first BPMN file creates the context, the second one uses it
       when(adapter1DeploymentService.readBpmn(anyString(), eq("process1.bpmn"), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("Process1", 1)));
       when(adapter1DeploymentService.readBpmn(anyString(), eq("process2.bpmn"), any(InputStream.class), anyBoolean()))
@@ -422,13 +399,12 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.prepareBpmn(anyString(), eq(100), eq("process2.bpmn"), anyString(), any()))
           .thenReturn(100);
 
-      // Create DeploymentService and call deployResources
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of());
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // Verify that prepareBpmn for process2 receives the context from process1
+      // prepareBpmn for process2 receives the context from process1
       verify(adapter1DeploymentService).prepareBpmn(
           eq("test-module"), eq(null), eq("process1.bpmn"), eq("Process1"), eq(1));
       verify(adapter1DeploymentService).prepareBpmn(
@@ -440,13 +416,11 @@ public class DeploymentServiceTest {
     @DisplayName("All executable processes of a single BPMN file are processed with threaded context")
     public void allProcessesOfBpmnFileAreProcessedWithThreadedContext() {
 
-      // Configure properties and mocks
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      // Create resources loader with a single BPMN file containing two executable processes
+      // a single BPMN file with two executable processes
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("multi-process.bpmn",
               createDummyBpmnInputStream()));
@@ -455,25 +429,25 @@ public class DeploymentServiceTest {
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("ProcessA", 41), Map.entry("ProcessB", 42)));
 
-      // the context of the first process has to be passed to the second process as existing context
+      // the context of the first process has to be passed to the second process as the
+      // existing context
       when(adapter1DeploymentService.prepareBpmn(anyString(), eq(null), anyString(), eq("ProcessA"), eq(41)))
           .thenReturn(100);
       when(adapter1DeploymentService.prepareBpmn(anyString(), eq(100), anyString(), eq("ProcessB"), eq(42)))
           .thenReturn(200);
 
-      // Create DeploymentService and call deployResources
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of());
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // Verify: BOTH processes are wired using their respective context
+      // BOTH processes are wired with their own context
       verify(adapter1DeploymentService).wireBpmn(
           eq("test-module"), eq("multi-process.bpmn"), eq("ProcessA"), eq(41), eq(100));
       verify(adapter1DeploymentService).wireBpmn(
           eq("test-module"), eq("multi-process.bpmn"), eq("ProcessB"), eq(42), eq(200));
 
-      // Verify: the FINAL context is deployed
+      // the FINAL context is deployed
       verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(200));
 
     }
@@ -482,36 +456,31 @@ public class DeploymentServiceTest {
     @DisplayName("Extension wiring services receive the same processing context as the adapter")
     public void extensionWiringServicesReceiveSameContextAsAdapter() {
 
-      // Configure properties
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      // Configure wiring service (getOrder() not called when only one service in list)
+      // getOrder() is not called when there is only one service in the list
       lenient().when(adapter1WiringService.getOrder()).thenReturn(1);
       when(adapter1WiringService.getModelType()).thenReturn(Integer.class);
       when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
 
-      // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(100);
 
-      // Create DeploymentService with wiring service
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of(adapter1WiringService));
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // Verify: the extension receives the context returned by prepareBpmn
-      // (the same one passed to the adapter's wireBpmn), not the context of a previous file
+      // the extension receives the context which prepareBpmn returned (the same one passed to
+      // the adapter's wireBpmn), not the context of an earlier file
       verify(adapter1DeploymentService).wireBpmn(
           eq("test-module"), eq("process.bpmn"), eq("TestProcess"), eq(42), eq(100));
       verify(adapter1WiringService).wireBpmn(
@@ -523,43 +492,39 @@ public class DeploymentServiceTest {
     @DisplayName("Extension wiring services declaring an interface as model type are matched")
     public void extensionWiringServicesWithInterfaceModelTypeAreMatched() {
 
-      // Configure properties
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService (model and context types are classes)
+      // the model and context types of the adapter are classes
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
       when(adapter1DeploymentService.getModelType()).thenReturn(Integer.class);
       when(adapter1DeploymentService.getProcessContextType()).thenReturn(Integer.class);
 
-      // Configure wiring service declaring INTERFACES as model and context types
+      // a wiring service which declares INTERFACES as model and context types
       lenient().when(interfaceTypeWiringService.getOrder()).thenReturn(1);
       doReturn(Comparable.class).when(interfaceTypeWiringService).getModelType();
       doReturn(Comparable.class).when(interfaceTypeWiringService).getProcessContextType();
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
 
-      // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(100);
 
-      // Create DeploymentService with wiring service
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of(interfaceTypeWiringService));
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // Verify: the extension is matched by assignability (Integer implements Comparable)
+      // the extension is matched by assignability (Integer implements Comparable)
       verify(interfaceTypeWiringService).wireBpmn(
           eq("test-module"), eq("process.bpmn"), eq("TestProcess"), eq(42), eq(100));
 
       testee.startWorkflowProcessing(List.of("test-module"));
 
-      // Verify: the extension is also started by assignability
+      // the extension is also started by assignability
       verify(interfaceTypeWiringService).startWorkflowProcessing(eq("test-module"), eq(100));
 
     }
@@ -568,19 +533,15 @@ public class DeploymentServiceTest {
     @DisplayName("All prioritized adapters are deployed and started")
     public void allPrioritizedAdaptersAreDeployedAndStarted() {
 
-      // Configure properties with TWO prioritized adapters
       final var properties = createPropertiesWithAdapters("adapter-test1", "adapter-test2");
 
-      // Configure both adapters
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
       when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
 
-      // Configure mock behavior of both adapters
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
@@ -590,19 +551,18 @@ public class DeploymentServiceTest {
       when(adapter2DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(4200L);
 
-      // Create DeploymentService with both adapters
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // Verify: resources are deployed to BOTH adapters
+      // the resources are deployed to BOTH adapters
       verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(100));
       verify(adapter2DeploymentService).deployResources(eq("test-module"), eq(4200L));
 
       testee.startWorkflowProcessing(List.of("test-module"));
 
-      // Verify: BOTH adapters keep processing workflows (necessary for BPMS migration)
+      // BOTH adapters keep processing workflows, which a BPMS migration needs
       verify(adapter1DeploymentService).startWorkflowProcessing(eq("test-module"), eq(100));
       verify(adapter2DeploymentService).startWorkflowProcessing(eq("test-module"), eq(4200L));
 
@@ -612,13 +572,11 @@ public class DeploymentServiceTest {
     @DisplayName("Extension wiring services are filtered by model type and process context type")
     public void extensionWiringServicesAreFilteredAndCalled() {
 
-      // Configure properties
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      // Configure wiring services (sorted by order in constructor)
+      // the constructor sorts the wiring services by their order
       when(adapter1WiringService.getOrder()).thenReturn(1);
       when(adapter1WiringService.getModelType()).thenReturn(Integer.class);
       when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
@@ -626,28 +584,25 @@ public class DeploymentServiceTest {
       lenient().when(adapter2WiringService.getModelType()).thenReturn(Long.class);
       lenient().when(adapter2WiringService.getProcessContextType()).thenReturn(Long.class);
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
 
-      // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(100);
 
-      // Create DeploymentService with wiring services
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of(adapter1WiringService, adapter2WiringService));
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // Verify: adapter1WiringService is called (Integer/Integer matches)
+      // adapter1WiringService is called, because Integer/Integer matches
       verify(adapter1WiringService).wireBpmn(
           eq("test-module"), eq("process.bpmn"), eq("TestProcess"), eq(42), any());
 
-      // Verify: adapter2WiringService is NOT called (Long/Long does not match Integer/Integer)
+      // adapter2WiringService is NOT called, because Long/Long does not match Integer/Integer
       verify(adapter2WiringService, never()).wireBpmn(anyString(), anyString(), anyString(), any(), any());
 
     }
@@ -656,7 +611,7 @@ public class DeploymentServiceTest {
     @DisplayName("VanillaBP BPMN flag is passed correctly to readBpmn")
     public void vanillaBpBpmnFlagIsPassedCorrectly() {
 
-      // Create properties with VanillaBP resources location (not adapter-specific)
+      // properties with a VanillaBP resources location which is not specific to an adapter
       final var properties = remember(MigrationAdapterProperties
           .builder()
           .adapters(Map.of("adapter-test1", AdapterConfigProperties.ofType("dummy")))
@@ -671,10 +626,8 @@ public class DeploymentServiceTest {
           .build());
       properties.validateAndLink();
 
-      // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
@@ -689,7 +642,7 @@ public class DeploymentServiceTest {
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // Verify: isVanillaBpBpmn is true when using global resourcesLocation
+      // isVanillaBpBpmn is true with the global resourcesLocation
       verify(adapter1DeploymentService).readBpmn(
           eq("test-module"), eq("process.bpmn"), any(InputStream.class), eq(true));
 
@@ -705,34 +658,26 @@ public class DeploymentServiceTest {
     @DisplayName("startWorkflowProcessing is called for deployed modules")
     public void startWorkflowProcessingIsCalledForDeployedModules() {
 
-      // Configure properties and mocks
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
 
-      // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(100);
 
-      // Create DeploymentService
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of());
 
-      // First deploy
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // Then start
       testee.startWorkflowProcessing(List.of("test-module"));
 
-      // Verify that startWorkflowProcessing was called on DeploymentService
       verify(adapter1DeploymentService).startWorkflowProcessing(eq("test-module"), eq(100));
 
     }
@@ -741,17 +686,13 @@ public class DeploymentServiceTest {
     @DisplayName("startWorkflowProcessing skips non-deployed modules")
     public void startWorkflowProcessingSkipsNonDeployedModules() {
 
-      // Configure properties
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Create DeploymentService WITHOUT prior deployment
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of());
 
-      // Call startWorkflowProcessing for non-deployed module
       testee.startWorkflowProcessing(List.of("non-deployed-module"));
 
-      // Verify that startWorkflowProcessing was NOT called
       verify(adapter1DeploymentService, never()).startWorkflowProcessing(anyString(), any());
 
     }
@@ -760,39 +701,32 @@ public class DeploymentServiceTest {
     @DisplayName("Extension wiring services are called on start")
     public void extensionWiringServicesAreCalledOnStart() {
 
-      // Configure properties and mocks
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
       when(adapter1DeploymentService.getModelType()).thenReturn(Integer.class);
       when(adapter1DeploymentService.getProcessContextType()).thenReturn(Integer.class);
 
-      // Configure wiring service (getOrder() not called when only one service in list)
+      // getOrder() is not called when there is only one service in the list
       lenient().when(adapter1WiringService.getOrder()).thenReturn(1);
       when(adapter1WiringService.getModelType()).thenReturn(Integer.class);
       when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
 
-      // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(100);
 
-      // Create DeploymentService with wiring service
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of(adapter1WiringService));
 
-      // Deploy and start
       testee.deployResources(List.of("test-module"), resourcesLoader);
       testee.startWorkflowProcessing(List.of("test-module"));
 
-      // Verify that startWorkflowProcessing was called on wiring service
       verify(adapter1WiringService).startWorkflowProcessing(eq("test-module"), eq(100));
 
     }
@@ -801,15 +735,12 @@ public class DeploymentServiceTest {
     @DisplayName("Only matching extension wiring services are called on start")
     public void onlyMatchingExtensionWiringServicesAreCalledOnStart() {
 
-      // Configure properties and mocks
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
       when(adapter1DeploymentService.getModelType()).thenReturn(Integer.class);
       when(adapter1DeploymentService.getProcessContextType()).thenReturn(Integer.class);
 
-      // Configure wiring services
       when(adapter1WiringService.getOrder()).thenReturn(1);
       when(adapter1WiringService.getModelType()).thenReturn(Integer.class);
       when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
@@ -817,29 +748,25 @@ public class DeploymentServiceTest {
       lenient().when(adapter2WiringService.getModelType()).thenReturn(Long.class);
       lenient().when(adapter2WiringService.getProcessContextType()).thenReturn(Long.class);
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
 
-      // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(100);
 
-      // Create DeploymentService with both wiring services
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of(adapter1WiringService, adapter2WiringService));
 
-      // Deploy and start
       testee.deployResources(List.of("test-module"), resourcesLoader);
       testee.startWorkflowProcessing(List.of("test-module"));
 
-      // Verify: adapter1WiringService is called (matches)
+      // adapter1WiringService is called, because it matches
       verify(adapter1WiringService).startWorkflowProcessing(eq("test-module"), eq(100));
 
-      // Verify: adapter2WiringService is NOT called (does not match)
+      // adapter2WiringService is NOT called, because it does not match
       verify(adapter2WiringService, never()).startWorkflowProcessing(anyString(), any());
 
     }
@@ -851,12 +778,11 @@ public class DeploymentServiceTest {
   class AdapterBeforeExtensionsTests {
 
     /**
-     * The promise every extension builds on: the adapter of the BPMS has wired a BPMN
-     * process before an extension sees it, and it is processing workflows before an
-     * extension is started. That is what lets an extension hook its own listeners in
-     * relative to what the adapter put there instead of at a position it has to guess.
-     * The way down is the mirror image and is held by
-     * {@code extensionWiringServicesAreStoppedBeforeAdapter}.
+     * The promise on which every extension builds. The adapter of the BPMS has wired a BPMN
+     * process before an extension sees it. And it processes workflows before an extension is
+     * started. So an extension can hook in its own listeners relative to what the adapter put
+     * there, instead of at a position it has to guess. The way down is the mirror image, and
+     * {@code extensionWiringServicesAreStoppedBeforeAdapter} holds it.
      */
     @Test
     @DisplayName("The adapter wires and starts a process before any extension does")
@@ -868,9 +794,8 @@ public class DeploymentServiceTest {
       when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
       when(extension1WiringService.getModelType()).thenReturn(Integer.class);
       when(extension1WiringService.getProcessContextType()).thenReturn(Integer.class);
-      // the two extensions among themselves are ordered by what they ask for, and they
-      // are handed in the other order to show that the list they arrive in decides
-      // nothing
+      // the two extensions are ordered by what they ask for. They are handed in the other
+      // order, to show that the order of the list decides nothing
       when(adapter1WiringService.getOrder()).thenReturn(1);
       when(extension1WiringService.getOrder()).thenReturn(2);
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -920,33 +845,27 @@ public class DeploymentServiceTest {
     @DisplayName("stopWorkflowProcessing is called for deployed modules using the deployed context")
     public void stopWorkflowProcessingIsCalledForDeployedModules() {
 
-      // Configure properties and mocks
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
 
-      // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(100);
 
-      // Create DeploymentService
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of());
 
-      // Deploy, start and stop
       testee.deployResources(List.of("test-module"), resourcesLoader);
       testee.startWorkflowProcessing(List.of("test-module"));
       testee.stopWorkflowProcessing(List.of("test-module"));
 
-      // Verify that stopWorkflowProcessing was called with the deployed context
+      // stopWorkflowProcessing was called with the deployed context
       verify(adapter1DeploymentService).stopWorkflowProcessing(eq("test-module"), eq(100));
 
     }
@@ -955,17 +874,13 @@ public class DeploymentServiceTest {
     @DisplayName("stopWorkflowProcessing skips non-deployed modules")
     public void stopWorkflowProcessingSkipsNonDeployedModules() {
 
-      // Configure properties
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Create DeploymentService WITHOUT prior deployment
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of());
 
-      // Call stopWorkflowProcessing for a non-deployed module
       testee.stopWorkflowProcessing(List.of("non-deployed-module"));
 
-      // Verify that stopWorkflowProcessing was NOT called
       verify(adapter1DeploymentService, never()).stopWorkflowProcessing(anyString(), any());
 
     }
@@ -974,15 +889,12 @@ public class DeploymentServiceTest {
     @DisplayName("Matching extension wiring services are stopped before the adapter")
     public void extensionWiringServicesAreStoppedBeforeAdapters() {
 
-      // Configure properties and mocks
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
       when(adapter1DeploymentService.getModelType()).thenReturn(Integer.class);
       when(adapter1DeploymentService.getProcessContextType()).thenReturn(Integer.class);
 
-      // Configure wiring services
       when(adapter1WiringService.getOrder()).thenReturn(1);
       when(adapter1WiringService.getModelType()).thenReturn(Integer.class);
       when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
@@ -990,32 +902,28 @@ public class DeploymentServiceTest {
       lenient().when(adapter2WiringService.getModelType()).thenReturn(Long.class);
       lenient().when(adapter2WiringService.getProcessContextType()).thenReturn(Long.class);
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
 
-      // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(100);
 
-      // Create DeploymentService with both wiring services
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of(adapter1WiringService, adapter2WiringService));
 
-      // Deploy, start and stop
       testee.deployResources(List.of("test-module"), resourcesLoader);
       testee.startWorkflowProcessing(List.of("test-module"));
       testee.stopWorkflowProcessing(List.of("test-module"));
 
-      // Verify: matching extension is stopped BEFORE the adapter (reverse of start order)
+      // the matching extension is stopped BEFORE the adapter (the reverse of the start order)
       final var inOrder = Mockito.inOrder(adapter1WiringService, adapter1DeploymentService);
       inOrder.verify(adapter1WiringService).stopWorkflowProcessing(eq("test-module"), eq(100));
       inOrder.verify(adapter1DeploymentService).stopWorkflowProcessing(eq("test-module"), eq(100));
 
-      // Verify: non-matching extension is NOT stopped
+      // the extension which does not match is NOT stopped
       verify(adapter2WiringService, never()).stopWorkflowProcessing(anyString(), any());
 
     }
@@ -1030,20 +938,19 @@ public class DeploymentServiceTest {
     @DisplayName("Failure of a non-first-priority adapter with policy 'warn' boots anyway")
     public void nonPrimaryAdapterFailureWithWarnPolicyBootsAnyway() {
 
-      // Configure properties with TWO prioritized adapters, second one may fail
+      // TWO prioritized adapters, and the second one may fail
       final var properties = createPropertiesWithAdapters("adapter-test1", "adapter-test2");
       properties.getAdapters().get("adapter-test2").setDeploymentFailure(DeploymentFailurePolicy.WARN);
 
-      // Configure both adapters
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
       when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
 
-      // First adapter deploys fine, second adapter fails (e.g. old BPMS unreachable)
+      // the first adapter deploys fine, the second one fails (for example an old BPMS which
+      // cannot be reached)
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
@@ -1051,17 +958,16 @@ public class DeploymentServiceTest {
       when(adapter2DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenThrow(new IllegalStateException("BPMS unreachable"));
 
-      // Create DeploymentService with both adapters
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
 
-      // Deployment does NOT fail
+      // the deployment does NOT fail
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // Verify: the first adapter was deployed
+      // the first adapter was deployed
       verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(100));
 
-      // Verify: a warning naming the failing adapter was logged
+      // a warning which names the failing adapter was reported
       final var warningLogs = reportedWarnings()
           .stream()
           .filter(message -> message.contains("adapter-test2"))
@@ -1069,7 +975,7 @@ public class DeploymentServiceTest {
           .toList();
       assertEquals(1, warningLogs.size());
 
-      // Verify: only the successfully deployed adapter starts processing
+      // only the adapter which deployed successfully starts processing
       testee.startWorkflowProcessing(List.of("test-module"));
       verify(adapter1DeploymentService).startWorkflowProcessing(eq("test-module"), eq(100));
       verify(adapter2DeploymentService, never()).startWorkflowProcessing(anyString(), any());
@@ -1080,26 +986,24 @@ public class DeploymentServiceTest {
     @DisplayName("Failure of the first-priority adapter fails the boot even with policy 'warn'")
     public void primaryAdapterFailureFailsEvenWithWarnPolicy() {
 
-      // Configure properties with TWO prioritized adapters, FIRST one may fail (policy is ignored)
+      // TWO prioritized adapters, and the FIRST one may fail (the policy is ignored)
       final var properties = createPropertiesWithAdapters("adapter-test1", "adapter-test2");
       properties.getAdapters().get("adapter-test1").setDeploymentFailure(DeploymentFailurePolicy.WARN);
 
-      // Configure the first adapter to fail
+      // the first adapter fails
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
       lenient().when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenThrow(new IllegalStateException("BPMS unreachable"));
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
 
-      // Create DeploymentService with both adapters
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
 
-      // Deployment fails
+      // the deployment fails
       final var exception = assertThrows(
           IllegalStateException.class,
           () -> testee.deployResources(List.of("test-module"), resourcesLoader));
@@ -1111,10 +1015,10 @@ public class DeploymentServiceTest {
     @DisplayName("Failure of a non-first-priority adapter fails the boot by default")
     public void nonPrimaryAdapterFailureFailsByDefault() {
 
-      // Configure properties with TWO prioritized adapters without any deployment-failure policy
+      // TWO prioritized adapters without any deployment-failure policy
       final var properties = createPropertiesWithAdapters("adapter-test1", "adapter-test2");
 
-      // Configure both adapters, second one fails
+      // the second adapter fails
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
       when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
@@ -1124,16 +1028,14 @@ public class DeploymentServiceTest {
       when(adapter2DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenThrow(new IllegalStateException("BPMS unreachable"));
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
 
-      // Create DeploymentService with both adapters
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
 
-      // Deployment fails (deployment-failure defaults to 'fail')
+      // the deployment fails ('deployment-failure' defaults to 'fail')
       final var exception = assertThrows(
           IllegalStateException.class,
           () -> testee.deployResources(List.of("test-module"), resourcesLoader));
@@ -1151,7 +1053,8 @@ public class DeploymentServiceTest {
     @DisplayName("Adapter named at the workflow level only receives the module's deployment (union)")
     public void workflowLevelAdapterIsIncludedInDeploymentUnion() {
 
-      // module-level list names adapter-test1 only, one workflow overrides to adapter-test2
+      // the list of the module names adapter-test1 only, and one workflow overrides it with
+      // adapter-test2
       final var properties = createPropertiesWithWorkflowOverride(
           List.of("adapter-test1"),
           "ProcessOnB",
@@ -1178,15 +1081,15 @@ public class DeploymentServiceTest {
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
-      // Verify: BOTH adapters receive the module's resources although the module-level
-      // list names adapter-test1 only - otherwise starting 'ProcessOnB' via
-      // adapter-test2 would fail at runtime
+      // BOTH adapters receive the module's resources, although the list of the module names
+      // adapter-test1 only. Otherwise starting 'ProcessOnB' with adapter-test2 would fail at
+      // runtime
       verify(adapter1DeploymentService).deployResources(eq("test-module"), eq(100));
       verify(adapter2DeploymentService).deployResources(eq("test-module"), eq(4200L));
 
       testee.startWorkflowProcessing(List.of("test-module"));
 
-      // Verify: BOTH adapters start processing workflows
+      // BOTH adapters start processing workflows
       verify(adapter1DeploymentService).startWorkflowProcessing(eq("test-module"), eq(100));
       verify(adapter2DeploymentService).startWorkflowProcessing(eq("test-module"), eq(4200L));
 
@@ -1196,7 +1099,7 @@ public class DeploymentServiceTest {
     @DisplayName("Failure of an adapter being first priority for a single workflow fails the boot even with policy 'warn'")
     public void workflowLevelFirstPriorityAdapterFailureFailsEvenWithWarnPolicy() {
 
-      // adapter-test2 is NOT first for the module but IS first for one workflow
+      // adapter-test2 is NOT first for the module, but it IS first for one workflow
       final var properties = createPropertiesWithWorkflowOverride(
           List.of("adapter-test1", "adapter-test2"),
           "ProcessOnB",
@@ -1220,8 +1123,8 @@ public class DeploymentServiceTest {
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService, adapter2DeploymentService), List.of());
 
-      // Deployment fails although the policy is 'warn': starting 'ProcessOnB' would
-      // be impossible without adapter-test2
+      // the deployment fails although the policy is 'warn'. 'ProcessOnB' could not be started
+      // without adapter-test2
       final var exception = assertThrows(
           IllegalStateException.class,
           () -> testee.deployResources(List.of("test-module"), resourcesLoader));
@@ -1252,7 +1155,7 @@ public class DeploymentServiceTest {
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of());
 
-      // only a WARN - the BPMN may arrive later (e.g. during a BPMS migration)
+      // only a WARN, because the BPMN may arrive later (for example during a BPMS migration)
       testee.deployResources(List.of("test-module"), resourcesLoader);
 
       final var warningLogs = reportedWarnings()
@@ -1304,8 +1207,8 @@ public class DeploymentServiceTest {
     private static final String FILE = "two-processes.bpmn";
 
     /**
-     * A wiring interface whose application claims the given processes of 'test-module' and no
-     * other - what the registry answers once the workflow services are registered.
+     * A wiring interface whose application claims the given processes of 'test-module', and no
+     * other. The registry answers that once the workflow services are registered.
      */
     private io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring wiringClaiming(
         final String... claimedProcessIds) {
@@ -1342,7 +1245,7 @@ public class DeploymentServiceTest {
     }
 
     /**
-     * Configuration of 'test-module' deployed by 'adapter-test1', with a section for the
+     * The configuration of 'test-module', deployed by 'adapter-test1', with a section for the
      * process 'Unclaimed' where one is given.
      */
     private MigrationAdapterProperties propertiesWith(
@@ -1384,8 +1287,8 @@ public class DeploymentServiceTest {
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of(FILE, createDummyBpmnInputStream()));
 
-      // one file, two executable processes - what a modeller produces by drawing a
-      // called process next to the calling one
+      // one file with two executable processes. A modeller produces that by drawing a called
+      // process next to the calling one
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("Claiming", 42), Map.entry("Unclaimed", 43)));
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
@@ -1530,8 +1433,8 @@ public class DeploymentServiceTest {
     @DisplayName("A pipeline without the core's wiring interface asks nobody")
     public void aPipelineWithoutTheWiringInterfaceAsksNobody() {
 
-      // the pipeline runs without the core's wiring interface in tests exercising
-      // only the pipeline itself, and it has to stay silent then
+      // tests which exercise only the pipeline run it without the core's wiring interface,
+      // and then it has to stay silent
       final var properties = createPropertiesWithAdapter("adapter-test1");
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
@@ -1563,33 +1466,28 @@ public class DeploymentServiceTest {
     @DisplayName("Adapters passed as wiring services are not wired a second time")
     public void adaptersPassedAsWiringServicesAreFiltered() {
 
-      // Configure properties and mocks
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // Configure adapter1DeploymentService
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
 
-      // Create resources loader
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(
           location -> Map.of("process.bpmn",
               createDummyBpmnInputStream()));
 
-      // Configure mock behavior
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of(Map.entry("TestProcess", 42)));
       when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(100);
 
-      // Create DeploymentService passing the ADAPTER also as a wiring service (as bean
-      // containers collecting by type would do, since AdapterDeploymentService extends
-      // ExtensionWiringService)
+      // the ADAPTER is also passed as a wiring service, as bean containers which collect by
+      // type would do, because AdapterDeploymentService extends ExtensionWiringService
       final var testee = new DeploymentService(
           properties, List.of(adapter1DeploymentService), List.of(adapter1DeploymentService));
 
       testee.deployResources(List.of("test-module"), resourcesLoader);
       testee.startWorkflowProcessing(List.of("test-module"));
 
-      // Verify: the adapter is wired and started exactly ONCE (not additionally as an extension)
+      // the adapter is wired and started exactly ONCE, and not again as an extension
       verify(adapter1DeploymentService, Mockito.times(1)).wireBpmn(
           eq("test-module"), eq("process.bpmn"), eq("TestProcess"), eq(42), eq(100));
       verify(adapter1DeploymentService, Mockito.times(1)).startWorkflowProcessing(
@@ -1599,7 +1497,6 @@ public class DeploymentServiceTest {
 
   }
 
-  // === Helper Methods ===
 
   @Nested
   @DisplayName("A module none of its adapters found BPMN files for")
@@ -1684,16 +1581,16 @@ public class DeploymentServiceTest {
                     .build()))
                 .build()))
         .build();
-    // Link back-references (workflowModuleId etc.)
+    // link the references back (workflowModuleId and so on)
     properties.validateAndLink();
     return remember(properties);
 
   }
 
   /**
-   * Properties of module 'test-module' with the given module-level prioritized
-   * adapters and ONE workflow having its own (possibly empty) prioritized-adapters
-   * override. Adapter sections exist for all adapter ids of both lists.
+   * Properties of module 'test-module' with the given prioritized adapters of the module, and
+   * ONE workflow with its own prioritized-adapters override, which may be empty. There are
+   * adapter sections for all adapter ids of both lists.
    */
   private MigrationAdapterProperties createPropertiesWithWorkflowOverride(
       final List<String> moduleAdapterIds,
@@ -1731,14 +1628,15 @@ public class DeploymentServiceTest {
                     .build()))
                 .build()))
         .build();
-    // Link back-references (workflowModuleId etc.)
+    // link the references back (workflowModuleId and so on)
     properties.validateAndLink();
     return remember(properties);
 
   }
 
   /**
-   * Creates properties with multiple configured adapters (in given priority) and a workflow module.
+   * Creates properties with several configured adapters (in the given priority) and a
+   * workflow module.
    */
   private MigrationAdapterProperties createPropertiesWithAdapters(
       final String... adapterIds) {
@@ -1766,22 +1664,22 @@ public class DeploymentServiceTest {
                 .adapters(adapterProperties)
                 .build()))
         .build();
-    // Link back-references (workflowModuleId etc.)
+    // link the references back (workflowModuleId and so on)
     properties.validateAndLink();
     return remember(properties);
 
   }
 
   /**
-   * An input stream tracking whether it was closed - used to pin the
-   * stream-ownership contract of the deployment pipeline.
+   * An input stream which tracks whether it was closed. It is used to pin down the contract
+   * of the deployment pipeline about who owns the streams.
    */
   private static class CountingCloseInputStream extends ByteArrayInputStream {
 
     private boolean closed = false;
 
     /**
-     * Creates a dummy InputStream for BPMN tests.
+     * Creates a dummy input stream for BPMN tests.
      */
     private CountingCloseInputStream() {
       super("<bpmn>dummy</bpmn>".getBytes(StandardCharsets.UTF_8));
@@ -1813,7 +1711,7 @@ public class DeploymentServiceTest {
       files.put("second.bpmn", stream2);
       final BiFunction<String, String, Map<String, InputStream>> resourcesLoader = bpmnFilesOnly(location -> files);
 
-      // parsing the FIRST file fails - the second file is never processed
+      // parsing the FIRST file fails, so the second file is never processed
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenThrow(new io.vanillabp.integration.adapter.spi.BpmnParseException("parse failure of first.bpmn"));
 
@@ -1824,7 +1722,7 @@ public class DeploymentServiceTest {
           io.vanillabp.integration.adapter.spi.BpmnParseException.class,
           () -> testee.deployResources(List.of("test-module"), resourcesLoader));
 
-      // no open streams remain - also the never-processed one is closed
+      // no streams stay open, also not the one which was never processed
       assertTrue(stream1.closed, "stream of the failing file has to be closed");
       assertTrue(stream2.closed, "stream of the never-processed file has to be closed");
 
@@ -1841,7 +1739,7 @@ public class DeploymentServiceTest {
           location -> Map.of("collab.bpmn",
               createDummyBpmnInputStream()));
 
-      // no executable processes in the file
+      // the file has no executable processes
       when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
           .thenReturn(List.of());
 
@@ -1898,8 +1796,8 @@ public class DeploymentServiceTest {
 
       final var properties = createPropertiesWithAdapter("adapter-test1");
 
-      // an adapter declaring Number as model type - but delivering an Integer
-      // instance at runtime
+      // an adapter which declares Number as model type, but delivers an Integer instance at
+      // runtime
       @SuppressWarnings("unchecked")
       final AdapterDeploymentService<Number, Number> numberAdapter = org.mockito.Mockito
           .mock(AdapterDeploymentService.class);
@@ -1911,9 +1809,9 @@ public class DeploymentServiceTest {
       lenient().when(numberAdapter.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
           .thenReturn(100);
 
-      // an extension declaring the SUBTYPE Integer: with the former isInstance
-      // matching it was wired (the actual model IS an Integer) but never started -
-      // declared-type matching makes it consistently neither
+      // an extension which declares the SUBTYPE Integer. With the former isInstance matching it
+      // was wired (the real model IS an Integer), but never started. Matching the declared
+      // types makes it consistently neither
       lenient().when(adapter1WiringService.getOrder()).thenReturn(1);
       lenient().when(adapter1WiringService.getModelType()).thenReturn(Integer.class);
       lenient().when(adapter1WiringService.getProcessContextType()).thenReturn(Integer.class);
@@ -1937,11 +1835,11 @@ public class DeploymentServiceTest {
 
 
   /**
-   * The rule: several ids of ONE adapter type only make sense if they address
-   * DIFFERENT systems, and whether two configurations differ is BPMS knowledge, so the
-   * adapter decides. The SPI documents WHEN the adapter is asked - once per type, on the
-   * first deployment service of that type, with the ids in priority order and before
-   * anything reaches a BPMS, and this is what holds it.
+   * The rule: several ids of ONE adapter type only make sense if they address DIFFERENT
+   * systems. Whether two configurations differ is BPMS knowledge, so the adapter decides. The
+   * SPI documents WHEN the adapter is asked: once per type, on the first deployment service
+   * of that type, with the ids in priority order, and before anything reaches a BPMS. This
+   * test holds that.
    */
   @Nested
   @DisplayName("Several ids of one adapter type Tests")
@@ -1970,7 +1868,7 @@ public class DeploymentServiceTest {
     @DisplayName("Two ids of ONE type are asked once, on the first service, in priority order")
     public void twoIdsOfOneTypeAreAskedOnce() {
 
-      // the service order and the priority order differ on purpose
+      // the order of the services and the order of the priorities differ on purpose
       final var properties = propertiesWithGlobalPriorities(List.of("adapter-test2", "adapter-test1"));
       when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
       when(adapter2DeploymentService.getAdapterId()).thenReturn("adapter-test2");
@@ -2051,9 +1949,8 @@ public class DeploymentServiceTest {
     }
 
     /**
-     * Properties whose GLOBAL prioritized adapters are the given ids, in that order -
-     * which is the order the adapter is told about, no matter how the deployment
-     * services happen to be sorted.
+     * Properties whose GLOBAL prioritized adapters are the given ids, in that order. The
+     * adapter is told this order, however the deployment services happen to be sorted.
      */
     private MigrationAdapterProperties propertiesWithGlobalPriorities(
         final List<String> prioritizedAdapters) {
@@ -2096,9 +1993,9 @@ public class DeploymentServiceTest {
 
     /**
      * A renamed BPMN process leaves its old id in the BPMS, and only the core knows that the
-     * application still declares it. So the core asks each adapter of the module once the
-     * module is deployed - and before the reverse wiring check, which needs the answer to
-     * tell a method kept for the old id from one wired to nothing.
+     * application still declares it. So the core asks each adapter of the module, once the
+     * module is deployed. And it does that before the reverse wiring check, which needs the
+     * answer to tell a method kept for the old id from one wired to nothing.
      */
     @Test
     @DisplayName("Every adapter of the workflow module is asked, before the module is judged")
@@ -2176,7 +2073,7 @@ public class DeploymentServiceTest {
   }
 
   /**
-   * A loader which hands out the given BPMN files and nothing else - the pipeline asks
+   * A loader which hands out the given BPMN files and nothing else. The pipeline asks
    * separately for the DMN files of a location, and most of these tests bring none.
    *
    * @param bpmnFiles What to answer where the BPMN extension is asked for

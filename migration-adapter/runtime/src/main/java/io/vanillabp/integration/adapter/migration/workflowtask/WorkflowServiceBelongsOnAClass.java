@@ -4,31 +4,32 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * The refusal both platforms answer a <code>&#64;WorkflowService</code> with which does not
- * sit on the class serving the tasks: on an interface the class implements, or on an
- * annotation of the application's own carrying <code>&#64;WorkflowService</code>.
+ * The refusal with which both platforms answer a <code>&#64;WorkflowService</code> which does
+ * not sit on the class that serves the tasks. That is the case on an interface which the
+ * class implements, or on an annotation of the application's own which carries
+ * <code>&#64;WorkflowService</code>.
  * <p>
- * Neither of the two is what <code>&#64;Inherited</code> covers. A subclass of an annotated
- * class IS a workflow service and stays one, on both platforms: it is the class the handler
- * methods are read off, the class named when a BPMN process ID follows the class name, and the
- * class whose archive decides the workflow module. An implementing class is not, because Java
- * does not inherit method annotations from an interface, so the
- * <code>&#64;WorkflowTask</code> methods of interface and implementation are two different
- * sets and the platforms do not read the same one: Spring Boot reads the bean's class,
- * whose overriding methods carry no annotation, while Quarkus reads the annotated type of
- * its index, which is the interface, and serves the methods declared there on an instance
- * of the implementation. One source file with two behaviours is what the refusal avoids.
+ * <code>&#64;Inherited</code> covers neither of the two. A subclass of an annotated class IS a
+ * workflow service, and it stays one on both platforms. The handler methods are read from
+ * it. It is the class which is named when a BPMN process ID follows the class name. And its
+ * archive decides the workflow module. An implementing class is not, because Java does not
+ * inherit method annotations from an interface. So the <code>&#64;WorkflowTask</code>
+ * methods of the interface and of the implementation are two different sets, and the
+ * platforms do not read the same one. Spring Boot reads the bean's class, whose overriding
+ * methods have no annotation. Quarkus reads the annotated type of its index, which is the
+ * interface, and serves the methods declared there on an instance of the implementation.
+ * The refusal avoids one source file with two behaviours.
  * <p>
- * The text lives in the core because both platform integrations say it, each having found
- * the declaration its own way - among the bean definitions on Spring Boot, in the Jandex
- * index while a Quarkus application is built.
+ * The text lives in the core because both platform integrations say it. Each of them finds
+ * the declaration its own way: among the bean definitions on Spring Boot, in the Jandex index
+ * while a Quarkus application is built.
  */
 public final class WorkflowServiceBelongsOnAClass {
 
   /**
-   * What to do instead, the same for both shapes of the defect: the annotation goes where
-   * the handler methods are, and a declaration meant for several classes goes onto their
-   * common superclass.
+   * What to do instead, the same for both shapes of the defect. The annotation goes where the
+   * handler methods are. A declaration meant for several classes goes onto their common
+   * superclass.
    */
   private static final String REMEDY = """
       Move @WorkflowService onto the class holding the @WorkflowTask methods of this workflow \
@@ -42,10 +43,10 @@ public final class WorkflowServiceBelongsOnAClass {
   }
 
   /**
-   * The message for the first shape of the defect - built by the platform which found it.
+   * The message for the first shape of the defect. The platform which found it builds it.
    *
-   * @param interfaceName The interface carrying the annotation
-   * @param implementingClasses The classes implementing it, empty where the platform cannot
+   * @param interfaceName The interface with the annotation
+   * @param implementingClasses The classes which implement it, empty where the platform cannot
    *     name them
    * @return The message ending the start
    */
@@ -72,8 +73,9 @@ public final class WorkflowServiceBelongsOnAClass {
   /**
    * The message for the second shape: a meta-annotation of the application's own.
    *
-   * @param annotationName The annotation of the application carrying the annotation
-   * @param annotatedClasses The classes using it, empty where the platform cannot name them
+   * @param annotationName The annotation of the application which carries the annotation
+   * @param annotatedClasses The classes which use it, empty where the platform cannot name
+   *     them
    * @return The message ending the start
    */
   public static String foundOnAnAnnotation(
@@ -96,9 +98,9 @@ public final class WorkflowServiceBelongsOnAClass {
   }
 
   /**
-   * The types which brought the declaration into the application, one per line, and nothing
-   * where the platform could not determine them: an interface nobody implements is refused
-   * as well, and there is then nothing to name.
+   * The types which brought the declaration into the application, one per line. It is empty
+   * where the platform could not find them out. An interface which nobody implements is
+   * refused as well, and then there is nothing to name.
    */
   private static String broughtInBy(
       final String relation,

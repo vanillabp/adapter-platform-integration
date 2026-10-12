@@ -10,29 +10,29 @@ import java.util.regex.Pattern;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 
 /**
- * The text an outbox entry keeps about the last attempt which did not get through: the
- * column <code>LAST_FAILURE</code> of the JDBC table and the field <code>lastFailure</code>
- * of the MongoDB collection. Every store builds it here, so a blocked entry reads the same
- * on every store.
+ * The text which an outbox entry keeps about the last attempt that did not get through.
+ * That is the column <code>LAST_FAILURE</code> of the JDBC table, and the field
+ * <code>lastFailure</code> of the MongoDB collection. Every store builds the text here, so a
+ * blocked entry reads the same on every store.
  * <p>
- * It is the class and the message of what was thrown, and of each cause which adds
- * something, joined into one line. The stack trace is not part of it: it stays in the log,
+ * The text is the class and the message of what was thrown, and of each cause which adds
+ * something, joined into one line. The stack trace is not part of it. It stays in the log,
  * where the same attempt wrote it.
  * <p>
  * The text is cut to {@link #MAX_BYTES} bytes of UTF-8. Bytes and not characters, because
- * Oracle and DB2 count a <code>VARCHAR</code> in bytes by default, and a message with an
- * umlaut in it would otherwise be refused by exactly the write which blocks the entry. See
- * decision 118 in the repository's DECISIONS.md.
+ * Oracle and DB2 count a <code>VARCHAR</code> in bytes by default. Otherwise a message with
+ * an umlaut in it would be refused by exactly the write which blocks the entry. See decision
+ * 118 in the repository's DECISIONS.md.
  */
 public final class LastFailure {
 
   /**
-   * How long the text may get, in bytes of UTF-8. It is the length of the column as well.
+   * How long the text may be, in bytes of UTF-8. It is the length of the column as well.
    */
   public static final int MAX_BYTES = 1000;
 
   /**
-   * What a text which was cut ends with, so a reader knows that there was more.
+   * What a text which was cut ends with, so that a reader knows there was more.
    */
   static final String CUT_MARK = "...";
 
@@ -42,8 +42,8 @@ public final class LastFailure {
   static final String CAUSED_BY = "; caused by ";
 
   /**
-   * Line breaks and the blanks around them. A message spanning several lines is written as
-   * one, because the query which reads the column prints one row per line.
+   * Line breaks and the blanks around them. A message with several lines is written as one
+   * line, because the query which reads the column prints one row per line.
    */
   private static final Pattern LINE_BREAKS = Pattern.compile("\\s*[\\r\\n]+\\s*");
 
@@ -54,8 +54,8 @@ public final class LastFailure {
    * The text an entry keeps about a dispatch which threw.
    *
    * @param failure What the dispatch threw
-   * @return Class and message of the failure and of each cause which adds something, at most
-   *         {@link #MAX_BYTES} bytes long
+   * @return Class and message of the failure and of each cause which adds something, at
+   *         most {@link #MAX_BYTES} bytes long
    */
   public static String of(
       final Throwable failure) {
@@ -65,9 +65,9 @@ public final class LastFailure {
   }
 
   /**
-   * The text an entry keeps when it is blocked because its BPMS did not report the workflow
-   * in time. What was thrown is only the last "not yet", so the text says first why the
-   * entry was given up on.
+   * The text which an entry keeps when it is blocked because its BPMS did not report the
+   * workflow in time. What was thrown is only the last "not yet". So the text first says why
+   * the entry was given up.
    *
    * @param waited How long the entry waited since it was written
    * @param lastAnswer The last "not yet" of the adapter
@@ -85,8 +85,8 @@ public final class LastFailure {
 
   /**
    * Class and message of the failure and of its causes. A cause is left out where the text
-   * before it already contains it, which is what <code>new RuntimeException(cause)</code>
-   * does: its message is the cause's own <code>toString()</code>.
+   * before it already contains it. <code>new RuntimeException(cause)</code> does that,
+   * because its message is the cause's own <code>toString()</code>.
    *
    * @param failure What was thrown
    * @return The whole text, not cut yet
@@ -116,8 +116,8 @@ public final class LastFailure {
   }
 
   /**
-   * Cuts the text to {@link #MAX_BYTES} bytes of UTF-8, at a whole character, and marks
-   * the cut.
+   * Cuts the text to {@link #MAX_BYTES} bytes of UTF-8, at a whole character, and marks the
+   * cut.
    *
    * @param text The whole text
    * @return The text as it is where it fits, or its beginning plus {@link #CUT_MARK}

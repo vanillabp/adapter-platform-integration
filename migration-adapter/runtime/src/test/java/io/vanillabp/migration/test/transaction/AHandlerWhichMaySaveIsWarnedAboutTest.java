@@ -32,10 +32,10 @@ import lombok.Getter;
 /**
  * What a boot says about an extension whose handlers may change the workflow aggregate.
  * <p>
- * Such a handler is a second writer on an aggregate which already has one, and where the
- * persistence cannot notice a concurrent change the later write wins without a word. The
- * boot is the last moment at which anybody knows that saving is allowed, so this is where it
- * is said - once per BPMN process, with the page which shows the way out.
+ * Such a handler is a second writer on an aggregate which already has one. Where the
+ * persistence cannot notice a concurrent change, the later write wins without a word. The
+ * boot is the last moment at which anybody knows that saving is allowed. So it is said
+ * here, once per BPMN process, with the page which shows the way out.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AHandlerWhichMaySaveIsWarnedAboutTest {
@@ -47,9 +47,9 @@ public class AHandlerWhichMaySaveIsWarnedAboutTest {
   private static final String EXTENSION = "sample";
 
   /**
-   * Stands in for <code>jakarta.persistence.Version</code> respectively
-   * <code>org.springframework.data.annotation.Version</code>, which the core must not
-   * depend on - it recognises them by their name.
+   * Stands in for <code>jakarta.persistence.Version</code> and for
+   * <code>org.springframework.data.annotation.Version</code>. The core must not depend on
+   * them, so it recognizes them by their name.
    */
   @Retention(RetentionPolicy.RUNTIME)
   @Target({
@@ -59,7 +59,7 @@ public class AHandlerWhichMaySaveIsWarnedAboutTest {
   }
 
   /**
-   * The annotation the extension brings.
+   * The annotation which the extension brings.
    */
   @Retention(RetentionPolicy.RUNTIME)
   @Target(ElementType.METHOD)
@@ -82,7 +82,7 @@ public class AHandlerWhichMaySaveIsWarnedAboutTest {
   }
 
   /**
-   * A workflow service with a method of the extension - the shape which earns the warning.
+   * A workflow service with a method of the extension. This shape earns the warning.
    */
   public static class NotingService {
 
@@ -96,8 +96,8 @@ public class AHandlerWhichMaySaveIsWarnedAboutTest {
   }
 
   /**
-   * A second workflow service class serving the same BPMN process, with a method of the
-   * extension under a key of its own - the shape which makes the check run twice.
+   * A second workflow service class which serves the same BPMN process, with a method of the
+   * extension under a key of its own. This shape makes the check run twice.
    */
   public static class AlsoNotingService {
 
@@ -178,7 +178,7 @@ public class AHandlerWhichMaySaveIsWarnedAboutTest {
   }
 
   /**
-   * The runner is never asked here - no test of this class runs a handler.
+   * The runner is never asked here, because no test of this class runs a handler.
    */
   private static class TransactionRunnerStub implements TransactionRunner {
 
@@ -231,8 +231,8 @@ public class AHandlerWhichMaySaveIsWarnedAboutTest {
   }
 
   /**
-   * The same contract, with the sentence an extension whose handlers only read says while
-   * it is wired.
+   * The same contract, with the sentence which an extension says while it is wired when its
+   * handlers only read.
    */
   private static HandlerContract readingNoteContract() {
 
@@ -247,7 +247,7 @@ public class AHandlerWhichMaySaveIsWarnedAboutTest {
   }
 
   /**
-   * What both platforms do while they boot: a workflow service is registered and an
+   * What both platforms do while they boot. A workflow service is registered, and an
    * extension registers what its annotation means.
    *
    * @return Everything the check wrote while that happened
@@ -317,7 +317,7 @@ public class AHandlerWhichMaySaveIsWarnedAboutTest {
     assertTrue(message.contains(Aggregate.class.getName()), message);
     assertTrue(message.contains("@Version"), message);
     assertTrue(message.contains("Workflow aggregates"), message);
-    // what it does NOT promise: no check while running, no second report
+    // what it does NOT promise: no check while running, and no second report
     assertTrue(message.contains("neither checks for the conflict nor repeats"), message);
 
   }

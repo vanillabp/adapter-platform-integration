@@ -29,19 +29,19 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * Whether a method reading the item of an iteration gets one on a version the BPMS only
- * still holds.
+ * Whether a method which reads the item of an iteration gets one on a version which the BPMS
+ * only still holds.
  * <p>
- * While a model is DEPLOYED the adapter asks that question and refuses a pairing its model
- * cannot serve: an element without <code>camunda:elementVariable</code> respectively
- * without <code>inputElement</code> iterates without ever naming the value of a round, and
- * a handler reading it gets <code>null</code>. A version a BPMS only holds is never
- * deployed again, so nobody asked - while the methods of the application serve it all the
- * same, because their version ranges say so.
+ * While a model is DEPLOYED, the adapter asks that question. It refuses a pairing which its
+ * model cannot serve. An element without <code>camunda:elementVariable</code> (or without
+ * <code>inputElement</code>) iterates without ever naming the value of a round. A handler
+ * which reads it gets <code>null</code>. A version which a BPMS only holds is never deployed
+ * again, so nobody asked. Still, the methods of the application serve it, because their
+ * version ranges say so.
  * <p>
- * Reading the old model belongs to the adapter ({@link ProcessVersionCatalog}), deciding
- * what it means belongs to the core, and an adapter which does not read the shape answers
- * nothing rather than a guess.
+ * Reading the old model belongs to the adapter ({@link ProcessVersionCatalog}). Deciding
+ * what it means belongs to the core. An adapter which does not read the shape answers
+ * nothing instead of a guess.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheMultiInstanceShapeOfAHeldVersionTest {
@@ -62,8 +62,8 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
   }
 
   /**
-   * The application as it is written today: one method for every version, reading the item
-   * of the iteration it runs in.
+   * The application as it is written today. One method serves every version and reads the
+   * item of the iteration it runs in.
    */
   public static class Service {
 
@@ -79,8 +79,8 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
   }
 
   /**
-   * The same application written the other way round: the method reads which round it is
-   * in and never the value of that round, which is a pairing every model can serve.
+   * The same application written the other way round. The method reads which round it is in,
+   * and never the value of that round. Every model can serve this pairing.
    */
   public static class ServiceReadingTheIndexOnly {
 
@@ -94,7 +94,7 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
   }
 
   /**
-   * What the BPMS holds, with every answer handed in by the test.
+   * What the BPMS holds. The test hands in every answer.
    */
   private static class CatalogStub implements ProcessVersionCatalog {
 
@@ -103,8 +103,8 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
     private final Map<String, Long> instancesPerVersion = new java.util.HashMap<>();
 
     /**
-     * The elements a version iterates without naming the item, per version.
-     * <code>null</code> for a version is an adapter which does not read the shape.
+     * The elements which a version iterates without naming the item, per version.
+     * <code>null</code> for a version means an adapter which does not read the shape.
      */
     private final Map<String, List<String>> withoutAnItemPerVersion = new java.util.HashMap<>();
 
@@ -172,7 +172,7 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
     catalog = new CatalogStub();
     catalog.versions = List
         .of(DeployedProcessVersion.of("1"), DeployedProcessVersion.of("2"), DeployedProcessVersion.of("3"));
-    // the model this boot deployed names the item; version 1 never did
+    // the model this boot deployed names the item. Version 1 never did
     catalog.withoutAnItemPerVersion.put("1", List.of("Subprocess_orders"));
     catalog.instancesPerVersion.put("1", 4L);
     catalog.instancesPerVersion.put("2", 0L);
@@ -188,8 +188,8 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
     assertEquals(1, findings.size(), findings.toString());
     final var finding = findings.get(0);
     assertEquals(StartupFindings.Severity.WARNING, finding.severity());
-    // the fix is in the code, but what a reader has to look at first is the version the
-    // BPMS still holds
+    // the fix is in the code. But a reader first has to look at the version which the BPMS
+    // still holds
     assertEquals(StartupTopic.DEPLOYED_VERSIONS, finding.topic());
     assertEquals(
         "process '%s' of workflow module '%s', adapter '%s'".formatted(PROCESS, MODULE, ADAPTER),
@@ -198,7 +198,7 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
     assertTrue(message.contains("Version '1'"), message);
     assertTrue(message.contains("'handleOrder' reads the item of 'Subprocess_orders'"), message);
     assertTrue(message.contains("which is 4 workflows at the moment"), message);
-    // and what the developer does about a model nobody can change any more
+    // and what the developer does about a model which nobody can change any more
     assertTrue(message.contains("narrow the version range of the method"), message);
 
   }
@@ -229,7 +229,8 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
 
     catalog.readsTheShape = false;
 
-    // a check which cannot answer for sure stays silent rather than refusing - decision 38
+    // a check which cannot answer for sure stays silent instead of refusing (decision 38 in
+    // the repository's DECISIONS.md)
     assertEquals(List.of(), aboutTheShape(theModuleFinishedDeploying(Service.class)));
 
   }
@@ -249,9 +250,8 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
   }
 
   /**
-   * What the check of this test reported, out of everything the deployment noticed. The
-   * versions a BPMS holds are read by several checks at once, and only one of them is
-   * the subject here.
+   * What the check of this test reported, out of everything the deployment noticed. Several
+   * checks read the versions a BPMS holds at once. Only one of them is the subject here.
    *
    * @param findings Everything the deployment noticed
    * @return The findings about a method reading an item no model names
@@ -269,7 +269,7 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
 
   /**
    * The deployment of a workflow module, up to the moment the versions the BPMS holds are
-   * read - and what the start noticed while it did.
+   * read. And what the start noticed meanwhile.
    */
   private StartupFindings theModuleFinishedDeploying(
       final Class<?> workflowServiceClass) {
@@ -296,7 +296,7 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
   }
 
   /**
-   * The registry needs a process service to register a workflow service; nothing here
+   * The registry needs a process service to register a workflow service. Nothing here
    * invokes it.
    */
   @SuppressWarnings({
@@ -315,7 +315,8 @@ public class TheMultiInstanceShapeOfAHeldVersionTest {
   }
 
   /**
-   * The transaction runner is irrelevant here - no test in this class runs a handler.
+   * The transaction runner does not matter here, because no test in this class runs a
+   * handler.
    */
   private static class TransactionRunnerStub implements TransactionRunner {
 

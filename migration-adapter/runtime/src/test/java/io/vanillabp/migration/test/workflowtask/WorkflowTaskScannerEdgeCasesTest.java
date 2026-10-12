@@ -33,11 +33,11 @@ import io.vanillabp.spi.service.TaskParam;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * Edge cases of the <code>&#64;WorkflowTask</code> scanner and parameter binding:
- * guiding registration-time failures for unsupported parameter declarations,
- * task-parameter type conversion, version-range formats and checked-exception
- * wrapping - paths practically never hit at runtime but part of the guiding-UX
- * contract.
+ * Edge cases of the <code>&#64;WorkflowTask</code> scanner and of the parameter binding.
+ * They cover guiding failures at registration time for parameter declarations which are not
+ * supported, the type conversion of task parameters, the formats of version ranges, and the
+ * wrapping of checked exceptions. These paths are practically never hit at runtime. But they
+ * are part of the contract of guiding messages.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowTaskScannerEdgeCasesTest {
@@ -58,8 +58,8 @@ public class WorkflowTaskScannerEdgeCasesTest {
   private WorkflowTaskRegistry registry;
 
   /**
-   * The configuration the registry reports into - a check leaves its finding there
-   * instead of writing a line, so this is where a test reads what the scanner said.
+   * The configuration into which the registry reports. A check leaves its finding there
+   * instead of writing a line. So a test reads here what the scanner said.
    */
   private io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties;
 
@@ -779,20 +779,19 @@ public class WorkflowTaskScannerEdgeCasesTest {
   }
 
   /**
-   * The startup check for a handler starting its own transaction. The annotations are
-   * matched by type name, so the
-   * stand-ins in this module's test sources (see
-   * {@link org.springframework.transaction.annotation.Transactional}) exercise exactly
-   * what the real ones do; the real annotations are used by the acceptance tests of
-   * both platform integrations.
+   * The startup check for a handler which starts its own transaction. The annotations are
+   * matched by type name. So the stand-ins in the test sources of this module (see
+   * {@link org.springframework.transaction.annotation.Transactional}) exercise exactly what
+   * the real ones do. The acceptance tests of both platform integrations use the real
+   * annotations.
    */
   @Nested
   @DisplayName("Transaction annotations of the application")
   class ApplicationTransactions {
 
     /**
-     * Registers the workflow service and returns what the scanner reported while doing
-     * so - a check leaves its finding in the collection of the start.
+     * Registers the workflow service and returns what the scanner reported while doing so.
+     * A check leaves its finding in the collection of the start.
      */
     private List<String> registerCollectingWarnings(
         final Class<?> serviceClass,
@@ -811,7 +810,7 @@ public class WorkflowTaskScannerEdgeCasesTest {
       assertTrue(
           e.getMessage().contains("covered by a transaction annotation of the application"),
           e.getMessage());
-      // the way out that always exists, no matter which annotation was found
+      // the way out which always exists, whichever annotation was found
       assertTrue(
           e.getMessage().contains("remove the annotation from the workflow task method"),
           e.getMessage());
@@ -1225,9 +1224,9 @@ public class WorkflowTaskScannerEdgeCasesTest {
         }
 
       }
-      // the platform reports Spring's annotation as ineffective, e.g. Quarkus without
-      // the extension quarkus-spring-tx: failing the boot over an annotation that does
-      // nothing would be wrong
+      // the platform reports the annotation of Spring as ineffective, for example Quarkus
+      // without the extension quarkus-spring-tx. Failing the boot over an annotation which
+      // does nothing would be wrong
       properties = new io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties();
       registry = new WorkflowTaskRegistry(
           new WorkflowTaskRegistryTest.RecordingTransactionRunner(), null, TransactionAnnotationSpecs
@@ -1300,8 +1299,8 @@ public class WorkflowTaskScannerEdgeCasesTest {
   }
 
   /**
-   * A custom annotation carrying the transaction boundary, a common house style a
-   * purely name-based scan would miss.
+   * A custom annotation which carries the transaction boundary. This is a common house
+   * style, and a scan purely by name would miss it.
    */
   @java.lang.annotation.Target({
       java.lang.annotation.ElementType.METHOD, java.lang.annotation.ElementType.TYPE

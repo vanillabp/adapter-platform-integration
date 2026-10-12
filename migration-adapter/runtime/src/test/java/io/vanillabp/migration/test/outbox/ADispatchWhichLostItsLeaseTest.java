@@ -47,16 +47,16 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 /**
  * What happens to a dispatch whose entry was taken over while it ran.
  * <p>
- * The renewal notices it - the write matches no row - and the dispatch which lost the entry
- * runs to its end. What it must NOT do is write down how that ended, because the node
- * holding the entry now is doing the same operation and its answer is the one the table
- * keeps. A late "blocked" over a finished entry would be the worst of them: the operation
- * reached the BPMS and somebody would be asked to repair it by hand.
+ * The renewal notices it, because its write matches no row. The dispatch which lost the
+ * entry runs to its end. But it must NOT write down how that ended. The node which holds the
+ * entry now does the same operation, and the table keeps the answer of that node. A late
+ * "blocked" over a finished entry would be the worst case. The operation reached the BPMS,
+ * and somebody would be asked to repair it by hand.
  * <p>
- * Two dispatchers on one database are what this needs, and one of them is robbed of its
- * lease by an <code>UPDATE</code> of the test, which is a node whose claim ran out while it
- * was working. Playing the second node with a mock would prove nothing here: the write
- * which is refused is the one both nodes really run.
+ * This needs two dispatchers on one database. An <code>UPDATE</code> of the test takes the
+ * lease away from one of them. That is a node whose claim ran out while it was working. A
+ * mock as the second node would prove nothing here, because the refused write is the one
+ * both nodes really run.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -65,17 +65,16 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 public class ADispatchWhichLostItsLeaseTest {
 
   /**
-   * How long a claim lasts here. Short, so the node which is robbed of its entry notices it
-   * within a tick instead of at the end of a distance chosen for production. Not shorter,
-   * because the poller of that node sleeps until its own claim runs out: everything below
-   * happens within one lease, and the node which lost the entry never gets to poll for it
-   * again.
+   * How long a claim lasts here. It is short, so the robbed node notices within a tick, and
+   * not after a time chosen for production. It is not shorter, because the poller of that
+   * node sleeps until its own claim runs out. Everything below happens within one lease. So
+   * the node which lost the entry never gets to poll for it again.
    */
   private static final Duration LEASE = Duration.ofSeconds(3);
 
   /**
-   * How long a test waits for something it expects to happen. It is a guard against a
-   * machine which leaves the JVM without a turn, not a measurement of speed.
+   * How long a test waits for something it expects to happen. It guards against a machine
+   * which leaves the JVM without a turn. It does not measure speed.
    */
   private static final Duration UNTIL_IT_HAPPENED = Duration.ofSeconds(30);
 
@@ -95,8 +94,8 @@ public class ADispatchWhichLostItsLeaseTest {
       SELECT STATUS, ATTEMPTS, DONE_AT FROM %s WHERE ID = ?""";
 
   /**
-   * What the test does to the entry of the node which is still working on it: the claim is
-   * released and the entry is due again, which is the row a node whose lease ran out leaves
+   * What the test does to the entry of the node which still works on it. The claim is
+   * released and the entry is due again. A node whose lease ran out leaves the same row
    * behind.
    */
   private static final String FREE_THE_LEASE = """
@@ -109,22 +108,22 @@ public class ADispatchWhichLostItsLeaseTest {
   private MigrationProcessService<Object> theNodeTakingTheEntry;
 
   /**
-   * Released by the test so the dispatch which lost its entry can end. Every test lets go
-   * of it, because that thread would otherwise wait for the whole run.
+   * The test releases it, so the dispatch which lost its entry can end. Every test lets go
+   * of it. Otherwise that thread would wait for the whole run.
    */
   private final CountDownLatch letTheSlowDispatchEnd = new CountDownLatch(1);
 
   /**
-   * Counted down by the slow node as its dispatch starts, so the test can take the entry
-   * away while that dispatch is really running.
+   * The slow node counts it down as its dispatch starts. So the test can take the entry away
+   * while that dispatch really runs.
    */
   private final CountDownLatch theSlowDispatchStarted = new CountDownLatch(1);
 
   private final AtomicInteger callsIntoTheAdapter = new AtomicInteger();
 
   /**
-   * What both dispatchers wrote into the log, which is where an operator reads that an
-   * entry changed hands. The two classes log it, so both are watched.
+   * What both dispatchers wrote into the log. An operator reads there that an entry changed
+   * hands. Both classes log it, so the test watches both.
    */
   private final ListAppender<ILoggingEvent> whatWasLogged = new ListAppender<>();
 
@@ -164,8 +163,8 @@ public class ADispatchWhichLostItsLeaseTest {
   }
 
   /**
-   * A database per test, because every test of this class writes into the outbox table and
-   * reads what is in it afterwards.
+   * A database per test. Every test of this class writes into the outbox table and reads
+   * what is in it afterwards.
    */
   private static JdbcConnectionAccess databaseNamed(
       final String name) {
@@ -179,16 +178,16 @@ public class ADispatchWhichLostItsLeaseTest {
 
     final var properties = new PhaseTwoOutboxProperties();
     properties.setAttemptFrequency(lease);
-    // the poll interval is the cap on the sleep, and a short one is what lets the second
-    // node find the entry as soon as the test released it
+    // the poll interval caps the sleep. A short one lets the second node find the entry as
+    // soon as the test released it
     properties.setPollInterval(lease);
     return properties;
 
   }
 
   /**
-   * The node whose entry is taken away: its dispatch waits until the test lets it end, and
-   * then ends the way the test asked for.
+   * The node whose entry is taken away. Its dispatch waits until the test lets it end. Then
+   * it ends the way the test asked for.
    *
    * @param endsWith What the dispatch throws, or <code>null</code> where it succeeds
    * @return The router of that node
@@ -216,7 +215,7 @@ public class ADispatchWhichLostItsLeaseTest {
   }
 
   /**
-   * The node which takes the entry over: its dispatch succeeds at once.
+   * The node which takes the entry over. Its dispatch succeeds at once.
    *
    * @return The router of that node
    */
@@ -279,7 +278,7 @@ public class ADispatchWhichLostItsLeaseTest {
   }
 
   /**
-   * Takes the claim off the entry, which is what a node whose lease ran out leaves behind.
+   * Takes the claim off the entry. A node whose lease ran out leaves the same row behind.
    */
   private void freeTheLeaseOf(
       final JdbcConnectionAccess connections,
@@ -328,9 +327,9 @@ public class ADispatchWhichLostItsLeaseTest {
   }
 
   /**
-   * Runs the story both tests share: the first node takes the entry and holds it, the test
-   * frees the lease, the second node dispatches the entry to its end, and then the first
-   * node's dispatch is allowed to finish.
+   * Runs the story both tests share. The first node takes the entry and holds it. The test
+   * frees the lease. The second node dispatches the entry to its end. Then the dispatch of
+   * the first node may finish.
    *
    * @param database Which database this test works on
    * @param table The outbox table of this test
@@ -362,9 +361,9 @@ public class ADispatchWhichLostItsLeaseTest {
           () -> JdbcPhaseTwoOutboxDispatcher.STATUS_DONE.equals(entryOf(connections, table, entry).status()));
       final var afterTheSecondNode = entryOf(connections, table, entry);
 
-      // the renewal is what notices, so the first node has to still be dispatching when it
-      // ticks. Letting its dispatch end first would cancel the tick and nothing would say
-      // that two nodes carried the operation out
+      // the renewal notices, so the first node must still be dispatching when it ticks. If
+      // its dispatch ended first, the tick would be cancelled, and nothing would say that two
+      // nodes carried the operation out
       waitUntil(
           "the node which lost its lease never noticed",
           () -> somethingWasLoggedAbout(entry, "was lost while it was being dispatched"));
@@ -405,8 +404,8 @@ public class ADispatchWhichLostItsLeaseTest {
   @DisplayName("A dispatch which lost its entry does not block an entry somebody else finished")
   public void aLostEntryIsNotBlockedByTheNodeWhichLostIt() throws Exception {
 
-    // the failure which blocks an entry with one attempt - the write which would be the
-    // most expensive of all to land on an entry the other node has just finished
+    // the failure which blocks an entry with one attempt. This write would be the most
+    // expensive one to land on an entry the other node has just finished
     final var afterTheSecondNode = theEntryChangesHands(
         "a-lost-entry-is-not-blocked", "OUTBOX_LOST_ENTRY_BLOCKED", new PhaseTwoPermanentFailure(
             "the adapter says repeating cannot help", null));

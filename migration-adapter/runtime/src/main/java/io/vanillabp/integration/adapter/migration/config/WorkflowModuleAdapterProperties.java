@@ -4,44 +4,45 @@ import java.util.Map;
 
 /**
  * What an application says about ONE workflow module (properties section
- * <code>vanillabp.workflow-modules.&lt;module&gt;.*</code>, the key being the module id
+ * <code>vanillabp.workflow-modules.&lt;module&gt;.*</code>, where the key is the module id
  * from its <code>META-INF/workflow-module</code> descriptor).
  * <p>
- * It is the second of the four levels an adapter setting may be written at, below the
+ * It is the second of the four levels at which an adapter setting may be written, below the
  * adapter's own section and above the single workflow (decision 7 in the repository's
- * DECISIONS.md). Next to those adapter keys it may say for its own workflows what the
- * global sections say for the whole application: which adapters serve, how transactions,
- * the election and the delivery records are treated, and what an extension is told.
+ * DECISIONS.md). Besides those adapter keys, it may say for its own workflows what the global
+ * sections say for the whole application: which adapters serve, how transactions, the
+ * election and the delivery records are treated, and what an extension is told.
  * <p>
- * A module which configures nothing still gets a section: the classpath facts derive one
- * per module found there (decision 8 in the repository's DECISIONS.md).
+ * A module which configures nothing still gets a section. The classpath facts derive one for
+ * each module found there (decision 8 in the repository's DECISIONS.md).
  */
 public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProperties {
 
   /**
-   * The workflow module this section is about, taken from the key the application wrote it
-   * under. Written by {@link MigrationAdapterProperties#validateAndLink()} rather than by
-   * the binder, so a section which was built by hand carries it only after that call.
+   * The workflow module which this section is about, taken from the key under which the
+   * application wrote it. Written by {@link MigrationAdapterProperties#validateAndLink()}
+   * rather than by the binder, so a section which was built by hand carries it only after
+   * that call.
    */
   String workflowModuleId;
 
   /**
-   * What the adapters are told for this workflow module. Keys are the adapter ids, and
-   * what may stand below one of them is {@link AdapterProperties} - the same keys as at
-   * the three other levels.
+   * What the adapters are told for this workflow module. The keys are the adapter ids. What
+   * may stand below one of them is {@link AdapterProperties}, the same keys as at the three
+   * other levels.
    */
   private Map<String, AdapterProperties> adapters = Map.of();
 
   /**
-   * The empty section a configuration binder starts from, one per configured workflow
-   * module: both platforms create the object and then write the keys the application
+   * The empty section from which a configuration binder starts, one per configured workflow
+   * module. Both platforms create the object, and then write the keys which the application
    * configured into it, one setter per key.
    * <p>
-   * It asks the builder for the values, and that is not a detour: every default of this
-   * class stands on the builder as well as on the field, and both ways into an object
-   * end here. A constructor which set the fields itself would have to repeat every
-   * default, and the first one somebody forgets would leave the maps of this section
-   * <code>null</code> instead of empty.
+   * It asks the builder for the values, and that is not a detour. Every default of this class
+   * is on the builder as well as on the field, and both ways into an object end here. A
+   * constructor which set the fields itself would have to repeat every default. The first
+   * default somebody forgets would leave the maps of this section <code>null</code> instead
+   * of empty.
    */
   public WorkflowModuleAdapterProperties() {
 
@@ -52,16 +53,16 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   /**
    * The workflows of the workflow module. The key is the BPMN process ID.
    * <p>
-   * <i>Hint:</i> Back-references (BPMN process ID, workflow module) are linked by
-   * {@link MigrationAdapterProperties#validateAndLink()}.
+   * <i>Hint:</i> {@link MigrationAdapterProperties#validateAndLink()} links the references
+   * back (BPMN process ID, workflow module).
    */
   private Map<String, WorkflowAdapterProperties> workflows = Map.of();
 
   /**
-   * Refused here on purpose: the permission to share a whole workflow aggregate belongs
-   * to the single workflow (see decision 66 in the repository's DECISIONS.md). It is
-   * bound at this level so that a line written here is answered with a message saying
-   * where it belongs, instead of being ignored.
+   * Refused here on purpose. The permission to share a whole workflow aggregate belongs to
+   * the single workflow (see decision 66 in the repository's DECISIONS.md). It is bound at
+   * this level, so that a line written here gets a message which says where it belongs,
+   * instead of being ignored.
    */
   private Boolean allowFullSyncWithBpms;
 
@@ -74,8 +75,8 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
 
   /**
    * The <code>&#64;TaskParam</code> parameters of this workflow module whose type the
-   * developer declared (<code>declared-task-params</code>). The second least specific of
-   * the four levels; a task, and then a workflow, outranks it.
+   * developer declared (<code>declared-task-params</code>). It is the second least specific
+   * of the four levels. A task, and then a workflow, win over it.
    */
   private java.util.List<String> declaredTaskParams;
 
@@ -88,9 +89,9 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   private Boolean implementedExternally;
 
   /**
-   * Overrides <code>vanillabp.transactions</code> for this workflow module. A setting
-   * left undefined here means the global one applies, so a single module can accept
-   * unguarded writes while every other one keeps failing the startup check.
+   * Overrides <code>vanillabp.transactions</code> for this workflow module. A setting which
+   * is not defined here means that the global one applies. So a single module can accept
+   * unguarded writes, while every other one keeps failing the startup check.
    */
   private TransactionsProperties transactions;
 
@@ -101,25 +102,24 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   private ElectionProperties election;
 
   /**
-   * Overrides <code>vanillabp.delivery</code> for this workflow module. A setting left
-   * undefined here means the global one applies, so one module can release the records of
-   * its ended workflows while another keeps them for support.
+   * Overrides <code>vanillabp.delivery</code> for this workflow module. A setting which is
+   * not defined here means that the global one applies. So one module can release the records
+   * of its ended workflows, while another keeps them for support.
    */
   private DeliveryProperties delivery;
 
   /**
-   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow
-   * module - the place an extension configured once for the whole application says
-   * something different about one of its modules (the Business Cockpit's URI of a module,
-   * say). Keys are the extension ids.
+   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow module.
+   * Here an extension which is configured once for the whole application says something
+   * different about one of its modules (for example the Business Cockpit's URI of a module).
+   * Keys are the extension ids.
    */
   private Map<String, Map<String, String>> extensions = Map.of();
 
   /**
-   * The builder of {@link WorkflowModuleAdapterProperties}. Its two type parameters
-   * carry the class being built and the builder itself, so a call inherited from a base
-   * class comes back as the builder of the subclass and the next call in the chain sees
-   * every key again.
+   * The builder of {@link WorkflowModuleAdapterProperties}. Its two type parameters are the
+   * class being built and the builder itself. So a call inherited from a base class comes
+   * back as the builder of the subclass, and the next call in the chain sees every key again.
    *
    * @param <C> The class this builder builds
    * @param <B> The builder itself, which every method of the chain returns
@@ -127,26 +127,26 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   public abstract static class WorkflowModuleAdapterPropertiesBuilder<C extends WorkflowModuleAdapterProperties, B extends WorkflowModuleAdapterProperties.WorkflowModuleAdapterPropertiesBuilder<C, B>> extends AdaptersConfigurationProperties.AdaptersConfigurationPropertiesBuilder<C, B> {
 
     /**
-     * The workflow module this section is about, taken from the key the application
-     * wrote it under.
+     * The workflow module which this section is about, taken from the key under which the
+     * application wrote it.
      */
     private String workflowModuleId;
 
     /**
-     * What the adapters are told for this workflow module. The builder starts from the
-     * same value the field does.
+     * What the adapters are told for this workflow module. The builder starts from the same
+     * value as the field.
      */
     private Map<String, AdapterProperties> adapters = Map.of();
 
     /**
-     * The workflows of the workflow module. The builder starts from the same value the
-     * field does.
+     * The workflows of the workflow module. The builder starts from the same value as the
+     * field.
      */
     private Map<String, WorkflowAdapterProperties> workflows = Map.of();
 
     /**
-     * Refused here on purpose: the permission to share a whole workflow aggregate
-     * belongs to the single workflow (see decision 66 in the repository's DECISIONS.md).
+     * Refused here on purpose. The permission to share a whole workflow aggregate belongs to
+     * the single workflow (see decision 66 in the repository's DECISIONS.md).
      */
     private Boolean allowFullSyncWithBpms;
 
@@ -188,23 +188,22 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
 
     /**
      * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow
-     * module - the place an extension configured once for the whole application says
-     * something different about one of its modules (the Business Cockpit's URI of a
-     * module, say). The builder starts from the same value the field does.
+     * module. Here an extension which is configured once for the whole application says
+     * something different about one of its modules (for example the Business Cockpit's URI of
+     * a module). The builder starts from the same value as the field.
      */
     private Map<String, Map<String, String>> extensions = Map.of();
 
     /**
-     * The builder of a subclass calls this while it is built. Nobody else needs one:
-     * {@link WorkflowModuleAdapterProperties#builder()} hands out the builder of this
-     * class.
+     * The builder of a subclass calls this while it is built. Nobody else needs one.
+     * {@link WorkflowModuleAdapterProperties#builder()} hands out the builder of this class.
      */
     public WorkflowModuleAdapterPropertiesBuilder() {
     }
 
     /**
-     * The workflow module this section is about, taken from the key the application
-     * wrote it under.
+     * The workflow module which this section is about, taken from the key under which the
+     * application wrote it.
      *
      * @param workflowModuleId The value of {@link #workflowModuleId}
      * @return This builder, so the calls chain
@@ -246,8 +245,8 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
     }
 
     /**
-     * Refused here on purpose: the permission to share a whole workflow aggregate
-     * belongs to the single workflow (see decision 66 in the repository's DECISIONS.md).
+     * Refused here on purpose. The permission to share a whole workflow aggregate belongs to
+     * the single workflow (see decision 66 in the repository's DECISIONS.md).
      *
      * @param allowFullSyncWithBpms The value of {@link #allowFullSyncWithBpms}
      * @return This builder, so the calls chain
@@ -353,9 +352,9 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
 
     /**
      * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow
-     * module - the place an extension configured once for the whole application says
-     * something different about one of its modules (the Business Cockpit's URI of a
-     * module, say).
+     * module. Here an extension which is configured once for the whole application says
+     * something different about one of its modules (for example the Business Cockpit's URI of
+     * a module).
      *
      * @param extensions The value of {@link #extensions}
      * @return This builder, so the calls chain
@@ -369,9 +368,8 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
     }
 
     /**
-     * The builder itself, typed as the builder of the subclass. Every method of the
-     * chain returns it, which is what keeps a chain started on a subclass builder at
-     * that subclass.
+     * The builder itself, typed as the builder of the subclass. Every method of the chain
+     * returns it. That keeps a chain which started on a subclass builder at that subclass.
      *
      * @return This builder
      */
@@ -437,8 +435,8 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   }
 
   /**
-   * The builder {@link #builder()} hands out: the one which builds
-   * {@link WorkflowModuleAdapterProperties} itself rather than a subclass of it.
+   * The builder which {@link #builder()} hands out: the one which builds
+   * {@link WorkflowModuleAdapterProperties} itself, and not a subclass of it.
    */
   private static final class WorkflowModuleAdapterPropertiesBuilderImpl extends WorkflowModuleAdapterProperties.WorkflowModuleAdapterPropertiesBuilder<WorkflowModuleAdapterProperties, WorkflowModuleAdapterProperties.WorkflowModuleAdapterPropertiesBuilderImpl> {
 
@@ -475,8 +473,8 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   }
 
   /**
-   * What every builder of this class and of its subclasses builds through. It is the one
-   * place the values of this class move from the builder into the object, so a subclass
+   * Every builder of this class and of its subclasses builds through this. It is the one
+   * place where the values of this class move from the builder into the object. So a subclass
    * builder fills the keys of its base class as well.
    *
    * @param b The builder holding what was written
@@ -501,7 +499,7 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   }
 
   /**
-   * A builder of {@link WorkflowModuleAdapterProperties}, empty except for the values
+   * A builder of {@link WorkflowModuleAdapterProperties}. It is empty, except for the values
    * which have a default.
    *
    * @return The builder
@@ -513,8 +511,8 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   }
 
   /**
-   * The workflow module this section is about, taken from the key the application wrote
-   * it under.
+   * The workflow module which this section is about, taken from the key under which the
+   * application wrote it.
    *
    * @return The value of {@link #workflowModuleId}
    */
@@ -547,8 +545,8 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   }
 
   /**
-   * Refused here on purpose: the permission to share a whole workflow aggregate belongs
-   * to the single workflow (see decision 66 in the repository's DECISIONS.md).
+   * Refused here on purpose. The permission to share a whole workflow aggregate belongs to
+   * the single workflow (see decision 66 in the repository's DECISIONS.md).
    *
    * @return The value of {@link #allowFullSyncWithBpms}
    */
@@ -631,10 +629,9 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   }
 
   /**
-   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow
-   * module - the place an extension configured once for the whole application says
-   * something different about one of its modules (the Business Cockpit's URI of a
-   * module, say).
+   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow module.
+   * Here an extension which is configured once for the whole application says something
+   * different about one of its modules (for example the Business Cockpit's URI of a module).
    *
    * @return The value of {@link #extensions}
    */
@@ -645,8 +642,8 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   }
 
   /**
-   * The workflow module this section is about, taken from the key the application wrote
-   * it under.
+   * The workflow module which this section is about, taken from the key under which the
+   * application wrote it.
    *
    * @param workflowModuleId The value of {@link #workflowModuleId}
    */
@@ -682,8 +679,8 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   }
 
   /**
-   * Refused here on purpose: the permission to share a whole workflow aggregate belongs
-   * to the single workflow (see decision 66 in the repository's DECISIONS.md).
+   * Refused here on purpose. The permission to share a whole workflow aggregate belongs to
+   * the single workflow (see decision 66 in the repository's DECISIONS.md).
    *
    * @param allowFullSyncWithBpms The value of {@link #allowFullSyncWithBpms}
    */
@@ -773,10 +770,9 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   }
 
   /**
-   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow
-   * module - the place an extension configured once for the whole application says
-   * something different about one of its modules (the Business Cockpit's URI of a
-   * module, say).
+   * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow module.
+   * Here an extension which is configured once for the whole application says something
+   * different about one of its modules (for example the Business Cockpit's URI of a module).
    *
    * @param extensions The value of {@link #extensions}
    */

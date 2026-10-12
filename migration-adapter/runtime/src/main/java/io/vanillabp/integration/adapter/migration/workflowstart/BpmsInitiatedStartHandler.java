@@ -34,8 +34,8 @@ public class BpmsInitiatedStartHandler {
   private final String startEventId;
 
   /**
-   * The process versions this method serves, which the whole registry shares with the
-   * other handler kinds and with the methods of an extension.
+   * The process versions this method serves. The whole registry shares this object with
+   * the other handler kinds and with the methods of an extension.
    */
   private final ServedVersions versions;
 
@@ -57,9 +57,9 @@ public class BpmsInitiatedStartHandler {
   }
 
   /**
-   * The start event this method asked for, read by the registry when it looks for a second
-   * method wired to the same one. An accessor per field rather than a whole class of them
-   * is decision 1 in the repository's DECISIONS.md.
+   * The start event this method asked for. The registry reads it when it looks for a second
+   * method wired to the same start event. Decision 1 in the repository's DECISIONS.md says
+   * why there is one accessor per field and not a whole class of them.
    *
    * @return The BPMN id of the start event, or <code>null</code> where the method serves
    *         every start event of the process
@@ -71,8 +71,8 @@ public class BpmsInitiatedStartHandler {
   }
 
   /**
-   * How this method is named in a message: the class and the method, both spelled the way
-   * they stand in the application's source, so a reader can go to them.
+   * How a message names this method: the class and the method, both spelled as they stand
+   * in the application's source, so that a reader can find them.
    *
    * @return The method, for guiding messages
    */
@@ -84,9 +84,8 @@ public class BpmsInitiatedStartHandler {
 
   /**
    * What this method serves, in the words of a message: one named start event, or every
-   * start event of the process. Two methods are a defect only where both
-   * describe the same thing, which is why the message quotes this rather than the id
-   * alone.
+   * start event of the process. Two methods are a defect only where both describe the same
+   * thing. That is why the message quotes this and not the id alone.
    *
    * @return What this handler is wired to, for guiding messages
    */
@@ -106,8 +105,8 @@ public class BpmsInitiatedStartHandler {
   }
 
   /**
-   * The version specification(s) this method names, for messages about a method
-   * serving no version the BPMS holds.
+   * The version specifications this method names, for messages about a method which serves
+   * no version the BPMS holds.
    *
    * @return The specifications, comma separated
    */
@@ -118,10 +117,10 @@ public class BpmsInitiatedStartHandler {
   }
 
   /**
-   * The version specification(s) plus, where the method named none itself, the
-   * declaration they came from. Every message about an ambiguity or a method serving
-   * nothing uses this: a complaint about a range the reader cannot see in front of the
-   * method reads like a defect of VanillaBP.
+   * The version specifications and, where the method named none itself, the declaration
+   * they came from. Every message about an ambiguity, or about a method which serves
+   * nothing, uses this. A complaint about a range which the reader cannot see at the method
+   * looks like a defect of VanillaBP.
    *
    * @return The specifications and their origin
    */
@@ -142,7 +141,7 @@ public class BpmsInitiatedStartHandler {
   }
 
   /**
-   * Where the range came from, ready to be appended to a description of the method -
+   * Where the range came from, ready to be added to a description of the method. It is
    * empty where the method names its range itself.
    *
    * @return The clause to append, or an empty string
@@ -162,8 +161,8 @@ public class BpmsInitiatedStartHandler {
   }
 
   /**
-   * Whether this handler and the given one serve at least one common process version -
-   * two handlers serving the same start event are ambiguous exactly then.
+   * Whether this handler and the given one serve at least one common process version. Two
+   * handlers of the same start event are ambiguous exactly then.
    *
    * @param other The other handler
    * @param resolver Resolves version tags of the BPMN process both belong to
@@ -197,9 +196,9 @@ public class BpmsInitiatedStartHandler {
   }
 
   /**
-   * Invokes the method with bound parameters. Runtime exceptions of the method
-   * propagate unchanged - the transaction of the start rolls back, so nothing was
-   * written and the BPMS retries.
+   * Calls the method with bound parameters. Runtime exceptions of the method are passed on
+   * unchanged. The transaction of the start rolls back, so nothing was written, and the
+   * BPMS retries.
    *
    * @param context The adapter's notification
    * @return The workflow aggregate the method built
@@ -207,7 +206,7 @@ public class BpmsInitiatedStartHandler {
   Object invoke(
       final BpmsInitiatedStartContext context) {
 
-    // no aggregate is passed: this method is the place it comes into existence
+    // no aggregate is passed, because this method is where the aggregate comes into being
     final var handlerContext = HandlerContexts.of(null, context, context.getVariables());
     final var arguments = binders
         .stream()

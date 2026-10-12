@@ -27,14 +27,14 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An adapter id which the persisted state still names although the configuration does not.
+ * An adapter id which the persisted state still names, although the configuration does not.
  * <p>
- * VanillaBP persists the adapter id twice: an outbox entry of a START operation names the
- * adapter elected in phase one, and the delivery key of every record is built from the
- * delivering adapter. An id which is gone therefore has two readings, and both cost the
- * application something - a workflow which was persisted and never started, or a
- * <code>&#64;WorkflowTask</code> method which runs a second time. Both were silent until
- * the entry was dispatched respectively the task was delivered again.
+ * VanillaBP persists the adapter id twice. An outbox entry of a START operation names the
+ * adapter elected in phase one. And the delivery key of every record is built from the
+ * delivering adapter. So an id which is gone has two readings, and both cost the application
+ * something. Either a workflow was persisted and never started, or a
+ * <code>&#64;WorkflowTask</code> method runs a second time. Both stayed silent until the
+ * entry was dispatched or the task was delivered again.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PersistedAdapterIdTest {
@@ -59,9 +59,8 @@ public class PersistedAdapterIdTest {
   }
 
   /**
-   * A REMOTE adapter: it may repeat a delivery, which is what makes the platform resolve
-   * a delivery log next to the outbox every application has - the state this check runs
-   * in.
+   * A REMOTE adapter. It may repeat a delivery. That makes the platform resolve a delivery
+   * log next to the outbox which every application has. This check runs in that state.
    */
   private static MigratableProcessService<Object> adapter() {
 
@@ -70,8 +69,8 @@ public class PersistedAdapterIdTest {
   }
 
   /**
-   * An adapter which reports the given number of open tasks - <code>null</code> being the
-   * BPMS which cannot say.
+   * An adapter which reports the given number of open tasks. <code>null</code> is a BPMS
+   * which cannot say.
    */
   private static MigratableProcessService<Object> adapter(
       final Long openTasks) {
@@ -81,7 +80,7 @@ public class PersistedAdapterIdTest {
   }
 
   /**
-   * The same adapter, noting every question the start puts to it - see
+   * The same adapter, which notes every question the start puts to it. See
    * {@link #theQuestionsDoNotDependOnWhatThePastLeftBehind()}.
    */
   private static MigratableProcessService<Object> adapter(
@@ -153,7 +152,7 @@ public class PersistedAdapterIdTest {
 
   }
 
-  /** The aggregate's persistence, reduced to what the constructor asks it. */
+  /** The persistence of the aggregate, cut down to what the constructor asks it. */
   private static AggregatePersistenceAware<Object> persistence() {
 
     return new AggregatePersistenceAware<>() {
@@ -176,7 +175,7 @@ public class PersistedAdapterIdTest {
 
   }
 
-  /** A store answering the given adapter ids, and nothing else. */
+  /** A store which answers the given adapter ids, and nothing else. */
   private static PhaseTwoOutbox outboxWaitingFor(
       final Set<String> adapterIds) {
 
@@ -205,7 +204,7 @@ public class PersistedAdapterIdTest {
 
   }
 
-  /** A log answering the given adapter ids for its open records, and nothing else. */
+  /** A log which answers the given adapter ids for its open records, and nothing else. */
   private static TaskDeliveryLog logWithOpenTasksOf(
       final Set<String> adapterIds) {
 
@@ -214,8 +213,8 @@ public class PersistedAdapterIdTest {
   }
 
   /**
-   * A log which additionally answers whether it holds open records at all -
-   * <code>null</code> being the store which cannot say.
+   * A log which also answers whether it holds open records at all. <code>null</code> is a
+   * store which cannot say.
    */
   private static TaskDeliveryLog logWithOpenTasksOf(
       final Set<String> adapterIds,
@@ -279,13 +278,13 @@ public class PersistedAdapterIdTest {
   }
 
   /**
-   * What the checks reported while the work ran, and only what THIS run added: a check
-   * of the start leaves its findings in one collection, and a test asking twice wants
-   * to see what the second ask produced.
+   * What the checks reported while the work ran, and only what THIS run added. A check of
+   * the start leaves its findings in one collection. A test which asks twice wants to see
+   * what the second question produced.
    * <p>
-   * The levels of the old log lines map onto the severities of a finding. A notice is
-   * asked for on its own, because the check under test reports there and a warning of a
-   * neighbouring check would otherwise count as its output.
+   * The levels of the old log lines map onto the severities of a finding. A notice is asked
+   * for on its own. The check under test reports there, and otherwise a warning of a
+   * neighbouring check would count as its output.
    */
   private static List<String> loggedBy(
       final Runnable work,
@@ -319,15 +318,15 @@ public class PersistedAdapterIdTest {
   }
 
   /**
-   * The configuration the last process service was built on - the collection a check
-   * reports into hangs on it.
+   * The configuration on which the last process service was built. The collection into
+   * which a check reports hangs on it.
    */
   private static MigrationAdapterProperties lastProperties;
 
   /**
-   * A process service whose stores are already resolved - which is the state the check
-   * runs in: the platform integration calls it after the outbox and the delivery-log
-   * validations.
+   * A process service whose stores are already resolved. The check runs in this state,
+   * because the platform integration calls it after the checks of the outbox and of the
+   * delivery log.
    */
   private static MigrationProcessService<Object> serviceWith(
       final MigrationAdapterProperties properties,
@@ -396,7 +395,7 @@ public class PersistedAdapterIdTest {
 
             })
         .build();
-    // resolves both stores the way the platform's own validations do before this check
+    // resolves both stores the way the own checks of the platform do before this check
     service.validatePhaseTwoOutboxAtStartup();
     service.validateTaskDeliveryLogAtStartup();
     return service;
@@ -540,8 +539,9 @@ public class PersistedAdapterIdTest {
   }
 
   /**
-   * A store which answers nothing but the schedule, which is the SPI default and what the
-   * gruelbox-based outbox of the Spring Boot integration does with this question.
+   * A store which answers nothing but the schedule. That is the SPI default, and the outbox
+   * of the Spring Boot integration, which is based on gruelbox, does the same with this
+   * question.
    */
   private static PhaseTwoOutbox aStoreWhichCannotSay() {
 
@@ -560,10 +560,9 @@ public class PersistedAdapterIdTest {
   }
 
   /**
-   * Dispatches phase two of a START entry naming the given adapter, which is what a store
-   * does with one of the entries it was waiting for. The dispatch fails because the adapter
-   * is gone, and that failure is the entry going back to the store rather than the subject
-   * here.
+   * Dispatches phase two of a START entry which names the given adapter. A store does this
+   * with one of the entries it was waiting for. The dispatch fails because the adapter is
+   * gone. That failure sends the entry back to the store, and it is not the subject here.
    */
   private static void dispatchAnEntryWaitingFor(
       final MigrationProcessService<Object> service,
@@ -619,7 +618,7 @@ public class PersistedAdapterIdTest {
 
   /**
    * How many messages the dispatch of the given number of stale entries wrote. They all name
-   * one adapter id, which is the backlog a BPMS unreachable for an hour leaves behind.
+   * one adapter id. A BPMS which was out of reach for an hour leaves this backlog behind.
    */
   private static int messagesWhileDispatchingStaleEntries(
       final int entries) {
@@ -653,7 +652,7 @@ public class PersistedAdapterIdTest {
   @DisplayName("A store which cannot say leaves the check silent instead of inventing an answer")
   public void aStoreWhichCannotSayIsSilent() {
 
-    // the SPI default of both methods: an empty answer
+    // the SPI default of both methods, which is an empty answer
     final var service = serviceWith(
         properties(List.of()), new PhaseTwoOutbox() {
 
@@ -694,9 +693,9 @@ public class PersistedAdapterIdTest {
   /**
    * What a start asks the two stores and the BPMS, by name.
    * <p>
-   * The three questions of this check are answered from tables and from a BPMS which grow
-   * with everything the application ever did, so all three could get slower the longer it
-   * runs. The number of them must not - see decision 19 in the repository's DECISIONS.md.
+   * The three questions of this check are answered from tables and from a BPMS. These grow
+   * with everything the application ever did. So all three could get slower the longer it
+   * runs. Their number must not grow (see decision 19 in the repository's DECISIONS.md).
    *
    * @param openTasks What the BPMS reports as open
    * @param pendingIds The adapter ids the outbox is waiting for
@@ -780,8 +779,8 @@ public class PersistedAdapterIdTest {
   @DisplayName("A start asks the same questions whether the past left nothing or a great deal behind")
   public void theQuestionsDoNotDependOnWhatThePastLeftBehind() {
 
-    // both of them are an application which was upgraded from version 1, so neither log
-    // remembers an open task yet - what differs is how much the past left behind
+    // both of them are an application which was upgraded from version 1. So neither log
+    // remembers an open task yet. What differs is how much the past left behind
     final var onTheDayAfterTheUpgrade = questionsOfAStart(0L, Set.of(), Set.of(), Boolean.FALSE);
     final var twoYearsOfIt = questionsOfAStart(
         84_000L,

@@ -10,22 +10,22 @@ import io.vanillabp.integration.adapter.spi.health.AdapterHealth;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Asks every BPMS adapter of the application what it can say about its BPMS and
- * collects the answers. One class for both platforms: Spring Boot turns the report
- * into an Actuator health indicator, Quarkus into a readiness check, and neither
- * knows anything about a BPMS.
+ * Asks every BPMS adapter of the application what it can say about its BPMS, and
+ * collects the answers. Both platforms use this one class. Spring Boot turns the report
+ * into an Actuator health indicator, Quarkus turns it into a readiness check. Neither of
+ * them knows anything about a BPMS.
  * <p>
- * What the report does beyond calling the adapters:
+ * The report does more than call the adapters:
  * <ul>
- * <li>an adapter contributing <code>null</code> is left out entirely - it is not
- * reported as healthy, because nobody checked it;</li>
- * <li>an adapter throwing is reported as {@link AdapterHealth.Status#DOWN} naming the
- * exception. A health endpoint has to answer even when an adapter misbehaves, and an
- * adapter which cannot answer its own question is a defect worth seeing;</li>
- * <li>the overall status is the worst one reported, where
+ * <li>If an adapter returns <code>null</code>, the report leaves it out. It is not
+ * reported as healthy, because nobody checked it.</li>
+ * <li>If an adapter throws, the report shows it as {@link AdapterHealth.Status#DOWN} and
+ * names the exception. A health endpoint has to answer even when an adapter misbehaves.
+ * And an adapter which cannot answer its own question has a defect worth seeing.</li>
+ * <li>The overall status is the worst one reported. But
  * {@link AdapterHealth.Status#UNKNOWN} is NOT worse than
- * {@link AdapterHealth.Status#UP}: an application whose second adapter is not
- * configured yet is not an outage.</li>
+ * {@link AdapterHealth.Status#UP}. An application whose second adapter is not
+ * configured yet does not have an outage.</li>
  * </ul>
  */
 @Slf4j
@@ -40,8 +40,8 @@ public class AdapterHealthReport {
    * answers long after the boot and an adapter may join or go in between.
    *
    * @param adapters Reports the adapter deployment services of the application, one
-   *          per configured adapter id (resolved on every call - the platform's bean
-   *          provider does the collecting)
+   *          per configured adapter id. It is asked again on every call. The platform's
+   *          bean provider does the collecting.
    */
   public AdapterHealthReport(
       final Supplier<Collection<AdapterDeploymentService<?, ?>>> adapters) {

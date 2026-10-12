@@ -21,8 +21,8 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What a payload does to the call it travels with: it gets a reference of its own, the
- * reference never reaches the idempotency key, and a payload too large for any store is
+ * What a payload does to the call it travels with. It gets a reference of its own. The
+ * reference never reaches the idempotency key. And a payload too large for any store is
  * refused where it was passed.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -34,8 +34,8 @@ public class PhaseTwoPayloadTest {
       .build();
 
   /**
-   * An operation deriving its key from EVERY argument, which is the rule the reference
-   * would break if it were added before the derivation.
+   * An operation which derives its key from EVERY argument. The reference would break this
+   * rule if it were added before the derivation.
    */
   private static final PhaseOperation KEYED_OVER_ALL_ARGS = PhaseOperation
       .extensionOperation("sample:NOTIFY_ALL")
@@ -111,7 +111,7 @@ public class PhaseTwoPayloadTest {
 
     assertEquals(scheduled.payloadReference(), dispatched.payloadReference());
     assertArrayEquals(payloadOf("the state"), dispatched.payload());
-    // the bytes decide equality, not the array's identity: the same entry read twice
+    // the bytes decide equality, not the identity of the array. The same entry read twice
     // gives two arrays and one call
     final var readAgain = PhaseTwoCall
         .forDispatch(

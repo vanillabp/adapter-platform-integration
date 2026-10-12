@@ -43,16 +43,15 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 /**
  * What a claimed entry does while it waits for the thread which dispatches its aggregate.
  * <p>
- * The poller claims an entry and hands it to a lane, and the lane may be busy with an
- * earlier entry of the same aggregate. Two things used to go wrong in that wait. The lease
- * of the waiting entry was not renewed, so a wait longer than one
- * <code>attempt-frequency</code> let another node claim it and both nodes carried the same
- * operation out. And the poller held the connection it claimed with while it waited for a
- * full lane, which is the connection the lane needs to write down how its dispatch ended.
+ * The poller claims an entry and hands it to a lane. The lane may be busy with an earlier
+ * entry of the same aggregate. Two things used to go wrong in that wait. First, nobody
+ * renewed the lease of the waiting entry. A wait longer than one
+ * <code>attempt-frequency</code> let another node claim it, and both nodes carried out the
+ * same operation. Second, the poller held its connection while it waited for a full lane.
+ * But the lane needs that connection to write down how its dispatch ended.
  * <p>
- * The tests below hold both: the lease of a waiting entry moves, another node leaves such
- * an entry alone, and a lane which is full does not hold up the dispatch which would empty
- * it.
+ * The tests below hold both. The lease of a waiting entry moves. Another node leaves such an
+ * entry alone. And a full lane does not hold up the dispatch which would empty it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -61,43 +60,43 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 public class AnEntryWaitingForItsLaneTest {
 
   /**
-   * How long a claim lasts here. Short enough that the wait in the queue below outlasts it
-   * several times over, which is what made the defect visible.
+   * How long a claim lasts here. It is short, so the wait in the queue below outlasts it
+   * several times. That made the defect visible.
    */
   private static final Duration LEASE = Duration.ofMillis(400);
 
   /**
-   * The lease of the test which watches the lease move. The renewal pushes it along after a
-   * third of it and a claim only after all of it, so the two are told apart by the moment
-   * the entry changes - and that needs a lease long enough that a machine under load does
-   * not decide the answer.
+   * The lease of the test which watches the lease move. The renewal pushes the lease along
+   * after a third of it. A new claim only comes after all of it. The test tells the two apart
+   * by the moment the entry changes. So the lease must be long enough that a machine under
+   * load does not decide the answer.
    */
   private static final Duration A_LEASE_LONG_ENOUGH_TO_WATCH = Duration.ofMillis(1500);
 
   /**
-   * How long a test waits for something it expects to happen. It is a guard against a
-   * machine which leaves the JVM without a turn, not a measurement of speed.
+   * How long a test waits for something it expects to happen. It guards against a machine
+   * which leaves the JVM without a turn. It does not measure speed.
    */
   private static final Duration UNTIL_IT_HAPPENED = Duration.ofSeconds(30);
 
   /**
-   * How many entries of one aggregate are written where the test wants a lane whose queue
-   * is full. More than one queue holds, so the poller reaches an entry it cannot hand over
-   * and has to wait.
+   * How many entries of one aggregate the test writes when it wants a full lane queue. One
+   * queue cannot hold them all. So the poller reaches an entry it cannot hand over, and it has
+   * to wait.
    */
   private static final int MORE_THAN_ONE_QUEUE_HOLDS = 40;
 
   /**
-   * How many entries of one aggregate one lane holds claimed at the same time: the one it
-   * dispatches, the one waiting at it, and the one the poller is holding out to it. Everything
-   * beyond that is an entry nobody works on whose lease this node renews at every tick.
+   * How many entries of one aggregate one lane holds claimed at the same time. These are the
+   * one it dispatches, the one waiting at it, and the one the poller is holding out to it. Any
+   * entry beyond that is one nobody works on, and this node renews its lease at every tick.
    */
   private static final int AS_MANY_AS_ONE_LANE_HOLDS = 3;
 
   /**
-   * How long the test watches the claims after the poller stopped claiming. Long enough for a
-   * poller which wanted more to have taken it - it claims by primary key and the entries are
-   * all there - and it is not a measurement of speed.
+   * How long the test watches the claims after the poller stopped claiming. A poller which
+   * wanted more would have taken it by then: it claims by primary key, and all the entries are
+   * there. It is not a measurement of speed.
    */
   private static final long WATCHING_THE_CLAIMS_MILLIS = 500;
 
@@ -108,8 +107,8 @@ public class AnEntryWaitingForItsLaneTest {
   private static final String AGGREGATE = "42";
 
   /**
-   * The aggregate of the entry the second node writes for itself. A different one, so its
-   * entry never queues behind what the first node is holding.
+   * The aggregate of the entry the second node writes for itself. It is a different one, so
+   * its entry never queues behind what the first node holds.
    */
   private static final String ANOTHER_AGGREGATE = "43";
 
@@ -129,22 +128,22 @@ public class AnEntryWaitingForItsLaneTest {
   private MigrationProcessService<Object> theOtherNode;
 
   /**
-   * Released by the test so the dispatch which holds a lane can end. Every test lets go of
-   * it, because the lane thread would otherwise wait for the whole run.
+   * The test releases it, so the dispatch which holds a lane can end. Every test lets go of
+   * it. Otherwise the lane thread would wait for the whole run.
    */
   private final CountDownLatch letTheLaneGo = new CountDownLatch(1);
 
   /**
-   * Counted down by the first call into the adapter, so a test can wait for the dispatch to
-   * have STARTED rather than sleeping for a while.
+   * The first call into the adapter counts it down. So a test can wait until the dispatch
+   * has STARTED, instead of sleeping for a while.
    */
   private final CountDownLatch theFirstCallStarted = new CountDownLatch(1);
 
   private final AtomicInteger callsIntoTheOtherNode = new AtomicInteger();
 
   /**
-   * A database per test, because every test of this class writes into the outbox table and
-   * reads what is in it afterwards.
+   * A database per test. Every test of this class writes into the outbox table and reads
+   * what is in it afterwards.
    *
    * @param name The database this test works on
    * @return Connections to it, as many at a time as anybody asks for
@@ -157,9 +156,9 @@ public class AnEntryWaitingForItsLaneTest {
   }
 
   /**
-   * The same database, handing out ONE connection at a time. It is what a pool of one
-   * connection does, and it turns "somebody holds a connection somebody else needs" from a
-   * delay into a test which ends.
+   * The same database, but it hands out ONE connection at a time, like a pool of one
+   * connection. "Somebody holds a connection somebody else needs" then becomes a test which
+   * ends, and not just a delay.
    *
    * @param name The database this test works on
    * @return Connections to it, one at a time
@@ -208,7 +207,7 @@ public class AnEntryWaitingForItsLaneTest {
 
   /**
    * The properties of a store with one lane, so every entry of the test meets the same
-   * queue, and with a lease short enough that a wait in that queue outlasts it.
+   * queue. The lease is short, so a wait in that queue outlasts it.
    *
    * @param lease How long a claim lasts
    * @return The properties of such a store
@@ -218,8 +217,8 @@ public class AnEntryWaitingForItsLaneTest {
 
     final var properties = new PhaseTwoOutboxProperties();
     properties.setAttemptFrequency(lease);
-    // the poll interval is the cap on the sleep, and a short one is what makes the poll
-    // happen again while the entries below are still waiting
+    // the poll interval caps the sleep. A short one makes the poll happen again while the
+    // entries below are still waiting
     properties.setPollInterval(lease);
     properties.setDispatchThreads(1);
     return properties;
@@ -227,7 +226,7 @@ public class AnEntryWaitingForItsLaneTest {
   }
 
   /**
-   * A router whose adapter holds the lane: the first call waits until the test lets go, so
+   * A router whose adapter holds the lane. The first call waits until the test lets go. So
    * every entry handed in after it waits in the queue.
    *
    * @return The router of the node holding the entries
@@ -251,7 +250,7 @@ public class AnEntryWaitingForItsLaneTest {
 
   /**
    * A router whose adapter returns at once and counts how often it was called. It is the
-   * second node, and the number is what says whether it took an entry of the first.
+   * second node. The count says whether it took an entry of the first node.
    *
    * @return The router of the second node
    */
@@ -346,8 +345,8 @@ public class AnEntryWaitingForItsLaneTest {
 
   /**
    * Writes the given number of entries of one aggregate, each one written a moment after
-   * the one before it, so the poller claims them in the order they are returned.
-   *
+   * Writes the given number of entries of one aggregate. Each one is written a moment after
+   * the one before, so the poller claims them in the order they are returned.
    * @return The ids, oldest first
    */
   private List<String> entriesOfOneAggregate(
@@ -453,8 +452,8 @@ public class AnEntryWaitingForItsLaneTest {
     final var dispatcher = dispatcherOf(
         connections, oneLaneLeasingFor(A_LEASE_LONG_ENOUGH_TO_WATCH), aRouterWhoseAdapterHoldsTheLane(), table);
     dispatcher.prepareSchema();
-    // three entries of one aggregate meet one lane: the first holds it, the second waits at
-    // the lane and the third waits in the hand of the poller
+    // three entries of one aggregate meet one lane. The first holds it, the second waits at
+    // the lane, and the third waits in the hand of the poller
     final var entries = entriesOfOneAggregate(connections, table, 3);
     final var waiting = entries.get(2);
 
@@ -469,9 +468,9 @@ public class AnEntryWaitingForItsLaneTest {
       final var claimedBy = entryOf(connections, table, waiting).leasedBy();
       final var leaseAtTheStart = entryOf(connections, table, waiting).leasedUntil();
 
-      // the moment the lease moves is the whole test. A renewal pushes it along after a
-      // third of the lease, while an entry nobody renews keeps it until it has run out and
-      // the next poll claims the entry anew - which moves the lease as well and looks the
+      // the whole test is about the moment the lease moves. A renewal pushes it along after
+      // a third of the lease. An entry nobody renews keeps its lease until it has run out, and
+      // then the next poll claims the entry anew. That moves the lease as well and looks the
       // same afterwards
       var lease = leaseAtTheStart;
       while (!lease.isAfter(leaseAtTheStart)) {
@@ -503,8 +502,8 @@ public class AnEntryWaitingForItsLaneTest {
     final var dispatcher = dispatcherOf(
         connections, oneLaneLeasingFor(A_LEASE_LONG_ENOUGH_TO_WATCH), aRouterWhoseAdapterHoldsTheLane(), table);
     dispatcher.prepareSchema();
-    // far more entries than the lane can take, all of them due and all of them of the one
-    // aggregate that lane serves
+    // far more entries than the lane can take. All of them are due, and all belong to the
+    // one aggregate that lane serves
     entriesOfOneAggregate(connections, table, MORE_THAN_ONE_QUEUE_HOLDS);
 
     try {
@@ -516,9 +515,9 @@ public class AnEntryWaitingForItsLaneTest {
           "the poller never claimed the entries around the one being dispatched",
           () -> claimedEntries(connections, table) >= AS_MANY_AS_ONE_LANE_HOLDS);
 
-      // and there it stops: the poller waits for the lane instead of claiming the backlog.
-      // Every further claim would be an entry nobody dispatches, renewed at every tick of
-      // the lease and hidden from the other nodes meanwhile
+      // and there it stops. The poller waits for the lane instead of claiming the backlog.
+      // Every further claim would be an entry nobody dispatches. Its lease would be renewed at
+      // every tick, and the other nodes could not see it meanwhile
       final var watchUntil = System.currentTimeMillis() + WATCHING_THE_CLAIMS_MILLIS;
       while (System.currentTimeMillis() < watchUntil) {
         assertEquals(
@@ -554,15 +553,15 @@ public class AnEntryWaitingForItsLaneTest {
       assertTrue(
           theFirstCallStarted.await(UNTIL_IT_HAPPENED.toSeconds(), TimeUnit.SECONDS),
           "the first entry was never dispatched");
-      // an entry of the second node's own, which says when that node has polled: without it
-      // the test would have to guess how long to wait before it may assert "nothing taken"
+      // an entry of the second node itself. It says when that node has polled. Without it,
+      // the test would have to guess how long to wait before it asserts "nothing taken"
       final var ofTheSecondNode = anEntryDueNow(connections, table, ANOTHER_AGGREGATE, Instant.now());
       secondNode.start();
       waitUntil(
           "the second node never dispatched anything, so it never polled",
           () -> JdbcPhaseTwoOutboxDispatcher.STATUS_DONE
               .equals(entryOf(connections, table, ofTheSecondNode).status()));
-      // the entries of the first node waited for its lane through several leases by now, so
+      // by now the entries of the first node waited for its lane through several leases. So
       // a poll which takes them is a poll which reads a lease nobody renewed
       Thread.sleep(3 * LEASE.toMillis());
 
@@ -588,20 +587,19 @@ public class AnEntryWaitingForItsLaneTest {
 
     final var database = "a-full-lane-holds-no-connection";
     final var table = "OUTBOX_FULL_LANE_HOLDS_NO_CONNECTION";
-    // one connection at a time, which is what turns "somebody holds what somebody else
-    // needs" into a test which ends: a poller waiting for a full lane while holding the
-    // connection waits for the lane to write down a dispatch, and that write waits for the
-    // connection. The test reads the table through a connection of its own, so the two
-    // waiting for each other is a failure after the deadline and not a run which hangs
+    // one connection at a time. That turns "somebody holds what somebody else needs" into a
+    // test which ends. A poller which waits for a full lane while it holds the connection
+    // waits for the lane to write down a dispatch. That write waits for the connection. The
+    // test reads the table through a connection of its own. So if the two wait for each
+    // other, the test fails after the deadline instead of hanging
     final var connections = databaseNamedWithOneConnection(database);
     final var whatTheTestReadsWith = databaseNamed(database);
     final var properties = oneLaneLeasingFor(LEASE);
     // the default lease, so no renewal competes for the one connection while the entries
-    // travel - what this test is about is the poller, not the renewal
+    // travel. This test is about the poller, not about the renewal
     properties.setAttemptFrequency(Duration.ofSeconds(30));
-    // the real payload store, housekeeping and all: every step of the cleanup borrows the
-    // one connection and gives it back, so the store the application runs is what this
-    // test measures
+    // the real payload store, with housekeeping. Every step of the cleanup borrows the one
+    // connection and gives it back. So the test measures the store the application runs
     final var dispatcher = dispatcherOf(connections, properties, aRouterWhoseAdapterReturnsAtOnce(), table);
     dispatcher.prepareSchema();
     final var entries = entriesOfOneAggregate(whatTheTestReadsWith, table, MORE_THAN_ONE_QUEUE_HOLDS);

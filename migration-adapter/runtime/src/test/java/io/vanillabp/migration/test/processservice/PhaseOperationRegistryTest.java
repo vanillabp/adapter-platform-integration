@@ -16,9 +16,9 @@ import io.vanillabp.integration.spi.PhaseOperationRegistry;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The rules keeping the operation registry unambiguous: an operation is registered
- * exactly once, extensions namespace their operations, and the core's names are
- * reserved.
+ * The rules which keep the operation registry unambiguous. An operation is registered
+ * exactly once. Extensions put their operations into a namespace. And the names of the core
+ * are reserved.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PhaseOperationRegistryTest {
@@ -68,8 +68,8 @@ public class PhaseOperationRegistryTest {
   @DisplayName("An extension claiming a core operation's name is rejected guiding")
   public void coreOperationNameIsReserved() {
 
-    // built through the plain constructor: 'extensionOperation' would already
-    // reject it for the missing namespace - the point here is the reservation
+    // built through the plain constructor. 'extensionOperation' would already reject it for
+    // the missing namespace, and the reservation is the point here
     final var squatter = new PhaseOperation(
         PhaseOperation.START_WORKFLOW.name(), call -> Optional
             .empty(), io.vanillabp.integration.spi.Election.OWN_DISPATCH, false, false, new PhaseOperation.Wording(args -> "squatting", "", ""));

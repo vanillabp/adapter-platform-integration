@@ -6,15 +6,14 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Stand-in for Spring's transaction annotation, carrying the members the core's check
- * reads. The core is plain Java and must not depend on Spring, and it matches
- * transaction annotations by their type NAME - so the stand-in proves the matching
- * exactly like the real annotation would, without dragging Spring onto the core's test
- * classpath. The real annotation is exercised by the acceptance tests of the Spring
- * Boot integration.
+ * Stand-in for the transaction annotation of Spring. It carries the members which the check
+ * of the core reads. The core is plain Java and must not depend on Spring. It matches
+ * transaction annotations by their type NAME. So the stand-in proves the matching exactly
+ * like the real annotation would, without dragging Spring onto the test classpath of the
+ * core. The acceptance tests of the Spring Boot integration exercise the real annotation.
  * <p>
- * Members and defaults mirror {@code spring-tx}: {@code value} is the transaction
- * manager qualifier and NOT the propagation, which is why the check reads
+ * Members and defaults mirror {@code spring-tx}. {@code value} is the qualifier of the
+ * transaction manager and NOT the propagation. That is why the check reads
  * {@code propagation} for this annotation.
  */
 @Target({

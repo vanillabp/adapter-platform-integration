@@ -24,39 +24,39 @@ import io.vanillabp.spi.service.WorkflowTask;
 import io.vanillabp.spi.service.WorkflowTasks;
 
 /**
- * Refuses to start an application which hands the BPMS a value the BPMS may not give
- * back the way it was given, and which nobody said anything about.
+ * Refuses to start an application which hands the BPMS a value that the BPMS may not give
+ * back the way it was given, where nobody said anything about that value.
  *
  * <h2>Why the two directions are judged differently</h2>
  *
- * A value of the workflow aggregate travels so that a model can decide on it, and the
- * thing reading it is the expression language of the BPMS. Only a <code>boolean</code>
- * and a text mean the same in every expression language, so those two travel and the
- * rest is declared first. The wrapper {@link Boolean} is not among them on purpose: a
- * <code>null</code> in a gateway condition means something different on every BPMS, and
- * a value nobody computed must not carry a decision.
+ * A value of the workflow aggregate travels so that a model can decide on it. The
+ * expression language of the BPMS reads it. Only a <code>boolean</code> and a text mean the
+ * same in every expression language. So those two travel, and the rest has to be declared
+ * first. The wrapper {@link Boolean} is left out on purpose. A <code>null</code> in a
+ * gateway condition means something different on every BPMS, and a value which nobody
+ * computed must not decide anything.
  * <p>
- * A value arriving in a <code>&#64;TaskParam</code> parameter is read by the handler and
- * by nobody else, so no expression language is involved and the serialization decides
- * alone. A <code>BigDecimal</code> is fine there as long as an adapter says what its
- * BPMS does with it. The rule is softer in that direction on purpose.
+ * A value which arrives in a <code>&#64;TaskParam</code> parameter is read by the handler
+ * and by nobody else. No expression language is involved, so the serialization alone
+ * decides. A <code>BigDecimal</code> is fine there, as long as an adapter says what its BPMS
+ * does with it. The rule is softer in that direction on purpose.
  *
  * <h2>Where the answers come from</h2>
  *
- * The set of places is complete while the application starts: the sync model says which
- * values of the aggregate leave, and the <code>&#64;TaskParam</code> parameters say which
- * come back. What a BPMS does with a type is its adapter's answer
- * ({@link MigratableProcessService#whatThisBpmsDoesWith}), and an adapter is allowed to
- * say that it cannot tell. That answer is a warning and never the end of a startup,
- * because an application whose BPMS is unreachable while it boots still has to boot.
+ * All the places are known while the application starts. The sync model says which values
+ * of the aggregate leave, and the <code>&#64;TaskParam</code> parameters say which come
+ * back. What a BPMS does with a type is its adapter's answer
+ * ({@link MigratableProcessService#whatThisBpmsDoesWith}). An adapter may say that it cannot
+ * tell. That answer is a warning and never ends a startup. An application whose BPMS cannot
+ * be reached while it boots still has to boot.
  */
 public class PortableValuesCheck {
 
   private static final Logger log = LoggerFactory.getLogger(PortableValuesCheck.class);
 
   /**
-   * The wiki page carrying the whole rule, named by every message so a developer has one
-   * place to read up.
+   * The wiki page with the whole rule. Every message names it, so a developer has one place
+   * to read about it.
    */
   private static final String DOCUMENTATION = "https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-aggregates";
 
@@ -67,9 +67,9 @@ public class PortableValuesCheck {
   /**
    * Built by the registry which registers the workflows, once per application.
    * <p>
-   * Both of these may be missing where a test registers workflow services directly.
-   * Nothing is refused then, because neither the values which travel nor the declarations
-   * can be read.
+   * Both of these may be missing where a test registers workflow services directly. Then
+   * nothing is refused, because neither the values which travel nor the declarations can be
+   * read.
    *
    * @param aggregateSync The core's sync model, which answers which values travel
    * @param properties The VanillaBP configuration, which holds the declarations
@@ -84,10 +84,10 @@ public class PortableValuesCheck {
   }
 
   /**
-   * Ends the startup where a value travels whose type the BPMS may not give back
-   * unchanged and which nobody declared. Called once per registered workflow, AFTER the
-   * sync model was validated: the annotations decide which values leave at all, and
-   * without that set the types of the wrong values would be judged.
+   * Ends the startup where a value travels whose type the BPMS may not give back unchanged,
+   * and which nobody declared. It is called once per registered workflow, AFTER the sync
+   * model was checked. The annotations decide which values leave at all. Without that set,
+   * the types of the wrong values would be judged.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID being registered
@@ -95,10 +95,10 @@ public class PortableValuesCheck {
    * @param workflowAggregateClass The workflow aggregate of that workflow
    * @param aggregateIdAttribute The name of the aggregate's ID attribute, or
    *          <code>null</code> where the persistence does not name one
-   * @param adapters The adapters serving this workflow, asked what their BPMS does with
-   *          a type
-   * @throws IllegalStateException Naming every value, its type, its direction, why it
-   *           does not travel well and the two ways on
+   * @param adapters The adapters which serve this workflow. They are asked what their BPMS
+   *          does with a type
+   * @throws IllegalStateException Naming every value, its type, its direction, why it does
+   *           not travel well, and the two ways forward
    */
   public void refuseValuesWhichDoNotTravelWell(
       final String workflowModuleId,
@@ -163,8 +163,8 @@ public class PortableValuesCheck {
   }
 
   /**
-   * The values of the aggregate on their way to the BPMS: a <code>boolean</code> and a
-   * text travel, everything else is declared first.
+   * The values of the aggregate on their way to the BPMS. A <code>boolean</code> and a text
+   * travel. Everything else has to be declared first.
    */
   private void judgeAggregateValues(
       final Class<?> workflowAggregateClass,
@@ -176,13 +176,13 @@ public class PortableValuesCheck {
     final var idAttribute = aggregateIdAttribute != null
         ? aggregateIdAttribute
         : "id";
-    // FULL is the default of every adapter, so an aggregate which annotates nothing is
-    // walked as a whole - the same starting point the sync model's own validation takes
+    // FULL is the default of every adapter. So an aggregate which annotates nothing is
+    // walked as a whole. The sync model's own check starts from the same point
     for (final var shared : ((AggregateSyncSupport) aggregateSync)
         .valuesSharedWithBpms(workflowAggregateClass, AggregateSyncMode.FULL)) {
       if (shared.path().equals(idAttribute)) {
-        // the aggregate's id reaches the BPMS whatever the sync model says, and how it
-        // travels is the adapter's business (see WorkflowAggregateSync)
+        // the aggregate's id reaches the BPMS whatever the sync model says. How it travels
+        // is the adapter's business (see WorkflowAggregateSync)
         continue;
       }
       if (travelsInEveryExpressionLanguage(shared.declaredType())) {
@@ -204,8 +204,9 @@ public class PortableValuesCheck {
   }
 
   /**
-   * The values arriving in <code>&#64;TaskParam</code> parameters: here the serialization
-   * decides, so an adapter saying that its BPMS hands the type back unchanged is enough.
+   * The values which arrive in <code>&#64;TaskParam</code> parameters. Here the
+   * serialization decides. So it is enough if an adapter says that its BPMS hands the type
+   * back unchanged.
    */
   private void judgeTaskParams(
       final String workflowModuleId,
@@ -291,8 +292,8 @@ public class PortableValuesCheck {
   }
 
   /**
-   * Whether a value of that type means the same in every expression language a BPMS may
-   * bring. Two types do: the plain <code>boolean</code> and a text.
+   * Whether a value of that type means the same in every expression language which a BPMS
+   * may bring. Two types do: the plain <code>boolean</code>, and a text.
    *
    * @param type The declared type
    * @return Whether it travels to the BPMS without being declared
@@ -305,15 +306,15 @@ public class PortableValuesCheck {
   }
 
   /**
-   * Why that type does not travel to the BPMS on its own. The wrapper
-   * {@link Boolean} gets its own sentence, because without it the rule looks like
-   * pedantry.
+   * Why that type does not travel to the BPMS on its own. The wrapper {@link Boolean} gets
+   * its own sentence. Without it the rule looks like pedantry.
    * <p>
-   * Every other type gets the reason and the fact that a declaration lets it through. The
-   * check judges the missing entry, never the type: {@link DeclaredAggregateValues#covers}
-   * compares paths only. Without that sentence the reason reads like a verdict on the type,
-   * which for a collection sounds as if it could not be declared at all. A collection, a map
-   * and an array get one more sentence, because what is inside them is the next question.
+   * Every other type gets the reason, and the fact that a declaration lets it through. The
+   * check judges the missing entry, never the type. {@link DeclaredAggregateValues#covers}
+   * only compares paths. Without that sentence the reason reads like a verdict on the type.
+   * For a collection it would sound as if it could not be declared at all. A collection, a
+   * map and an array get one more sentence, because what is inside them is the next
+   * question.
    *
    * @param type The declared type
    * @return The sentence for the message
@@ -345,8 +346,8 @@ public class PortableValuesCheck {
   }
 
   /**
-   * Whether a value of that type holds other values, which is what the message about it adds a
-   * sentence for.
+   * Whether a value of that type holds other values. The message about it adds a sentence
+   * for that.
    */
   private static boolean isCollection(
       final Class<?> type) {
@@ -356,9 +357,9 @@ public class PortableValuesCheck {
   }
 
   /**
-   * What the adapters of the workflow say about that type, appended to a message about a
-   * value which does not travel. An adapter which says nothing new is left out, so the
-   * message carries what a reader can act on.
+   * What the adapters of the workflow say about that type, added to a message about a value
+   * which does not travel. An adapter which says nothing new is left out. So the message has
+   * what a reader can act on.
    */
   private String whatTheAdaptersSay(
       final List<? extends MigratableProcessService<?>> adapters,
@@ -380,9 +381,9 @@ public class PortableValuesCheck {
   }
 
   /**
-   * Says once, as a warning, which adapters could not judge a type. A startup never ends
-   * on that answer, and staying silent about it would leave the developer believing the
-   * value was checked.
+   * Says once, as a warning, which adapters could not judge a type. A startup never ends on
+   * that answer. But staying silent would leave the developer believing that the value was
+   * checked.
    */
   private void warnAboutAdaptersWhichCannotSay(
       final List<? extends MigratableProcessService<?>> adapters,
@@ -411,9 +412,9 @@ public class PortableValuesCheck {
   }
 
   /**
-   * Whether the declaration names no concrete type, so what arrives is whatever the
-   * serialization of the BPMS produced. An {@link Object} is the plain case, a raw or
-   * wildcard collection and a {@link Map} are the same thing one level down.
+   * Whether the declaration names no concrete type. Then what arrives is whatever the
+   * serialization of the BPMS produced. An {@link Object} is the plain case. A raw collection,
+   * a collection with a wildcard, and a {@link Map} are the same thing one level down.
    *
    * @param type The declared type
    * @return Whether the declaration decides nothing
@@ -427,12 +428,12 @@ public class PortableValuesCheck {
   }
 
   /**
-   * The task the configuration knows that method under, or <code>null</code> where the
-   * method is none VanillaBP reads <code>&#64;TaskParam</code> parameters of.
+   * The task under which the configuration knows that method. It is <code>null</code> where
+   * VanillaBP reads no <code>&#64;TaskParam</code> parameters of the method.
    * <p>
-   * A <code>&#64;WorkflowStartedByBpms</code> method has no task around it, so its
-   * parameters are declared at the workflow. It is named here anyway, because its
-   * parameters come from the BPMS exactly as a task's do.
+   * A <code>&#64;WorkflowStartedByBpms</code> method has no task around it. So its parameters
+   * are declared at the workflow. It is named here anyway, because its parameters come from
+   * the BPMS exactly like those of a task.
    */
   private static String taskIdOf(
       final Method method) {
@@ -442,8 +443,8 @@ public class PortableValuesCheck {
       return WorkflowTaskScanner.taskConfigurationKeyOf(method, task);
     }
     if (method.getAnnotation(WorkflowTasks.class) != null) {
-      // several tasks on one method: whichever of them is configured, the parameter is
-      // the same one, so the method's name is the key the message hands out
+      // several tasks on one method. Whichever of them is configured, the parameter is the
+      // same one. So the method's name is the key which the message hands out
       return method.getName();
     }
     return method.getAnnotation(WorkflowStartedByBpms.class) != null
@@ -453,8 +454,8 @@ public class PortableValuesCheck {
   }
 
   /**
-   * How a type is written in a message: its canonical name, so a reader knows which class
-   * is meant and can search for it.
+   * How a message writes a type: its canonical name, so that a reader knows which class is
+   * meant and can search for it.
    *
    * @param type The type
    * @return The name for the message

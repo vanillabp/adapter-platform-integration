@@ -39,19 +39,19 @@ import io.vanillabp.spi.service.WorkflowStartedByBpms;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * A business key counts only where it carries the workflow aggregate's id.
+ * A business key counts only where it carries the id of the workflow aggregate.
  * <p>
- * VanillaBP names a workflow by its workflow aggregate and by nothing else, and writes
- * that id into the business key wherever it starts the workflow itself. A workflow
- * started past VanillaBP can carry a key somebody else chose, and then two values say
- * different things about one instance. This test holds the two places where the check
- * compares them, a task delivery and the notification that the workflow ended, and the
- * third place a workflow arrives at, a start the BPMS performed on its own. There the key
- * is the name VanillaBP looks the workflow up by rather than a second value, so a start
- * carrying a name no workflow aggregate has is refused for that reason.
+ * VanillaBP names a workflow by its workflow aggregate and by nothing else. It writes that
+ * id into the business key wherever it starts the workflow itself. A workflow started past
+ * VanillaBP can carry a key which somebody else chose. Then two values say different things
+ * about one instance. This test holds the two places where the check compares them: a task
+ * delivery, and the notification that the workflow ended. It also holds the third place at
+ * which a workflow arrives: a start which the BPMS performed on its own. There the key is
+ * the name by which VanillaBP looks the workflow up, not a second value. So a start which
+ * carries a name that no workflow aggregate has is refused for that reason.
  * <p>
- * What a disagreement produces is a refusal, never an incident VanillaBP raises itself.
- * The invocation ends, and each BPMS applies what it applies to any failing handler. See
+ * A disagreement produces a refusal, never an incident which VanillaBP raises itself. The
+ * invocation ends, and each BPMS applies what it applies to any failing handler. See
  * decision 69 in the repository's DECISIONS.md.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -125,10 +125,10 @@ public class BusinessKeyIsTheAggregateIdTest {
   }
 
   /**
-   * A transaction runner which really rolls back: it remembers the stored aggregates
-   * before the work starts and puts them back when the work throws. Without that a test
-   * cannot say whether a refused start left an aggregate behind, and that is half of
-   * what a refusal before anything is written is worth.
+   * A transaction runner which really rolls back. It remembers the stored aggregates before
+   * the work starts, and puts them back when the work throws. Without that, a test cannot say
+   * whether a refused start left an aggregate behind. And that is half of what a refusal
+   * before anything is written is worth.
    */
   static class TransactionRunnerStub implements TransactionRunner {
 
@@ -246,7 +246,7 @@ public class BusinessKeyIsTheAggregateIdTest {
 
   }
 
-  /** What an adapter reports about one delivery, business key included. */
+  /** What an adapter reports about one delivery, with the business key. */
   private static TaskInvocationContext delivery(
       final String aggregateId,
       final String businessKey) {
@@ -384,8 +384,8 @@ public class BusinessKeyIsTheAggregateIdTest {
     final var testee = registry();
     final var aggregate = storeAggregate("4712");
 
-    // every Camunda 8 workflow up to cluster 8.8 and every workflow of a BPMS which
-    // keeps no business key looks like this, so this is the ordinary case
+    // every Camunda 8 workflow up to cluster 8.8, and every workflow of a BPMS which keeps
+    // no business key, looks like this. So this is the ordinary case
     testee.invokeWorkflowTask(MODULE, PROCESS, delivery("4712", null));
 
     assertEquals("assessRisk", aggregate.servedBy);
@@ -409,12 +409,11 @@ public class BusinessKeyIsTheAggregateIdTest {
   @DisplayName("A workflow taken over from version 1 carries a business key and no variable, which is silence")
   public void aWorkflowTakenOverFromVersionOneIsNotADeviation() {
 
-    // Version 1 on Camunda 7 wrote no process variables at all: the model read the
-    // workflow aggregate directly, so such an instance carries its identity in the
-    // business key and nowhere else. An adapter which reads the id from the variable
-    // finds none, and this is the case which must not become an incident - otherwise
-    // every workflow an application takes over on its upgrade would fail at its first
-    // delivery.
+    // version 1 on Camunda 7 wrote no process variables at all. The model read the workflow
+    // aggregate directly. So such an instance carries its identity in the business key and
+    // nowhere else. An adapter which reads the id from the variable finds none. This case
+    // must not become an incident. Otherwise every workflow which an application takes over
+    // on its upgrade would fail at its first delivery.
     assertDoesNotThrow(
         () -> BusinessKeyCheck
             .refuseAKeyWhichIsNotTheAggregateId(

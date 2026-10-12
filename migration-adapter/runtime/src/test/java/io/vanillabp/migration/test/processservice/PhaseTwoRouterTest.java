@@ -32,9 +32,9 @@ public class PhaseTwoRouterTest {
   private final PhaseTwoRouter testee = new PhaseTwoRouter();
 
   /**
-   * Registers the mocked process service for <code>test-module/TestProcess</code> -
-   * done per test instead of in a setup method, because the tests around the
-   * operation registry need no process service at all.
+   * Registers the mocked process service for <code>test-module/TestProcess</code>. Each test
+   * does it, instead of a setup method, because the tests around the operation registry need
+   * no process service at all.
    */
   private void registerProcessService() {
 
@@ -80,7 +80,7 @@ public class PhaseTwoRouterTest {
             .counter()
             .count());
 
-    // a failure the adapter called permanent is told apart from one worth repeating
+    // a failure which the adapter called permanent is told apart from one worth repeating
     Mockito
         .doThrow(new io.vanillabp.integration.spi.PhaseTwoPermanentFailure("no such process", null))
         .when(processService)
@@ -121,7 +121,7 @@ public class PhaseTwoRouterTest {
   }
 
   /**
-   * Stands in for a platform's transaction runner and remembers whether the work it
+   * Stands in for the transaction runner of a platform. It remembers whether the work it
    * received actually reached the process service.
    */
   private class RecordingTransactionRunner implements TransactionRunner {
@@ -219,8 +219,8 @@ public class PhaseTwoRouterTest {
                             PhaseTwoCall.ARG_CORRELATION_ID, "partner-42",
                             PhaseTwoCall.ARG_ACTIVATION_ID, "element-instance-99")));
 
-    // a BPMS with a message deduplication of its own needs the same distinction there,
-    // and phase two runs on the dispatcher's thread
+    // a BPMS with a message deduplication of its own needs the same distinction there. And
+    // phase two runs on the thread of the dispatcher
     verify(processService)
         .executePhaseTwo(
             PhaseOperation.CORRELATE_MESSAGE,
@@ -282,7 +282,7 @@ public class PhaseTwoRouterTest {
             .of(
                 PhaseOperation.START_WORKFLOW, "test-module", "RemovedProcess", "42", "test-adapter", Map.of())));
 
-    // the message has to name the process, the module and that the entry stays
+    // the message has to name the process and the module. It also says that the entry stays
     // visible in the outbox store
     assertTrue(exception.getMessage().contains("RemovedProcess"));
     assertTrue(exception.getMessage().contains("test-module"));
@@ -296,8 +296,8 @@ public class PhaseTwoRouterTest {
 
     registerProcessService();
 
-    // a signal is not about one workflow: the entry carries no aggregate ID, and
-    // asking for one would fail the dispatch of an entry which is perfectly fine
+    // a signal is not about one workflow. The entry carries no aggregate ID. Asking for one
+    // would fail the dispatch of an entry which is perfectly fine
     testee
         .dispatch(PhaseTwoCall
             .of(
@@ -352,8 +352,8 @@ public class PhaseTwoRouterTest {
                 call,
                 previouslyAttempted) -> dispatched.set(call));
 
-    // no process service is registered: an extension operation is NOT routed
-    // through the aggregate-ID-to-adapter election of the core operations
+    // no process service is registered. An extension operation is NOT routed through the
+    // election by aggregate ID which the core operations use
     testee.dispatch(PhaseTwoCall
         .of(operation, "test-module", "TestProcess", "42", null, Map.of("event", "created")));
 
@@ -373,8 +373,8 @@ public class PhaseTwoRouterTest {
             .forDispatch(
                 "gone-extension:NOTIFY", "test-module", "TestProcess", "42", null, Map.of())));
 
-    // the message has to name the unknown operation, list what IS registered and
-    // say that the entry stays in the store
+    // the message has to name the unknown operation and list what IS registered. It also
+    // says that the entry stays in the store
     assertTrue(exception.getMessage().contains("gone-extension:NOTIFY"));
     assertTrue(exception.getMessage().contains("START_WORKFLOW"));
     assertTrue(exception.getMessage().contains("outbox store"));

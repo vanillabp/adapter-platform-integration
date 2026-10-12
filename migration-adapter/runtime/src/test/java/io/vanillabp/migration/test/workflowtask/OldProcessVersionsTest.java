@@ -33,11 +33,11 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * The startup check for old process versions: does this application still serve the OLDER versions
- * of its processes the BPMS holds, and what does outfading a version do.
+ * The startup check for old process versions. Does this application still serve the OLDER
+ * versions of its processes which the BPMS holds? And what does fading out a version do?
  * <p>
- * The BPMS is a stub here, because the question the core answers is version arithmetic,
- * not model reading: the adapters prove the reading half against real engines.
+ * The BPMS is a stub here. The core answers a question of version arithmetic, not of model
+ * reading. The adapters prove the reading half against real engines.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OldProcessVersionsTest {
@@ -56,8 +56,8 @@ public class OldProcessVersionsTest {
   }
 
   /**
-   * Serves the deployed version 3 and, with a second method, the older version 2. The
-   * task 'goneTask' existed in older models only and is served by nobody.
+   * Serves the deployed version 3, and with a second method the older version 2. The task
+   * 'goneTask' existed only in older models, and nobody serves it.
    */
   public static class Service {
 
@@ -74,7 +74,7 @@ public class OldProcessVersionsTest {
   }
 
   /**
-   * A method for a version this BPMS does not hold - a typo, a version deleted from
+   * A method for a version this BPMS does not hold. It may be a typo, a version deleted from
    * the engine, or code shipped before the model it needs.
    */
   public static class DeadVersionService {
@@ -87,7 +87,7 @@ public class OldProcessVersionsTest {
   }
 
   /**
-   * What the BPMS is asked, with every answer handed in by the test.
+   * What the BPMS is asked. The test hands in every answer.
    */
   private static class CatalogStub implements io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog {
 
@@ -97,7 +97,7 @@ public class OldProcessVersionsTest {
         final String bpmnProcessId,
         final String versionOrVersionTag) {
 
-      // the check resolves no tags, it works through the versions it was handed
+      // the check resolves no tags. It works through the versions it was handed
       return null;
 
     }
@@ -138,10 +138,10 @@ public class OldProcessVersionsTest {
 
     /**
      * Every question this BPMS was asked, by name. What a start asks may depend on the
-     * versions a BPMS holds; it must not depend on how many workflows ran through them,
-     * which is decision 19 in the repository's DECISIONS.md and what
-     * {@link OldProcessVersionsTest#theQuestionsDoNotDependOnHowManyWorkflowsRun()}
-     * holds.
+     * versions a BPMS holds. It must not depend on how many workflows ran through them.
+     * That is decision 19 in the repository's DECISIONS.md, and
+     * {@link OldProcessVersionsTest#theQuestionsDoNotDependOnHowManyWorkflowsRun()} holds
+     * it.
      */
     private final Map<String, Integer> questions = new java.util.HashMap<>();
 
@@ -161,9 +161,9 @@ public class OldProcessVersionsTest {
 
     /**
      * How often the BPMS was asked for the instance count of each version. Asking is a
-     * QUERY, and the number of versions a BPMS holds grows with every deployment which
-     * changes a model, so an extra ask per version is a cost which grows with the age of
-     * the application.
+     * QUERY. The number of versions a BPMS holds grows with every deployment which changes
+     * a model. So an extra question per version is a cost which grows with the age of the
+     * application.
      */
     private final Map<String, Integer> instanceCountQueries = new java.util.HashMap<>();
 
@@ -204,14 +204,14 @@ public class OldProcessVersionsTest {
   private CatalogStub catalog;
 
   /**
-   * The check reads the version this boot deployed from here - the registry records it
+   * The check reads from here the version this boot deployed. The registry records it
    * through the SPI (see below), and the test drives the check directly.
    */
   private ProcessVersions processVersions;
 
   /**
-   * ONE instance per test, as in an application: what it reported once it does not
-   * report again.
+   * ONE instance per test, as in an application. What it reported once, it does not report
+   * again.
    */
   private DeployedProcessVersionsCheck deployedVersionsCheck;
 
@@ -261,8 +261,8 @@ public class OldProcessVersionsTest {
   @DisplayName("The instance count of a version is asked ONCE, however many reports want it")
   public void theInstanceCountIsAskedOncePerVersion() {
 
-    // an older version which is BOTH counted as running and reported as unserved: the
-    // two reports used to ask the same question twice
+    // an older version which is BOTH counted as running and reported as unserved. The two
+    // reports used to ask the same question twice
     catalog.instancesPerVersion = Map.of("1", 4L);
 
     check(Level.ERROR);
@@ -288,8 +288,8 @@ public class OldProcessVersionsTest {
     check(Level.ERROR);
     final var askedByAYoungApplication = Map.copyOf(catalog.questions);
 
-    // the same application two years later: same models, same versions, and everything
-    // which happened in between reflected in the numbers alone
+    // the same application two years later. The models and versions are the same, and the
+    // numbers alone reflect everything which happened in between
     setUp();
     catalog.instancesPerVersion = Map.of("1", 2_400_000L, "2", 910_000L);
     check(Level.ERROR);
@@ -405,7 +405,7 @@ public class OldProcessVersionsTest {
   @DisplayName("A version the method serves by its version range is served, one it excludes is not")
   public void versionRangesDecidePerVersion() {
 
-    // 'oldOnly' names version 2, so the same task in version 1 is unserved
+    // 'oldOnly' names version 2, so nobody serves the same task in version 1
     catalog.tasksPerVersion = Map.of("1", List.of(new BpmnTaskSpec("Activity_old", "oldOnly")), "2", List
         .of(new BpmnTaskSpec("Activity_old", "oldOnly")));
 
@@ -423,8 +423,8 @@ public class OldProcessVersionsTest {
 
     check();
 
-    // the method serving version 2 matched no task of the DEPLOYED model, which is
-    // the direction validateNoUnwiredWorkflowTaskMethods decides
+    // the method which serves version 2 matched no task of the DEPLOYED model.
+    // validateNoUnwiredWorkflowTaskMethods decides this direction
     final var failure = assertThrows(
         IllegalStateException.class,
         () -> {
@@ -462,7 +462,7 @@ public class OldProcessVersionsTest {
   @DisplayName("Fading a version out makes the method serving it dead, and the message says so")
   public void outfadingMakesAMethodDead() {
 
-    // 'oldOnly' serves version 2 only, which is now faded out
+    // 'oldOnly' serves only version 2, which is now faded out
     outfade("2");
 
     final var message = deadMethodMessage(check());
@@ -565,7 +565,7 @@ public class OldProcessVersionsTest {
   }
 
   /**
-   * The registry needs a process service to register a workflow service; nothing here
+   * The registry needs a process service to register a workflow service. Nothing here
    * invokes it.
    */
   @SuppressWarnings("unchecked")
@@ -581,7 +581,7 @@ public class OldProcessVersionsTest {
   }
 
   /**
-   * The one message about a method which never runs - the same check also reports the
+   * The one message about a method which never runs. The same check also reports the
    * unserved tasks of the versions that method left behind.
    */
   private static String deadMethodMessage(
@@ -633,8 +633,8 @@ public class OldProcessVersionsTest {
 
     check();
 
-    // the versions OLDER than the one this boot deployed, which is the same set the
-    // unserved-task report walks, and the instance count it already asked for
+    // the versions OLDER than the one this boot deployed. The report of unserved tasks walks
+    // the same set, and it already asked for the instance count
     assertEquals(java.util.Set.of("1", "2"), reported.keySet(), () -> String.valueOf(reported));
     assertEquals(4L, reported.get("1"));
     assertEquals(0L, reported.get("2"));
@@ -669,7 +669,7 @@ public class OldProcessVersionsTest {
   private void runCheck() {
 
     deployedVersionsCheck.check(MODULE, checkedProcess, ADAPTER, catalog, VersionRange.NO_RESOLVER);
-    // a method which never runs is a statement about the whole workflow module, so the
+    // a method which never runs is a statement about the whole workflow module. So the
     // check draws it once the versions of every process of the module were read
     deployedVersionsCheck.reportDeadHandlers(MODULE);
 
@@ -694,8 +694,8 @@ public class OldProcessVersionsTest {
 
     checkedProcess = bpmnProcessId;
     runCheck();
-    // the levels of the old log lines map onto the severities of a finding: a check no
-    // longer writes a line, it reports, and the start says it once at its end
+    // the levels of the old log lines map onto the severities of a finding. A check no
+    // longer writes a line. It reports, and the start says it once at its end
     final var atLeast = Level.ERROR.equals(level)
         ? java.util.Set.of(StartupFindings.Severity.ERROR, StartupFindings.Severity.REFUSAL)
         : Level.WARN.equals(level)
@@ -718,7 +718,8 @@ public class OldProcessVersionsTest {
   }
 
   /**
-   * The transaction runner is irrelevant here - no test in this class runs a handler.
+   * The transaction runner does not matter here, because no test in this class runs a
+   * handler.
    */
   private static class TransactionRunnerStub implements TransactionRunner {
 

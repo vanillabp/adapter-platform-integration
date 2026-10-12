@@ -39,21 +39,20 @@ import io.vanillabp.spi.service.WorkflowEnded;
 import lombok.Getter;
 
 /**
- * A workflow which ended releases the records of its processed task deliveries,
- * so the deduplication window is closed by the workflow instead of by the clock. What is
- * pinned here is the CORE's part of it:
+ * A workflow which ended releases the records of its processed task deliveries. So the
+ * workflow closes the deduplication window, not the clock. This pins the part of the CORE:
  * <ul>
- * <li>the deletion runs when a workflow ends, bounded by workflow module, BPMN process,
- * aggregate and by the moment of the notification - the records of another workflow, of
- * another process, of another module and of a SECOND workflow on the same aggregate are
- * untouched;</li>
- * <li>it runs without a <code>&#64;WorkflowEnded</code> method as well, which is why the
- * core asks the adapters to attach their listener where the release is switched on;</li>
- * <li>with the option off nothing is released and no listener is wanted;</li>
- * <li>a store which does not implement the release plus the option on is reported at
- * startup, naming the store and the property.</li>
+ * <li>The deletion runs when a workflow ends. It is bounded by workflow module, BPMN
+ * process, aggregate, and the moment of the notification. The records of another workflow,
+ * another process, another module, and of a SECOND workflow on the same aggregate stay
+ * untouched.</li>
+ * <li>It also runs without a <code>&#64;WorkflowEnded</code> method. That is why the core
+ * asks the adapters to attach their listener where the release is switched on.</li>
+ * <li>With the option off, nothing is released and no listener is wanted.</li>
+ * <li>A store which does not implement the release, together with the option on, is
+ * reported at startup. The report names the store and the property.</li>
  * </ul>
- * The stores themselves (JDBC, MongoDB) are covered by the platform integrations' tests -
+ * The platform integrations cover the stores themselves (JDBC, MongoDB) in their tests,
  * per platform, as the coverage rules require.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -115,8 +114,8 @@ public class DeliveryRecordReleaseTest {
   }
 
   /**
-   * A delivery log in memory which really filters: the release has to be bounded the way
-   * a store would bound its DELETE, otherwise this test would pin nothing.
+   * A delivery log in memory which really filters. The release has to be bounded the way a
+   * store would bound its DELETE. Otherwise this test would pin nothing.
    */
   static class InMemoryDeliveryLog implements TaskDeliveryLog {
 
@@ -170,8 +169,8 @@ public class DeliveryRecordReleaseTest {
     }
 
     /**
-     * Writes a record as a processed delivery would have, at a moment this test decides -
-     * the bound of the release is a timestamp, so it has to be one the test controls.
+     * Writes a record as a processed delivery would have, at a moment this test decides.
+     * The bound of the release is a timestamp, so the test has to control it.
      */
     void given(
         final String key,
@@ -191,8 +190,8 @@ public class DeliveryRecordReleaseTest {
   }
 
   /**
-   * A store written before the release existed: it inherits the SPI's default doing
-   * nothing.
+   * A store written before the release existed. It inherits the default of the SPI, which
+   * does nothing.
    */
   static class LegacyDeliveryLog implements TaskDeliveryLog {
 
@@ -232,8 +231,8 @@ public class DeliveryRecordReleaseTest {
   }
 
   /**
-   * A workflow service which does NOT want to know about the end of its workflows - the
-   * case the release has to work in, since it is what makes the listener necessary.
+   * A workflow service which does NOT want to know about the end of its workflows. The
+   * release has to work in this case, and this case makes the listener necessary.
    */
   public static class SilentService {
 
@@ -387,8 +386,8 @@ public class DeliveryRecordReleaseTest {
   }
 
   /**
-   * What the checks reported while the work ran - a check of the start leaves its
-   * finding in the collection the configuration carries.
+   * What the checks reported while the work ran. A check of the start leaves its finding in
+   * the collection of the configuration.
    */
   private List<String> warningsOf(
       final MigrationAdapterProperties properties,
@@ -412,8 +411,8 @@ public class DeliveryRecordReleaseTest {
     deliveryLog.given("of-another-aggregate", MODULE, PROCESS, "4712", past);
     deliveryLog.given("of-another-process", MODULE, "OtherProcess", "4711", past);
     deliveryLog.given("of-another-module", "other-module", PROCESS, "4711", past);
-    // the second workflow on the same aggregate: its record is written AFTER the end of
-    // the first one, which is exactly what the time bound protects
+    // the second workflow on the same aggregate. Its record is written AFTER the end of the
+    // first one. The time bound protects exactly that
     deliveryLog
         .given("of-the-second-workflow", MODULE, PROCESS, "4711", Instant.now().plus(1, ChronoUnit.MINUTES));
 

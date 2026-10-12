@@ -47,19 +47,19 @@ import lombok.Getter;
  * How old an open task is, and what VanillaBP does about it.
  * <p>
  * A task left open by a <code>&#64;TaskId</code> handler is answered from its delivery
- * record on every redelivery, which is what keeps the handler from running twice. The
- * record carries the moment the handler ran, so the core can measure how long the
- * application has owed that task its completion - the generic half, which holds for
- * every BPMS. What is pinned here:
+ * record on every redelivery. That keeps the handler from running twice. The record carries
+ * the moment the handler ran. So the core can measure how long the application has owed
+ * that task its completion. That is the generic half, which holds for every BPMS. This test
+ * pins:
  * <ul>
- * <li>a redelivery of an open task reports COMPLETION_PENDING and does not touch the
- * workflow aggregate;</li>
- * <li>the outcome carries the age, which is the distance to the recorded moment;</li>
- * <li>a task older than <code>vanillabp.delivery.max-task-age</code> is reported ONCE, by
- * a message naming the workflow module, the process, the aggregate and the age, and the
- * outcome says so - which is what a BPMS-specific reaction hangs on;</li>
- * <li>the maximum age resolves per workflow module, workflow and task, most specific
- * wins, and zero switches the report off.</li>
+ * <li>A redelivery of an open task reports COMPLETION_PENDING and does not touch the
+ * workflow aggregate.</li>
+ * <li>The outcome carries the age, which is the time since the recorded moment.</li>
+ * <li>A task older than <code>vanillabp.delivery.max-task-age</code> is reported ONCE. The
+ * message names the workflow module, the process, the aggregate and the age. The outcome
+ * says so too, and a reaction specific to a BPMS hangs on that.</li>
+ * <li>The maximum age resolves per workflow module, workflow and task. The most specific
+ * value wins, and zero switches the report off.</li>
  * </ul>
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -144,8 +144,8 @@ public class OpenTaskAgeTest {
   }
 
   /**
-   * A delivery log in memory whose records may be BACKDATED - which is how a task open
-   * for thirty days is tested without waiting for them.
+   * A delivery log in memory whose records may be BACKDATED. So a task open for thirty days
+   * is tested without waiting for them.
    */
   static class InMemoryDeliveryLog implements TaskDeliveryLog {
 
@@ -197,7 +197,7 @@ public class OpenTaskAgeTest {
   public static class TestWorkflowService {
 
     /**
-     * A task the application completes later - the only kind which can be left open.
+     * A task which the application completes later. Only this kind can be left open.
      */
     @WorkflowTask(taskDefinition = TASK)
     public void asyncTask(
@@ -215,8 +215,8 @@ public class OpenTaskAgeTest {
   private final InMemoryDeliveryLog deliveryLog = new InMemoryDeliveryLog();
 
   /**
-   * Properties configuring the maximum age at the given levels - <code>null</code> means
-   * "not configured there", so the most-specific-wins resolution can be exercised.
+   * Properties which configure the maximum age at the given levels. <code>null</code> means
+   * "not configured there". So the test can exercise that the most specific value wins.
    */
   private MigrationAdapterProperties properties(
       final Duration global,
@@ -413,8 +413,8 @@ public class OpenTaskAgeTest {
     assertTrue(message.contains("PT3H"), "names the age");
     assertTrue(message.contains("vanillabp.delivery.max-task-age"), "names the property");
 
-    // the lock of an open task is renewed by every redelivery - the report is about the
-    // task, not about the renewal
+    // every redelivery renews the lock of an open task. The report is about the task, not
+    // about the renewal
     final var repeated = new ArrayList<String>();
     final var third = loggedBy(
         repeated,
@@ -604,7 +604,7 @@ public class OpenTaskAgeTest {
   }
 
   /**
-   * Runs the given work and collects the warnings the core emitted while it ran.
+   * Runs the given work and collects the warnings which the core emitted meanwhile.
    */
   private WorkflowTaskOutcome loggedBy(
       final List<String> messages,

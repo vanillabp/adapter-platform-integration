@@ -29,9 +29,8 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The name-clash-avoidance model: resolving the mode, composing the
- * identifiers a BPMS sees, reading them back and the validations which make the
- * whole thing safe.
+ * The model of name-clash avoidance. It resolves the mode, composes the identifiers a BPMS
+ * sees, and reads them back. It also has the checks which make the whole thing safe.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class NameClashAvoidanceServiceTest {
@@ -43,8 +42,8 @@ public class NameClashAvoidanceServiceTest {
   private static final String ADAPTER = "c8";
 
   /**
-   * Properties with a mode at the adapter level and, optionally, overrides per
-   * workflow module and workflow.
+   * Properties with a mode at the adapter level and, if given, overrides per workflow module
+   * and workflow.
    */
   private static MigrationAdapterProperties propertiesWith(
       final NameClashAvoidance adapterLevel,
@@ -97,7 +96,7 @@ public class NameClashAvoidanceServiceTest {
   }
 
   /**
-   * An adapter of the id {@link #ADAPTER} declaring the given default mode
+   * An adapter of the id {@link #ADAPTER} which declares the given default mode
    * (<code>null</code> for an adapter which declares none).
    */
   @SuppressWarnings("unchecked")
@@ -119,9 +118,9 @@ public class NameClashAvoidanceServiceTest {
   }
 
   /**
-   * A service knowing the adapter's deployment service - the shape both platform
-   * integrations wire up (the adapter is asked for its default mode and reports a
-   * workflow module whose identifiers are not scoped).
+   * A service which knows the deployment service of the adapter. Both platform integrations
+   * wire it up in this shape. The adapter is asked for its default mode, and it reports a
+   * workflow module whose identifiers are not scoped.
    */
   private static NameClashAvoidanceService serviceWith(
       final NameClashAvoidance adapterLevel,
@@ -140,8 +139,8 @@ public class NameClashAvoidanceServiceTest {
     final var testee = serviceWith(null);
 
     assertEquals(NameClashAvoidance.BY_ADAPTER, testee.modeFor(MODULE, PROCESS, ADAPTER));
-    // nothing is prefixed - what BY_ADAPTER means for a BPMS (a tenant, a namespace)
-    // is the adapter's business
+    // nothing is prefixed. What BY_ADAPTER means for a BPMS (a tenant, a namespace) is the
+    // business of the adapter
     assertEquals(PROCESS, testee.scopedProcessId(MODULE, PROCESS, ADAPTER));
 
   }
@@ -195,7 +194,7 @@ public class NameClashAvoidanceServiceTest {
         "loan-approval__RiskAssessment__scoreApplicant",
         testee.scopedTaskDefinition(MODULE, PROCESS, "scoreApplicant", ADAPTER),
         "task definitions are scoped per process by default");
-    // null identifiers stay null (an adapter may pass an absent value)
+    // null identifiers stay null, because an adapter may pass an absent value
     assertNull(testee.scopedIdentifier(MODULE, null, ADAPTER));
     assertNull(testee.scopedTaskDefinition(MODULE, PROCESS, null, ADAPTER));
 
@@ -228,14 +227,14 @@ public class NameClashAvoidanceServiceTest {
         "scoreApplicant",
         testee.plainTaskDefinition(MODULE, PROCESS, "loan-approval__RiskAssessment__scoreApplicant", ADAPTER));
 
-    // an identifier NOT carrying the expected prefix is returned unchanged - the
-    // separator is never searched for, so a value containing it survives
+    // an identifier which does NOT carry the expected prefix is returned unchanged. The
+    // separator is never searched for, so a value which contains it survives
     assertEquals(
         "other-module__RiskAssessment",
         testee.plainProcessId(MODULE, "other-module__RiskAssessment", ADAPTER));
     assertEquals("plain", testee.plainProcessId(MODULE, "plain", ADAPTER));
 
-    // in the other modes nothing is stripped at all
+    // in the other modes, nothing is stripped at all
     assertEquals(
         "loan-approval__RiskAssessment",
         serviceWith(NameClashAvoidance.BY_ADAPTER).plainProcessId(MODULE, "loan-approval__RiskAssessment", ADAPTER));
@@ -260,7 +259,7 @@ public class NameClashAvoidanceServiceTest {
     assertTrue(message.contains("'a__b__c'"), () -> message);
     assertTrue(message.contains("'b__c'") && message.contains("'a__b'"), () -> message);
 
-    // the same process reported twice (several files/adapters) is not a collision
+    // the same process reported twice (several files or adapters) is not a collision
     testee.validateNoCollidingProcessIds(
         ADAPTER,
         List.of(
@@ -283,7 +282,7 @@ public class NameClashAvoidanceServiceTest {
     assertTrue(explicit.getMessage().contains("use-prefix"), explicit::getMessage);
     assertTrue(explicit.getMessage().contains("none"), explicit::getMessage);
 
-    // ... and by simply not configuring anything (BY_ADAPTER is the default)
+    // ... and by simply configuring nothing (BY_ADAPTER is the default)
     final var byDefault = assertThrowsExactly(
         IllegalStateException.class,
         () -> serviceWith(null).validateNativeIsolationSupported(ADAPTER, null, "the Process-Engine-API"));
@@ -294,8 +293,8 @@ public class NameClashAvoidanceServiceTest {
         .validateNativeIsolationSupported(ADAPTER, null, "the Process-Engine-API");
     serviceWith(NameClashAvoidance.NONE).validateNativeIsolationSupported(ADAPTER, null, "the Process-Engine-API");
 
-    // per WORKFLOW MODULE: the mode resolved for the module being deployed decides,
-    // and the message names that module
+    // per WORKFLOW MODULE: the mode resolved for the module which is deployed decides. The
+    // message names that module
     final var perModule = assertThrowsExactly(
         IllegalStateException.class,
         () -> serviceWith(NameClashAvoidance.USE_PREFIX, NameClashAvoidance.BY_ADAPTER, null, null)
@@ -303,7 +302,7 @@ public class NameClashAvoidanceServiceTest {
     assertTrue(perModule.getMessage().contains("'"
         + MODULE
         + "'"), perModule::getMessage);
-    // ... and a module using a supported mode passes even though another one does not
+    // ... and a module with a supported mode passes, even though another one does not
     serviceWith(NameClashAvoidance.BY_ADAPTER, NameClashAvoidance.USE_PREFIX, null, null)
         .validateNativeIsolationSupported(ADAPTER, MODULE, "the Process-Engine-API");
 
@@ -322,11 +321,12 @@ public class NameClashAvoidanceServiceTest {
         NameClashAvoidance.USE_PREFIX,
         serviceWith(NameClashAvoidance.USE_PREFIX, adapterDeclaring(NameClashAvoidance.NONE))
             .modeFor(MODULE, PROCESS, ADAPTER));
-    // an adapter declaring no default keeps version 1's behavior ...
+    // an adapter which declares no default keeps the behavior of version 1 ...
     assertEquals(
         NameClashAvoidance.BY_ADAPTER,
         serviceWith(null, adapterDeclaring(null)).modeFor(MODULE, PROCESS, ADAPTER));
-    // ... as does an adapter unknown to the service (tests, platforms not wiring them)
+    // ... and so does an adapter which the service does not know (tests, and platforms
+    // which do not wire them)
     assertEquals(NameClashAvoidance.BY_ADAPTER, serviceWith(null).modeFor(MODULE, PROCESS, ADAPTER));
 
   }
@@ -338,7 +338,7 @@ public class NameClashAvoidanceServiceTest {
     final var byDefault = adapterDeclaring(NameClashAvoidance.NONE);
     final var testee = serviceWith(null, byDefault);
 
-    // the mode is resolved again at every boundary, the WARN belongs to startup
+    // the mode is resolved again at every boundary. The WARN belongs to startup
     testee.modeFor(MODULE, PROCESS, ADAPTER);
     testee.modeFor(MODULE, PROCESS, ADAPTER);
     Mockito
@@ -350,8 +350,8 @@ public class NameClashAvoidanceServiceTest {
     Mockito
         .verify(byDefault, Mockito.times(1))
         .warnAboutUnscopedIdentifiers("other-module", true);
-    // ... while resolving the mode without one reports nothing (e.g. comparing two
-    // adapter instances) - the per-module resolutions of the deployment do
+    // ... while resolving the mode without one reports nothing (for example when comparing
+    // two adapter instances). The resolutions per module of the deployment do report
     testee.modeFor(null, null, ADAPTER);
     Mockito
         .verify(byDefault, Mockito.never())
@@ -377,9 +377,9 @@ public class NameClashAvoidanceServiceTest {
   @DisplayName("The report of the adapter names the property keys of both ways out")
   public void theReportNamesThePropertyKeys() {
 
-    // the SPI's own text, not a mock: it is the only place a developer learns that
-    // nothing keeps the identifiers of two workflow modules apart, and it is useless
-    // if the keys in it are wrong
+    // the own text of the SPI, not a mock. Only there does a developer learn that nothing
+    // keeps the identifiers of two workflow modules apart. It is useless if the keys in it
+    // are wrong
     @SuppressWarnings("unchecked")
     final AdapterDeploymentService<Object, Object> adapter = Mockito
         .mock(AdapterDeploymentService.class, Mockito.withSettings().defaultAnswer(Mockito.CALLS_REAL_METHODS));
@@ -418,10 +418,10 @@ public class NameClashAvoidanceServiceTest {
   @DisplayName("Configuration only BY_ADAPTER could use fails the boot naming both ways out")
   public void byAdapterOnlyConfigurationWithoutByAdapterIsRejected() {
 
-    // what the setting IS stays with the adapter - here the Camunda tenant
+    // what the setting IS stays with the adapter. Here it is the Camunda tenant
     final var tenantKey = "vanillabp.adapters.c8.tenant-id";
 
-    // the adapter defaults to NONE and nothing is configured, so the BPMS isolates nothing
+    // the adapter defaults to NONE and nothing is configured. So the BPMS isolates nothing
     final var exception = assertThrowsExactly(
         IllegalStateException.class,
         () -> serviceWith(null, adapterDeclaring(NameClashAvoidance.NONE))
@@ -431,17 +431,17 @@ public class NameClashAvoidanceServiceTest {
     assertTrue(message.contains("'none'"), () -> message);
     assertTrue(message.contains("name-clash-avoidance: by-adapter"), () -> message);
 
-    // prefixing does not use the BPMS' own isolation either
+    // prefixing does not use the own isolation of the BPMS either
     assertThrowsExactly(
         IllegalStateException.class,
         () -> serviceWith(NameClashAvoidance.USE_PREFIX).validateNoneNameClashStrategy(ADAPTER, tenantKey));
 
     // configured at the adapter level ...
     serviceWith(NameClashAvoidance.BY_ADAPTER).validateNoneNameClashStrategy(ADAPTER, tenantKey);
-    // ... or for a single workflow module: the property is put to use there
+    // ... or for a single workflow module, which puts the property to use there
     serviceWith(NameClashAvoidance.NONE, NameClashAvoidance.BY_ADAPTER, null, null)
         .validateNoneNameClashStrategy(ADAPTER, tenantKey);
-    // ... or by the adapter's default while no level overrides it
+    // ... or by the default of the adapter while no level overrides it
     serviceWith(null, adapterDeclaring(NameClashAvoidance.BY_ADAPTER))
         .validateNoneNameClashStrategy(ADAPTER, tenantKey);
 
@@ -455,7 +455,8 @@ public class NameClashAvoidanceServiceTest {
   @DisplayName("An adapter without native isolation defaulting to NONE is not asked to choose")
   public void unconfiguredLevelsHonorTheAdapterDefault() {
 
-    // nothing configured, so BY_ADAPTER never applies - no boot failure to raise
+    // nothing configured, so BY_ADAPTER never applies, and there is no boot failure to
+    // raise
     serviceWith(null, adapterDeclaring(NameClashAvoidance.NONE))
         .validateNativeIsolationSupported(ADAPTER, null, "the Process-Engine-API");
 
@@ -477,8 +478,8 @@ public class NameClashAvoidanceServiceTest {
   public void withoutASupportTheIdentifiersStayPlain() {
 
     // what a caller holds where no platform registered a support: a unit test, or a
-    // component built without one around it. Writing the check per call site is how two
-    // of them end up disagreeing, and a disagreement here is a query finding nothing
+    // component built without one around it. If each call site wrote the check itself, two
+    // of them would end up disagreeing. A disagreement here is a query which finds nothing
     assertEquals(PROCESS, NameClashAvoidanceSupport.scopedProcessId(null, MODULE, PROCESS, ADAPTER));
     assertEquals("PaymentReceived", NameClashAvoidanceSupport
         .scopedIdentifier(null, MODULE, "PaymentReceived", ADAPTER));

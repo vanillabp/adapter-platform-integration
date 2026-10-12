@@ -58,13 +58,14 @@ import io.vanillabp.spi.service.WorkflowStartedByBpms;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The version of the process definition a workflow runs on, written into the rows of the delivery
- * log on each of the three ways a row comes about: the start VanillaBP dispatches, the start the
- * BPMS fires itself, and the delivery of a task. An extension which shows details per version reads
- * it back together with the id of the workflow, and learns whether an empty version may still come.
+ * The version of the process definition on which a workflow runs is written into the rows of
+ * the delivery log. A row comes about in three ways: the start which VanillaBP dispatches, the
+ * start which the BPMS fires itself, and the delivery of a task. An extension which shows
+ * details per version reads it back together with the id of the workflow. It also learns
+ * whether an empty version may still come.
  * <p>
- * An adapter which keeps a catalog of versions and reports none is in here as well. Its rows are
- * written all the same, and it is named once per BPMN process.
+ * An adapter which keeps a catalog of versions and reports none is in here as well. Its rows
+ * are written all the same, and it is named once per BPMN process.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheRowsCarryTheProcessVersionTest {
@@ -80,8 +81,8 @@ public class TheRowsCarryTheProcessVersionTest {
   private static final String TIMER_EVENT = "DailyTimer";
 
   /**
-   * The words of the WARN about a missing version, quoted by the case which expects it and by the
-   * case which must not get it.
+   * The words of the WARN about a missing version. The case which expects it and the case
+   * which must not get it both quote them.
    */
   private static final String NO_VERSION_ALTHOUGH_A_CATALOG = "without the version of the process definition, although it keeps a catalog";
 
@@ -182,8 +183,9 @@ public class TheRowsCarryTheProcessVersionTest {
   }
 
   /**
-   * An adapter which creates an instance in phase two of a start and reports it, with the version
-   * of the process definition or, the way an adapter written before the version did, without.
+   * An adapter which creates an instance in phase two of a start and reports it. It reports
+   * with the version of the process definition, or without it, as an adapter written before
+   * the version did.
    */
   static class AnAdapterWhichReportsItsStarts implements MigratableProcessService<Aggregate> {
 
@@ -263,7 +265,7 @@ public class TheRowsCarryTheProcessVersionTest {
 
   }
 
-  /** A delivery log in memory, which keeps what it is told and answers by key and by aggregate. */
+  /** A delivery log in memory. It keeps what it is told and answers by key and by aggregate. */
   static class DeliveryLogInMemory implements TaskDeliveryLog {
 
     final Map<String, TaskDelivery> records = new HashMap<>();
@@ -331,7 +333,7 @@ public class TheRowsCarryTheProcessVersionTest {
   private WorkflowTaskRegistry registry;
 
   /**
-   * The registry with one workflow service and one adapter, the way a platform integration builds
+   * The registry with one workflow service and one adapter, as a platform integration builds
    * it at startup.
    */
   private void givenAnAdapterWhich(
@@ -585,8 +587,8 @@ public class TheRowsCarryTheProcessVersionTest {
   @DisplayName("An adapter with a catalog which names no version is named once, and its rows are written anyway")
   public void anAdapterWithACatalogWhichNamesNoVersionIsNamedOnce() {
 
-    // the adapter calls the method it called before the version existed, which is exactly the
-    // state every adapter is in until it follows
+    // the adapter calls the method it called before the version existed. Every adapter is
+    // in exactly this state until it follows
     givenAnAdapterWhich(new AnAdapterWhichReportsItsStarts(null, false));
     givenTheAdapterKeepsACatalog();
 

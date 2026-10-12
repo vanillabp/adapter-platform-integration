@@ -7,27 +7,26 @@ import java.util.stream.Collectors;
 /**
  * The process versions ONE handler method serves, and where that statement came from.
  * <p>
- * This is the version half of every handler VanillaBP wires: a
+ * This is the version half of every handler which VanillaBP wires: a
  * <code>&#64;WorkflowTask</code>, <code>&#64;WorkflowStartedByBpms</code> or
- * <code>&#64;WorkflowEnded</code> method of the core, and a method carrying the
- * annotation of an extension
- * ({@link io.vanillabp.integration.extension.spi.handler.HandlerContract}). All of them
- * ask the same three questions - does this method serve the version a delivery came
- * from, do two methods serve a common version, which version tags does a method name -
- * and all of them ask them here, so the answer is the same everywhere (see decision 56
+ * <code>&#64;WorkflowEnded</code> method of the core, and a method with the annotation of
+ * an extension ({@link io.vanillabp.integration.extension.spi.handler.HandlerContract}). All
+ * of them ask the same three questions. Does this method serve the version a delivery came
+ * from? Do two methods serve a common version? Which version tags does a method name? All
+ * of them ask these questions here, so the answer is the same everywhere (see decision 56
  * in the repository's DECISIONS.md).
  * <p>
- * What a single specification means is {@link VersionRange}; a method may name several,
- * and it serves a version ANY of them covers.
+ * {@link VersionRange} says what a single specification means. A method may name several,
+ * and it serves a version which ANY of them covers.
  *
  * @see InheritedVersions
  */
 public final class ServedVersions {
 
   /**
-   * What a method naming no version serves - every version, which is also the only
-   * thing served by a delivery whose version the BPMS did not report (decision 20 in
-   * the repository's DECISIONS.md).
+   * What a method which names no version serves: every version. It is also the only thing
+   * which serves a delivery whose version the BPMS did not report (decision 20 in the
+   * repository's DECISIONS.md).
    */
   public static final ServedVersions EVERY_VERSION = new ServedVersions(
       List.of(VersionRange.parse("*", "the default")), null);
@@ -35,10 +34,10 @@ public final class ServedVersions {
   private final List<VersionRange> ranges;
 
   /**
-   * Where the ranges came from if the method named none itself: the
-   * <code>&#64;BpmnProcess</code> declaration the handlers of its class were registered
-   * for. <code>null</code> where the method names its own, whose messages need no
-   * origin - the attribute is in front of whoever reads them.
+   * Where the ranges came from, if the method named none itself: the
+   * <code>&#64;BpmnProcess</code> declaration for which the handlers of its class were
+   * registered. It is <code>null</code> where the method names its own. Their messages need
+   * no origin, because the reader sees the attribute.
    */
   private final String inheritedFrom;
 
@@ -110,11 +109,11 @@ public final class ServedVersions {
   /**
    * Whether this method is unrestricted.
    * <p>
-   * Two places rely on it: a method like this inherits the ranges of its class, and it is
+   * Two places rely on it. A method like this inherits the ranges of its class. And it is
    * the only kind of method which serves a delivery whose version the BPMS did not report.
    *
-   * @return Whether every version is served - what a method naming no version parses
-   *         to, and what makes it inherit the ranges of its class
+   * @return Whether every version is served. A method which names no version parses to
+   *         that, and it makes the method inherit the ranges of its class
    */
   public boolean everyVersion() {
 
@@ -123,9 +122,10 @@ public final class ServedVersions {
   }
 
   /**
-   * Whether a delivery of a BPMS which keeps no catalog of its deployed versions can
-   * ever reach this method - see {@link VersionRange#canBeMetWithoutACatalog}. A method serves
-   * a version ANY of its specifications covers, so one which can be met is enough.
+   * Whether a delivery of a BPMS which keeps no list of its deployed versions can ever reach
+   * this method (see {@link VersionRange#canBeMetWithoutACatalog}). A method serves a version
+   * which ANY of its specifications covers. So one specification which can be met is
+   * enough.
    *
    * @param reported What a delivery of that BPMS carries as its process version
    * @return Whether such a delivery can reach this method
@@ -142,9 +142,9 @@ public final class ServedVersions {
   /**
    * Whether this method serves that version, using numbers alone.
    * <p>
-   * For ranges made of numbers that is the whole answer. A range naming a version tag needs
-   * the BPMS, so use {@link #matches(String, VersionRange.ProcessVersionResolver)} wherever a
-   * tag may turn up.
+   * For ranges made of numbers, that is the whole answer. A range which names a version tag
+   * needs the BPMS. So use {@link #matches(String, VersionRange.ProcessVersionResolver)}
+   * wherever a tag may turn up.
    *
    * @param processVersion The version the BPMS reported
    * @return Whether this method serves it, decided without asking a BPMS
@@ -157,12 +157,11 @@ public final class ServedVersions {
   }
 
   /**
-   * Whether this method serves the version a delivery came from - the question every
-   * dispatch asks.
+   * Whether this method serves the version a delivery came from. Every dispatch asks this.
    * <p>
-   * A method serves a version ANY of its specifications covers. Where the BPMS reported no
-   * version, only a method naming no range at all is served (decision 20 in the repository's
-   * DECISIONS.md).
+   * A method serves a version which ANY of its specifications covers. Where the BPMS
+   * reported no version, only a method which names no range at all is served (decision 20
+   * in the repository's DECISIONS.md).
    *
    * @param processVersion The version the BPMS reported, <code>null</code> where it
    *          reports none
@@ -180,10 +179,10 @@ public final class ServedVersions {
   }
 
   /**
-   * Whether two methods serve at least one common process version - what makes two
-   * methods wired to the same element ambiguous. Disjoint ranges are a legitimate way of
-   * serving several versions of a process, which is why <code>1-2</code> next to
-   * <code>&gt;2</code> is fine and <code>1-3</code> next to <code>2</code> is not.
+   * Whether two methods serve at least one common process version. That makes two methods
+   * wired to the same element ambiguous. Ranges which do not overlap are a valid way to serve
+   * several versions of a process. That is why <code>1-2</code> next to <code>&gt;2</code> is
+   * fine, and <code>1-3</code> next to <code>2</code> is not.
    *
    * @param other What the other method serves
    * @param resolver Resolves version tags of the BPMN process both belong to
@@ -202,14 +201,15 @@ public final class ServedVersions {
   }
 
   /**
-   * The tags which have to be resolved before these ranges can be placed in the deployment
-   * order.
+   * The tags which have to be resolved before these ranges can be placed in the order of
+   * the deployments.
    * <p>
-   * An empty answer for every method of a process saves the BPMS question altogether, and a
-   * tag the BPMS does not know is reported naming the method it came from.
+   * If the answer is empty for every method of a process, the BPMS is not asked at all. A
+   * tag which the BPMS does not know is reported, and the message names the method it came
+   * from.
    *
-   * @return The version tags these specifications name, each once - empty for
-   *         specifications no BPMS has to be asked about
+   * @return The version tags which these specifications name, each once. Empty for
+   *         specifications about which no BPMS has to be asked
    */
   public List<String> versionTags() {
 
@@ -224,10 +224,10 @@ public final class ServedVersions {
   /**
    * Whether a message about these ranges has to explain where they sit.
    * <p>
-   * A range the method does not carry is the surprising case: its author reads a complaint
-   * about a version attribute nowhere near the method.
+   * A range which the method does not have is the surprising case. Its author reads a
+   * complaint about a version attribute which is nowhere near the method.
    *
-   * @return Whether these ranges come from the class rather than from the method
+   * @return Whether these ranges come from the class and not from the method
    */
   public boolean inherited() {
 
@@ -236,7 +236,7 @@ public final class ServedVersions {
   }
 
   /**
-   * The specification(s), for messages about a method serving no version the BPMS
+   * The specifications, for messages about a method which serves no version the BPMS
    * holds.
    *
    * @return The specifications, comma separated
@@ -252,9 +252,9 @@ public final class ServedVersions {
   }
 
   /**
-   * The specification(s) plus, where the method named none itself, the declaration they
-   * came from. Every message about an ambiguity or a method serving nothing uses this: a
-   * complaint about a range the reader cannot see in front of the method reads like a
+   * The specifications and, where the method named none itself, the declaration they came
+   * from. Every message about an ambiguity, or about a method which serves nothing, uses
+   * this. A complaint about a range which the reader cannot see at the method looks like a
    * defect of VanillaBP.
    *
    * @return The specifications and their origin
@@ -268,7 +268,7 @@ public final class ServedVersions {
   }
 
   /**
-   * Where the ranges came from, ready to be appended to a description of the method -
+   * Where the ranges came from, ready to be added to a description of the method. It is
    * empty where the method names them itself.
    *
    * @return The clause to append, or an empty string

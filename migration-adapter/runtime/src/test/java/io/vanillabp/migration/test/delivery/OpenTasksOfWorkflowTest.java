@@ -18,13 +18,13 @@ import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The open tasks of ONE workflow of the BPMS, which is what the core reads on every
- * wake-up to see what else it still believes is open there. The SQL is shared by both
- * platforms, so this is where it is pinned, on H2.
+ * The open tasks of ONE workflow of the BPMS. The core reads them on every wake-up, to see
+ * what else it still believes to be open there. Both platforms share the SQL, so it is
+ * pinned here, on H2.
  * <p>
- * The last case is the reason the read exists at all: it reads an index over
- * <code>WORKFLOW_ID</code> and not the table, so its cost follows what one workflow has
- * open rather than what the whole installation has.
+ * The last case is the reason why the read exists at all. It reads an index over
+ * <code>WORKFLOW_ID</code> and not the table. So its cost follows what one workflow has
+ * open, not what the whole installation has.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OpenTasksOfWorkflowTest {
@@ -101,9 +101,9 @@ public class OpenTasksOfWorkflowTest {
   }
 
   /**
-   * A task a called process handed out carries the secondary BPMN process id while
-   * belonging to the same workflow of the BPMS. That is why the BPMN process is not part
-   * of the question: narrowing by it would drop exactly those tasks.
+   * A task which a called process handed out carries the secondary BPMN process id. But it
+   * belongs to the same workflow of the BPMS. That is why the BPMN process is not part of
+   * the question. Narrowing by it would drop exactly those tasks.
    */
   @Test
   @DisplayName("A task of a called process belongs to the same workflow")
@@ -131,9 +131,9 @@ public class OpenTasksOfWorkflowTest {
   }
 
   /**
-   * The one limit of this read, and the reason its javadoc names it: an adapter which
-   * reports no workflow leaves the column empty, and such a record can never be found by
-   * a workflow.
+   * The one limit of this read, and the reason why its javadoc names it. An adapter which
+   * reports no workflow leaves the column empty. Such a record can never be found by a
+   * workflow.
    */
   @Test
   @DisplayName("A record whose adapter named no workflow is invisible to this read")
@@ -150,15 +150,15 @@ public class OpenTasksOfWorkflowTest {
   }
 
   /**
-   * What the read costs: the index over WORKFLOW_ID and not a walk over everything which
-   * is open in the installation. Read from the plan the database itself prints, so a
-   * statement which stops using the index fails here rather than in an installation with
-   * many open tasks.
+   * What the read costs: the index over WORKFLOW_ID, and not a walk over everything which
+   * is open in the installation. The test reads it from the plan which the database itself
+   * prints. So a statement which stops using the index fails here, and not in an
+   * installation with many open tasks.
    * <p>
-   * The rows are needed for the question to be interesting at all. A planner decides
-   * between the index over WORKFLOW_ID and the index over what "open" means, and with a
-   * handful of rows either is as good as the other. A thousand open tasks spread over
-   * five hundred workflows is what makes the difference visible.
+   * The question needs the rows to be interesting at all. A planner decides between the
+   * index over WORKFLOW_ID and the index over what "open" means. With a handful of rows, both
+   * are equally good. A thousand open tasks spread over five hundred workflows make the
+   * difference visible.
    */
   @Test
   @DisplayName("The read follows the index over WORKFLOW_ID rather than everything which is open")
@@ -191,8 +191,8 @@ public class OpenTasksOfWorkflowTest {
   }
 
   /**
-   * Lets the database count what is in the table, so its planner chooses by how selective
-   * a column is instead of by how many conditions an index matches.
+   * Lets the database count what is in the table. So its planner chooses by how selective a
+   * column is, and not by how many conditions an index matches.
    */
   private void analyze() throws SQLException {
 

@@ -17,40 +17,38 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * The SQL behind the JDBC-based {@link io.vanillabp.integration.spi.TaskDeliveryLog}
  * implementations of both platforms: reading, writing and cleaning up the records of
- * processed task deliveries. Everything platform-specific is behind
- * {@link JdbcConnectionAccess} - the connection has to belong to the transaction which
- * persists the workflow aggregate, otherwise the record and the aggregate would not
- * commit together.
+ * processed task deliveries. Everything which depends on the platform is behind
+ * {@link JdbcConnectionAccess}. The connection has to belong to the transaction which
+ * persists the workflow aggregate. Otherwise the record and the aggregate would not commit
+ * together.
  * <p>
- * A row of this table is either a task delivery or the start of a workflow, and
- * <code>RECORD_KIND</code> is what says which. Every question about open work filters on it
- * first, so a start - which carries no task - is in none of those answers, and the retention of
- * the deliveries leaves it alone because it has a period of its own.
+ * A row of this table is either a task delivery or the start of a workflow.
+ * <code>RECORD_KIND</code> says which. Every question about open work filters on it first.
+ * So a start, which has no task, is in none of those answers. And the retention of the
+ * deliveries leaves it alone, because a start has a period of its own.
  * <p>
- * A record is INSERTed once and never rewritten: the delivery key is the primary key, so
- * two nodes processing the same delivery concurrently end up with one record and the
- * loser learns it from the constraint violation ({@link #record(TaskDelivery)} returns
- * <code>false</code> then, exactly like a duplicate outbox entry). A row of a delivery
- * nobody deduplicates carries a key which belongs to that row alone, so it cannot be the
- * loser of such a race and nothing here treats it differently. Two columns change
- * afterwards and nothing else does: <code>LAST_SEEN_AT</code>, the moment the BPMS last
- * redelivered the task the record answers - what the retention counts from - and
- * <code>TASK_CLOSED_AT</code>, the moment the application's completion of that task reached
- * the BPMS.
+ * A record is INSERTed once and never rewritten. The delivery key is the primary key. So if
+ * two nodes process the same delivery at the same time, there is one record, and the loser
+ * learns it from the constraint violation. {@link #record(TaskDelivery)} then returns
+ * <code>false</code>, exactly like a duplicate outbox entry. A row of a delivery which nobody
+ * deduplicates has a key which belongs to that row alone. So it cannot lose such a race, and
+ * nothing here treats it differently. Two columns change later, and nothing else does.
+ * <code>LAST_SEEN_AT</code> is the moment the BPMS last redelivered the task which the record
+ * answers. The retention counts from it. <code>TASK_CLOSED_AT</code> is the moment the
+ * application's completion of that task reached the BPMS.
  * <p>
- * The DDL is kept portable the same way the Quarkus outbox does it: table existence is
- * checked via JDBC metadata (<code>CREATE TABLE IF NOT EXISTS</code> is not supported
- * by Oracle and SQL Server), the timestamp type is chosen per database and the delivery
- * key is limited to {@value io.vanillabp.integration.adapter.migration.workflowtask.TaskDeliveryKey#MAX_LENGTH}
- * characters so MySQL's key-length limit (3072 bytes with utf8mb4) is respected - the
+ * The DDL stays portable in the same way as the Quarkus outbox. Whether the table exists is
+ * checked through the JDBC metadata, because Oracle and SQL Server do not support
+ * <code>CREATE TABLE IF NOT EXISTS</code>. The timestamp type is chosen per database. The
+ * delivery key is limited to
+ * {@value io.vanillabp.integration.adapter.migration.workflowtask.TaskDeliveryKey#MAX_LENGTH}
+ * characters, so the key-length limit of MySQL (3072 bytes with utf8mb4) is respected. The
  * core hashes longer keys before they ever reach a store.
  * <p>
- * Why a record is written at all and why it carries two timestamps is decision 6 in the
- * repository's DECISIONS.md; where the schema comes from and why the startup check reads the
- * columns is decision 16 in the repository's DECISIONS.md; why the adapter id is a column of its
- * own is
- * decision 17 in the repository's DECISIONS.md; why the record also answers which adapter holds a
- * task is decision 30 in the repository's DECISIONS.md.
+ * Decision 6 in the repository's DECISIONS.md says why a record is written at all, and why it
+ * has two timestamps. Decision 16 says where the schema comes from, and why the startup check
+ * reads the columns. Decision 17 says why the adapter id is a column of its own. Decision 30
+ * says why the record also answers which adapter holds a task.
  */
 @Slf4j
 // see decision 1 in the repository's DECISIONS.md
@@ -58,17 +56,17 @@ import lombok.extern.slf4j.Slf4j;
 public class JdbcTaskDeliveryStore {
 
   /**
-   * The default name of the table holding the records, used where the application names
+   * The default name of the table which holds the records, used where the application names
    * none (<code>vanillabp.outbox.jdbc.delivery-table</code>).
    */
   public static final String DEFAULT_TABLE_NAME = "VANILLABP_TASK_DELIVERY";
 
   /**
    * Resolves the configured table name
-   * (<code>vanillabp.outbox.jdbc.delivery-table</code>, falling back to
-   * {@link #DEFAULT_TABLE_NAME}). Both platforms ask this method instead of reading the
-   * key themselves, so an application which renames the table is followed by the store, by
-   * the startup check and by the message about two stores in one table.
+   * (<code>vanillabp.outbox.jdbc.delivery-table</code>, or else {@link #DEFAULT_TABLE_NAME}).
+   * Both platforms ask this method instead of reading the key themselves. So if an
+   * application renames the table, the store, the startup check and the message about two
+   * stores in one table all follow.
    *
    * @param properties The outbox configuration, which carries the store settings of the
    *          delivery log
@@ -92,17 +90,17 @@ public class JdbcTaskDeliveryStore {
       WHERE DELIVERY_KEY = ?""";
 
   /**
-   * The record which left one task open, read once per task operation of the application:
-   * the election asks it instead of asking every configured BPMS which of them holds the
-   * task. TASK_ID is indexed, so this is a lookup and not a scan; the remaining columns
-   * narrow the answer down to the one workflow, because a task id is only unique within its
-   * BPMS.
+   * The record which left one task open. It is read once per task operation of the
+   * application. The election asks it instead of asking every configured BPMS which of them
+   * holds the task. TASK_ID has an index, so this is a lookup and not a scan. The other
+   * columns narrow the answer down to the one workflow, because a task id is only unique
+   * within its BPMS.
    * <p>
-   * Only a record reporting <code>COMPLETION_PENDING</code> qualifies - that is the outcome
-   * which leaves a task open, and only such a task can be completed or cancelled later.
-   * Ordered by RECORDED_AT so the most recent one answers where a task was delivered more
-   * than once (a redelivery of an open task writes no second record, but a task cancelled
-   * and created again does).
+   * Only a record which reports <code>COMPLETION_PENDING</code> counts. That outcome leaves a
+   * task open, and only such a task can be completed or cancelled later. The order is by
+   * RECORDED_AT, so the most recent record answers where a task was delivered more than once.
+   * A redelivery of an open task writes no second record, but a task which is cancelled and
+   * created again does.
    */
   private static final String SELECT_RECORD_OF_TASK = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
@@ -115,35 +113,35 @@ public class JdbcTaskDeliveryStore {
 
   /**
    * How many rows the election reads: the newest record of that task, and nothing behind it.
-   * Set on the statement rather than written as a LIMIT clause, for the reason
-   * {@link #ROWS_OF_AN_EXISTENCE_QUESTION} spells out.
+   * It is set on the statement and not written as a LIMIT clause, for the reason which
+   * {@link #ROWS_OF_AN_EXISTENCE_QUESTION} explains.
    */
   private static final int ROWS_OF_THE_NEWEST_RECORD = 1;
 
   /**
    * The OPEN records of one workflow aggregate: the outcome which left a task to the
-   * application, and no moment saying the completion reached the BPMS. Ordered oldest first,
-   * which is the order the tasks were handed out in.
+   * application, and no moment which says that the completion reached the BPMS. The oldest
+   * comes first, which is the order in which the tasks were handed out.
    * <p>
-   * The index this reads is {@link #INDEX_OF_OPEN_RECORDS}, over the kind of the row and the two
-   * columns which say "open". AGGREGATE_ID is not part of it: the column holds up to 1024 characters, and an
-   * index over it exceeds the key-length limit of MySQL (3072 bytes with utf8mb4) and of a
-   * DB2 database using 4K pages - the same reason the release of an ended workflow ships
-   * without one. So the index narrows the read to the tasks which are open right now, whose
-   * number follows what the BPMS hands out rather than everything ever recorded, and the
-   * three equality columns are matched on those rows. An application with very many
-   * concurrently open tasks adds an index over AGGREGATE_ID itself, prefixed the way its
-   * database spells it, which this module's README says as well.
+   * This reads the index {@link #INDEX_OF_OPEN_RECORDS}, over the kind of the row and the two
+   * columns which say "open". AGGREGATE_ID is not part of it. The column holds up to 1024
+   * characters. An index over it exceeds the key-length limit of MySQL (3072 bytes with
+   * utf8mb4) and of a DB2 database with 4K pages. For the same reason the release of an ended
+   * workflow ships without such an index. So the index narrows the read to the tasks which are
+   * open right now. Their number follows what the BPMS hands out, not everything ever
+   * recorded. The three equality columns are matched on those rows. An application with very
+   * many tasks open at the same time adds an index over AGGREGATE_ID itself, with a prefix as
+   * its database writes it. The README of migration-adapter says this as well.
    * <p>
-   * What that costs was measured on PostgreSQL 16.15 in September 2026, with the table in
-   * memory: 0.22 ms at 501 concurrently open records, 0.68 ms at 5001, 5.73 ms at 50001 and
-   * 34.30 ms at 500001, against 0.27 ms at every one of those sizes on MongoDB, which indexes
-   * the aggregate id itself. PostgreSQL uses this index until the open records are about a
-   * fifth of the table and reads the table itself beyond that, and the cost is a straight line
-   * through that switch, because either way one pass covers the open records. The history is
-   * out of it: the index scan examined the same 501 entries in 0.17 ms whether the table held
-   * one million records or two million. The numbers and the reasoning for shipping no index
-   * over AGGREGATE_ID are in this module's README.
+   * The cost was measured on PostgreSQL 16.15 in September 2026, with the table in memory:
+   * 0.22 ms at 501 open records, 0.68 ms at 5001, 5.73 ms at 50001 and 34.30 ms at 500001.
+   * MongoDB took 0.27 ms at every one of those sizes, because it indexes the aggregate id
+   * itself. PostgreSQL uses this index until the open records are about a fifth of the table.
+   * Beyond that it reads the table itself. The cost is a straight line through that switch,
+   * because either way one pass covers the open records. The history does not count: the
+   * index scan examined the same 501 entries in 0.17 ms, whether the table held one million
+   * records or two million. The README of migration-adapter has the numbers and the reasons
+   * for shipping no index over AGGREGATE_ID.
    */
   private static final String SELECT_OPEN_TASKS_OF_AGGREGATE = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
@@ -155,30 +153,30 @@ public class JdbcTaskDeliveryStore {
       ORDER BY RECORDED_AT ASC""";
 
   /**
-   * The statement creating the index the open tasks of an aggregate are read through. Two
-   * placeholders for the table name, like every other DDL of this class.
+   * The statement which creates the index through which the open tasks of an aggregate are
+   * read. It has two placeholders for the table name, like every other DDL of this class.
    * <p>
-   * RECORD_KIND stands FIRST, which is the question asked first: is this row about a task at
-   * all. Two equality columns can stand in either order without changing what the database does
-   * with them - what has to stand last is TASK_CLOSED_AT, which is read as a range - so the
+   * RECORD_KIND comes FIRST, because it is the question asked first: is this row about a task
+   * at all? Two equality columns can stand in either order, and the database does the same
+   * with them. Only TASK_CLOSED_AT has to come last, because it is read as a range. So the
    * order is the one a reader follows.
    */
   private static final String INDEX_OF_OPEN_RECORDS = "CREATE INDEX %s_OPEN ON %s (RECORD_KIND, OUTCOME, TASK_CLOSED_AT)";
 
   /**
-   * The OPEN records of ONE workflow of the BPMS, read on every wake-up of that workflow.
-   * Ordered oldest first, which is the order the tasks were handed out in and the order the
-   * probes of a wake-up follow.
+   * The OPEN records of ONE workflow of the BPMS, read on every wake-up of that workflow. The
+   * oldest comes first. That is the order in which the tasks were handed out, and the order
+   * which the probes of a wake-up follow.
    * <p>
-   * WORKFLOW_ID carries an index of its own ({@link #INDEX_OF_WORKFLOW}), unlike AGGREGATE_ID:
-   * the column is VARCHAR(255) and stays inside the key-length limit of every database this
-   * runs on, the same way TASK_ID does. What that buys is measured in this module's README -
-   * the read by aggregate grows with the number of tasks open in the whole installation, this
-   * one does not.
+   * Unlike AGGREGATE_ID, WORKFLOW_ID has an index of its own ({@link #INDEX_OF_WORKFLOW}). The
+   * column is VARCHAR(255) and stays inside the key-length limit of every database this runs
+   * on, the same way as TASK_ID. The README of migration-adapter has the measurement of what
+   * that buys. The read by aggregate grows with the number of open tasks in the whole
+   * installation. This read does not.
    * <p>
-   * The BPMN process is NOT part of the question. A workflow of the BPMS is one instance, and
-   * a task a called process handed out carries the secondary process id while belonging to
-   * the same instance - so narrowing by process would drop exactly those.
+   * The BPMN process is NOT part of the question. A workflow of the BPMS is one instance. A
+   * task which a called process handed out has the id of the secondary process, but it
+   * belongs to the same instance. So narrowing by process would drop exactly those tasks.
    */
   private static final String SELECT_OPEN_TASKS_OF_WORKFLOW = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
@@ -190,15 +188,15 @@ public class JdbcTaskDeliveryStore {
       ORDER BY RECORDED_AT ASC""";
 
   /**
-   * The statement creating the index the open tasks of one workflow are read through. Two
-   * placeholders for the table name, like every other DDL of this class.
+   * The statement which creates the index through which the open tasks of one workflow are
+   * read. It has two placeholders for the table name, like every other DDL of this class.
    */
   private static final String INDEX_OF_WORKFLOW = "CREATE INDEX %s_WORKFLOW ON %s (WORKFLOW_ID)";
 
   /**
-   * The adapter ids the OPEN records of one BPMN process belong to. Asked once
-   * per BPMN process at startup, never at runtime, and answered from the same index the
-   * cleanup uses; a record written before ADAPTER_ID existed carries none and is skipped.
+   * The adapter ids to which the OPEN records of one BPMN process belong. It is asked once
+   * per BPMN process at startup, never at runtime, and answered from the same index which the
+   * cleanup uses. A record written before ADAPTER_ID existed has none and is skipped.
    */
   private static final String SELECT_ADAPTER_IDS_OF_OPEN_TASKS = """
       SELECT DISTINCT ADAPTER_ID \
@@ -207,10 +205,10 @@ public class JdbcTaskDeliveryStore {
       AND ADAPTER_ID IS NOT NULL""";
 
   /**
-   * Whether ANY open record of one BPMN process exists. The question is about existence,
-   * so exactly one row is wanted no matter how many there are - see
-   * {@link #ROWS_OF_AN_EXISTENCE_QUESTION} for why the row limit is set on the statement
-   * rather than written into this text.
+   * Whether ANY open record of one BPMN process exists. The question is about existence, so
+   * exactly one row is wanted, however many there are. See
+   * {@link #ROWS_OF_AN_EXISTENCE_QUESTION} for why the row limit is set on the statement and
+   * not written into this text.
    */
   private static final String SELECT_ANY_OPEN_RECORD = """
       SELECT DELIVERY_KEY \
@@ -221,46 +219,47 @@ public class JdbcTaskDeliveryStore {
    * How many rows a question about EXISTENCE fetches.
    * <p>
    * Reading the first row of a result set is not the same as asking for one row. A driver
-   * decides for itself how much it fetches before <code>next()</code> answers, and the
-   * PostgreSQL driver reads the WHOLE result set into memory unless the statement says
-   * otherwise. An application with a hundred thousand open task deliveries would therefore
-   * transfer a hundred thousand keys while booting, to learn whether there is at least
-   * one - the growth with the age of the application which decision 19 in the repository's
-   * DECISIONS.md forbids of a startup check.
+   * decides for itself how much it fetches before <code>next()</code> answers. The PostgreSQL
+   * driver reads the WHOLE result set into memory unless the statement says otherwise. So an
+   * application with a hundred thousand open task deliveries would transfer a hundred
+   * thousand keys while it boots, only to learn whether there is at least one. That is
+   * growth with the age of the application, and decision 19 in the repository's DECISIONS.md
+   * forbids it for a startup check.
    * <p>
-   * {@link java.sql.Statement#setMaxRows(int)} rather than a <code>LIMIT</code> clause: the
-   * syntax for it differs per database while the JDBC call does not, and it reaches the
-   * server, because the extended query protocol carries the row count in the message which
-   * executes the statement.
+   * It uses {@link java.sql.Statement#setMaxRows(int)} and not a <code>LIMIT</code> clause.
+   * The syntax of that clause differs per database, but the JDBC call does not. And the call
+   * reaches the server, because the extended query protocol carries the row count in the
+   * message which executes the statement.
    */
   private static final int ROWS_OF_AN_EXISTENCE_QUESTION = 1;
 
   /**
-   * The outcome of a delivery which left its task open - the only records the three
-   * questions about open tasks are interested in.
+   * The outcome of a delivery which left its task open. The three questions about open tasks
+   * are only interested in these records.
    */
   private static final String COMPLETION_PENDING = io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome.Kind.COMPLETION_PENDING
       .name();
 
   /**
-   * The kind of row every question about open work filters on, and the kind the retention of
-   * deliveries deletes by age. A row which says nothing about its kind was written before the
-   * column existed and is a delivery, which is why the column is NOT NULL with this as its
-   * default: an ALTER of an existing table fills it, and from then on the filter is a plain
-   * equality.
+   * The kind of row which every question about open work filters on, and which the retention
+   * of deliveries deletes by age. A row which says nothing about its kind was written before
+   * the column existed, and it is a delivery. That is why the column is NOT NULL with this as
+   * its default. An ALTER of an existing table fills it, and from then on the filter is a
+   * plain equality.
    */
   private static final String TASK_DELIVERY = io.vanillabp.integration.spi.DeliveryRecordKind.TASK_DELIVERY
       .name();
 
   /**
-   * The kind of row which says where a workflow runs, and the only one the retention of started
-   * workflows deletes.
+   * The kind of row which says where a workflow runs. The retention of started workflows
+   * deletes only this kind.
    */
   private static final String WORKFLOW_START = io.vanillabp.integration.spi.DeliveryRecordKind.WORKFLOW_START
       .name();
 
   /**
-   * The kind a row is written under: what the record says, and a delivery where it says nothing.
+   * The kind under which a row is written: what the record says, or a delivery where it says
+   * nothing.
    *
    * @param delivery The record about to be written
    * @return The text of the kind, never <code>null</code>
@@ -268,9 +267,10 @@ public class JdbcTaskDeliveryStore {
   private static String kindOfTheRow(
       final TaskDelivery delivery) {
 
-    // a kind this version does not know is written as a delivery rather than as itself: the
-    // questions about open work and the two retentions are equalities on the two kinds, so a third
-    // word would put the row in no answer and in no cleanup and leave it in the table for good
+    // a kind which this version does not know is written as a delivery and not as itself.
+    // The questions about open work and the two retentions compare with the two known kinds.
+    // A third word would put the row in no answer and in no cleanup, and it would stay in
+    // the table for good
     final var kind = io.vanillabp.integration.spi.DeliveryRecordKind.of(delivery.recordKind());
     return kind == null
         ? TASK_DELIVERY
@@ -285,7 +285,7 @@ public class JdbcTaskDeliveryStore {
       LAST_SEEN_AT, TASK_KIND, RECORD_KIND, PROCESS_VERSION) \
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""";
 
-  // TASK_CLOSED_AT is not written here: a record is born open, and the moment the
+  // TASK_CLOSED_AT is not written here. A record starts open. The moment when the
   // application's completion reached the BPMS is the one thing about a task which is known
   // long after the handler ran
   private static final String CLOSE_TASK = """
@@ -294,9 +294,9 @@ public class JdbcTaskDeliveryStore {
       WHERE TASK_ID = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ? \
       AND TASK_CLOSED_AT IS NULL""";
 
-  // one key per execution instead of an IN list, whose length is capped differently by
-  // every database (Oracle at 1000 expressions, SQL Server at about 2100 parameters) -
-  // the statement is executed as a JDBC batch, which knows no such limit
+  // one key per execution instead of an IN list. Every database limits the length of such
+  // a list differently (Oracle at 1000 expressions, SQL Server at about 2100 parameters).
+  // The statement runs as a JDBC batch, which has no such limit
   private static final String TOUCH_DELIVERY = """
       UPDATE %s \
       SET LAST_SEEN_AT = ? \
@@ -307,20 +307,20 @@ public class JdbcTaskDeliveryStore {
       WHERE RECORD_KIND = ? AND LAST_SEEN_AT < ?""";
 
   /**
-   * The rows about started workflows whose own retention passed. LAST_SEEN_AT and not
-   * RECORDED_AT, although the two hold the same moment in such a row: nothing ever moves
-   * LAST_SEEN_AT of a start row - only a redelivery of an open task does that, and a start row
-   * answers no redelivery - and deleting by the column the AGE index spans is what keeps this an
-   * indexed delete rather than a scan.
+   * The rows about started workflows whose own retention has passed. It uses LAST_SEEN_AT and
+   * not RECORDED_AT, although both hold the same moment in such a row. Nothing ever moves
+   * LAST_SEEN_AT of a start row. Only a redelivery of an open task does that, and a start row
+   * answers no redelivery. Deleting by the column which the AGE index spans keeps this an
+   * indexed delete and not a scan.
    */
   private static final String DELETE_EXPIRED_WORKFLOW_STARTS = """
       DELETE FROM %s \
       WHERE RECORD_KIND = ? AND LAST_SEEN_AT < ?""";
 
   /**
-   * The rows about started workflows the sieve is asked about, read instead of deleted where an
-   * application asked for the sieve. The row limit of one run is
-   * {@link #WORKFLOW_STARTS_SIEVED_PER_RUN}; what is not reached is reached by the next run.
+   * The rows about started workflows which the sieve is asked about. Where an application
+   * asked for the sieve, they are read instead of deleted. The row limit of one run is
+   * {@link #WORKFLOW_STARTS_SIEVED_PER_RUN}. The next run reaches what this one did not.
    */
   private static final String SELECT_EXPIRED_WORKFLOW_STARTS = """
       SELECT DELIVERY_KEY, ADAPTER_ID, WORKFLOW_MODULE_ID, BPMN_PROCESS_ID, AGGREGATE_ID, WORKFLOW_ID, \
@@ -332,9 +332,9 @@ public class JdbcTaskDeliveryStore {
 
   /**
    * How many rows one sieved run looks at. The sieve costs one read of the application's own
-   * database per row, so a run has an upper bound instead of taking however many rows expired
-   * while the application was stopped; the next hourly run continues where this one stopped,
-   * because what it kept is kept and what it deleted is gone.
+   * database per row. So a run has an upper limit, instead of taking however many rows
+   * expired while the application was stopped. The next hourly run goes on where this one
+   * stopped, because what it kept is kept, and what it deleted is gone.
    */
   private static final int WORKFLOW_STARTS_SIEVED_PER_RUN = 1000;
 
@@ -343,15 +343,16 @@ public class JdbcTaskDeliveryStore {
       WHERE DELIVERY_KEY = ?""";
 
   /**
-   * What a SECOND workflow of one aggregate writes: the row is keyed by the aggregate and the BPMN
-   * process, so the insert of such a start finds the row of the workflow which ended before it and
-   * the id in it has to be replaced. Bounded to a row which really is a start and whose id really
-   * differs, so a start dispatched twice updates nothing.
+   * What a SECOND workflow of one aggregate writes. The row is keyed by the aggregate and the
+   * BPMN process. So the insert of such a start finds the row of the workflow which ended
+   * before it, and the id in that row has to be replaced. It only touches a row which really
+   * is a start and whose id really differs. So a start which is dispatched twice updates
+   * nothing.
    * <p>
-   * LAST_SEEN_AT moves with it, which is what the period of a start row counts from: the row is
-   * about the workflow which runs now, so its age is that workflow's age. PROCESS_VERSION moves as
-   * well, also to empty: a version of the workflow which ended says nothing about the one which
-   * runs now.
+   * LAST_SEEN_AT moves with it, and the period of a start row counts from it. The row is
+   * about the workflow which runs now, so its age is the age of that workflow.
+   * PROCESS_VERSION moves as well, also to empty. A version of the workflow which ended says
+   * nothing about the one which runs now.
    */
   private static final String REPLACE_WORKFLOW_START = """
       UPDATE %s \
@@ -360,10 +361,10 @@ public class JdbcTaskDeliveryStore {
       AND (WORKFLOW_ID IS NULL OR WORKFLOW_ID <> ?)""";
 
   /**
-   * What a second report of the SAME start adds: the version, where the row names this workflow
-   * and no version yet. The start of one workflow may be reported by the adapter which started it
-   * and again by the BPMS itself, and only one of the two may know the version. A version which is
-   * there already stays: it is the one the workflow started on.
+   * What a second report of the SAME start adds: the version, where the row names this
+   * workflow and has no version yet. The adapter which started a workflow may report its
+   * start, and the BPMS itself may report it again. Only one of the two may know the
+   * version. A version which is there already stays, because the workflow started on it.
    */
   private static final String ADD_THE_VERSION_OF_A_WORKFLOW_START = """
       UPDATE %s \
@@ -416,14 +417,14 @@ public class JdbcTaskDeliveryStore {
   /**
    * Built by the platform's delivery log, once per application.
    * <p>
-   * The statements are composed here rather than per call, because the table name is the one
-   * thing about them which can differ and it is known now. Nothing touches the database yet -
-   * the schema is checked when the log starts.
+   * The statements are built here and not per call. The table name is the only thing about
+   * them which can differ, and it is known now. Nothing touches the database yet. The schema
+   * is checked when the log starts.
    *
-   * @param connectionAccess Where a connection of the running transaction comes from, which
-   *          is what makes a record commit together with the workflow aggregate
-   * @param tableName The table holding the records, {@link #DEFAULT_TABLE_NAME} unless the
-   *          application configured another one
+   * @param connectionAccess Where a connection of the running transaction comes from. That
+   *          makes a record commit together with the workflow aggregate
+   * @param tableName The table which holds the records, {@link #DEFAULT_TABLE_NAME} unless
+   *          the application configured another one
    */
   public JdbcTaskDeliveryStore(
       final JdbcConnectionAccess connectionAccess,
@@ -452,9 +453,9 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * The table this store works on, which the messages around it name.
+   * The table this store works on. The messages around it name it.
    * <p>
-   * An operator who has to look at the records needs the name, and it is configurable, so
+   * An operator who has to look at the records needs the name. It can be configured, so
    * nothing may spell it out a second time.
    *
    * @return The name of the table the records are stored in
@@ -497,13 +498,13 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * The record which left one task open, whether or not the task has been closed since -
-   * what the election of a task operation reads instead of asking a BPMS (see
+   * The record which left one task open, whether or not the task has been closed since. The
+   * election of a task operation reads it instead of asking a BPMS (see
    * {@link io.vanillabp.integration.spi.TaskDeliveryLog#recordOfTask}).
    * <p>
-   * A failure is NOT swallowed here, unlike the startup questions above: this read decides
-   * whether an operation is routed at all, and a store which quietly answers "nothing" would
-   * turn a broken table into a silently doubled number of BPMS round trips.
+   * Unlike the startup questions above, a failure is NOT swallowed here. This read decides
+   * whether an operation is routed at all. A store which quietly answered "nothing" would
+   * turn a broken table into twice as many BPMS round trips, and nobody would notice.
    *
    * @param workflowModuleId The workflow module of the workflow
    * @param bpmnProcessId The BPMN process of the workflow
@@ -551,9 +552,9 @@ public class JdbcTaskDeliveryStore {
    * {@link io.vanillabp.integration.spi.TaskDeliveryLog#openTasksOfAggregate}), oldest
    * first.
    * <p>
-   * A failure is NOT swallowed: a caller building a list of open work from an empty answer
-   * would show an empty screen instead of an error, and nobody would notice the table is
-   * broken.
+   * A failure is NOT swallowed. A caller which builds a list of open work from an empty
+   * answer would show an empty screen instead of an error. Nobody would notice that the
+   * table is broken.
    *
    * @param workflowModuleId The workflow module of the workflow
    * @param bpmnProcessId The BPMN process of the workflow
@@ -598,9 +599,9 @@ public class JdbcTaskDeliveryStore {
    * The open tasks of one workflow of the BPMS (see
    * {@link io.vanillabp.integration.spi.TaskDeliveryLog#openTasksOfWorkflow}), oldest first.
    * <p>
-   * A failure is NOT swallowed, for the reason the read by aggregate does not swallow one: a
-   * caller reading an empty answer would derive nothing and nobody would notice the table is
-   * broken.
+   * A failure is NOT swallowed, for the same reason as in the read by aggregate. A caller
+   * which reads an empty answer would derive nothing, and nobody would notice that the table
+   * is broken.
    *
    * @param workflowModuleId The workflow module of the workflow
    * @param workflowId The BPMS' own id of the workflow
@@ -640,14 +641,14 @@ public class JdbcTaskDeliveryStore {
 
   /**
    * Writes down that one task is over (see
-   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#markTaskClosed}). Runs in the
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#markTaskClosed}). It runs in the
    * transaction of whoever calls it, so it commits with whatever that thread commits.
    * <p>
-   * <code>TASK_CLOSED_AT IS NULL</code> keeps a repeated dispatch from moving the moment: the
-   * task was closed when it was first closed, and the age of an open task is measured
-   * against exactly such a fixed moment elsewhere in this table. The statement carries no
-   * row limit, so every record naming that task is closed, which is decision 72 in the
-   * repository's DECISIONS.md.
+   * <code>TASK_CLOSED_AT IS NULL</code> keeps a repeated dispatch from moving the moment. The
+   * task was closed when it was first closed. Elsewhere in this table the age of an open task
+   * is measured against exactly such a fixed moment. The statement has no row limit, so every
+   * record which names that task is closed. That is decision 72 in the repository's
+   * DECISIONS.md.
    *
    * @param workflowModuleId The workflow module of the workflow
    * @param bpmnProcessId The BPMN process of the workflow
@@ -685,9 +686,9 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Reads one row into a record. Every statement selecting a whole record lists its columns
-   * in the order of the record's components, which is what lets them share this and what
-   * keeps the indexes below readable.
+   * Reads one row into a record. Every statement which selects a whole record lists its
+   * columns in the order of the record's components. That lets them share this method, and
+   * it keeps the indexes below readable.
    *
    * @param resultSet The result set positioned on the row
    * @return The record it holds
@@ -712,10 +713,10 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * The adapter ids the OPEN records of one BPMN process belong to: a record
-   * whose outcome is <code>COMPLETION_PENDING</code> answers redeliveries of a task the
-   * application has not completed yet, so its adapter id is one the configuration still
-   * has to know.
+   * The adapter ids to which the OPEN records of one BPMN process belong. A record with the
+   * outcome <code>COMPLETION_PENDING</code> answers redeliveries of a task which the
+   * application has not completed yet. So its adapter id is one which the configuration
+   * still has to know.
    *
    * @param workflowModuleId The workflow module to ask about
    * @param bpmnProcessId The BPMN process to ask about
@@ -742,9 +743,9 @@ public class JdbcTaskDeliveryStore {
         }
       }
     } catch (final SQLException e) {
-      // a startup diagnosis must not be the reason an application fails to boot: the
-      // question stays unanswered and the check is silent, which is what a store saying
-      // "I cannot tell" does anyway
+      // a startup diagnosis must not be the reason why an application fails to boot. The
+      // question stays unanswered and the check is silent. A store which says "I cannot tell"
+      // does the same anyway
       log
           .debug(
               "Could not read the adapter ids of open task-delivery records of BPMN process '{}' "
@@ -790,8 +791,8 @@ public class JdbcTaskDeliveryStore {
             ? Instant.now()
             : delivery.recordedAt());
         statement.setTimestamp(13, recordedAt);
-        // the record was seen the moment it was written; a redelivery of a task which
-        // stays open moves this one and leaves RECORDED_AT where it is
+        // the record was seen at the moment it was written. A redelivery of a task which
+        // stays open moves this one, and leaves RECORDED_AT where it is
         statement.setTimestamp(14, recordedAt);
         statement.setString(15, delivery.taskKind());
         statement.setString(16, kindOfTheRow(delivery));
@@ -801,8 +802,8 @@ public class JdbcTaskDeliveryStore {
       return true;
     } catch (final SQLException e) {
       if (isDuplicateKey(e)) {
-        // another node processed the same delivery concurrently - it wrote the
-        // record, and this transaction has nothing to add
+        // another node processed the same delivery at the same time. It wrote the record,
+        // and this transaction has nothing to add
         log.debug(
             "Task delivery '{}' of BPMN process '{}' of workflow module '{}' was recorded already",
             delivery.deliveryKey(),
@@ -824,15 +825,15 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Writes the row about the start of a workflow, replacing the one of an earlier workflow of the
-   * same aggregate (see
+   * Writes the row about the start of a workflow. It replaces the row of an earlier workflow
+   * of the same aggregate (see
    * {@link io.vanillabp.integration.spi.TaskDeliveryLog#recordWorkflowStart}).
    * <p>
-   * The insert comes first, because the ordinary case is that there is no row: an aggregate carries
-   * one workflow. Only where the insert finds a row does the update run, and that update is bounded
-   * to a row which is a start and whose workflow id differs - so a start dispatched twice writes
-   * nothing and answers <code>false</code>. A row which names this workflow already may still get
-   * the version it lacks, and nothing else.
+   * The insert comes first, because usually there is no row: an aggregate has one workflow.
+   * Only where the insert finds a row does the update run. That update only touches a row
+   * which is a start and whose workflow id differs. So a start which is dispatched twice
+   * writes nothing and answers <code>false</code>. A row which already names this workflow
+   * may still get the version it lacks, and nothing else.
    *
    * @param workflowStart The row to write
    * @return Whether the store now holds this workflow's id or its version for the first time
@@ -894,8 +895,8 @@ public class JdbcTaskDeliveryStore {
    * Replaces the id in the row of an earlier workflow of the same aggregate.
    *
    * @param workflowStart The row of the workflow which runs now
-   * @return Whether a row was replaced, which is <code>false</code> where the row already named this
-   *         workflow
+   * @return Whether a row was replaced. It is <code>false</code> where the row already named
+   *         this workflow
    */
   private boolean replaceTheStartOfAnEarlierWorkflow(
       final TaskDelivery workflowStart) {
@@ -936,10 +937,10 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Remembers that the record of this delivery is still answering the redeliveries of an
-   * open task, so the retention has to count from now rather than from the moment the
-   * handler ran. Nothing is written here - the key is collected and the next
-   * {@link #deleteExpired(Duration)} writes what accumulated.
+   * Remembers that the record of this delivery still answers the redeliveries of an open
+   * task. So the retention has to count from now, not from the moment the handler ran.
+   * Nothing is written here. The key is collected, and the next
+   * {@link #deleteExpired(Duration)} writes what has accumulated.
    *
    * @param deliveryKey The delivery's identity
    */
@@ -952,7 +953,8 @@ public class JdbcTaskDeliveryStore {
 
   /**
    * Writes <code>LAST_SEEN_AT</code> for the open tasks redelivered since the last run.
-   * Called by {@link #deleteExpired(Duration)} and usable on demand (e.g. by tests).
+   * {@link #deleteExpired(Duration)} calls it, and it can be called on demand (for example by
+   * tests).
    *
    * @return The number of records refreshed
    */
@@ -964,8 +966,8 @@ public class JdbcTaskDeliveryStore {
 
   /**
    * Writes <code>LAST_SEEN_AT</code> of one block of records, as a JDBC batch of the same
-   * statement. A key whose record was deleted meanwhile updates nothing, which is the
-   * right answer: the record is gone and the next redelivery writes a new one.
+   * statement. A key whose record was deleted in the meantime updates nothing. That is the
+   * right answer: the record is gone, and the next redelivery writes a new one.
    *
    * @param deliveryKeys The keys of one block
    */
@@ -995,14 +997,14 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Refreshes the records of the open tasks redelivered since the last run and then
-   * deletes the records nobody has seen for the given retention period - the
-   * deduplication window closes with them. A plain, idempotent DELETE: several
-   * application instances may run it concurrently.
+   * Refreshes the records of the open tasks redelivered since the last run. Then it deletes
+   * the records which nobody has seen for the given retention period. The window of
+   * deduplication closes with them. It is a plain DELETE which can be repeated safely, so
+   * several application instances may run it at the same time.
    * <p>
-   * The two belong together and in this order: refreshing first is what keeps the record
-   * of a task which is still being redelivered, and deleting by <code>LAST_SEEN_AT</code>
-   * is what lets the record of a task nobody redelivers any more expire after all.
+   * The two steps belong together, in this order. Refreshing first keeps the record of a task
+   * which is still being redelivered. Deleting by <code>LAST_SEEN_AT</code> lets the record of
+   * a task which nobody redelivers any more expire after all.
    *
    * @param retention How long a record is kept
    * @return The number of records deleted
@@ -1030,19 +1032,19 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Deletes the rows about started workflows whose own retention passed. Called by the same
-   * hourly run which deletes the expired deliveries, with a period of its own: such a row is
-   * read for as long as somebody may ask which workflow an aggregate belongs to, which outlasts
-   * the workflow itself.
+   * Deletes the rows about started workflows whose own retention has passed. The same hourly
+   * run which deletes the expired deliveries calls it, with a period of its own. Such a row
+   * is read for as long as somebody may ask which workflow an aggregate belongs to, and that
+   * is longer than the workflow itself.
    * <p>
-   * Without a sieve this is one indexed DELETE. With one, the expired rows are read first and
-   * the sieve is asked per row, which costs a read of the application's own database per row and
-   * is why an application switches it on rather than finding it on (see
-   * {@link io.vanillabp.integration.spi.WorkflowStartSieve}). A row the sieve keeps is simply
-   * left where it is and offered again at the next run.
+   * Without a sieve this is one indexed DELETE. With a sieve, the expired rows are read first
+   * and the sieve is asked for each row. That costs a read of the application's own database
+   * per row. That is why an application has to switch it on, and does not find it on (see
+   * {@link io.vanillabp.integration.spi.WorkflowStartSieve}). A row which the sieve keeps
+   * simply stays where it is and is offered again at the next run.
    * <p>
-   * A failure is swallowed like the one of the deliveries: it costs disk space, and the next run
-   * tries again.
+   * A failure is swallowed, like the one of the deliveries. It costs disk space, and the
+   * next run tries again.
    *
    * @param retention How long the row about a started workflow is kept
    * @param sieve What decides per row whether it may go, or <code>null</code> to delete every
@@ -1079,11 +1081,11 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Reads the expired rows about started workflows, asks the sieve about each of them and
+   * Reads the expired rows about started workflows, asks the sieve about each of them, and
    * deletes the ones it lets go, as one JDBC batch.
    *
    * @param connection The connection of this run
-   * @param expiredBefore The moment a row has to be older than
+   * @param expiredBefore A row has to be older than this moment
    * @param sieve What decides per row
    * @return The number of rows deleted
    */
@@ -1128,24 +1130,24 @@ public class JdbcTaskDeliveryStore {
 
   /**
    * Deletes the records of ONE ended workflow (see
-   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf}). Runs in the
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#releaseRecordsOf}). It runs in the
    * transaction of the end notification, so it commits with it.
    * <p>
-   * Unlike {@link #deleteExpired(Duration)} a failure is NOT swallowed: the retention
-   * cleanup runs again in an hour, this deletion has exactly one chance and belongs to a
+   * Unlike {@link #deleteExpired(Duration)}, a failure is NOT swallowed. The retention cleanup
+   * runs again in an hour. This deletion has exactly one chance, and it belongs to a
    * transaction which has to know whether its work went through.
    *
    * @param workflowModuleId The workflow module of the ended workflow
    * @param bpmnProcessId The BPMN process of the ended workflow
    * @param workflowAggregateId The ID of its workflow aggregate
-   * @param recordedBefore Only records written before this moment are deleted - what
-   *          keeps the records of a second workflow on the same aggregate
+   * @param recordedBefore Only records written before this moment are deleted. That keeps
+   *          the records of a second workflow on the same aggregate
    * @return The number of records deleted
    */
-  // No index ships for these columns: AGGREGATE_ID holds up to 1024 characters, and an
+  // No index ships for these columns. AGGREGATE_ID holds up to 1024 characters, and an
   // index over the three of them exceeds the key-length limit of MySQL (3072 bytes with
-  // utf8mb4) and of a DB2 database using 4K pages. An application whose table grows large
-  // adds one itself, prefixed the way its database needs it - the wiki says so.
+  // utf8mb4) and of a DB2 database with 4K pages. An application whose table grows large
+  // adds one itself, with a prefix as its database needs it. The wiki says so.
   public int deleteRecordsOf(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -1176,9 +1178,9 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * The columns a table has to carry beyond the ones every version of VanillaBP wrote.
-   * Only what was ADDED later belongs in here: a table which predates the addition exists
-   * and looks fine, and the missing column would surface at the first write.
+   * The columns which a table must have beyond the ones every version of VanillaBP wrote.
+   * Only what was ADDED later belongs here. A table which is older than the addition exists
+   * and looks fine, and the missing column would only show up at the first write.
    */
   private static final List<AddedColumn> ADDED_COLUMNS = List
       .of(
@@ -1202,16 +1204,16 @@ public class JdbcTaskDeliveryStore {
               "PROCESS_VERSION", "VARCHAR(255) (nullable: a record written before the column existed names no version)", "a row does not say which version of its process a workflow runs on, so an extension which shows details per version cannot tell which details belong to a workflow until the BPMS itself can be asked", null));
 
   /**
-   * A column a later version of VanillaBP added: its name, the statement which adds it and
-   * what is lost without it. All three belong in the message, because that is the whole
-   * remedy.
+   * A column which a later version of VanillaBP added: its name, the statement which adds it,
+   * and what is lost without it. All three belong in the message, because together they are
+   * the whole remedy.
    *
    * @param name The column's name
    * @param definition What to add it as
    * @param whatIsLost What VanillaBP cannot do without it
-   * @param indexStatement The statement creating the index the column is read by, with two
-   *          placeholders for the table name, or <code>null</code> where the column is
-   *          written and read without one
+   * @param indexStatement The statement which creates the index the column is read by, with
+   *          two placeholders for the table name. <code>null</code> where the column is
+   *          written and read without an index
    */
   private record AddedColumn(
                              String name,
@@ -1221,12 +1223,13 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Creates the table (and the index the cleanup reads) unless it exists already. A table
-   * which exists is checked for the columns a later version of VanillaBP added, because
-   * creating nothing is the one case in which a table of an older version passes unnoticed.
+   * Creates the table, and the index which the cleanup reads, unless it exists already. A
+   * table which exists is checked for the columns which a later version of VanillaBP added.
+   * If nothing is created, that is the one case in which a table of an older version would
+   * pass unnoticed.
    *
-   * @throws IllegalStateException If the DDL fails - naming the way out (manage the
-   *           schema manually)
+   * @throws IllegalStateException If the DDL fails. The message names the way out (manage
+   *           the schema manually)
    */
   public void createSchemaIfNotExists() {
 
@@ -1241,23 +1244,23 @@ public class JdbcTaskDeliveryStore {
         statement.executeUpdate(buildCreateTable(connection, tableName));
         statement.executeUpdate(
             "CREATE INDEX %s_AGE ON %s (LAST_SEEN_AT)".formatted(tableName, tableName));
-        // the election of a task operation looks a record up by the task the caller names,
-        // once per operation - without this index that read is a table scan and costs more
-        // than the BPMS round trip it saves. TASK_ID alone is selective (a BPMS names its
-        // tasks uniquely) and stays well inside MySQL's key-length limit, which an index
-        // spanning AGGREGATE_ID would not
+        // the election of a task operation looks up a record by the task which the caller
+        // names, once per operation. Without this index that read is a table scan, and it
+        // costs more than the BPMS round trip it saves. TASK_ID alone is selective (a BPMS
+        // names its tasks uniquely), and it stays well inside MySQL's key-length limit. An
+        // index which spans AGGREGATE_ID would not
         statement.executeUpdate(
             "CREATE INDEX %s_TASK ON %s (TASK_ID)".formatted(tableName, tableName));
-        // the open tasks of one workflow aggregate are asked for once per screen an
-        // extension builds, so that read must not walk everything ever recorded. Over
-        // RECORD_KIND, OUTCOME and TASK_CLOSED_AT rather than over AGGREGATE_ID, which is 1024
-        // characters wide and would exceed the key-length limit of MySQL and of DB2 with
-        // 4K pages - see SELECT_OPEN_TASKS_OF_AGGREGATE
+        // an extension asks for the open tasks of one workflow aggregate once per screen it
+        // builds. So that read must not walk everything ever recorded. The index is over
+        // RECORD_KIND, OUTCOME and TASK_CLOSED_AT, not over AGGREGATE_ID. That column is 1024
+        // characters wide and would exceed the key-length limit of MySQL and of DB2 with 4K
+        // pages. See SELECT_OPEN_TASKS_OF_AGGREGATE
         statement.executeUpdate(INDEX_OF_OPEN_RECORDS.formatted(tableName, tableName));
         // the open tasks of ONE workflow of the BPMS are read once per wake-up of that
-        // workflow, which is far more often than an extension builds a screen. WORKFLOW_ID
-        // is VARCHAR(255) and selective, so it carries an index of its own - what
-        // AGGREGATE_ID cannot - see SELECT_OPEN_TASKS_OF_WORKFLOW
+        // workflow, which is far more often than an extension builds a screen. WORKFLOW_ID is
+        // VARCHAR(255) and selective, so it has an index of its own, which AGGREGATE_ID
+        // cannot have. See SELECT_OPEN_TASKS_OF_WORKFLOW
         statement.executeUpdate(INDEX_OF_WORKFLOW.formatted(tableName, tableName));
       }
     } catch (final SQLException e) {
@@ -1278,9 +1281,9 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Whether the DDL failed because another instance created the table between the check and the
-   * statement. Two instances starting together both see no table and both create it, and the
-   * loser's deployment is fine - it just has nothing left to do (see
+   * Whether the DDL failed because another instance created the table between the check and
+   * the statement. Two instances which start together both see no table, and both create it.
+   * The deployment of the loser is fine. It just has nothing left to do (see
    * {@link JdbcSchema#tableExistsQuietly(Connection, String)}).
    *
    * @return Whether the table is there now
@@ -1306,16 +1309,17 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Verifies that the table exists AND carries the columns this version writes, for an
-   * application which creates its schema itself.
+   * Checks that the table exists AND has the columns which this version writes. This is for
+   * an application which creates its schema itself.
    * <p>
-   * Without this check a missing table surfaces at the first delivery, which is hours after the
-   * deployment and looks like a bug of the application. The message names the table, the property
-   * which would have created it and the artifact which contains the statements.
+   * Without this check a missing table shows up at the first delivery. That is hours after
+   * the deployment, and it looks like a bug of the application. The message names the table,
+   * the property which would have created it, and the artifact which contains the
+   * statements.
    * <p>
-   * The columns are checked for the same reason: an application which applied an
-   * earlier changelog of VanillaBP has the table but not everything the current version writes
-   * into it, and a table which exists would otherwise pass the check and fail at the first
+   * The columns are checked for the same reason. An application which applied an earlier
+   * changelog of VanillaBP has the table, but not everything which the current version writes
+   * into it. Without the check, a table which exists would pass and fail at the first
    * delivery.
    *
    * @throws IllegalStateException If the table or one of its columns is missing
@@ -1351,9 +1355,9 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Verifies the columns which a later version of VanillaBP added to the table. The
-   * message names the column, the statement which adds it and the artifact whose
-   * changelog does it, because that is the whole remedy.
+   * Checks the columns which a later version of VanillaBP added to the table. The message
+   * names the column, the statement which adds it, and the artifact whose changelog does
+   * that, because together they are the whole remedy.
    *
    * @param connection The connection to the database holding the table
    * @throws IllegalStateException If a column is missing
@@ -1398,8 +1402,8 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Whether the given exception signals a violated unique constraint (= the delivery
-   * was recorded already).
+   * Whether the given exception signals a violated unique constraint, which means that the
+   * delivery was recorded already.
    *
    * @param e The exception raised by the insert
    * @return Whether the insert failed due to a duplicate key
@@ -1407,9 +1411,9 @@ public class JdbcTaskDeliveryStore {
   private static boolean isDuplicateKey(
       final SQLException e) {
 
-    // PostgreSQL's JDBC driver does not map unique violations to the dedicated
-    // subclass - fall back to the standard SQL state class 23 (integrity
-    // constraint violation) for such drivers
+    // the JDBC driver of PostgreSQL does not map unique violations to the special subclass.
+    // For such drivers, fall back to the standard SQL state class 23 (integrity constraint
+    // violation)
     return (e instanceof SQLIntegrityConstraintViolationException) || ((e.getSQLState() != null) && e
         .getSQLState()
         .startsWith("23"));
@@ -1417,9 +1421,9 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Builds the CREATE TABLE statement using a timestamp type suitable for the database:
-   * SQL Server's <code>TIMESTAMP</code> is a row version (not a date-time), MySQL's has
-   * auto-initialization quirks and ends in 2038.
+   * Builds the CREATE TABLE statement with a timestamp type which suits the database. The
+   * <code>TIMESTAMP</code> of SQL Server is a row version, not a date and time. The one of
+   * MySQL has odd automatic initialization, and it ends in 2038.
    *
    * @param connection The connection used to detect the database
    * @param tableName The table to create
@@ -1466,10 +1470,10 @@ public class JdbcTaskDeliveryStore {
   }
 
   /**
-   * Whether an OPEN record of that BPMN process exists at all - see
-   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#hasOpenRecords(String, String)}.
-   * Unlike the adapter ids this distinguishes "none" from "cannot say", so a failing
-   * query answers <code>null</code> rather than <code>false</code>.
+   * Whether an OPEN record of that BPMN process exists at all (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#hasOpenRecords(String, String)}).
+   * Unlike the adapter ids, this tells "none" from "cannot say". So a failing query answers
+   * <code>null</code> and not <code>false</code>.
    *
    * @param workflowModuleId The workflow module to ask about
    * @param bpmnProcessId The BPMN process to ask about

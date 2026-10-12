@@ -46,25 +46,25 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * An adapter which deduplicates nothing still writes down which BPMS holds the task and
+ * An adapter which deduplicates nothing still writes down which BPMS holds the task, and
  * which kind of id its id is.
  * <p>
- * Camunda 7 is the adapter this was measured on. A transaction of the engine creates every
- * user task the token reaches and the id comes into being while it is created, so the
- * adapter reports no delivery id: there is nothing a repetition could be recognised by.
- * That used to mean no row at all, and with the row went the two answers which have nothing
- * to do with repetitions. So <code>completeTask</code> with the id of a user task got the
- * list of three guesses on Camunda 7, which is exactly the mistake the kind of task was
- * written down for.
+ * This was measured on the Camunda 7 adapter. A transaction of the engine creates every
+ * user task which the token reaches, and the id comes into being while it is created. So
+ * the adapter reports no delivery id, because there is nothing by which a repetition could
+ * be recognised. That used to mean no row at all. With the row went the two answers which
+ * have nothing to do with repetitions. So on Camunda 7, <code>completeTask</code> with the id
+ * of a user task got the list of three guesses. The kind of task was written down to prevent
+ * exactly this mistake.
  * <p>
- * What runs here is the whole way: a delivery goes in through the registry, the handler
- * leaves the task open, and the application then hands that user task's id to the operation
- * which asks a BPMS about a task. No BPMS knows the id, each of them says so, and the
- * failure names what the id is.
+ * The whole way runs here. A delivery goes in through the registry. The handler leaves the
+ * task open. Then the application hands the id of that user task to the operation which asks
+ * a BPMS about a task. No BPMS knows the id, each of them says so, and the failure names
+ * what the id is.
  * <p>
- * This is the platform's half of the proof. The other half needs an engine and belongs to
- * the Camunda 7 repository, where the adapter really reports no delivery id - here the
- * adapter is a double which reports none.
+ * This is the half of the proof which belongs to the platform. The other half needs an
+ * engine and belongs to the Camunda 7 repository, where the adapter really reports no
+ * delivery id. Here the adapter is a double which reports none.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ADeliveryNobodyDeduplicatesStillNamesTheKindTest {
@@ -77,10 +77,10 @@ public class ADeliveryNobodyDeduplicatesStillNamesTheKindTest {
 
   private static final String AGGREGATE = "4711";
 
-  /** The task definition of the user task the handler leaves open. */
+  /** The task definition of the user task which the handler leaves open. */
   private static final String TASK = "approve";
 
-  /** The id of the user task, which is what the mistake hands to a task operation. */
+  /** The id of the user task. The mistake hands it to a task operation. */
   private static final String USER_TASK = "user-task-1";
 
   public static class Aggregate {
@@ -192,9 +192,9 @@ public class ADeliveryNobodyDeduplicatesStillNamesTheKindTest {
   }
 
   /**
-   * An adapter of an embedded engine: it repeats no delivery, so it reports no delivery id,
-   * and its BPMS knows none of the ids asked about - which is the answer every BPMS gives
-   * for an id of the other kind.
+   * An adapter of an embedded engine. It repeats no delivery, so it reports no delivery id.
+   * Its BPMS knows none of the ids asked about. Every BPMS gives this answer for an id of the
+   * other kind.
    */
   static class AnEmbeddedEngine implements MigratableProcessService<Aggregate> {
 
@@ -252,7 +252,7 @@ public class ADeliveryNobodyDeduplicatesStillNamesTheKindTest {
 
   }
 
-  /** The outbox, reduced to what it is here: what phase two was planned with. */
+  /** The outbox, cut down to what it is here: what phase two was planned with. */
   static class CapturingOutbox implements PhaseTwoOutbox {
 
     final List<PhaseTwoCall> scheduled = new ArrayList<>();
@@ -268,7 +268,7 @@ public class ADeliveryNobodyDeduplicatesStillNamesTheKindTest {
   public static class TestWorkflowService {
 
     /**
-     * A user task the application completes later - the only kind which can be left open.
+     * A user task which the application completes later. Only this kind can be left open.
      */
     @WorkflowTask(taskDefinition = TASK)
     public void approve(
@@ -371,7 +371,7 @@ public class ADeliveryNobodyDeduplicatesStillNamesTheKindTest {
   }
 
   /**
-   * A delivery of the embedded engine: it names the task and the kind of task, and it
+   * A delivery of the embedded engine. It names the task and the kind of task, and it
    * reports no delivery id at all.
    */
   private TaskInvocationContext aUserTaskDelivery(
@@ -488,8 +488,8 @@ public class ADeliveryNobodyDeduplicatesStillNamesTheKindTest {
     assertEquals(ADAPTER, record.adapterId(), "the row is written and names the adapter");
     assertNull(record.taskKind(), "and it names no kind, because the adapter named none");
 
-    // the mix-up is not caught here and never was: a row which says nothing about the kind
-    // contradicts nothing, so the command is elected from it exactly as it always was
+    // the mix-up is not caught here, and it never was. A row which says nothing about the
+    // kind contradicts nothing. So the command is elected from it exactly as it always was
     testee.completeTask(aggregate, USER_TASK);
 
     assertEquals(0, adapter.probes.get());

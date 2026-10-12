@@ -33,12 +33,12 @@ import io.vanillabp.spi.process.WorkflowHistory;
 import io.vanillabp.spi.process.WorkflowNotFoundException;
 
 /**
- * A read of the viewer API on a node whose election cache knows nothing about the workflow: a
- * second node, a node after a restart, or a node whose cache forgot. The workflow was started a
- * moment ago, and the read model of its BPMS has not caught up yet. The row written when the
- * workflow started is in the application's database. The read uses it like an operation does,
- * so it waits for the adapter the row names instead of failing at once. Without the row the read
- * behaves as before.
+ * A read of the viewer API on a node whose election cache knows nothing about the workflow.
+ * That is a second node, a node after a restart, or a node whose cache forgot. The workflow
+ * was started a moment ago, and the read model of its BPMS has not caught up yet. The row
+ * written when the workflow started is in the database of the application. The read uses it
+ * like an operation does. So it waits for the adapter which the row names, instead of
+ * failing at once. Without the row, the read behaves as before.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheViewerReadsTheStartRowTest {
@@ -54,8 +54,9 @@ public class TheViewerReadsTheStartRowTest {
   private static final String AGGREGATE = "4711";
 
   /**
-   * An adapter whose read model is behind for the first probes. It answers "unknown" until the
-   * given number of probes has passed, and it writes down the workflow id each probe was handed.
+   * An adapter whose read model is behind for the first probes. It answers "unknown" until
+   * the given number of probes has passed. It writes down the workflow id each probe was
+   * handed.
    */
   static class AnAdapterWhichCatchesUp extends AnOperationReadsTheStartRowTest.AnAdapterWithALaggingReadModel {
 

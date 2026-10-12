@@ -49,14 +49,15 @@ import lombok.Getter;
  * What the <code>version</code> attribute of <code>&#64;WorkflowTask</code>,
  * <code>&#64;WorkflowStartedByBpms</code> and <code>&#64;WorkflowEnded</code> means.
  * <p>
- * Two things are tested here: version ranges pick the method serving a process version
- * (numbers straight away, version tags through the catalog the adapter registered,
- * including the BPMS query for a version deployed by ANOTHER cluster node), and two
- * methods wired to one BPMN element are ambiguous exactly when their ranges overlap.
+ * Two things are tested here. First, version ranges pick the method which serves a process
+ * version. Numbers work straight away. Version tags go through the catalog the adapter
+ * registered, including the BPMS query for a version which ANOTHER cluster node deployed.
+ * Second, two methods wired to one BPMN element are ambiguous exactly when their ranges
+ * overlap.
  * <p>
  * {@link ClassLevelRanges} adds the third source of a range: the
- * <code>&#64;BpmnProcess</code> a method's process was declared with, which the methods
- * naming none of their own serve.
+ * <code>&#64;BpmnProcess</code> with which the process of a method was declared. The methods
+ * which name no range of their own serve it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ProcessVersionMatchingTest {
@@ -66,8 +67,8 @@ public class ProcessVersionMatchingTest {
   private static final String PROCESS = "TestProcess";
 
   /**
-   * A second BPMN process of the same workflow aggregate - what
-   * <code>secondaryBpmnProcesses</code> declares, each entry with a version of its own.
+   * A second BPMN process of the same workflow aggregate. <code>secondaryBpmnProcesses</code>
+   * declares it, each entry with a version of its own.
    */
   private static final String SECONDARY_PROCESS = "CalledProcess";
 
@@ -144,9 +145,9 @@ public class ProcessVersionMatchingTest {
   }
 
   /**
-   * A BPMS answering what it was told to answer, counting how often it was asked - the
-   * BPMS query behind {@link CachingProcessVersionCatalog} must not run per task
-   * delivery, and it HAS to run once when a version shows up this node never deployed.
+   * A BPMS which answers what it was told to answer and counts how often it was asked. The
+   * BPMS query behind {@link CachingProcessVersionCatalog} must not run per task delivery.
+   * And it HAS to run once when a version shows up which this node never deployed.
    */
   static class RecordingCatalog extends CachingProcessVersionCatalog {
 
@@ -156,7 +157,7 @@ public class ProcessVersionMatchingTest {
 
     RecordingCatalog() {
 
-      // no floor between two queries: the test wants the on-demand query to happen
+      // no floor between two queries, because the test wants the query on demand to happen
       super(Duration.ZERO);
 
     }
@@ -182,13 +183,13 @@ public class ProcessVersionMatchingTest {
   }
 
   /**
-   * The configuration the registry built last runs on - what a check reports into hangs
-   * on it, so this is where a test reads what the start said.
+   * The configuration on which the last built registry runs. A check reports into what
+   * hangs on it. So a test reads here what the start said.
    */
   private MigrationAdapterProperties lastProperties;
 
   /**
-   * A registry reporting into a configuration this test can read again.
+   * A registry which reports into a configuration this test can read again.
    */
   private WorkflowTaskRegistry registryReportingHere() {
 
@@ -248,8 +249,8 @@ public class ProcessVersionMatchingTest {
   }
 
   /**
-   * Two workflow service classes of ONE BPMN process - the shape a class-level version
-   * range exists for.
+   * Two workflow service classes of ONE BPMN process. A version range at class level exists
+   * for this shape.
    */
   private WorkflowTaskRegistry registryOf(
       final Class<?> oneClass,
@@ -276,7 +277,7 @@ public class ProcessVersionMatchingTest {
   }
 
   /**
-   * The messages a logger emitted while the given work ran - the guiding messages are
+   * The messages a logger emitted while the given work ran. The guiding messages are
    * WARNings, and "normal" logging is switched off during tests.
    */
   private List<String> loggedBy(
@@ -356,7 +357,7 @@ public class ProcessVersionMatchingTest {
       assertFalse(overlaps("1-2", "3-4"), "next to each other, not overlapping");
       assertFalse(overlaps("<2", ">2"), "everything but version 2");
 
-      // version 1's README documented '>=' and '<=' although nothing implemented them
+      // the README of version 1 documented '>=' and '<=', although nothing implemented them
       assertTrue(overlaps(">=2", "2"), "'>=2' includes its boundary");
       assertTrue(overlaps("<=2", "2"), "'<=2' includes its boundary");
       assertFalse(overlaps("<=1", ">=2"), "adjacent, both inclusive");
@@ -530,9 +531,9 @@ public class ProcessVersionMatchingTest {
     testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "3"));
     assertEquals("afterTwo", persistence.aggregates.get("4711").servedBy);
 
-    // a BPMS reporting NO version is served by '*' only: whether a version nobody
-    // reported lies within '1-2' cannot be answered, and the answer must not depend on
-    // the order the methods happen to be reflected in
+    // a BPMS which reports NO version is served by '*' only. Nobody can answer whether an
+    // unreported version lies within '1-2'. And the answer must not depend on the order in
+    // which reflection happens to return the methods
     final var unreported = assertThrows(
         IllegalStateException.class,
         () -> testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", null)));
@@ -551,8 +552,8 @@ public class ProcessVersionMatchingTest {
     testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", null));
     assertEquals("everyVersion", persistence.aggregates.get("4711").servedBy);
 
-    // the same method serves a reported version, which is what makes the attribute
-    // free of cost for an application not using it
+    // the same method serves a reported version. So the attribute costs nothing for an
+    // application which does not use it
     testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "7"));
     assertEquals("everyVersion", persistence.aggregates.get("4711").servedBy);
 
@@ -570,24 +571,23 @@ public class ProcessVersionMatchingTest {
     testee.resolveProcessVersions(MODULE);
     storeAggregate("4711");
 
-    // the startup resolution asked the BPMS - a task delivery does not ask again
+    // the resolution at startup asked the BPMS, and a task delivery does not ask again
     assertEquals(1, catalog.fetches);
 
     testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "2"));
     assertEquals("tagged", persistence.aggregates.get("4711").servedBy);
     assertEquals(1, catalog.fetches);
 
-    // ANOTHER cluster node deployed version 3 while this one is running, and the
-    // open end of the second method serves it
+    // ANOTHER cluster node deployed version 3 while this one runs. The open end of the
+    // second method serves it
     catalog.versions.add(DeployedProcessVersion.of("3", "release-2025"));
     testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "3"));
     assertEquals("afterTheTag", persistence.aggregates.get("4711").servedBy);
-    // whether that delivery ASKED the BPMS is not decided here. Both methods are
-    // offered it, the first one which matches serves it, and only the one naming the
-    // tag has to place version 3 to answer. Which of the two is offered it first comes
-    // from reflection over the class, which orders nothing, so the question belongs to
-    // aVersionDeployedElsewhereIsLookedUpOnDemand, where one method is the only
-    // candidate
+    // this test does not decide whether that delivery ASKED the BPMS. Both methods are
+    // offered it, and the first one which matches serves it. Only the one which names the
+    // tag has to place version 3 to answer. Reflection over the class decides which of the
+    // two is offered it first, and reflection orders nothing. So the question belongs to
+    // aVersionDeployedElsewhereIsLookedUpOnDemand, where one method is the only candidate
 
   }
 
@@ -607,9 +607,9 @@ public class ProcessVersionMatchingTest {
   @DisplayName("A version another node deployed is looked up when a delivery carries it")
   public void aVersionDeployedElsewhereIsLookedUpOnDemand() {
 
-    // one method, so the delivery below has exactly one candidate: what this test
-    // measures is whether the BPMS is asked, and a second candidate matching earlier
-    // would leave the first one unasked without saying so
+    // one method, so the delivery below has exactly one candidate. This test measures
+    // whether the BPMS is asked. A second candidate which matched earlier would leave the
+    // first one unasked, without saying so
     final var testee = registry(TagMovedToALaterVersionService.class, TagMovedToALaterVersionService::new);
     final var catalog = new RecordingCatalog();
     catalog.versions.add(DeployedProcessVersion.of("1", null));
@@ -618,11 +618,11 @@ public class ProcessVersionMatchingTest {
     testee.resolveProcessVersions(MODULE);
     storeAggregate("4711");
 
-    // the startup resolution asked the BPMS once
+    // the resolution at startup asked the BPMS once
     assertEquals(1, catalog.fetches);
 
     // ANOTHER cluster node deployed version 3 and moved the tag to it. This node knows
-    // neither, so serving the delivery is only possible after asking the BPMS
+    // neither, so it can only serve the delivery after it asked the BPMS
     catalog.versions.add(DeployedProcessVersion.of("3", "release-2024"));
     testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "3"));
     assertEquals("tagged", persistence.aggregates.get("4711").servedBy);
@@ -634,7 +634,7 @@ public class ProcessVersionMatchingTest {
   @DisplayName("Ranges naming a tag are checked for overlaps once the BPMS placed them")
   public void overlappingTagRangesFailAfterTheDeployment() {
 
-    // registering cannot decide it: no BPMS was asked at that point
+    // registering cannot decide it, because no BPMS was asked at that point
     final var testee = registry(OverlappingTagsService.class, OverlappingTagsService::new);
     final var catalog = new RecordingCatalog();
     catalog.versions.add(DeployedProcessVersion.of("1", "v1.0"));
@@ -778,9 +778,9 @@ public class ProcessVersionMatchingTest {
 
       @Override
       public java.util.Map<String, Object> getVariables() {
-        // the model carries the value the application names its aggregate after. It is
-        // NOT called after the aggregate's id attribute: a variable of that name would be
-        // the name the BPMS already holds for the workflow, and no aggregate carries it
+        // the model carries the value after which the application names its aggregate. It
+        // is NOT named after the id attribute of the aggregate. A variable of that name would
+        // be the name the BPMS already holds for the workflow, and no aggregate carries it
         return java.util.Map.of("chosenId", chosenId);
       }
 
@@ -841,7 +841,7 @@ public class ProcessVersionMatchingTest {
     assertEquals("afterTwo", persistence.aggregates.get("4712").servedBy);
 
     // without a reported version no ranged method runs, and then nothing builds the
-    // aggregate at all: the start ends naming the methods wired to that start event
+    // aggregate at all. The start ends and names the methods wired to that start event
     final var unserved = assertThrows(
         IllegalStateException.class,
         () -> testee.startWorkflowByBpms(MODULE, PROCESS, startContext("4713", null)));
@@ -872,8 +872,8 @@ public class ProcessVersionMatchingTest {
     testee.workflowEnded(MODULE, PROCESS, endedContext("3"));
     assertEquals("afterTwo", persistence.aggregates.get("4711").servedBy);
 
-    // a notification without a version reaches no ranged method - a warning, because
-    // the application asked to hear about the end and does not
+    // a notification without a version reaches no ranged method. That is a warning,
+    // because the application asked to hear about the end and does not hear about it
     final var messages = loggedBy(
         io.vanillabp.integration.adapter.migration.workflowend.WorkflowEndedHandlers.class,
         () -> testee.workflowEnded(MODULE, PROCESS, endedContext(null)));
@@ -953,13 +953,13 @@ public class ProcessVersionMatchingTest {
     assertEquals("1", catalog.resolveVersion(MODULE, PROCESS, "v1.0").version());
     assertEquals(1, queries.get());
 
-    // a tag which does not exist: asked once, then held back by the interval
+    // a tag which does not exist. It is asked once, and then the interval holds it back
     assertNull(catalog.resolveVersion(MODULE, PROCESS, "does-not-exist"));
     assertNull(catalog.resolveVersion(MODULE, PROCESS, "does-not-exist"));
     assertEquals(2, queries.get());
 
-    // a version another node deployed meanwhile: looked up right away, although the
-    // interval of the unknown tag has not passed
+    // a version which another node deployed meanwhile. It is looked up right away,
+    // although the interval of the unknown tag has not passed
     versions.add(DeployedProcessVersion.of("2", "v2.0"));
     assertEquals("2", catalog.resolveVersion(MODULE, PROCESS, "2").version());
     assertEquals(3, queries.get());
@@ -967,11 +967,11 @@ public class ProcessVersionMatchingTest {
   }
 
   /**
-   * Whether a specification serves a version, on a BPMS which holds version 1 only
-   * while this node boots and versions 2 and 3, tagged 'release-2' and 'release-3',
-   * once another node deployed them. The floor between two queries is long, as in
-   * production, so the tags the boot did not find stay unknown unless something
-   * else makes the BPMS be asked.
+   * Whether a specification serves a version. The BPMS holds only version 1 while this node
+   * boots. Later it holds versions 2 and 3, tagged 'release-2' and 'release-3', once another
+   * node deployed them. The floor between two queries is long, as in production. So the tags
+   * which the boot did not find stay unknown, unless something else makes the core ask the
+   * BPMS.
    */
   private static boolean servedAfterALaterDeployment(
       final String specification,
@@ -1068,8 +1068,8 @@ public class ProcessVersionMatchingTest {
 
   /**
    * <code>&#64;BpmnProcess(version = ...)</code> as the fallback of the three method
-   * annotations: one workflow service class per generation of a model, with no method
-   * repeating the range.
+   * annotations. There is one workflow service class per generation of a model, and no
+   * method repeats the range.
    */
   @Nested
   @DisplayName("A range declared by @BpmnProcess")
@@ -1230,8 +1230,8 @@ public class ProcessVersionMatchingTest {
           () -> testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", null)));
 
       assertTrue(unreported.getMessage().contains("reports no process version"), unreported.getMessage());
-      // neither method carries an attribute, so the message has to say where the
-      // range it complains about comes from
+      // neither method carries an attribute. So the message has to say where the range it
+      // complains about comes from
       assertTrue(
           unreported.getMessage().contains("inherits its range from the @BpmnProcess"),
           unreported.getMessage());
@@ -1246,8 +1246,8 @@ public class ProcessVersionMatchingTest {
       final var testee = registry(MethodWinsService.class, MethodWinsService::new);
       storeAggregate("4711");
 
-      // '12' lies outside the class' '<10' and is served nevertheless: an intersection
-      // would make the attribute in front of the method mean something else
+      // '12' lies outside the '<10' of the class, and is served anyway. An intersection
+      // would change what the attribute in front of the method means
       testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "12"));
       assertEquals("ownRange", persistence.aggregates.get("4711").servedBy);
 
@@ -1319,8 +1319,8 @@ public class ProcessVersionMatchingTest {
       testee.invokeWorkflowTask(MODULE, SECONDARY_PROCESS, taskContext("4711", "3"));
       assertEquals("served", persistence.aggregates.get("4711").servedBy);
 
-      // the same method, restricted differently per process: version 3 of the primary
-      // process lies outside the range that process was declared with
+      // the same method, restricted differently per process. Version 3 of the primary
+      // process lies outside the range with which that process was declared
       final var outside = assertThrows(
           IllegalStateException.class,
           () -> testee.invokeWorkflowTask(MODULE, PROCESS, taskContext("4711", "3")));
@@ -1340,8 +1340,8 @@ public class ProcessVersionMatchingTest {
       testee.workflowEnded(MODULE, PROCESS, endedContext("2"));
       assertEquals("ended", persistence.aggregates.get("4711").servedBy);
 
-      // version 3 lies outside the class' range: nothing builds the aggregate, and the
-      // end reaches nobody
+      // version 3 lies outside the range of the class. Nothing builds the aggregate, and
+      // the end reaches nobody
       assertThrows(
           IllegalStateException.class,
           () -> testee.startWorkflowByBpms(MODULE, PROCESS, startContext("4712", "3")));
@@ -1351,13 +1351,12 @@ public class ProcessVersionMatchingTest {
   }
 
   /**
-   * A BPMS which says it keeps no catalog of its deployed versions, instead of simply
-   * registering none.
+   * A BPMS which says that it keeps no catalog of its deployed versions. It does not just
+   * register none.
    * <p>
-   * The difference matters to the developer, not to the machine: an adapter which
-   * registers nothing may not have been asked yet, while one which says this has
-   * answered. Only the second lets the start name the methods waiting for a version
-   * which never comes.
+   * The difference matters to the developer, not to the machine. An adapter which registers
+   * nothing may not have been asked yet. One which says this has answered. Only the second
+   * lets the start name the methods which wait for a version that never comes.
    */
   @Nested
   @DisplayName("A BPMS which keeps no version catalog")

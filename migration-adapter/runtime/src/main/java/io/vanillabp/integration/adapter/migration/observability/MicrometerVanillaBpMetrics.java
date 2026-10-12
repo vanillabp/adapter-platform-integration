@@ -18,49 +18,47 @@ import io.vanillabp.integration.adapter.migration.config.MetricsProperties;
 import io.vanillabp.integration.adapter.spi.observability.CachedGaugeValue;
 
 /**
- * Publishes what {@link VanillaBpMetrics} records as Micrometer meters. Both
- * platforms apply {@link MeterBinder} beans to their registries themselves (Spring
- * Boot through the Actuator's metrics auto-configuration, Quarkus through the
- * Micrometer extension), so this one class serves both.
+ * Publishes what {@link VanillaBpMetrics} records as Micrometer meters. Both platforms
+ * apply {@link MeterBinder} beans to their registries themselves: Spring Boot through the
+ * metrics auto-configuration of the Actuator, Quarkus through the Micrometer extension. So
+ * this one class serves both.
  * <p>
- * Micrometer is OPTIONAL: this class is loaded only where the platform integration
- * found Micrometer, and everything the core records goes to {@link
- * VanillaBpMetrics#NONE} otherwise.
+ * Micrometer is OPTIONAL. This class is loaded only where the platform integration found
+ * Micrometer. Otherwise everything the core records goes to {@link VanillaBpMetrics#NONE}.
  * <p>
  * <b>Why the meters are cached.</b> A delivery must not pay for its own measurement.
- * Resolving a meter by name and tags costs a map lookup plus the tag list on every
- * call, so each meter is looked up once per tag combination and kept - and the number
- * of combinations is fixed by the deployment, see the cardinality note on
- * {@link VanillaBpMetrics}.
+ * Finding a meter by name and tags costs a map lookup plus the tag list on every call. So
+ * each meter is looked up once per combination of tags and kept. The deployment fixes the
+ * number of combinations, see the note on cardinality at {@link VanillaBpMetrics}.
  * <p>
- * Before {@link #bindTo(MeterRegistry)} was called there is no registry, and every
- * record is dropped. That is the normal state during startup, where beans are built
- * before the metrics infrastructure binds them.
+ * Before {@link #bindTo(MeterRegistry)} was called there is no registry, and every record
+ * is dropped. That is the normal state during startup, where beans are built before the
+ * metrics infrastructure binds them.
  * <p>
- * <b>Reading a metric costs nothing.</b> The counters and the timers are numbers this
- * class already holds, but a gauge is different: it is read on every collection, and
- * both gauges here have to ask an outbox store - how many entries wait, and how long
- * the oldest of them has been waiting. Each query is
- * wrapped in a {@link CachedGaugeValue} before it ever becomes a gauge, so a store
- * cannot forget to do it - see {@link #registerPendingOutboxEntries(String, java.util.function.Supplier)}
- * and {@link #registerAgeOfOldestPendingOutboxEntry(String, java.util.function.Supplier)}.
+ * <b>Reading a metric costs nothing.</b> This class already holds the counters and the
+ * timers as numbers. A gauge is different, because it is read on every collection. Both
+ * gauges here have to ask an outbox store: how many entries wait, and how long the oldest
+ * of them has been waiting. Each query is wrapped in a {@link CachedGaugeValue} before it
+ * ever becomes a gauge, so a store cannot forget it. See
+ * {@link #registerPendingOutboxEntries(String, java.util.function.Supplier)} and
+ * {@link #registerAgeOfOldestPendingOutboxEntry(String, java.util.function.Supplier)}.
  * <p>
- * Why the caching happens here once instead of in every store is decision 18 in the repository's
- * DECISIONS.md.
+ * Decision 18 in the repository's DECISIONS.md says why the caching happens here once and
+ * not in every store.
  */
 public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder {
 
   private volatile MeterRegistry registry;
 
   /**
-   * How long one measurement of an asking gauge is reused
+   * How long one measurement of a gauge which has to ask is reused
    * (<code>vanillabp.metrics.gauge-cache</code>). Zero measures on every collection.
    */
   private final Duration gaugeCache;
 
   /**
-   * Creates the meters with the default holding period - kept for tests; the platform
-   * integrations always pass the configured one.
+   * Creates the meters with the default holding period. It is kept for tests. The platform
+   * integrations always pass the configured period.
    */
   public MicrometerVanillaBpMetrics() {
 
@@ -70,7 +68,7 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
 
   /**
    * Built by the platform integration while the application boots, once per application.
-   * No meter exists yet at that point: the registry arrives later, with
+   * No meter exists yet at that point. The registry arrives later, with
    * {@link #bindTo(MeterRegistry)}.
    *
    * @param gaugeCache How long one measurement of a gauge which has to ask somebody is
@@ -88,27 +86,28 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
   private final Map<String, Timer> timers = new ConcurrentHashMap<>();
 
   /**
-   * The pending-entry suppliers of the outbox stores, kept because a store may
+   * The suppliers of pending entries of the outbox stores. They are kept because a store may
    * register before the registry exists.
    */
   private final Map<String, Supplier<OptionalLong>> pendingOutboxEntries = new ConcurrentHashMap<>();
 
   /**
-   * The age suppliers of the outbox stores, held for the same reason the pending ones
-   * are: a store registers while the beans are built, long before a registry exists.
+   * The age suppliers of the outbox stores, kept for the same reason as the pending ones. A
+   * store registers while the beans are built, long before a registry exists.
    */
   private final Map<String, Supplier<OptionalLong>> oldestPendingOutboxEntryAges = new ConcurrentHashMap<>();
 
   /**
-   * What each store's housekeeping says about its last window, held for the reason the
-   * two above are: a store registers while the beans are built, long before a registry
-   * exists.
+   * What the housekeeping of each store says about its last window. It is kept for the same
+   * reason as the two above. A store registers while the beans are built, long before a
+   * registry exists.
    */
   private final Map<String, Housekeeping> housekeepings = new ConcurrentHashMap<>();
 
   /**
-   * The three numbers of one store's last housekeeping window, kept together because
-   * they are registered together and re-registered together when a registry arrives.
+   * The three numbers of the last housekeeping window of one store. They are kept together,
+   * because they are registered together, and registered again together when a registry
+   * arrives.
    *
    * @param remaining What was left when the window closed
    * @param removed How many rows the window removed
@@ -125,7 +124,7 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
       final MeterRegistry meterRegistry) {
 
     this.registry = meterRegistry;
-    // the cached meters belong to the registry they were created in
+    // the cached meters belong to the registry in which they were created
     counters.clear();
     timers.clear();
     pendingOutboxEntries.forEach((
@@ -397,11 +396,11 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
   }
 
   /**
-   * The supplier is NOT registered as the gauge reads it. Counting the waiting entries
-   * of an outbox is a query, a gauge is read on every collection, and every instance of
-   * the application answers for itself - so what becomes the gauge is a
-   * {@link CachedGaugeValue} around it, and the query runs at most once per
-   * <code>vanillabp.metrics.gauge-cache</code> however many collectors ask.
+   * The supplier is NOT registered as the gauge which is read. Counting the waiting entries
+   * of an outbox is a query. A gauge is read on every collection, and every instance of the
+   * application answers for itself. So a {@link CachedGaugeValue} around the supplier
+   * becomes the gauge. The query runs at most once per
+   * <code>vanillabp.metrics.gauge-cache</code>, however many collectors ask.
    */
   @Override
   public void registerPendingOutboxEntries(
@@ -418,10 +417,10 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
   }
 
   /**
-   * The age travels as milliseconds and is published as seconds, because a dashboard
-   * reads seconds while an outbox which waits milliseconds needs no alert at all. The
-   * query behind it is held exactly as the pending one is: asking a store for its
-   * oldest waiting entry is a query, and a gauge is read on every collection.
+   * The age travels as milliseconds and is published as seconds. A dashboard reads seconds,
+   * and an outbox which waits milliseconds needs no alert at all. The query behind it is
+   * held exactly like the pending one. Asking a store for its oldest waiting entry is a
+   * query, and a gauge is read on every collection.
    */
   @Override
   public void registerAgeOfOldestPendingOutboxEntry(
@@ -446,9 +445,8 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
   }
 
   /**
-   * The three values are held by the housekeeping itself, which measured them when it
-   * closed its window, so nothing is cached around them: reading a gauge here reads a
-   * field.
+   * The housekeeping itself holds the three values. It measured them when it closed its
+   * window. So nothing is cached around them, and reading a gauge here reads a field.
    */
   @Override
   public void registerHousekeeping(
@@ -475,10 +473,9 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
   }
 
   /**
-   * Publishes the three numbers of one store's housekeeping. A store whose window has
-   * never closed reports NaN on all three, the gap this class leaves wherever a
-   * measurement was not taken - a zero would read as "nothing was left", which is a
-   * claim nobody checked.
+   * Publishes the three numbers of the housekeeping of one store. A store whose window has
+   * never closed reports NaN on all three. This class leaves that gap wherever no measurement
+   * was taken. A zero would read as "nothing was left", and nobody checked that.
    *
    * @param meterRegistry Where the gauges go
    * @param store The store they belong to
@@ -551,9 +548,9 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
   }
 
   /**
-   * A measurement which could not be taken is reported as NaN, which Micrometer treats
-   * as "no measurement" and most backends skip - the same way the election cache's size
-   * gauge answers for a cache which does not know its size. A zero would be a claim
+   * A measurement which could not be taken is reported as NaN. Micrometer treats NaN as "no
+   * measurement", and most backends skip it. The size gauge of the election cache answers
+   * the same way for a cache which does not know its size. A zero would claim something which
    * nobody checked.
    */
   private static void registerPendingGauge(
@@ -578,10 +575,9 @@ public class MicrometerVanillaBpMetrics implements VanillaBpMetrics, MeterBinder
   }
 
   /**
-   * Publishes the held age as seconds. An outbox with nothing waiting reports zero,
-   * which is a measurement: nothing is owed. A store which could not read its oldest
-   * entry reports NaN, the gap {@link #registerPendingGauge} leaves for the same
-   * reason.
+   * Publishes the held age as seconds. An outbox with nothing waiting reports zero. That is a
+   * measurement: nothing is owed. A store which could not read its oldest entry reports NaN.
+   * {@link #registerPendingGauge} leaves the same gap, for the same reason.
    */
   private static void registerOldestPendingAgeGauge(
       final MeterRegistry meterRegistry,

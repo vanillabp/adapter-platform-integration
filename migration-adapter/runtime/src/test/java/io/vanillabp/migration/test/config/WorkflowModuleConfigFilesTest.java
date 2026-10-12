@@ -13,9 +13,9 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowModuleConfigFil
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The four places a workflow module may put its configuration file, and what is said about
- * a module which uses two of them for the same file. Both platform integrations read this
- * list, so a change here changes both.
+ * The four places where a workflow module may put its configuration file, and what is said
+ * about a module which uses two of them for the same file. Both platform integrations read
+ * this list, so a change here changes both.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowModuleConfigFilesTest {

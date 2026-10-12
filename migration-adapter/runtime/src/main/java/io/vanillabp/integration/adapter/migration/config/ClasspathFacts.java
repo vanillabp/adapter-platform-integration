@@ -3,16 +3,15 @@ package io.vanillabp.integration.adapter.migration.config;
 import java.util.List;
 
 /**
- * What the platform knows about the application WITHOUT reading any
- * <code>vanillabp.*</code> property: which adapter types the classpath provides
- * and which workflow modules it contains. These facts are the basis of
- * convention-over-configuration: everything derivable from them is
- * derived by {@link MigrationAdapterProperties#normalize(ClasspathFacts)} BEFORE
- * the validation runs - the validation rules themselves stay unchanged and apply
- * to derived entries exactly like to hand-written ones.
+ * What the platform knows about the application WITHOUT reading any <code>vanillabp.*</code>
+ * property: which adapter types the classpath provides, and which workflow modules it
+ * contains. Convention over configuration is based on these facts.
+ * {@link MigrationAdapterProperties#normalize(ClasspathFacts)} derives everything which can
+ * be derived from them, BEFORE the checks run. The rules of the checks stay the same, and
+ * they apply to derived entries exactly like to hand-written ones.
  * <p>
- * Why these facts are read before the configuration is validated is decision 8 in the repository's
- * DECISIONS.md.
+ * Decision 8 in the repository's DECISIONS.md says why these facts are read before the
+ * configuration is checked.
  *
  * @param adapterTypes The adapter types found in the classpath (Spring Boot: the
  *          <code>AdapterConfigurationBase</code> beans, Quarkus: the VanillaBP
@@ -44,9 +43,9 @@ public record ClasspathFacts(
   }
 
   /**
-   * Facts of a platform which cannot tell where a workflow module descriptor came
-   * from - every module is treated as an own artifact (the conservative choice:
-   * its resources are expected below the module ID).
+   * The facts of a platform which cannot tell where a workflow module descriptor came from.
+   * Every module counts as an artifact of its own. That is the careful choice: its resources
+   * are expected below the module ID.
    *
    * @param adapterTypes The adapter types found in the classpath
    * @param workflowModuleIds The workflow module IDs found in the classpath
@@ -66,7 +65,7 @@ public record ClasspathFacts(
 
   /**
    * The module ids alone, for everything which asks whether a configured module exists at
-   * all and does not care where its descriptor came from.
+   * all, and does not care where its descriptor came from.
    *
    * @return The IDs of the workflow modules found in the classpath, in the order the
    *         platform read them

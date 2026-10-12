@@ -16,14 +16,14 @@ import io.vanillabp.integration.spi.RunningActivation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Pins the PERSISTED contract of VanillaBP's core phase-two operations: their names
- * and their idempotency-key derivation rules. Both were guaranteed by construction
- * as long as the operations were enum constants; since they are entries of the
- * operation registry, this test is the guarantee.
+ * Pins the PERSISTED contract of the phase-two operations of the VanillaBP core: their
+ * names, and the rules by which their idempotency keys are derived. Both were guaranteed by
+ * construction as long as the operations were enum constants. Now they are entries of the
+ * operation registry, and this test is the guarantee.
  * <p>
- * A failure here means outbox entries written by an earlier version of the
- * application will no longer dispatch or no longer deduplicate. Do not "fix" the
- * test by adjusting the expectation - fix the operation.
+ * A failure here means that outbox entries written by an earlier version of the application
+ * will no longer dispatch, or no longer deduplicate. Do not "fix" the test by changing the
+ * expectation. Fix the operation.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PhaseOperationContractTest {
@@ -65,8 +65,8 @@ public class PhaseOperationContractTest {
         "START_WORKFLOW|test-module|TestProcess|42",
         call(PhaseOperation.START_WORKFLOW, Map.of()).idempotencyKey().orElseThrow());
 
-    // by message: same key, the plain start's name included - a workflow is started at
-    // most once per aggregate, regardless of the triggering message
+    // by message: the same key, and it includes the name of the plain start. A workflow is
+    // started at most once per aggregate, whichever message triggers it
     assertEquals(
         "START_WORKFLOW|test-module|TestProcess|42",
         call(
@@ -89,7 +89,7 @@ public class PhaseOperationContractTest {
         call(
             PhaseOperation.COMPLETE_USER_TASK,
             Map.of(PhaseTwoCall.ARG_TASK_ID, "task-1")).idempotencyKey().orElseThrow());
-    // the BPMN error code is NOT part of the key: one task is cancelled once
+    // the BPMN error code is NOT part of the key, because one task is cancelled once
     assertEquals(
         "CANCEL_TASK|test-module|TestProcess|42|task-1",
         call(
@@ -145,9 +145,9 @@ public class PhaseOperationContractTest {
                     PhaseTwoCall.ARG_CORRELATION_ID, "correlation-1"))
             .idempotencyKey().orElseThrow());
 
-    // without a correlation id the same message may legitimately be correlated
-    // several times - there is no key, and an at-least-once dispatch may
-    // double-correlate (documented residual)
+    // without a correlation id, the same message may legitimately be correlated several
+    // times. There is no key, and a dispatch of at-least-once may correlate twice (a
+    // documented residual)
     assertTrue(
         call(
             PhaseOperation.CORRELATE_MESSAGE,
@@ -159,9 +159,9 @@ public class PhaseOperationContractTest {
   @DisplayName("An activation in the args names the correlation key, and only that key")
   public void correlateMessageKeyCarriesTheActivationFromTheArgs() {
 
-    // the value is read from the CALL, not from the thread: the derivation stays a pure
-    // function of what a store persists, and the same args carry the activation to the
-    // adapter at dispatch time. Which is why opening a scope alone changes nothing here
+    // the value is read from the CALL, not from the thread. So the derivation stays a pure
+    // function of what a store persists. The same args carry the activation to the adapter
+    // at dispatch time. That is why opening a scope alone changes nothing here
     final var withActivation = Map
         .of(
             PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived",
@@ -171,8 +171,8 @@ public class PhaseOperationContractTest {
         "CORRELATE_MESSAGE|test-module|TestProcess|42|OrderReceived|correlation-1|element-instance-99",
         call(PhaseOperation.CORRELATE_MESSAGE, withActivation).idempotencyKey().orElseThrow());
 
-    // an entry written before this existed carries no such arg and keeps its key, which
-    // is what lets it dispatch across the upgrade
+    // an entry written before this existed carries no such arg and keeps its key. That
+    // lets it dispatch across the upgrade
     final var withoutActivation = Map
         .of(
             PhaseTwoCall.ARG_MESSAGE_NAME, "OrderReceived",
@@ -194,8 +194,8 @@ public class PhaseOperationContractTest {
   @DisplayName("No other operation is told about an activation")
   public void noOtherKeyCarriesAnActivation() {
 
-    // these deduplicate ACROSS activations on purpose: a workflow is started at most once
-    // per aggregate whichever activation asks, and a task id already names one activation
+    // these deduplicate ACROSS activations on purpose. A workflow is started at most once
+    // per aggregate, whichever activation asks. And a task id already names one activation
     // of one element
     assertEquals(
         "START_WORKFLOW|test-module|TestProcess|42",
@@ -212,7 +212,7 @@ public class PhaseOperationContractTest {
                     PhaseTwoCall.ARG_ACTIVATION_ID, "element-instance-99"))
             .idempotencyKey()
             .orElseThrow());
-    // and keyless stays keyless: an activation must not start deduplicating what is
+    // and keyless stays keyless. An activation must not start to deduplicate what is
     // deliberately not deduplicated
     assertTrue(
         call(
@@ -266,7 +266,7 @@ public class PhaseOperationContractTest {
   @DisplayName("A key too long for the stores is hashed, and the hash is pinned")
   public void anOversizedKeyIsHashed() {
 
-    // 300 characters of aggregate id push the derived key past the 250 characters
+    // 300 characters of aggregate id push the derived key past the 250 characters which
     // gruelbox accepts as a unique request id
     final var aggregateId = "a".repeat(300);
     final var key = PhaseTwoCall
@@ -278,8 +278,8 @@ public class PhaseOperationContractTest {
         .idempotencyKey()
         .orElseThrow();
 
-    // pinned as a literal: entries of a running installation are looked up by this
-    // string, so a changed digest, prefix or boundary would stop matching silently
+    // pinned as a literal. Entries of a running installation are looked up by this string.
+    // A changed digest, prefix or boundary would silently stop matching
     assertEquals(
         "sha256:bfd70402b37726c004502c1e170fa5d6e38b74c63acf3923a555410fd24df939",
         key);
@@ -302,8 +302,8 @@ public class PhaseOperationContractTest {
                 .of(PhaseOperation.START_WORKFLOW, "test-module", "TestProcess", aggregateId, "test-adapter", Map
                     .of()));
 
-    // the message has to name the column and the length, because it replaces a
-    // driver-level truncation error in the middle of the caller's transaction
+    // the message has to name the column and the length. It replaces a truncation error of
+    // the driver in the middle of the transaction of the caller
     assertTrue(exception.getMessage().contains("AGGREGATE_ID"), exception.getMessage());
     assertTrue(exception.getMessage().contains("1025"), exception.getMessage());
     assertTrue(exception.getMessage().contains("1024"), exception.getMessage());
@@ -330,9 +330,9 @@ public class PhaseOperationContractTest {
   @DisplayName("Args no store can hold are refused where the call is built")
   public void unstorableArgsAreRefused() {
 
-    // 700 percent signs are 700 characters raw and 2100 encoded, so only the
-    // serialized form exceeds the column - a check against the raw value would let
-    // exactly this case through
+    // 700 percent signs are 700 characters raw and 2100 encoded. So only the serialized
+    // form exceeds the column. A check against the raw value would let exactly this case
+    // through
     final var correlationId = "%".repeat(700);
 
     final var exception = org.junit.jupiter.api.Assertions
@@ -345,8 +345,8 @@ public class PhaseOperationContractTest {
                         PhaseTwoCall.ARG_CORRELATION_ID, correlationId)));
 
     assertTrue(correlationId.length() < PhaseTwoCall.MAX_ARGS_LENGTH, "raw value fits, encoded does not");
-    // the message replaces a driver-level truncation in the middle of the caller's
-    // transaction, so it names the column, both lengths and the argument to change
+    // the message replaces a truncation of the driver in the middle of the transaction of
+    // the caller. So it names the column, both lengths and the argument to change
     assertTrue(exception.getMessage().contains("ARGS"), exception.getMessage());
     assertTrue(exception.getMessage().contains("2048"), exception.getMessage());
     assertTrue(exception.getMessage().contains(PhaseTwoCall.ARG_CORRELATION_ID), exception.getMessage());
@@ -358,12 +358,12 @@ public class PhaseOperationContractTest {
   @DisplayName("Args up to the column's width are accepted")
   public void theLongestStorableArgsAreAccepted() {
 
-    // "messageName=" plus the value is what is stored, so the value which just fits is
-    // shorter than the column by the length of the key and the separator
+    // "messageName=" plus the value is stored. So the value which just fits is shorter than
+    // the column by the length of the key and the separator
     final var messageName = "m".repeat(PhaseTwoCall.MAX_ARGS_LENGTH - (PhaseTwoCall.ARG_MESSAGE_NAME.length() + 1));
 
-    // no correlation id, so this call carries no idempotency key by design - what is
-    // asserted here is that it is built at all, with its args intact
+    // no correlation id, so this call carries no idempotency key by design. This asserts
+    // that the call is built at all, with its args intact
     assertEquals(
         messageName,
         PhaseTwoCall

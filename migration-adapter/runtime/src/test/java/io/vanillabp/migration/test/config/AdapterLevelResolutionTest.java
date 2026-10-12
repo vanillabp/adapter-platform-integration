@@ -18,11 +18,11 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterPr
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Tests the generic most-specific-wins resolution of adapter-scoped properties
- * across the four levels (task &gt; workflow &gt; workflow-module &gt; adapter). The
- * probe is <code>deduplicate-deliveries</code>, the key which is really read at all
- * four of them, and neighbouring levels say the opposite so that every answer names
- * the level it came from.
+ * Tests the generic resolution of settings scoped to an adapter, across the four levels
+ * (task &gt; workflow &gt; workflow-module &gt; adapter). The most specific value wins. The
+ * probe is <code>deduplicate-deliveries</code>, the key which is really read at all four
+ * levels. Neighbouring levels say the opposite, so every answer names the level it came
+ * from.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AdapterLevelResolutionTest {
@@ -40,10 +40,10 @@ public class AdapterLevelResolutionTest {
   }
 
   /**
-   * Builds properties with a value at every one of the four levels: the task says
-   * false, the workflow true, the workflow module false and the adapter true. Each
-   * level therefore contradicts the next less specific one, so an answer can only
-   * have come from the level the test expects.
+   * Builds properties with a value at every one of the four levels. The task says false,
+   * the workflow true, the workflow module false, and the adapter true. So each level
+   * contradicts the next less specific one, and an answer can only have come from the level
+   * the test expects.
    */
   private static MigrationAdapterProperties allLevels() {
 
@@ -138,8 +138,8 @@ public class AdapterLevelResolutionTest {
   @DisplayName("A null value at a specific level falls through to the next less specific one")
   public void nullValueFallsThrough() {
 
-    // the task and workflow levels DECLARE the adapter but do not set the value -
-    // the resolution has to fall through to the module level
+    // the task and workflow levels DECLARE the adapter, but do not set the value. The
+    // resolution has to fall through to the module level
     final var properties = MigrationAdapterProperties
         .builder()
         .adapters(Map.of(ADAPTER_ID, AdapterConfigProperties

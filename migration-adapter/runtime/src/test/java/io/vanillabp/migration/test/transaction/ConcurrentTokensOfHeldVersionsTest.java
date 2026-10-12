@@ -27,14 +27,14 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * Two writers on one workflow aggregate in a version the BPMS still HOLDS. An older version
- * with a parallel gateway the newest model dropped keeps forking every workflow which was
- * started before it, and those are the workflows which run longest - so a check reading only
- * the model of this boot never sees the case which lasts.
+ * Two writers on one workflow aggregate in a version which the BPMS still HOLDS. An older
+ * version may have a parallel gateway which the newest model dropped. It keeps forking every
+ * workflow which was started before, and those are the workflows which run longest. So a
+ * check which reads only the model of this boot never sees the case which lasts.
  * <p>
  * Reading the old model belongs to the adapter
- * ({@link ProcessVersionCatalog#concurrentTokenElementsOfVersion}), deciding what it means
- * belongs to the core, which is the same split the deployed model goes through.
+ * ({@link ProcessVersionCatalog#concurrentTokenElementsOfVersion}). Deciding what it means
+ * belongs to the core. The deployed model goes through the same split.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ConcurrentTokensOfHeldVersionsTest {
@@ -53,9 +53,9 @@ public class ConcurrentTokensOfHeldVersionsTest {
   }
 
   /**
-   * Stands in for <code>jakarta.persistence.Version</code> respectively
-   * <code>org.springframework.data.annotation.Version</code>, which the core must not depend
-   * on - it recognizes them by their name.
+   * Stands in for <code>jakarta.persistence.Version</code> and for
+   * <code>org.springframework.data.annotation.Version</code>. The core must not depend on
+   * them, so it recognizes them by their name.
    */
   @java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.RUNTIME)
   @java.lang.annotation.Target({
@@ -65,8 +65,8 @@ public class ConcurrentTokensOfHeldVersionsTest {
   }
 
   /**
-   * The same aggregate with the attribute a persistence layer increments per write - a
-   * collision raises an exception there instead of being lost, which is what silences the
+   * The same aggregate with the attribute which a persistence layer increments per write.
+   * There a collision raises an exception instead of being lost. That silences the
    * warning.
    */
   @Getter
@@ -101,7 +101,7 @@ public class ConcurrentTokensOfHeldVersionsTest {
   }
 
   /**
-   * What the BPMS holds, with every answer handed in by the test.
+   * What the BPMS holds. The test hands in every answer.
    */
   private static class CatalogStub implements ProcessVersionCatalog {
 
@@ -114,8 +114,8 @@ public class ConcurrentTokensOfHeldVersionsTest {
     private boolean canReadModels = true;
 
     /**
-     * Every question this BPMS was asked, in order - what a version nobody runs on costs is
-     * exactly what is missing from this list.
+     * Every question this BPMS was asked, in order. What a version on which nobody runs
+     * costs is exactly what is missing from this list.
      */
     private final List<String> questions = new ArrayList<>();
 
@@ -190,8 +190,8 @@ public class ConcurrentTokensOfHeldVersionsTest {
     catalog = new CatalogStub();
     catalog.versions = List
         .of(DeployedProcessVersion.of("1"), DeployedProcessVersion.of("2"), DeployedProcessVersion.of("3"));
-    // the gateway was dropped by the model this boot deployed, and the workflows of the two
-    // older versions are still forking on it
+    // the model which this boot deployed dropped the gateway. The workflows of the two older
+    // versions still fork on it
     catalog.concurrentTokensPerVersion.put("1", List.of("Gateway_Fork"));
     catalog.concurrentTokensPerVersion.put("2", List.of("Gateway_Fork", "Event_Reminder"));
     catalog.instancesPerVersion.put("1", 7L);
@@ -237,7 +237,8 @@ public class ConcurrentTokensOfHeldVersionsTest {
 
     catalog.instancesPerVersion.clear();
 
-    // "cannot tell" is not "nobody", and a lost update is the one outcome worth a model read
+    // "cannot tell" is not "nobody", and a lost update is the one outcome worth a model
+    // read
     assertFalse(theModuleFinishedDeploying(Aggregate.class).isEmpty());
 
   }
@@ -270,8 +271,8 @@ public class ConcurrentTokensOfHeldVersionsTest {
       registry.resolveProcessVersions(MODULE);
     });
 
-    // two models carry the same finding about one aggregate, so they carry the same
-    // message and differ in their scope - which is what lets the box fold them
+    // two models carry the same finding about one aggregate. So they carry the same message
+    // and differ in their scope. That lets the box fold them
     final var aboutTwoTokens = properties
         .startupFindings()
         .findings()
@@ -298,8 +299,8 @@ public class ConcurrentTokensOfHeldVersionsTest {
   }
 
   /**
-   * The deployment of a workflow module whose adapter reports no concurrent token of the model
-   * it just deployed: the older versions are what the check reads afterwards.
+   * The deployment of a workflow module whose adapter reports no concurrent token of the
+   * model it just deployed. The check reads the older versions afterwards.
    */
   private List<String> theModuleFinishedDeploying(
       final Class<?> workflowAggregateClass) {
@@ -332,8 +333,9 @@ public class ConcurrentTokensOfHeldVersionsTest {
   }
 
   /**
-   * What an adapter does while and after deploying: it wires the model, reports what of it can
-   * produce a second token, registers what its BPMS knows and names the version it was given.
+   * What an adapter does while and after deploying. It wires the model, reports what of it
+   * can produce a second token, registers what its BPMS knows, and names the version it was
+   * given.
    */
   private void theAdapterWired(
       final WorkflowTaskRegistry registry,
@@ -348,8 +350,9 @@ public class ConcurrentTokensOfHeldVersionsTest {
   }
 
   /**
-   * What the concurrent-token check reported while the work ran - the scope of a finding
-   * beside its message, because the scope names the model the finding was drawn from.
+   * What the concurrent-token check reported while the work ran. It shows the scope of a
+   * finding beside its message, because the scope names the model from which the finding
+   * was drawn.
    */
   private List<String> loggedByTheCheck(
       final Runnable work) {
@@ -364,8 +367,8 @@ public class ConcurrentTokensOfHeldVersionsTest {
   }
 
   /**
-   * The registry needs a process service to register a workflow service; nothing here invokes
-   * it, and its aggregate class is the whole point of the question asked.
+   * The registry needs a process service to register a workflow service. Nothing here invokes
+   * it. Its aggregate class is the whole point of the question asked.
    */
   @SuppressWarnings({
       "unchecked", "rawtypes"
@@ -378,7 +381,7 @@ public class ConcurrentTokensOfHeldVersionsTest {
     org.mockito.Mockito
         .when(processService.getWorkflowAggregateClass())
         .thenReturn((Class) workflowAggregateClass);
-    // the check asks the persistence of the aggregate, not the class - a real process
+    // the check asks the persistence of the aggregate, not the class. A real process
     // service answers that from its AggregatePersistenceAware
     org.mockito.Mockito
         .when(processService.detectsConcurrentModification())
@@ -388,7 +391,8 @@ public class ConcurrentTokensOfHeldVersionsTest {
   }
 
   /**
-   * The transaction runner is irrelevant here - no test in this class runs a handler.
+   * The transaction runner does not matter here, because no test in this class runs a
+   * handler.
    */
   private static class TransactionRunnerStub implements TransactionRunner {
 

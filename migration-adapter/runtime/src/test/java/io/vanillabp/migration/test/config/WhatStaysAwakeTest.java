@@ -19,16 +19,16 @@ import io.vanillabp.migration.test.startup.WhatWasFound;
 
 /**
  * An application which lets its outbox sleep watches its database next, and this is the
- * message it reads first. Promising silence would be the easy answer and the wrong one: what
- * the developer needs is the list of timers which are still there, because every one they do
- * not hear about here they have to find themselves.
+ * message it reads first. Promising silence would be the easy answer, and the wrong one. The
+ * developer needs the list of timers which are still there. Every timer they do not hear
+ * about here they have to find themselves.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WhatStaysAwakeTest {
 
   /**
-   * What the last validated configuration reported, which is where this message goes
-   * instead of into a line of its own.
+   * What the last validated configuration reported. This message goes there instead of into
+   * a line of its own.
    */
   private String reported;
 

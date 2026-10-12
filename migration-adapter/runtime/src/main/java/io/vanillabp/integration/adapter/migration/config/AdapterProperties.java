@@ -12,32 +12,32 @@ import java.util.Map;
  * vanillabp.adapters.&lt;id&gt;.*                                                                (least specific)
  * </pre>
  *
- * Every one of the four binds this class, so each key below may be written at any of them.
- * The <code>&lt;id&gt;</code> is the adapter id, and an application running two adapters of
- * the same BPMS - the migration case - says different things to each of them by writing two
+ * Each of the four binds this class, so each key below may be written at any of them. The
+ * <code>&lt;id&gt;</code> is the adapter id. An application which runs two adapters of the
+ * same BPMS (the migration case) says different things to each of them by writing two
  * sections.
  * <p>
- * <code>null</code> is the value of every key nobody wrote, and it means "this level says
- * nothing" rather than "off": the lookup walks from the most specific level to the least
- * specific one and takes the first value which is not <code>null</code>
+ * <code>null</code> is the value of every key which nobody wrote. It means "this level says
+ * nothing", not "off". The lookup walks from the most specific level to the least specific
+ * one, and takes the first value which is not <code>null</code>
  * ({@link MigrationAdapterProperties#resolveForAdapter}). Where no level says anything, the
- * default named at the key applies. Why an adapter setting may be written in four places is
- * decision 7 in the repository's DECISIONS.md.
+ * default named at the key applies. Decision 7 in the repository's DECISIONS.md says why an
+ * adapter setting may be written in four places.
  * <p>
- * The section of the adapter itself carries two keys more than the three levels below it,
- * and those are in {@link AdapterConfigProperties}.
+ * The section of the adapter itself has two more keys than the three levels below it. Those
+ * are in {@link AdapterConfigProperties}.
  */
 public class AdapterProperties {
 
   /**
-   * The empty section a configuration binder starts from: both platforms create the object
-   * and then write the keys the application configured into it, one setter per key.
+   * The empty section from which a configuration binder starts. Both platforms create the
+   * object, and then write the keys which the application configured into it, one setter per
+   * key.
    * <p>
-   * It asks the builder for the values, and that is not a detour: every default of this
-   * class stands on the builder as well as on the field, and both ways into an object
-   * end here. A constructor which set the fields itself would have to repeat every
-   * default, and the first one somebody forgets would leave such a field
-   * <code>null</code>.
+   * It asks the builder for the values, and that is not a detour. Every default of this class
+   * is on the builder as well as on the field, and both ways into an object end here. A
+   * constructor which set the fields itself would have to repeat every default. The first
+   * default somebody forgets would leave such a field <code>null</code>.
    */
   public AdapterProperties() {
 
@@ -46,114 +46,109 @@ public class AdapterProperties {
   }
 
   /**
-   * Refused here on purpose: the permission to share a whole workflow aggregate belongs
-   * to the single workflow (see decision 66 in the repository's DECISIONS.md). It is
-   * bound at this level so that a line written here is answered with a message saying
-   * where it belongs, instead of being ignored.
+   * Refused here on purpose. The permission to share a whole workflow aggregate belongs to
+   * the single workflow (see decision 66 in the repository's DECISIONS.md). It is bound at
+   * this level, so that a line written here gets a message which says where it belongs,
+   * instead of being ignored.
    */
   private Boolean allowFullSyncWithBpms;
 
   /**
-   * Where to load BPMN files from, which are specific to the adapter.
+   * Where to load BPMN files from which are specific to the adapter.
    * <p>
-   * Read at the workflow module and at the adapter, in that order, and the global
+   * It is read at the workflow module and at the adapter, in that order. The global
    * <code>vanillabp.resources-location</code> follows both (see
    * {@link MigrationAdapterProperties#getAdapterResourcesLocationsFor}). The two more
-   * specific levels cannot be read: VanillaBP finds the BPMN files before it knows which
-   * process or which task is in them. They are bound all the same, so that a line
-   * written at a workflow or at a task is answered with a message naming the keys it
-   * belongs at, instead of being ignored (see decision 80 in the repository's
-   * DECISIONS.md).
+   * specific levels cannot be read. VanillaBP finds the BPMN files before it knows which
+   * process or which task is in them. They are bound all the same. So a line written at a
+   * workflow or at a task gets a message which names the keys where it belongs, instead of
+   * being ignored (see decision 80 in the repository's DECISIONS.md).
    */
   private String resourcesLocation;
 
   /**
-   * How the identifiers of a workflow module are kept apart from those of other
-   * workflow modules (see
-   * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance}). Adapter-scoped
-   * and therefore resolvable per workflow module and workflow; <code>null</code>
-   * means "not configured at this level" (the adapter's own default applies then, see
+   * How the identifiers of a workflow module are kept apart from those of other workflow
+   * modules (see {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance}). It is
+   * adapter-scoped, so it can be set per workflow module and workflow. <code>null</code>
+   * means "not configured at this level". Then the adapter's own default applies (see
    * {@link io.vanillabp.integration.adapter.spi.AdapterDeploymentService#defaultNameClashAvoidance()}).
    */
   private io.vanillabp.integration.adapter.spi.NameClashAvoidance nameClashAvoidance;
 
   /**
-   * Whether a task definition is scoped by the BPMN process ID in addition to the
-   * workflow module ID (only relevant for
-   * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance#USE_PREFIX}).
-   * Defaults to <code>true</code>: reusing one task implementation across processes
-   * is an anti-pattern, so a task definition belongs to its process. Set it to
-   * <code>false</code> if an application does it deliberately. <code>null</code>
-   * means "not configured at this level".
+   * Whether a task definition is scoped by the BPMN process ID, in addition to the workflow
+   * module ID (only relevant for
+   * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance#USE_PREFIX}). The default
+   * is <code>true</code>. Using one task implementation in several processes is an
+   * anti-pattern, so a task definition belongs to its process. Set it to <code>false</code>
+   * if an application does that on purpose. <code>null</code> means "not configured at this
+   * level".
    */
   private Boolean prefixTaskDefinitionsPerProcess;
 
   /**
-   * Whether VanillaBP remembers the task deliveries of this BPMS, so a repeated
-   * delivery does not run the <code>&#64;WorkflowTask</code> method again but reports
-   * the recorded outcome once more (see
-   * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). Adapter-scoped and
-   * therefore resolvable per workflow module, workflow and task - a single task doing
-   * something expensive twice may be treated differently from the rest.
+   * Whether VanillaBP remembers the task deliveries of this BPMS. Then a repeated delivery
+   * does not run the <code>&#64;WorkflowTask</code> method again, but reports the recorded
+   * outcome once more (see {@link io.vanillabp.integration.spi.TaskDeliveryLog}). It is
+   * adapter-scoped, so it can be set per workflow module, workflow and task. A single task
+   * which does something expensive twice may be treated differently from the rest.
    * <p>
-   * Defaults to <code>true</code>: not running business code twice is the safer
-   * behaviour. It has an effect only where the BPMS may repeat a delivery at all
-   * ({@link io.vanillabp.integration.adapter.spi.MigratableProcessService#deliversTasksAtLeastOnce()})
-   * and the adapter reports a delivery identity. <code>null</code> means "not
+   * The default is <code>true</code>, because not running business code twice is the safer
+   * behaviour. It only has an effect where the BPMS may repeat a delivery at all
+   * ({@link io.vanillabp.integration.adapter.spi.MigratableProcessService#deliversTasksAtLeastOnce()}),
+   * and where the adapter reports a delivery identity. <code>null</code> means "not
    * configured at this level".
    */
   private Boolean deduplicateDeliveries;
 
   /**
-   * Whether something other than this application serves the tasks this level covers,
+   * Whether something other than this application serves the tasks which this level covers,
    * for this adapter only (<code>implemented-externally</code>, see
-   * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, it is
+   * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, this is
    * how the two adapters of a migration say different things about one task.
    * <code>null</code> means "not configured at this level".
    */
   private Boolean implementedExternally;
 
   /**
-   * The versions of a BPMN process this application does not serve any more, each
+   * The versions of a BPMN process which this application does not serve any more. Each is
    * written in the grammar of the <code>version</code> attribute of
-   * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
-   * <code>1-3</code>, <code>v1.0..v2.0</code>, a version tag). A version covered by
-   * ANY of them is ignored by the startup check, so its task definitions need no
-   * methods.
+   * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>, <code>1-3</code>,
+   * <code>v1.0..v2.0</code>, a version tag). The startup check ignores a version which ANY of
+   * them covers. So its task definitions need no methods.
    * <p>
-   * Adapter-scoped and therefore resolvable per workflow module and workflow - every
-   * BPMS counts its own versions, which is why a specification without an adapter
-   * would be meaningless and why the two adapters of a BPMS migration fade out their
-   * own versions independently. <code>null</code> or empty means "not configured at
-   * this level".
+   * It is adapter-scoped, so it can be set per workflow module and workflow. Every BPMS counts
+   * its own versions. That is why a specification without an adapter would mean nothing, and
+   * why the two adapters of a BPMS migration fade out their own versions independently.
+   * <code>null</code> or empty means "not configured at this level".
    */
   private java.util.List<String> outfadedVersions;
 
   /**
-   * What happens when workflows still run on an outfaded version - see
-   * {@link OutfadedVersionsInUsePolicy}. Defaults to
-   * {@link OutfadedVersionsInUsePolicy#LOG}; <code>null</code> means "not configured
-   * at this level".
+   * What happens when workflows still run on a version which is faded out, see
+   * {@link OutfadedVersionsInUsePolicy}. The default is
+   * {@link OutfadedVersionsInUsePolicy#LOG}. <code>null</code> means "not configured at this
+   * level".
    */
   private OutfadedVersionsInUsePolicy outfadedVersionsInUse;
 
   /**
-   * What an extension is configured with FOR THIS ADAPTER at this level (properties
-   * section <code>...adapters.&lt;id&gt;.extensions.&lt;extension&gt;.*</code>). Keys are
-   * the extension ids, values what the application wrote below them.
+   * What an extension is configured with FOR THIS ADAPTER at this level (properties section
+   * <code>...adapters.&lt;id&gt;.extensions.&lt;extension&gt;.*</code>). The keys are the
+   * extension ids. The values are what the application wrote below them.
    * <p>
-   * An extension hangs on every configured adapter separately, so an application running
-   * two adapters of the same BPMS type may tell them different things. What an adapter is
-   * told beats what the same level says in general, and a more specific level beats a less
-   * specific one (see decision 53 in the repository's DECISIONS.md and
+   * An extension is configured on every configured adapter separately. So an application which
+   * runs two adapters of the same BPMS type may tell them different things. What an adapter is
+   * told wins over what the same level says in general. And a more specific level wins over a
+   * less specific one (see decision 53 in the repository's DECISIONS.md and
    * {@link MigrationAdapterProperties#resolveForExtension}).
    */
   private Map<String, Map<String, String>> extensions = Map.of();
 
   /**
-   * The builder of {@link AdapterProperties}. Its two type parameters carry the class
-   * being built and the builder itself, so a call inherited from a base class comes back
-   * as the builder of the subclass and the next call in the chain sees every key again.
+   * The builder of {@link AdapterProperties}. Its two type parameters are the class being
+   * built and the builder itself. So a call inherited from a base class comes back as the
+   * builder of the subclass, and the next call in the chain sees every key again.
    *
    * @param <C> The class this builder builds
    * @param <B> The builder itself, which every method of the chain returns
@@ -161,13 +156,13 @@ public class AdapterProperties {
   public abstract static class AdapterPropertiesBuilder<C extends AdapterProperties, B extends AdapterProperties.AdapterPropertiesBuilder<C, B>> {
 
     /**
-     * Refused here on purpose: the permission to share a whole workflow aggregate
-     * belongs to the single workflow (see decision 66 in the repository's DECISIONS.md).
+     * Refused here on purpose. The permission to share a whole workflow aggregate belongs to
+     * the single workflow (see decision 66 in the repository's DECISIONS.md).
      */
     private Boolean allowFullSyncWithBpms;
 
     /**
-     * Where to load BPMN files from, which are specific to the adapter.
+     * Where to load BPMN files from which are specific to the adapter.
      */
     private String resourcesLocation;
 
@@ -179,60 +174,59 @@ public class AdapterProperties {
     private io.vanillabp.integration.adapter.spi.NameClashAvoidance nameClashAvoidance;
 
     /**
-     * Whether a task definition is scoped by the BPMN process ID in addition to the
-     * workflow module ID (only relevant for
+     * Whether a task definition is scoped by the BPMN process ID, in addition to the workflow
+     * module ID (only relevant for
      * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance#USE_PREFIX}).
      */
     private Boolean prefixTaskDefinitionsPerProcess;
 
     /**
-     * Whether VanillaBP remembers the task deliveries of this BPMS, so a repeated
-     * delivery does not run the <code>&#64;WorkflowTask</code> method again but reports
-     * the recorded outcome once more (see
-     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
+     * Whether VanillaBP remembers the task deliveries of this BPMS. Then a repeated delivery
+     * does not run the <code>&#64;WorkflowTask</code> method again, but reports the recorded
+     * outcome once more (see {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
      */
     private Boolean deduplicateDeliveries;
 
     /**
-     * Whether something other than this application serves the tasks this level covers,
+     * Whether something other than this application serves the tasks which this level covers,
      * for this adapter only (<code>implemented-externally</code>, see
-     * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, it is
-     * how the two adapters of a migration say different things about one task.
+     * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, this
+     * is how the two adapters of a migration say different things about one task.
      * <code>null</code> means "not configured at this level".
      */
     private Boolean implementedExternally;
 
     /**
-     * The versions of a BPMN process this application does not serve any more, each
+     * The versions of a BPMN process which this application does not serve any more. Each is
      * written in the grammar of the <code>version</code> attribute of
-     * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
-     * <code>1-3</code>, <code>v1.0..v2.0</code>, a version tag).
+     * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>, <code>1-3</code>,
+     * <code>v1.0..v2.0</code>, a version tag).
      */
     private java.util.List<String> outfadedVersions;
 
     /**
-     * What happens when workflows still run on an outfaded version - see
+     * What happens when workflows still run on a version which is faded out, see
      * {@link OutfadedVersionsInUsePolicy}.
      */
     private OutfadedVersionsInUsePolicy outfadedVersionsInUse;
 
     /**
-     * What an extension is configured with FOR THIS ADAPTER at this level (properties
-     * section <code>...adapters.&lt;id&gt;.extensions.&lt;extension&gt;.*</code>). The
-     * builder starts from the same value the field does.
+     * What an extension is configured with FOR THIS ADAPTER at this level (properties section
+     * <code>...adapters.&lt;id&gt;.extensions.&lt;extension&gt;.*</code>). The builder starts
+     * from the same value as the field.
      */
     private Map<String, Map<String, String>> extensions = Map.of();
 
     /**
-     * The builder of a subclass calls this while it is built. Nobody else needs one:
+     * The builder of a subclass calls this while it is built. Nobody else needs one.
      * {@link AdapterProperties#builder()} hands out the builder of this class.
      */
     public AdapterPropertiesBuilder() {
     }
 
     /**
-     * Refused here on purpose: the permission to share a whole workflow aggregate
-     * belongs to the single workflow (see decision 66 in the repository's DECISIONS.md).
+     * Refused here on purpose. The permission to share a whole workflow aggregate belongs to
+     * the single workflow (see decision 66 in the repository's DECISIONS.md).
      *
      * @param allowFullSyncWithBpms The value of {@link #allowFullSyncWithBpms}
      * @return This builder, so the calls chain
@@ -246,7 +240,7 @@ public class AdapterProperties {
     }
 
     /**
-     * Where to load BPMN files from, which are specific to the adapter.
+     * Where to load BPMN files from which are specific to the adapter.
      *
      * @param resourcesLocation The value of {@link #resourcesLocation}
      * @return This builder, so the calls chain
@@ -276,8 +270,8 @@ public class AdapterProperties {
     }
 
     /**
-     * Whether a task definition is scoped by the BPMN process ID in addition to the
-     * workflow module ID (only relevant for
+     * Whether a task definition is scoped by the BPMN process ID, in addition to the workflow
+     * module ID (only relevant for
      * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance#USE_PREFIX}).
      *
      * @param prefixTaskDefinitionsPerProcess The value of {@link #prefixTaskDefinitionsPerProcess}
@@ -292,10 +286,9 @@ public class AdapterProperties {
     }
 
     /**
-     * Whether VanillaBP remembers the task deliveries of this BPMS, so a repeated
-     * delivery does not run the <code>&#64;WorkflowTask</code> method again but reports
-     * the recorded outcome once more (see
-     * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
+     * Whether VanillaBP remembers the task deliveries of this BPMS. Then a repeated delivery
+     * does not run the <code>&#64;WorkflowTask</code> method again, but reports the recorded
+     * outcome once more (see {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
      *
      * @param deduplicateDeliveries The value of {@link #deduplicateDeliveries}
      * @return This builder, so the calls chain
@@ -309,10 +302,10 @@ public class AdapterProperties {
     }
 
     /**
-     * Whether something other than this application serves the tasks this level covers,
+     * Whether something other than this application serves the tasks which this level covers,
      * for this adapter only (<code>implemented-externally</code>, see
-     * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, it is
-     * how the two adapters of a migration say different things about one task.
+     * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, this
+     * is how the two adapters of a migration say different things about one task.
      * <code>null</code> means "not configured at this level".
      *
      * @param implementedExternally The value of {@link #implementedExternally}
@@ -327,10 +320,10 @@ public class AdapterProperties {
     }
 
     /**
-     * The versions of a BPMN process this application does not serve any more, each
+     * The versions of a BPMN process which this application does not serve any more. Each is
      * written in the grammar of the <code>version</code> attribute of
-     * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
-     * <code>1-3</code>, <code>v1.0..v2.0</code>, a version tag).
+     * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>, <code>1-3</code>,
+     * <code>v1.0..v2.0</code>, a version tag).
      *
      * @param outfadedVersions The value of {@link #outfadedVersions}
      * @return This builder, so the calls chain
@@ -344,7 +337,7 @@ public class AdapterProperties {
     }
 
     /**
-     * What happens when workflows still run on an outfaded version - see
+     * What happens when workflows still run on a version which is faded out, see
      * {@link OutfadedVersionsInUsePolicy}.
      *
      * @param outfadedVersionsInUse The value of {@link #outfadedVersionsInUse}
@@ -374,9 +367,8 @@ public class AdapterProperties {
     }
 
     /**
-     * The builder itself, typed as the builder of the subclass. Every method of the
-     * chain returns it, which is what keeps a chain started on a subclass builder at
-     * that subclass.
+     * The builder itself, typed as the builder of the subclass. Every method of the chain
+     * returns it. That keeps a chain which started on a subclass builder at that subclass.
      *
      * @return This builder
      */
@@ -431,8 +423,8 @@ public class AdapterProperties {
   }
 
   /**
-   * The builder {@link #builder()} hands out: the one which builds
-   * {@link AdapterProperties} itself rather than a subclass of it.
+   * The builder which {@link #builder()} hands out: the one which builds
+   * {@link AdapterProperties} itself, and not a subclass of it.
    */
   private static final class AdapterPropertiesBuilderImpl extends AdapterProperties.AdapterPropertiesBuilder<AdapterProperties, AdapterProperties.AdapterPropertiesBuilderImpl> {
 
@@ -469,8 +461,8 @@ public class AdapterProperties {
   }
 
   /**
-   * What every builder of this class and of its subclasses builds through. It is the one
-   * place the values of this class move from the builder into the object, so a subclass
+   * Every builder of this class and of its subclasses builds through this. It is the one
+   * place where the values of this class move from the builder into the object. So a subclass
    * builder fills the keys of its base class as well.
    *
    * @param b The builder holding what was written
@@ -491,7 +483,7 @@ public class AdapterProperties {
   }
 
   /**
-   * A builder of {@link AdapterProperties}, empty except for the values which have a
+   * A builder of {@link AdapterProperties}. It is empty, except for the values which have a
    * default.
    *
    * @return The builder
@@ -503,8 +495,8 @@ public class AdapterProperties {
   }
 
   /**
-   * Refused here on purpose: the permission to share a whole workflow aggregate belongs
-   * to the single workflow (see decision 66 in the repository's DECISIONS.md).
+   * Refused here on purpose. The permission to share a whole workflow aggregate belongs to
+   * the single workflow (see decision 66 in the repository's DECISIONS.md).
    *
    * @return The value of {@link #allowFullSyncWithBpms}
    */
@@ -515,7 +507,7 @@ public class AdapterProperties {
   }
 
   /**
-   * Where to load BPMN files from, which are specific to the adapter.
+   * Where to load BPMN files from which are specific to the adapter.
    *
    * @return The value of {@link #resourcesLocation}
    */
@@ -538,8 +530,8 @@ public class AdapterProperties {
   }
 
   /**
-   * Whether a task definition is scoped by the BPMN process ID in addition to the
-   * workflow module ID (only relevant for
+   * Whether a task definition is scoped by the BPMN process ID, in addition to the workflow
+   * module ID (only relevant for
    * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance#USE_PREFIX}).
    *
    * @return The value of {@link #prefixTaskDefinitionsPerProcess}
@@ -551,10 +543,9 @@ public class AdapterProperties {
   }
 
   /**
-   * Whether VanillaBP remembers the task deliveries of this BPMS, so a repeated delivery
-   * does not run the <code>&#64;WorkflowTask</code> method again but reports the
-   * recorded outcome once more (see
-   * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
+   * Whether VanillaBP remembers the task deliveries of this BPMS. Then a repeated delivery
+   * does not run the <code>&#64;WorkflowTask</code> method again, but reports the recorded
+   * outcome once more (see {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
    *
    * @return The value of {@link #deduplicateDeliveries}
    */
@@ -565,9 +556,9 @@ public class AdapterProperties {
   }
 
   /**
-   * Whether something other than this application serves the tasks this level covers,
+   * Whether something other than this application serves the tasks which this level covers,
    * for this adapter only (<code>implemented-externally</code>, see
-   * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, it is
+   * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, this is
    * how the two adapters of a migration say different things about one task.
    * <code>null</code> means "not configured at this level".
    *
@@ -580,10 +571,10 @@ public class AdapterProperties {
   }
 
   /**
-   * The versions of a BPMN process this application does not serve any more, each
+   * The versions of a BPMN process which this application does not serve any more. Each is
    * written in the grammar of the <code>version</code> attribute of
-   * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
-   * <code>1-3</code>, <code>v1.0..v2.0</code>, a version tag).
+   * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>, <code>1-3</code>,
+   * <code>v1.0..v2.0</code>, a version tag).
    *
    * @return The value of {@link #outfadedVersions}
    */
@@ -594,7 +585,7 @@ public class AdapterProperties {
   }
 
   /**
-   * What happens when workflows still run on an outfaded version - see
+   * What happens when workflows still run on a version which is faded out, see
    * {@link OutfadedVersionsInUsePolicy}.
    *
    * @return The value of {@link #outfadedVersionsInUse}
@@ -618,8 +609,8 @@ public class AdapterProperties {
   }
 
   /**
-   * Refused here on purpose: the permission to share a whole workflow aggregate belongs
-   * to the single workflow (see decision 66 in the repository's DECISIONS.md).
+   * Refused here on purpose. The permission to share a whole workflow aggregate belongs to
+   * the single workflow (see decision 66 in the repository's DECISIONS.md).
    *
    * @param allowFullSyncWithBpms The value of {@link #allowFullSyncWithBpms}
    */
@@ -631,7 +622,7 @@ public class AdapterProperties {
   }
 
   /**
-   * Where to load BPMN files from, which are specific to the adapter.
+   * Where to load BPMN files from which are specific to the adapter.
    *
    * @param resourcesLocation The value of {@link #resourcesLocation}
    */
@@ -656,8 +647,8 @@ public class AdapterProperties {
   }
 
   /**
-   * Whether a task definition is scoped by the BPMN process ID in addition to the
-   * workflow module ID (only relevant for
+   * Whether a task definition is scoped by the BPMN process ID, in addition to the workflow
+   * module ID (only relevant for
    * {@link io.vanillabp.integration.adapter.spi.NameClashAvoidance#USE_PREFIX}).
    *
    * @param prefixTaskDefinitionsPerProcess The value of {@link #prefixTaskDefinitionsPerProcess}
@@ -670,10 +661,9 @@ public class AdapterProperties {
   }
 
   /**
-   * Whether VanillaBP remembers the task deliveries of this BPMS, so a repeated delivery
-   * does not run the <code>&#64;WorkflowTask</code> method again but reports the
-   * recorded outcome once more (see
-   * {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
+   * Whether VanillaBP remembers the task deliveries of this BPMS. Then a repeated delivery
+   * does not run the <code>&#64;WorkflowTask</code> method again, but reports the recorded
+   * outcome once more (see {@link io.vanillabp.integration.spi.TaskDeliveryLog}).
    *
    * @param deduplicateDeliveries The value of {@link #deduplicateDeliveries}
    */
@@ -685,9 +675,9 @@ public class AdapterProperties {
   }
 
   /**
-   * Whether something other than this application serves the tasks this level covers,
+   * Whether something other than this application serves the tasks which this level covers,
    * for this adapter only (<code>implemented-externally</code>, see
-   * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, it is
+   * {@link MigrationAdapterProperties#implementedExternally}). Written below a task, this is
    * how the two adapters of a migration say different things about one task.
    * <code>null</code> means "not configured at this level".
    *
@@ -701,10 +691,10 @@ public class AdapterProperties {
   }
 
   /**
-   * The versions of a BPMN process this application does not serve any more, each
+   * The versions of a BPMN process which this application does not serve any more. Each is
    * written in the grammar of the <code>version</code> attribute of
-   * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>,
-   * <code>1-3</code>, <code>v1.0..v2.0</code>, a version tag).
+   * <code>&#64;WorkflowTask</code> and its siblings (<code>&lt;4</code>, <code>1-3</code>,
+   * <code>v1.0..v2.0</code>, a version tag).
    *
    * @param outfadedVersions The value of {@link #outfadedVersions}
    */
@@ -716,7 +706,7 @@ public class AdapterProperties {
   }
 
   /**
-   * What happens when workflows still run on an outfaded version - see
+   * What happens when workflows still run on a version which is faded out, see
    * {@link OutfadedVersionsInUsePolicy}.
    *
    * @param outfadedVersionsInUse The value of {@link #outfadedVersionsInUse}

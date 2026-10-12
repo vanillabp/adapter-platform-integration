@@ -19,9 +19,9 @@ import io.vanillabp.integration.adapter.migration.outbox.JdbcHousekeepingLease;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Which node house-keeps a store tonight. Two nodes doing it at the same time would each
- * measure the other's work, and the batch size they arrive at would be nonsense - so the
- * claim is what keeps the measurement honest, and these tests hold what it promises.
+ * Which node does the housekeeping of a store tonight. If two nodes did it at the same
+ * time, each would measure the work of the other, and their batch size would be nonsense.
+ * The claim keeps the measurement honest, and these tests hold what it promises.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class JdbcHousekeepingLeaseTest {
@@ -72,8 +72,8 @@ public class JdbcHousekeepingLeaseTest {
 
     final var lease = leaseOn("housekeeping-first-row");
 
-    // the row of a store is written by whoever house-keeps it first, and two nodes doing
-    // that in the same moment are sorted out by its primary key
+    // whoever does the housekeeping of a store first writes its row. The primary key sorts
+    // out two nodes which do that in the same moment
     assertTrue(lease.claimUntil("a-store-nobody-touched", "first-node", inAnHour()));
     assertFalse(lease.claimUntil("a-store-nobody-touched", "second-node", inAnHour()));
 

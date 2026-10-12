@@ -34,18 +34,18 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * The <code>&#64;WorkflowStartedByBpms</code> methods kept for a BPMN process id the application
- * DECLARES without deploying a model for it - the id a renamed process left behind, whose timer
- * the BPMS may still fire every day.
+ * The <code>&#64;WorkflowStartedByBpms</code> methods kept for a BPMN process id which the
+ * application DECLARES without deploying a model for it. A renamed process leaves such an id
+ * behind, and the BPMS may still fire its timer every day.
  * <p>
- * Nothing wires such an id during a boot, so the validation an adapter triggers while wiring
- * never runs for it and its methods used to be judged by nothing: a typo in
- * <code>id = ...</code> stayed silent for the life of the application. What the judgement needs
- * is the start events of a version the BPMS holds, which the adapter answers through
+ * Nothing wires such an id during a boot. So the check which an adapter triggers while wiring
+ * never runs for it, and nothing used to judge its methods. A typo in <code>id = ...</code>
+ * stayed silent for the life of the application. The judgement needs the start events of a
+ * version the BPMS holds. The adapter answers them through
  * {@link ProcessVersionCatalog#startEventsOfVersion}.
  * <p>
- * The BPMS is a stub, because what is asked here is the core's comparison; the adapters prove
- * against real engines that reading an old model gives the right answer.
+ * The BPMS is a stub, because the comparison of the core is under test here. The adapters
+ * prove against real engines that reading an old model gives the right answer.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class StartEventsOfARenamedProcessTest {
@@ -68,8 +68,8 @@ public class StartEventsOfARenamedProcessTest {
   }
 
   /**
-   * The application after the rename, with a method kept for the timer of the OLD model: the
-   * new generation starts by the application only, the old one still fires.
+   * The application after the rename, with a method kept for the timer of the OLD model. Only
+   * the application starts the new generation. The old one still fires.
    */
   @WorkflowService(
       workflowAggregateClass = Aggregate.class,
@@ -93,8 +93,9 @@ public class StartEventsOfARenamedProcessTest {
   }
 
   /**
-   * The same application with the start event misspelled - the case nothing used to find,
-   * because the model carrying the right spelling is the one the application does not bring.
+   * The same application, but with the start event misspelled. Nothing used to find this
+   * case, because the model which carries the right spelling is the one the application
+   * does not bring.
    */
   @WorkflowService(
       workflowAggregateClass = Aggregate.class,
@@ -118,8 +119,8 @@ public class StartEventsOfARenamedProcessTest {
   }
 
   /**
-   * A method kept for the old id although no version the BPMS holds under it starts on its
-   * own at all - the method belongs to another process, or the id is the misspelled one.
+   * A method kept for the old id, although no version the BPMS holds under it starts on its
+   * own at all. The method belongs to another process, or the id is the misspelled one.
    */
   @WorkflowService(
       workflowAggregateClass = Aggregate.class,
@@ -143,24 +144,24 @@ public class StartEventsOfARenamedProcessTest {
   }
 
   /**
-   * What a BPMS holds per BPMN process id, with every answer handed in by the test.
+   * What a BPMS holds per BPMN process id. The test hands in every answer.
    */
   private static class CatalogStub implements ProcessVersionCatalog {
 
     private final Map<String, List<DeployedProcessVersion>> versions = new java.util.HashMap<>();
 
     /**
-     * The BPMS-initiated start events per "process id|version". A version missing from this
-     * map has none; a version listed in {@link #versionsWhoseModelCannotBeRead} answers
-     * <code>null</code>.
+     * The start events which the BPMS fires itself, per "process id|version". A version
+     * missing from this map has none. A version listed in
+     * {@link #versionsWhoseModelCannotBeRead} answers <code>null</code>.
      */
     private final Map<String, Collection<BpmsInitiatedStartSpec>> startEvents = new java.util.HashMap<>();
 
     private final java.util.Set<String> versionsWhoseModelCannotBeRead = new java.util.HashSet<>();
 
     /**
-     * Every question this BPMS was asked, in order - what a boot asks about an id nothing was
-     * deployed under is worth reading in a test.
+     * Every question this BPMS was asked, in order. A test should read what a boot asks
+     * about an id under which nothing was deployed.
      */
     private final List<String> questions = new ArrayList<>();
 
@@ -223,8 +224,9 @@ public class StartEventsOfARenamedProcessTest {
         .put(OLD_ID, List
             .of(DeployedProcessVersion.of("1"), DeployedProcessVersion.of("2"), DeployedProcessVersion.of("3")));
     catalog.versions.put(NEW_ID, List.of(DeployedProcessVersion.of("1")));
-    // the timer was dropped along the way: the newest version the BPMS holds under the old
-    // id has none, which is why a check reading one version only would say the wrong thing
+    // the timer was dropped along the way. The newest version which the BPMS holds under the
+    // old id has none. That is why a check which reads only one version would say the wrong
+    // thing
     catalog.startEvents
         .put(
             "%s|1".formatted(OLD_ID),
@@ -281,7 +283,7 @@ public class StartEventsOfARenamedProcessTest {
     assertEquals(1, reports.size(), reports.toString());
     assertTrue(reports.get(0).contains("none of the version(s)"), reports.get(0));
     assertTrue(reports.get(0).contains("1, 2, 3"), reports.get(0));
-    // the ids the module DID deploy are what a misspelled declaration is compared against
+    // a misspelled declaration is compared against the ids which the module DID deploy
     assertTrue(reports.get(0).contains("'%s'".formatted(NEW_ID)), reports.get(0));
 
   }
@@ -294,8 +296,8 @@ public class StartEventsOfARenamedProcessTest {
     theApplicationDeclares(ServiceWithAMisspelledStartEvent.class);
     theAdapterDeployed(NEW_ID, "1");
 
-    // the start event might be sitting in exactly the model which could not be read, so a
-    // verdict would be a guess - decision 38 in the repository's DECISIONS.md
+    // the start event might sit in exactly the model which could not be read. So a verdict
+    // would be a guess (decision 38 in the repository's DECISIONS.md)
     assertEquals(List.of(), theModuleFinishedDeploying(Level.WARN));
 
   }
@@ -308,8 +310,8 @@ public class StartEventsOfARenamedProcessTest {
     theAdapterDeployed(NEW_ID, "1");
     theAdapterDeployed(OLD_ID, "3");
 
-    // both ids were wired, so nothing is declared-only any more and the wiring validation
-    // is what judges the methods - which is the adapter's call, not this check's
+    // both ids were wired, so nothing is only declared any more. The wiring check judges
+    // the methods. That is the call of the adapter, not of this check
     assertEquals(List.of(), theModuleFinishedDeploying(Level.WARN));
     assertTrue(
         catalog.questions.stream().noneMatch(question -> question.startsWith("startEventsOfVersion")),
@@ -339,8 +341,9 @@ public class StartEventsOfARenamedProcessTest {
   }
 
   /**
-   * What an adapter does for a BPMN process it really deployed: it wires the model, registers
-   * what its BPMS knows about that process and reports the version it was given.
+   * What an adapter does for a BPMN process it really deployed. It wires the model,
+   * registers what its BPMS knows about that process, and reports the version it was
+   * given.
    */
   private void theAdapterDeployed(
       final String bpmnProcessId,
@@ -354,9 +357,9 @@ public class StartEventsOfARenamedProcessTest {
   }
 
   /**
-   * The two steps the deployment pipeline runs once every adapter of a workflow module
-   * deployed: the core asks each adapter about the ids nothing was deployed under, then the
-   * versions are resolved and checked.
+   * The two steps which the deployment pipeline runs once every adapter of a workflow module
+   * has deployed. First the core asks each adapter about the ids under which nothing was
+   * deployed. Then the versions are resolved and checked.
    */
   private List<String> theModuleFinishedDeploying(
       final Level level) {
@@ -384,7 +387,7 @@ public class StartEventsOfARenamedProcessTest {
   }
 
   /**
-   * The registry needs a process service to register a workflow service; nothing here
+   * The registry needs a process service to register a workflow service. Nothing here
    * invokes it.
    */
   @SuppressWarnings("unchecked")
@@ -400,7 +403,8 @@ public class StartEventsOfARenamedProcessTest {
   }
 
   /**
-   * The transaction runner is irrelevant here - no test in this class runs a handler.
+   * The transaction runner does not matter here, because no test in this class runs a
+   * handler.
    */
   private static class TransactionRunnerStub implements TransactionRunner {
 

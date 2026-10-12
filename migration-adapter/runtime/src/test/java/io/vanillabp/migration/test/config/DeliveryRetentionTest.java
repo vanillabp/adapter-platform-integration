@@ -15,23 +15,23 @@ import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxPropertie
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * One number used to govern two windows, and after the outbound one ended with the
- * dispatch they stopped being the same kind of setting: on the outbox side the retention
- * decides how long a dispatched entry stays readable during support, on the delivery side
- * it decides whether a late redelivery runs the business code a second time. So there are
- * two properties now, and this pins how they relate.
+ * One number used to govern two windows. The outbound window then ended with the dispatch,
+ * and the two stopped being the same kind of setting. On the outbox side, the retention
+ * decides how long a dispatched entry stays readable for support. On the delivery side, it
+ * decides whether a late redelivery runs the business code a second time. So there are two
+ * properties now, and this test pins how they relate.
  * <p>
- * The relation is the whole feature: an installation which never cared notices nothing,
- * one which lowered the old number keeps the behaviour it had, and one which wants the
- * correctness half longer than the operational half can say so. What it must not do is
- * change silently, which is what the startup message is for.
+ * The relation is the whole feature. An installation which never cared notices nothing. One
+ * which lowered the old number keeps the behaviour it had. And one which wants the
+ * correctness half longer than the operational half can say so. What must not happen is a
+ * silent change. The startup message is there to prevent that.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DeliveryRetentionTest {
 
   /**
-   * What the validated configurations of one test reported, which is where this message
-   * goes instead of into a line of its own.
+   * What the validated configurations of one test reported. This message goes there
+   * instead of into a line of its own.
    */
   private final StringBuilder reported = new StringBuilder();
 
@@ -77,8 +77,8 @@ public class DeliveryRetentionTest {
   @DisplayName("Only the outbox retention set: the delivery half follows it")
   public void theDeliveryHalfFollowsTheOutboxRetention() {
 
-    // the upgrade case: this number governed both windows before, so an installation
-    // which lowered it keeps the behaviour it had rather than silently gaining a longer
+    // the upgrade case. This number governed both windows before. So an installation which
+    // lowered it keeps the behaviour it had, instead of silently gaining a longer
     // correctness window
     final var properties = properties(Duration.ofDays(2), null);
 
@@ -114,8 +114,8 @@ public class DeliveryRetentionTest {
   @DisplayName("An absent outbox section still yields a delivery retention")
   public void anAbsentOutboxSectionDoesNotCostTheDefault() {
 
-    // a binder mapping an absent section onto null must not end the boot, and it must
-    // not answer null for a period the cleanup is constructed with
+    // a binder which maps an absent section onto null must not end the boot. And it must
+    // not answer null for a period with which the cleanup is constructed
     final var properties = new MigrationAdapterProperties();
     properties.setOutbox(null);
     properties.setDelivery(null);
@@ -128,8 +128,8 @@ public class DeliveryRetentionTest {
   @DisplayName("The rule lives in one place, and the platforms call it")
   public void theResolutionIsOneFunction() {
 
-    // the Quarkus delivery logs resolve their retention lazily and cannot ask a bound
-    // core properties object, so they call this - which is why it is public and pinned
+    // the delivery logs on Quarkus resolve their retention lazily and cannot ask a bound
+    // core properties object. So they call this, and that is why it is public and pinned
     final var delivery = new DeliveryProperties();
     assertEquals(
         Duration.ofDays(7),
@@ -155,7 +155,7 @@ public class DeliveryRetentionTest {
     assertTrue(log.contains(PhaseTwoOutboxProperties.RETENTION_PROPERTY), log);
     assertTrue(log.contains(DeliveryProperties.RETENTION_PROPERTY), log);
     assertTrue(log.contains("PT48H"), log);
-    // the sentence which makes the difference actionable
+    // the sentence which makes the difference something to act on
     assertTrue(log.contains("@WorkflowTask method a second time"), log);
 
   }
@@ -188,8 +188,8 @@ public class DeliveryRetentionTest {
   }
 
   /**
-   * Runs the startup validation of an otherwise minimal application, which is where the
-   * message about the two retentions is written.
+   * Runs the startup check of an otherwise minimal application. The message about the two
+   * retentions is written there.
    */
   private void validated(
       final MigrationAdapterProperties properties) {

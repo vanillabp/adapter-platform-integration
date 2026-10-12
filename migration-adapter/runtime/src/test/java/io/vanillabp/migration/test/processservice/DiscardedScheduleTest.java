@@ -33,20 +33,20 @@ import io.vanillabp.integration.spi.RunningActivation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An operation the outbox refuses to plan is the one thing an application must not have
- * to discover by watching a workflow wait forever. The store answers
- * <code>false</code> where an identical operation is still waiting for its dispatch, and
- * this pins what the core does with that answer: a WARN naming what was dropped, where
- * it belongs and both causes nothing here can tell apart (see decision 22 in the
+ * The outbox may refuse to plan an operation. An application must not have to discover
+ * that by watching a workflow wait forever. The store answers <code>false</code> where an
+ * identical operation is still waiting for its dispatch. This test pins what the core does
+ * with that answer. It writes a WARN which names what was dropped and where it belongs. It
+ * also names both causes, which nothing here can tell apart (see decision 22 in the
  * repository's DECISIONS.md).
  * <p>
  * It also pins which operations reach that answer at all. Multi-instance siblings of one
- * aggregate used to: three elements of a multi-instance call activity share workflow
- * module, BPMN process and aggregate id, so their correlations shared a key and two of
- * the three were dropped. Since the activation which planned an operation is part of the
- * key, they do not (see decision 23 in the repository's DECISIONS.md), and what is left
- * is a caller repeating itself within ONE activation or outside any. Both are here,
- * because the difference between them is the feature.
+ * aggregate used to reach it. Three elements of a multi-instance call activity share
+ * workflow module, BPMN process and aggregate id. So their correlations shared a key, and
+ * two of the three were dropped. Now the activation which planned an operation is part of
+ * the key, so they do not reach it any more (see decision 23 in the repository's
+ * DECISIONS.md). What is left is a caller which repeats itself within ONE activation, or
+ * outside any. Both cases are here, because the difference between them is the feature.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DiscardedScheduleTest {
@@ -58,9 +58,9 @@ public class DiscardedScheduleTest {
   private static final String ADAPTER = "test-adapter";
 
   /**
-   * What the counter of a refused schedule saw, in the order it was told: an alarm on
-   * <code>vanillabp.outbox.discarded</code> is how a workflow waiting for a message
-   * nobody will send again is found in hours instead of weeks, so the count and the WARN
+   * What the counter of a refused schedule saw, in the order it was told. An alarm on
+   * <code>vanillabp.outbox.discarded</code> finds a workflow which waits for a message that
+   * nobody will send again. It finds it in hours instead of weeks. So the count and the WARN
    * have to move together.
    */
   private final java.util.List<String> discardedOperations = new java.util.ArrayList<>();
@@ -88,8 +88,8 @@ public class DiscardedScheduleTest {
   }
 
   /**
-   * A store behaving like the real ones: a key deduplicates while the entry carrying it
-   * waits for its dispatch, and nothing here dispatches anything.
+   * A store which behaves like the real ones. A key deduplicates while the entry which
+   * carries it waits for its dispatch. Nothing here dispatches anything.
    */
   private static final class PendingKeyOutbox implements PhaseTwoOutbox {
 
@@ -125,8 +125,8 @@ public class DiscardedScheduleTest {
   }
 
   /**
-   * A process service talking to a remote BPMS (so everything goes through the outbox)
-   * whose store discards every schedule carrying a key.
+   * A process service which talks to a remote BPMS, so everything goes through the outbox.
+   * Its store discards every schedule which carries a key.
    */
   private MigrationProcessService<Object> serviceWithDiscardingOutbox(
       final PhaseTwoOutbox outbox) {
@@ -138,7 +138,7 @@ public class DiscardedScheduleTest {
     lenient()
         .when(adapter.awarenessOfWorkflow(any(), any(), any()))
         .thenReturn(WorkflowAwareness.ACTIVE);
-    // the election hands the workflow id to a probe about a workflow, and a mock does not run
+    // the election hands the workflow id to a probe about a workflow. A mock does not run
     // the default which drops it
     lenient()
         .when(adapter.awarenessOfWorkflow(any(), any(), any(), any()))
@@ -223,8 +223,8 @@ public class DiscardedScheduleTest {
     assertTrue(warning.contains("4711"), warning);
     assertTrue(warning.contains(PROCESS), warning);
     assertTrue(warning.contains(MODULE), warning);
-    // both causes, because the store cannot tell them apart - and the remedy the
-    // application can act on
+    // both causes, because the store cannot tell them apart. And the remedy on which the
+    // application can act
     assertTrue(warning.contains("redelivery"), warning);
     assertTrue(warning.contains("second, legitimate operation"), warning);
     assertTrue(warning.contains("vary the correlation id"), warning);
@@ -309,11 +309,11 @@ public class DiscardedScheduleTest {
   @DisplayName("Multi-instance siblings of one aggregate each keep their correlation")
   public void siblingsOfOneAggregateAreToldApartByTheirActivation() {
 
-    // three elements of a multi-instance call activity: the called process is a
-    // secondary workflow of the SAME aggregate, so the three correlations share workflow
-    // module, BPMN process and aggregate id, and a correlation id read from business data
-    // does not have to differ. What differs is the activation each of them was planned
-    // in, which is exactly what the BPMS names and what the idempotency key carries
+    // three elements of a multi-instance call activity. The called process is a secondary
+    // workflow of the SAME aggregate. So the three correlations share workflow module, BPMN
+    // process and aggregate id. A correlation id read from business data does not have to
+    // differ. What differs is the activation in which each of them was planned. The BPMS
+    // names exactly that, and the idempotency key carries it
     final var outbox = new PendingKeyOutbox();
     final var testee = serviceWithDiscardingOutbox(outbox);
 
@@ -342,8 +342,8 @@ public class DiscardedScheduleTest {
   @DisplayName("A repeated delivery of ONE activation still correlates once")
   public void aRepeatedDeliveryOfOneActivationCorrelatesOnce() {
 
-    // the guarantee the activation identity must not cost: the BPMS handing the same
-    // element instance out twice is not a second element, and its correlation is the
+    // the guarantee which the activation identity must not cost. When the BPMS hands the
+    // same element instance out twice, that is not a second element. Its correlation is the
     // one which is already waiting
     final var outbox = new PendingKeyOutbox();
     final var testee = serviceWithDiscardingOutbox(outbox);
@@ -373,8 +373,8 @@ public class DiscardedScheduleTest {
 
     final var warning = theWarning();
     assertTrue(warning.contains("element-1"), warning);
-    // the remedy of the other branch would send the reader looking for a sibling which
-    // this cannot be
+    // the remedy of the other branch would send the reader looking for a sibling, and this
+    // cannot be one
     assertTrue(warning.contains("one activation asking twice"), warning);
 
   }
@@ -383,8 +383,8 @@ public class DiscardedScheduleTest {
   @DisplayName("Outside any activation a repetition is still discarded, audibly")
   public void aRepetitionOutsideAnyActivationIsDiscardedAndSaidSo() {
 
-    // a REST endpoint correlating the same message twice for one aggregate is
-    // indistinguishable from a repeat of itself, and it stays that way - this story
+    // a REST endpoint which correlates the same message twice for one aggregate cannot be
+    // told apart from a repeat of itself, and it stays that way. The activation in the key
     // fixed the siblings, not this
     final var outbox = new PendingKeyOutbox();
     final var testee = serviceWithDiscardingOutbox(outbox);
@@ -403,10 +403,10 @@ public class DiscardedScheduleTest {
   @DisplayName("A handler spawning its own thread loses the activation and the key with it")
   public void anActivationDoesNotReachAThreadTheHandlerStarted() throws Exception {
 
-    // absent rather than failing. The activation is a plain ThreadLocal and never an
-    // inheritable one, so a pooled thread cannot carry an activation into work which
-    // does not belong to it - the price is that a handler correlating from a thread of
-    // its own gets the key of a correlation which knows no activation
+    // absent, instead of failing. The activation is a plain ThreadLocal and never an
+    // inheritable one. So a pooled thread cannot carry an activation into work which does
+    // not belong to it. The price: a handler which correlates from a thread of its own gets
+    // the key of a correlation which knows no activation
     final var outbox = new PendingKeyOutbox();
     final var testee = serviceWithDiscardingOutbox(outbox);
 
@@ -430,8 +430,8 @@ public class DiscardedScheduleTest {
   @DisplayName("A scope restores the activation it found instead of clearing it")
   public void aNestedScopeRestoresTheOuterActivation() {
 
-    // an embedded engine can invoke a second handler within the first one's execution,
-    // and the outer activation has to survive that
+    // an embedded engine can invoke a second handler within the execution of the first
+    // one, and the outer activation has to survive that
     try (var outer = RunningActivation.of("element-1")) {
       try (var inner = RunningActivation.of("element-2")) {
         assertEquals("element-2", RunningActivation.current());

@@ -13,10 +13,9 @@ import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The Micrometer side of what the core records: the meters carry the tags
- * a deployment fixes and nothing which grows with the number of workflows, they
- * survive a registry which arrives late, and recording before any registry exists
- * costs nothing.
+ * The Micrometer side of what the core records. The meters carry the tags which a
+ * deployment fixes, and nothing which grows with the number of workflows. They survive a
+ * registry which arrives late. And recording before any registry exists costs nothing.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MicrometerVanillaBpMetricsTest {
@@ -218,7 +217,7 @@ public class MicrometerVanillaBpMetricsTest {
     // no holding period, so the test sees what the store says right now
     final var metrics = new MicrometerVanillaBpMetrics(java.time.Duration.ZERO);
 
-    // registered BEFORE the registry exists - which is what a startup does
+    // registered BEFORE the registry exists, as a startup does
     metrics
         .registerAgeOfOldestPendingOutboxEntry(
             "JdbcPhaseTwoOutbox",
@@ -407,7 +406,7 @@ public class MicrometerVanillaBpMetricsTest {
     // no holding period, so the test sees what the store says right now
     final var metrics = new MicrometerVanillaBpMetrics(java.time.Duration.ZERO);
 
-    // registered BEFORE the registry exists - which is what a startup does
+    // registered BEFORE the registry exists, as a startup does
     metrics
         .registerPendingOutboxEntries(
             "JdbcPhaseTwoOutbox",

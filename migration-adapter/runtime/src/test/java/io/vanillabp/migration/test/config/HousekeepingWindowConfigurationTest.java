@@ -25,26 +25,25 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 /**
  * What the housekeeping window accepts, what it refuses and what it only warns about.
  * <p>
- * The case a developer never meets is the zone: a container stands on UTC unless somebody
- * sets its zone, so "four in the morning" becomes four UTC, which in most places is the
- * middle of the working day. It is noticed when the application is installed on a server,
- * which is why the message names two ways out and both of them go through an environment
- * variable. It is a warning and not a refusal, because UTC is the normal case for a
- * container and a refused start would cost the deployment - see decision 91 in the
- * repository's DECISIONS.md.
+ * A developer never meets the case of the zone. A container runs on UTC unless somebody sets
+ * its zone. So "four in the morning" becomes four UTC, which in most places is the middle of
+ * the working day. This is noticed when the application is installed on a server. That is
+ * why the message names two ways out, and both go through an environment variable. It is a
+ * warning and not a refusal. UTC is the normal case for a container, and a refused start
+ * would cost the deployment (see decision 91 in the repository's DECISIONS.md).
  * <p>
  * The warning does not go into the log where it is found. It is left with the findings of
- * the start and reaches the reader in the box at the end of it (decision 96 in the
- * repository's DECISIONS.md), which is why these tests read the findings rather than a log
+ * the start, and it reaches the reader in the box at the end of the start (decision 96 in the
+ * repository's DECISIONS.md). That is why these tests read the findings and not a log
  * appender.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class HousekeepingWindowConfigurationTest {
 
   /**
-   * The zone this JVM stood on before a test moved it. The test JVMs of this repository
-   * are given a zone (see the surefire configuration of the root POM), and a test which
-   * moves it puts it back.
+   * The zone on which this JVM stood before a test moved it. The test JVMs of this
+   * repository are given a zone (see the surefire configuration of the root POM). A test
+   * which moves it puts it back.
    */
   private final TimeZone zoneOfThisJvm = TimeZone.getDefault();
 
@@ -56,7 +55,7 @@ public class HousekeepingWindowConfigurationTest {
   }
 
   /**
-   * Where the validation leaves what it noticed, one per test.
+   * Where the check leaves what it noticed, one per test.
    */
   private StartupFindings findings;
 
@@ -68,7 +67,7 @@ public class HousekeepingWindowConfigurationTest {
   }
 
   /**
-   * What the validation noticed, as one text - the same thing the box shows, without its
+   * What the check noticed, as one text. It is the same thing the box shows, without its
    * frame.
    */
   private String whatWasNoticed() {
@@ -165,7 +164,7 @@ public class HousekeepingWindowConfigurationTest {
     final var warning = whatWasNoticed();
     // what is happening, and why
     assertTrue(warning.contains("middle of the working day"), warning);
-    // and the two ways out, neither of which needs a new build
+    // and the two ways out, and neither of them needs a new build
     assertTrue(warning.contains("TZ=Europe/Vienna"), warning);
     assertTrue(warning.contains(HousekeepingProperties.ZONE_ENVIRONMENT_VARIABLE), warning);
     assertTrue(warning.contains(HousekeepingProperties.ZONE_PROPERTY), warning);
@@ -180,8 +179,8 @@ public class HousekeepingWindowConfigurationTest {
 
     TimeZone.setDefault(TimeZone.getTimeZone("Etc/UTC"));
 
-    // UTC is what a container ships with, so refusing such a start would invent a
-    // precondition rather than uncover a mistake
+    // a container ships with UTC. So refusing such a start would invent a precondition,
+    // instead of uncovering a mistake
     assertDoesNotThrow(() -> outboxWith(new HousekeepingProperties()).validateHousekeeping(findings));
 
   }
@@ -259,7 +258,7 @@ public class HousekeepingWindowConfigurationTest {
     assertEquals(1, findings.findings().size(), whatWasNoticed());
     final var finding = findings.findings().get(0);
     assertEquals(StartupFindings.Severity.WARNING, finding.severity());
-    // the fix is a line of configuration or an environment variable, so the box sends the
+    // the fix is a line of configuration or an environment variable. So the box sends the
     // reader to the configuration
     assertEquals(StartupTopic.CONFIGURATION, finding.topic());
     assertEquals(HousekeepingProperties.HOUSEKEEPING_PREFIX, finding.scope());

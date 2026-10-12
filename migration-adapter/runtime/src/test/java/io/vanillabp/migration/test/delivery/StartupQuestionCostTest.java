@@ -27,20 +27,20 @@ import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What a start asks, and what that costs - decision 19 in the repository's DECISIONS.md.
+ * What a start asks, and what that costs (decision 19 in the repository's DECISIONS.md).
  * <p>
- * The two questions the startup checks put to the delivery log are answered from the whole
- * table, so both of them could grow with everything the application ever recorded. What
- * keeps them from doing so is not visible in the answer: the question about EXISTENCE
- * looks identical whether it transfers one row or a hundred thousand, because the code
- * reads the first row either way and the rest happens inside the driver. So this test
- * watches the statements instead of the answers, and it does so against a table which
- * holds more than one open record - the case where a missing row limit costs something.
+ * The startup checks put two questions to the delivery log. Both are answered from the whole
+ * table. So both could grow with everything the application ever recorded. What keeps them
+ * from growing is not visible in the answer. The question about EXISTENCE looks the same
+ * whether it transfers one row or a hundred thousand. The code reads the first row either
+ * way, and the rest happens inside the driver. So this test watches the statements instead
+ * of the answers. It does so against a table with more than one open record, because there
+ * a missing row limit costs something.
  * <p>
- * The question about the identifiers a BPMS already holds is measured here as well, from
- * the side this repository owns. The query is the adapter's, but what comes back grows with
- * everything ever deployed into that BPMS, and the core turning it into a hundred messages
- * would cost a start as surely as a hundred statements would.
+ * The test also measures the question about the identifiers a BPMS already holds, from the
+ * side which this repository owns. The query belongs to the adapter. But what comes back
+ * grows with everything ever deployed into that BPMS. If the core turned it into a hundred
+ * messages, that would cost a start as surely as a hundred statements.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class StartupQuestionCostTest {
@@ -61,7 +61,7 @@ public class StartupQuestionCostTest {
     private final String sql;
 
     /**
-     * What {@link PreparedStatement#setMaxRows(int)} was given, zero for "no limit"
+     * What {@link PreparedStatement#setMaxRows(int)} was given. Zero means "no limit",
      * which is the JDBC default.
      */
     private int maxRows;
@@ -95,9 +95,9 @@ public class StartupQuestionCostTest {
   }
 
   /**
-   * A connection which reports what the store does with it. Everything is passed on to
-   * H2, so the answers are the answers of a real database; only the row limit of each
-   * prepared statement is noted on the way through.
+   * A connection which reports what the store does with it. Everything is passed on to H2,
+   * so the answers come from a real database. Only the row limit of each prepared statement
+   * is noted on the way through.
    */
   private JdbcConnectionAccess watched(
       final String database) {
@@ -191,8 +191,8 @@ public class StartupQuestionCostTest {
 
     assertEquals(Boolean.TRUE, store.hasOpenRecords(MODULE, PROCESS));
 
-    // without the limit a driver is free to read the whole result set before the first
-    // row is looked at, and the PostgreSQL one does exactly that
+    // without the limit, a driver may read the whole result set before the first row is
+    // looked at. The one of PostgreSQL does exactly that
     assertEquals(
         1,
         theOnly("SELECT DELIVERY_KEY").maxRows(),
@@ -208,8 +208,8 @@ public class StartupQuestionCostTest {
 
     assertEquals(java.util.Set.of("c7"), store.adapterIdsOfOpenTasks(MODULE, PROCESS));
 
-    // DISTINCT is what bounds this one: the answer has as many rows as the application
-    // has adapter ids, which is a handful, and never as many as it has records
+    // DISTINCT bounds this one. The answer has as many rows as the application has adapter
+    // ids. That is a handful, and never as many as it has records
     assertTrue(
         theOnly("SELECT DISTINCT ADAPTER_ID").sql().contains("DISTINCT"),
         "the database reduces the records to the ids, not the application");
@@ -218,7 +218,7 @@ public class StartupQuestionCostTest {
 
   /**
    * How many records the core writes while an adapter reports the given number of
-   * identifiers its BPMS already held.
+   * identifiers which its BPMS already held.
    */
   private static int messagesWhileReporting(
       final int heldIdentifiers) {
@@ -243,7 +243,7 @@ public class StartupQuestionCostTest {
 
   /**
    * How many records the core writes while the models of two workflow modules declare the
-   * given number of identifiers, all of them colliding.
+   * given number of identifiers, and all of them collide.
    */
   private static int messagesWhileTwoModulesDeclare(
       final int identifiers) {
@@ -303,9 +303,9 @@ public class StartupQuestionCostTest {
     final var declared = List.of(new ModelIdentifier(ScopedIdentifierKind.MESSAGE_NAME, "PaymentReceived", null));
     scoping.reportIdentifiersTheModelsDeclare("c7", MODULE, declared);
 
-    // the same finding on a version two workflows run on and on one which carries a
-    // hundred thousand: what the message costs is the version, and the count travels as a
-    // number the check around it already asked for
+    // the same finding on a version on which two workflows run, and on one which carries a
+    // hundred thousand. The cost of the message is per version. The count travels as a
+    // number which the check around it already asked for
     final var aQuietVersion = whileRecording(
         properties,
         () -> scoping.reportIdentifiersOfHeldVersion("c7", "another-module", PROCESS, "2", 2L, declared));
@@ -319,9 +319,9 @@ public class StartupQuestionCostTest {
   }
 
   /**
-   * How often the adapter is asked whether its own isolation separates two workflow modules
-   * while both of them deploy the given number of BPMN processes, all of them reaching the
-   * BPMS under one identifier each.
+   * How often the adapter is asked whether its own isolation separates two workflow
+   * modules. Both modules deploy the given number of BPMN processes, and each reaches the
+   * BPMS under one identifier.
    */
   @SuppressWarnings("unchecked")
   private static int isolationQuestionsWhileTwoModulesDeploy(
@@ -393,8 +393,8 @@ public class StartupQuestionCostTest {
   }
 
   /**
-   * How many findings the given reporting added - a check of the start reports instead of
-   * writing a line, so what a message costs is counted where it is collected.
+   * How many findings the given reporting added. A check of the start reports instead of
+   * writing a line. So the cost of a message is counted where it is collected.
    */
   private static int whileRecording(
       final io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties properties,

@@ -10,37 +10,37 @@ import java.util.concurrent.ConcurrentHashMap;
  * What an application declared about the values of ONE workflow aggregate, read from
  * <code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;process&gt;.declared-aggregate-values</code>.
  * <p>
- * A declaration does two jobs, and both are the same statement: the developer looked at
- * this value and knows what it is. It lets a value whose type is neither a
- * <code>boolean</code> nor a text travel to the BPMS, and it may name the value to write
- * where the path does not resolve.
+ * A declaration does two jobs, and both say the same thing: the developer looked at this
+ * value and knows what it is. It lets a value travel to the BPMS whose type is neither a
+ * <code>boolean</code> nor a text. And it may name the value to write where the path does
+ * not resolve.
  *
  * <h2>The path which does not resolve</h2>
  *
- * A section of a larger process usually sits as a sub-object in the aggregate, and as
- * long as the section has not run that object is <code>null</code>. Then
- * <code>shipping.express</code> reaches the BPMS as nothing, and a gateway reading it
- * decides on a value nobody computed. Writing <code>false</code> there would be the worst
- * answer of all, because it cannot be told apart from a computed <code>false</code>.
+ * A section of a larger process usually has a sub-object in the aggregate. As long as the
+ * section has not run, that object is <code>null</code>. Then <code>shipping.express</code>
+ * reaches the BPMS as nothing, and a gateway which reads it decides on a value nobody
+ * computed. Writing <code>false</code> there would be the worst answer of all, because
+ * nobody could tell it from a computed <code>false</code>.
  * <p>
- * So a declared path which does not resolve ends the sync with a message naming the path
- * and the link which is <code>null</code>, unless the declaration says what to write
- * instead (<code>shipping.express=false</code>). A stopped workflow is better than a
- * decision on a value nobody computed.
+ * So a declared path which does not resolve ends the sync with a message. The message names
+ * the path and the link which is <code>null</code>. The exception is a declaration which
+ * says what to write instead (<code>shipping.express=false</code>). A stopped workflow is
+ * better than a decision on a value nobody computed.
  */
 public class DeclaredAggregateValues {
 
   /**
-   * Built by the sync model, once per application, and filled by the startup check which
-   * reads the configuration.
+   * Built by the sync model, once per application. The startup check which reads the
+   * configuration fills it.
    */
   public DeclaredAggregateValues() {
   }
 
   /**
-   * The entry which covers every value below a path rather than one of them:
-   * <code>shipping.*</code>. Written on its own it covers every value of the aggregate,
-   * which is the one line a workflow sharing its whole aggregate needs.
+   * The entry which covers every value below a path, not just one of them:
+   * <code>shipping.*</code>. On its own it covers every value of the aggregate. A workflow
+   * which shares its whole aggregate needs only this one line.
    */
   public static final String EVERYTHING_BELOW = "*";
 
@@ -77,10 +77,10 @@ public class DeclaredAggregateValues {
   }
 
   /**
-   * What was declared per workflow-aggregate class. The class is the key because the
+   * What was declared, per workflow-aggregate class. The class is the key, because the
    * adapters ask for the shared values with the aggregate in hand and without naming a
-   * workflow. Two workflows sharing one aggregate class therefore share their
-   * declarations, which is reported where it happens.
+   * workflow. So two workflows with the same aggregate class share their declarations. That
+   * is reported where it happens.
    */
   private final Map<Class<?>, List<Declaration>> byAggregateClass = new ConcurrentHashMap<>();
 
@@ -148,15 +148,15 @@ public class DeclaredAggregateValues {
     if (segments.isEmpty() && !everythingBelow) {
       return null;
     }
-    // a lone '*' names no path and covers every value of the aggregate, which is what a
-    // workflow sharing its whole aggregate says in one line instead of twenty
+    // a lone '*' names no path and covers every value of the aggregate. A workflow which
+    // shares its whole aggregate says that in one line instead of twenty
     return new Declaration(List.copyOf(segments), everythingBelow, substitute);
 
   }
 
   /**
-   * Whether that path was declared for that aggregate, which is what lets a value of an
-   * unportable type travel.
+   * Whether that path was declared for that aggregate. A declaration lets a value of a
+   * type travel which not every BPMS can carry.
    *
    * @param workflowAggregateClass The workflow-aggregate class
    * @param path The path as the startup check names it, attribute names joined by dots
@@ -193,10 +193,10 @@ public class DeclaredAggregateValues {
   }
 
   /**
-   * Checks the declared paths of that aggregate against the values about to be shared,
-   * and writes the substitutes where one was named.
+   * Checks the declared paths of that aggregate against the values about to be shared. It
+   * writes the substitute where one was named.
    * <p>
-   * Only a path of more than one segment can fail: a top-level attribute is always there,
+   * Only a path of more than one segment can fail. A top-level attribute is always there,
    * whatever its value is.
    *
    * @param workflowAggregateClass The workflow-aggregate class
@@ -243,8 +243,8 @@ public class DeclaredAggregateValues {
         continue;
       }
       if (below != null) {
-        // the value is there but carries no members: the startup check judged the types,
-        // and a second verdict at a sync point would say the same thing later
+        // the value is there but has no members. The startup check judged the types
+        // already, and a second verdict at a sync point would only say the same later
         return;
       }
       if (declaration.substitute() == null) {
@@ -281,9 +281,9 @@ public class DeclaredAggregateValues {
   }
 
   /**
-   * What a declared substitute is worth. A boolean is written as one, because the reason
-   * to declare a substitute at all is a gateway reading it; everything else travels as
-   * the text it was written as.
+   * What a declared substitute is worth. A boolean is written as a boolean, because a
+   * substitute is declared for a gateway which reads it. Everything else travels as the
+   * text it was written as.
    *
    * @param substitute The text the application wrote
    * @return The value to share

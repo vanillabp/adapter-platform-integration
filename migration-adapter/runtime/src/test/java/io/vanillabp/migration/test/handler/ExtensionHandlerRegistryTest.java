@@ -41,13 +41,13 @@ import io.vanillabp.spi.service.TaskId;
 import io.vanillabp.spi.service.TaskParam;
 
 /**
- * The edge cases of the handler contracts an extension registers: what is matched, what
- * is refused while the application boots, and what happens to the workflow aggregate
+ * The edge cases of the handler contracts which an extension registers: what is matched,
+ * what is refused while the application boots, and what happens to the workflow aggregate
  * around an invocation.
  * <p>
- * The way through is the same one both platforms take - a workflow service registered in
- * the {@link WorkflowTaskRegistry}, a contract registered in the extension handlers it
- * owns - so nothing here is a shortcut around the production path.
+ * The tests take the same way as both platforms. A workflow service is registered in the
+ * {@link WorkflowTaskRegistry}, and a contract in the extension handlers it owns. So nothing
+ * here is a shortcut around the production path.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ExtensionHandlerRegistryTest {
@@ -59,7 +59,7 @@ public class ExtensionHandlerRegistryTest {
   private static final String EXTENSION = "sample";
 
   /**
-   * The annotation an extension brings.
+   * The annotation which an extension brings.
    */
   @Retention(RetentionPolicy.RUNTIME)
   @Target(ElementType.METHOD)
@@ -69,8 +69,8 @@ public class ExtensionHandlerRegistryTest {
     String element() default "";
 
     /**
-     * An attribute the contract cannot describe: what it means is the extension's
-     * business, and so is which values it serves.
+     * An attribute which the contract cannot describe. The extension decides what it means,
+     * and which values it serves.
      */
     String version() default "";
 
@@ -107,7 +107,7 @@ public class ExtensionHandlerRegistryTest {
   }
 
   /**
-   * The extension's own payload, bound by a binder it contributes.
+   * The own payload of the extension, bound by a binder which it contributes.
    */
   public record Payload(String text) {
   }
@@ -219,8 +219,8 @@ public class ExtensionHandlerRegistryTest {
   }
 
   /**
-   * Two methods for one element of the model: one naming its BPMN element id, one naming
-   * its task definition. Which of them runs is what the order of the offered keys decides.
+   * Two methods for one element of the model. One names its BPMN element id, the other its
+   * task definition. The order of the offered keys decides which of them runs.
    */
   public static class TwoKeysOfOneElementService {
 
@@ -251,8 +251,9 @@ public class ExtensionHandlerRegistryTest {
   }
 
   /**
-   * Methods reading process variables, wired by element id, by task definition and to
-   * every element, plus one whose <code>&#64;TaskParam</code> the extension binds itself.
+   * Methods which read process variables. They are wired by element id, by task definition
+   * and to every element. One more has a <code>&#64;TaskParam</code> which the extension binds
+   * itself.
    */
   public static class ReadingService {
 
@@ -294,8 +295,7 @@ public class ExtensionHandlerRegistryTest {
   }
 
   /**
-   * The methods of two extensions on the same elements, each reading variables of its
-   * own.
+   * The methods of two extensions on the same elements. Each reads variables of its own.
    */
   public static class ReadingTwoExtensionsService {
 
@@ -471,7 +471,7 @@ public class ExtensionHandlerRegistryTest {
     public Aggregate save(
         final Aggregate aggregate) {
 
-      // a copy, so what a handler changed without being saved never reaches the store
+      // a copy, so what a handler changed without saving never reaches the store
       final var stored = new Aggregate();
       stored.id = aggregate.id;
       stored.touched = aggregate.touched;
@@ -597,7 +597,7 @@ public class ExtensionHandlerRegistryTest {
   }
 
   /**
-   * A call offering several keys, in the order the extension prefers them.
+   * A call which offers several keys, in the order the extension prefers them.
    */
   private static HandlerCall callWithKeys(
       final List<String> lookupKeys) {
@@ -618,8 +618,8 @@ public class ExtensionHandlerRegistryTest {
   }
 
   /**
-   * Registers a workflow service and a contract, in the order given, and puts one
-   * aggregate into the store.
+   * Registers a workflow service and a contract, in the order given. It puts one aggregate
+   * into the store.
    */
   private static Fixture fixture(
       final Class<?> workflowServiceClass,
@@ -768,7 +768,7 @@ public class ExtensionHandlerRegistryTest {
 
     assertEquals("by-task-definition", handlers.invoke(callWithKeys(List.of("reviewTheNote"))).orElseThrow());
     assertTrue(handlers.hasHandler(Note.class, MODULE, PROCESS, List.of("reviewTheNote")));
-    // and a key nobody names still ends at the method serving every element
+    // and a key which nobody names still ends at the method which serves every element
     assertEquals("every", handlers.invoke(callWithKeys(List.of("NobodyServesThis"))).orElseThrow());
 
   }
@@ -804,8 +804,8 @@ public class ExtensionHandlerRegistryTest {
         .registry()
         .getExtensionHandlers();
 
-    // sorted and named once, and the method serving every element is not counted: the
-    // method naming the element serves every version, so the catch-all never runs here
+    // sorted and named once. The method which serves every element is not counted. The
+    // method which names the element serves every version, so the catch-all never runs here
     assertEquals(
         List.of("amount", "currency"),
         handlers.taskParameterNames(Note.class, MODULE, PROCESS, List.of("Activity_Review")));
@@ -819,7 +819,7 @@ public class ExtensionHandlerRegistryTest {
     assertEquals(
         List.of("reviewer"),
         handlers.taskParameterNames(Note.class, MODULE, PROCESS, List.of("NobodyServesThis", "reviewTheNote")));
-    // a key nobody names ends at the method serving every element
+    // a key which nobody names ends at the method which serves every element
     assertEquals(
         List.of("fallback"),
         handlers.taskParameterNames(Note.class, MODULE, PROCESS, List.of("NobodyServesThis")));
@@ -910,8 +910,8 @@ public class ExtensionHandlerRegistryTest {
             type -> null,
             processService(new InMemoryPersistence()));
 
-    // each extension walks the keys on its own: the method of the first one naming the
-    // element id ends its walk, while the second one serves only the task definition
+    // each extension walks the keys on its own. The method of the first one names the
+    // element id and ends its walk. The second one serves only the task definition
     assertEquals(
         List.of("amount", "glanced"),
         registry.extensionTaskParameterNames(MODULE, PROCESS, List.of("Activity_Review", "reviewTheNote")));
@@ -990,7 +990,7 @@ public class ExtensionHandlerRegistryTest {
         .registerWorkflowService(
             MODULE, PROCESS, NotingService.class, NotingService::new, type -> null, processService(persistence));
 
-    // the call says nothing about saving, which normally means "save"
+    // the call says nothing about saving, and that normally means "save"
     final var returned = registry
         .getExtensionHandlers()
         .invoke(call("TheTask").variable("kind", "CREATED").build());
@@ -1011,9 +1011,9 @@ public class ExtensionHandlerRegistryTest {
         .getExtensionHandlers()
         .invoke(call("TheTask").variable("kind", "CREATED").build());
 
-    // the form which insists on a running transaction is for an adapter which knows it
-    // has one; an extension cannot know, so it never gets that form and never fails for
-    // lack of a transaction
+    // the form which insists on a running transaction is for an adapter which knows that
+    // it has one. An extension cannot know. So it never gets that form, and it never fails
+    // for lack of a transaction
     assertFalse(fixture.transactionRunner().inCurrentUsed);
 
   }
@@ -1253,8 +1253,8 @@ public class ExtensionHandlerRegistryTest {
     assertEquals(Optional.empty(), handlers.workflowAggregateOf(MODULE, "NobodyDeclaredThis"));
     assertEquals(Optional.empty(), handlers.workflowAggregateOf("other-module", PROCESS));
     assertEquals(List.of(), handlers.bpmnProcessesOf("other-module"));
-    // the aggregate is known although this extension has no contract registered at all:
-    // the answer is about the application, not about the extension's own methods
+    // the aggregate is known, although this extension has no contract registered at all.
+    // The answer is about the application, not about the own methods of the extension
     assertEquals(Optional.of(Aggregate.class), handlers.workflowAggregateOf(MODULE, PROCESS));
 
   }
@@ -1324,7 +1324,7 @@ public class ExtensionHandlerRegistryTest {
     assertTrue(report.contains("tooWellHidden"), report);
     assertTrue(report.contains("is protected"), report);
     assertTrue(report.contains("Make the method public"), report);
-    // and the annotations of VanillaBP's own SPI say nothing about this class
+    // and the annotations of the own SPI of VanillaBP say nothing about this class
     assertNull(
         HandlerMethodsNobodySees
             .reportFor(HiddenNoteService.class, HandlerMethodsNobodySees.CORE_HANDLER_ANNOTATIONS));
@@ -1350,7 +1350,7 @@ public class ExtensionHandlerRegistryTest {
     assertTrue(line.contains("'Activity_Review'"), line);
     assertTrue(line.contains("byTaskDefinition"), line);
     assertTrue(line.contains("'reviewTheNote'"), line);
-    // and which of them is the one running where no key is served
+    // and which of them runs where no key is served
     assertTrue(line.contains("everything"), line);
     assertTrue(line.contains("every element of the BPMN process"), line);
 
@@ -1417,8 +1417,8 @@ public class ExtensionHandlerRegistryTest {
   }
 
   /**
-   * A contract refusing the one attribute it cannot describe - what an extension does
-   * with a version, a template path or anything else only it understands.
+   * A contract which refuses the one attribute it cannot describe. An extension does this
+   * with a version, a template path or anything else which only it understands.
    */
   private static HandlerContract checkingContract() {
 
@@ -1443,7 +1443,8 @@ public class ExtensionHandlerRegistryTest {
   }
 
   /**
-   * A registry holding one contract and one workflow service, registered in that order.
+   * A registry which holds one contract and one workflow service, registered in that
+   * order.
    */
   private static WorkflowTaskRegistry registryWith(
       final HandlerContract contract,

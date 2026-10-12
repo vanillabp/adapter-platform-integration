@@ -12,23 +12,23 @@ import io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog;
 import io.vanillabp.integration.adapter.spi.version.ReportedProcessVersion;
 
 /**
- * What the BPMS of every adapter knows about the deployed versions of the BPMN
- * processes, per (workflow module, BPMN process) - registered by the adapters during
+ * What the BPMS of every adapter knows about the deployed versions of the BPMN processes,
+ * per workflow module and BPMN process. The adapters register it during
  * <code>wireBpmn</code> (see
- * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#registerProcessVersions})
- * and used to place a version TAG named by <code>&#64;WorkflowTask(version = ...)</code>
- * and its siblings in the deployment order.
+ * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#registerProcessVersions}).
+ * It is used to place a version TAG, named by <code>&#64;WorkflowTask(version = ...)</code>
+ * and its siblings, in the order of the deployments.
  * <p>
- * A version specification made of numbers never gets here: it is compared to the
- * version the adapter reported. That is what keeps the cost of the feature at zero for
- * applications not using version tags.
+ * A version specification made of numbers never gets here. It is compared with the
+ * version which the adapter reported. That keeps the cost of the feature at zero for
+ * applications which use no version tags.
  * <p>
- * While a BPMS migration is running, two adapters may serve the same BPMN process. Each
- * BPMS counts its own versions, so the catalogs are asked in registration order and the
- * first one knowing the version or tag answers.
+ * While a BPMS migration runs, two adapters may serve the same BPMN process. Each BPMS
+ * counts its own versions. So the catalogs are asked in the order they were registered,
+ * and the first one which knows the version or tag answers.
  * <p>
- * What a version is, and why overlapping ranges end the start, is decision 20 in the repository's
- * DECISIONS.md.
+ * Decision 20 in the repository's DECISIONS.md says what a version is, and why overlapping
+ * ranges end the start.
  */
 public class ProcessVersions {
 
@@ -57,7 +57,7 @@ public class ProcessVersions {
   }
 
   /**
-   * One BPMS which said it keeps no catalog for one BPMN process.
+   * One BPMS which said that it keeps no list of versions for one BPMN process.
    *
    * @param adapterId The adapter ID
    * @param reported What a delivery of that BPMS carries as its process version
@@ -70,39 +70,39 @@ public class ProcessVersions {
   private final Map<RegistryKey, List<RegisteredCatalog>> catalogs = new ConcurrentHashMap<>();
 
   /**
-   * The BPMS which said there is nothing to ask them about - see
-   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#reportNoProcessVersionCatalog}.
-   * An adapter which says nothing is not in here, and that is the difference every
-   * message below rests on.
+   * The BPMS which said there is nothing to ask them about (see
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#reportNoProcessVersionCatalog}).
+   * An adapter which says nothing is not in here. Every message below relies on that
+   * difference.
    */
   private final Map<RegistryKey, List<WithoutACatalog>> withoutACatalog = new ConcurrentHashMap<>();
 
   /**
-   * The version each adapter deployed during THIS boot - the border between
-   * "the model this application brings" and the older versions the BPMS still holds.
+   * The version which each adapter deployed during THIS boot. It is the line between "the
+   * model this application brings" and the older versions which the BPMS still holds.
    */
   private final Map<DeploymentKey, String> deployedVersions = new ConcurrentHashMap<>();
 
   /**
-   * What was reported already, so a task delivery does not log the same message over and
-   * over: the version identifiers and tags nobody could place, and the BPMN processes
-   * whose BPMS keeps no catalog at all.
+   * What was reported already, so that a task delivery does not log the same message again
+   * and again: the version identifiers and tags which nobody could place, and the BPMN
+   * processes whose BPMS keeps no list of versions at all.
    */
   private final java.util.Set<String> reportedAsUnknown = ConcurrentHashMap.newKeySet();
 
   /**
-   * Where a finding goes, so the whole start says it once.
+   * Where a finding goes, so that the whole start says it once.
    */
   private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
 
   /**
-   * Builds an empty registry - the {@link WorkflowTaskRegistry} keeps one of these, and a
+   * Builds an empty registry. The {@link WorkflowTaskRegistry} keeps one of these, and a
    * test which only needs the version answers builds one of its own.
    * <p>
    * Nothing is known at this point. Everything in here arrives while the adapters wire their
-   * BPMN, so the answers below are worth asking for only after the deployment.
+   * BPMN. So the answers below are only worth asking for after the deployment.
    *
-   * @param findings Where a finding of this registry is left
+   * @param findings Where a finding of this registry goes
    */
   public ProcessVersions(
       final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings) {
@@ -112,9 +112,9 @@ public class ProcessVersions {
   }
 
   /**
-   * Registers what one BPMS knows about one BPMN process. Registering the same catalog
-   * again (a module deployed at every boot, several workflow service classes) does not
-   * duplicate it.
+   * Registers what one BPMS knows about one BPMN process. Registering the same catalog again
+   * does not add it twice. That happens with a module deployed at every boot, or with
+   * several workflow service classes.
    *
    * @param adapterId The adapter ID
    * @param workflowModuleId The workflow module ID
@@ -143,8 +143,8 @@ public class ProcessVersions {
   }
 
   /**
-   * Remembers that one BPMS keeps no catalog for one BPMN process, which is a statement
-   * and not the absence of one.
+   * Remembers that one BPMS keeps no list of versions for one BPMN process. That is a
+   * statement, not the absence of one.
    *
    * @param adapterId The adapter ID
    * @param workflowModuleId The workflow module ID
@@ -173,13 +173,14 @@ public class ProcessVersions {
   }
 
   /**
-   * Whether one adapter reports the version of the process definition for that BPMN process: it
-   * registered a catalog, or it said it keeps none and its deliveries carry the version tag.
+   * Whether one adapter reports the version of the process definition for that BPMN process.
+   * It does if it registered a catalog, or if it said it keeps none and its deliveries carry
+   * the version tag.
    * <p>
-   * This is the answer to "may an empty version still come?". An adapter which counts versions
-   * and reports none for a workflow has a defect, and one which counts none never will. An
-   * adapter which said nothing either way answers <code>false</code> here: a reader waiting for
-   * a version from it would wait forever.
+   * This answers "may an empty version still come?". An adapter which counts versions and
+   * reports none for a workflow has a defect. One which counts none never will. An adapter
+   * which said nothing either way answers <code>false</code> here. A reader who waited for a
+   * version from it would wait forever.
    *
    * @param adapterId The adapter ID
    * @param workflowModuleId The workflow module ID
@@ -210,8 +211,8 @@ public class ProcessVersions {
   }
 
   /**
-   * Whether one adapter keeps a catalog of the versions of that BPMN process, which means its
-   * BPMS counts them and can name the version of every workflow it runs.
+   * Whether one adapter keeps a catalog of the versions of that BPMN process. Then its BPMS
+   * counts them, and can name the version of every workflow it runs.
    *
    * @param adapterId The adapter ID
    * @param workflowModuleId The workflow module ID
@@ -231,9 +232,9 @@ public class ProcessVersions {
   }
 
   /**
-   * What the BPMS of that process said about their missing catalog, and only where NONE
-   * of them registered one. A process a second BPMS can be asked about is served by that
-   * BPMS, so nothing is reported about the first.
+   * What the BPMS of that process said about their missing catalog, and only where NONE of
+   * them registered one. A process which a second BPMS can be asked about is served by that
+   * BPMS. So nothing is reported about the first.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
@@ -256,9 +257,9 @@ public class ProcessVersions {
   }
 
   /**
-   * What a delivery of the BPMS serving that process can carry as its process version -
-   * the most a method can hope for, so two BPMS which answer differently leave the
-   * method with the wider answer.
+   * What a delivery of the BPMS which serves that process can carry as its process version.
+   * This is the most a method can hope for. So if two BPMS answer differently, the method
+   * gets the wider answer.
    */
   private static ReportedProcessVersion widestOf(
       final List<WithoutACatalog> declared) {
@@ -272,8 +273,8 @@ public class ProcessVersions {
   }
 
   /**
-   * Remembers the version an adapter deployed during this boot - see
-   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#registerDeployedVersion}.
+   * Remembers the version which an adapter deployed during this boot (see
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#registerDeployedVersion}).
    *
    * @param adapterId The adapter ID
    * @param workflowModuleId The workflow module ID
@@ -294,11 +295,12 @@ public class ProcessVersions {
   }
 
   /**
-   * The border between the model this boot brought and the older versions the BPMS holds.
+   * The line between the model this boot brought, and the older versions which the BPMS
+   * holds.
    * <p>
-   * A <code>null</code> answer carries two meanings, and only the caller can tell them apart:
-   * where the module deployed the process there is no older version to speak of, and where
-   * the id was declared without a model every version the BPMS holds under it is an older one
+   * A <code>null</code> answer has two meanings, and only the caller can tell them apart.
+   * Where the module deployed the process, there is no older version to speak of. Where the
+   * id was declared without a model, every version the BPMS holds under it is an older one
    * (decision 15 in the repository's DECISIONS.md).
    *
    * @param adapterId The adapter ID
@@ -318,10 +320,10 @@ public class ProcessVersions {
   /**
    * Which BPMS can be asked about that process at all.
    * <p>
-   * The order is the order the adapters registered in, and it is what decides the answer
-   * while two BPMS serve one process during a migration: the first one knowing a version or
-   * tag wins. An empty answer means nobody can be asked, which is not the same as "no version
-   * is deployed".
+   * The order is the order in which the adapters registered. While two BPMS serve one
+   * process during a migration, it decides the answer: the first one which knows a version
+   * or tag wins. An empty answer means that nobody can be asked. That is not the same as "no
+   * version is deployed".
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
@@ -341,9 +343,9 @@ public class ProcessVersions {
   /**
    * A resolver for one BPMN process, to be handed to a {@link VersionRange}.
    * <p>
-   * The resolver asks the registered catalogs and warns about a version or tag none of them
-   * knows, once per name. So it belongs where an unknown name is worth a word - a plain
-   * comparison of numbers needs no resolver at all.
+   * The resolver asks the registered catalogs. It warns once per name about a version or
+   * tag which none of them knows. So it belongs where an unknown name is worth a word. A
+   * plain comparison of numbers needs no resolver at all.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
@@ -372,8 +374,8 @@ public class ProcessVersions {
   }
 
   /**
-   * Asks the catalogs without reporting anything - the startup check reports in its own
-   * words, naming the method whose specification cannot be served.
+   * Asks the catalogs without reporting anything. The startup check reports in its own
+   * words, and names the method whose specification cannot be served.
    */
   private io.vanillabp.integration.adapter.spi.version.DeployedProcessVersion lookup(
       final String workflowModuleId,
@@ -382,8 +384,8 @@ public class ProcessVersions {
 
     final var registered = catalogs.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if ((registered != null) && !registered.isEmpty()) {
-      // asking a catalog may query the BPMS: a version deployed by ANOTHER cluster
-      // node is unknown here until it is asked for (the catalogs cache the answer)
+      // asking a catalog may query the BPMS. A version which ANOTHER cluster node deployed
+      // is unknown here until it is asked for (the catalogs cache the answer)
       for (final var candidate : registered) {
         final var resolved = candidate
             .catalog()
@@ -398,8 +400,8 @@ public class ProcessVersions {
   }
 
   /**
-   * Loads all versions of the given BPMN process the BPMS knows - called at startup
-   * for the processes whose annotations name a version tag, so the tags are resolved
+   * Loads all versions of the given BPMN process which the BPMS knows. It is called at
+   * startup for the processes whose annotations name a version tag. So the tags are resolved
    * before the first workflow needs them.
    *
    * @param workflowModuleId The workflow module ID
@@ -430,15 +432,15 @@ public class ProcessVersions {
   }
 
   /**
-   * Reports a version tag no BPMS knows, ONCE, naming what the developer can do about
-   * it. Not a boot failure: the tagged version may be deployed later (a rolling
-   * deployment where another cluster node is ahead), and an application whose other
-   * methods serve the deployed versions has to keep running.
+   * Reports a version tag which no BPMS knows, ONCE, and names what the developer can do
+   * about it. It is not a boot failure. The tagged version may be deployed later, for example
+   * in a rolling deployment where another cluster node is ahead. And an application whose
+   * other methods serve the deployed versions has to keep running.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
    * @param versionTag The version tag named by an annotation
-   * @param describedLocation The method serving that specification, plus the
+   * @param describedLocation The method which serves that specification, plus the
    *          declaration it came from where the method names none itself
    */
   public void reportUnknownVersionTag(
@@ -451,9 +453,9 @@ public class ProcessVersions {
       return;
     }
     if (!onlyWithoutACatalog(workflowModuleId, bpmnProcessId).isEmpty()) {
-      // "no BPMS knows that tag" reads as a typo, and on a BPMS which counts no
-      // versions the tag is the one thing a delivery can carry. What such a process
-      // needs to hear is said by reportMethodsWhichNeverRun, in its own words
+      // "no BPMS knows that tag" sounds like a typo. But on a BPMS which counts no versions
+      // the tag is the one thing a delivery can carry. reportMethodsWhichNeverRun says in its
+      // own words what such a process needs to hear
       return;
     }
     findings
@@ -481,9 +483,9 @@ public class ProcessVersions {
     }
     final var declared = onlyWithoutACatalog(workflowModuleId, bpmnProcessId);
     if (!declared.isEmpty()) {
-      // the BPMS answered this while it was wired: there is no catalog to ask. Saying
-      // that nobody can be asked would send the developer looking for an adapter which
-      // was never missing
+      // the BPMS answered this while it was wired: there is no catalog to ask. Saying that
+      // nobody can be asked would send the developer to look for an adapter which was never
+      // missing
       findings
           .warn(
               io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
@@ -500,9 +502,9 @@ public class ProcessVersions {
     }
     final var registered = catalogs.get(new RegistryKey(workflowModuleId, bpmnProcessId));
     if ((registered == null) || registered.isEmpty()) {
-      // saying "no versions are deployed" here would be wrong: the BPMS may well hold
-      // versions of this process - what is missing is an adapter able to ASK about
-      // them, which is a different defect with a different remedy
+      // saying "no versions are deployed" here would be wrong. The BPMS may well hold
+      // versions of this process. What is missing is an adapter which can ASK about them.
+      // That is a different defect, with a different remedy
       findings
           .warn(
               io.vanillabp.integration.spi.startup.StartupTopic.DEPLOYED_VERSIONS,
@@ -529,9 +531,9 @@ public class ProcessVersions {
   }
 
   /**
-   * Which methods of one BPMN process never run because the BPMS serving it keeps no
-   * catalog of its versions - answered by the {@link WorkflowTaskRegistry}, the only
-   * place knowing the methods and their specifications.
+   * Which methods of one BPMN process never run, because the BPMS which serves it keeps no
+   * list of its versions. The {@link WorkflowTaskRegistry} answers it, because only it knows
+   * the methods and their specifications.
    */
   @FunctionalInterface
   public interface MethodsWhichNeverRun {
@@ -539,14 +541,15 @@ public class ProcessVersions {
     /**
      * Names the methods of that process which no delivery of such a BPMS can reach.
      * <p>
-     * This is asked only where a BPMS said it keeps no catalog, so the answer is a list for
-     * one message and nothing else. An empty list keeps that message out altogether.
+     * This is asked only where a BPMS said that it keeps no catalog. So the answer is a list
+     * for one message and nothing else. An empty list keeps that message out altogether.
      *
      * @param workflowModuleId The workflow module ID
      * @param bpmnProcessId The plain BPMN process ID
-     * @param reported What a delivery of that BPMS carries as its process version - what
+     * @param reported What a delivery of that BPMS carries as its process version. That
      *          decides whether a specification can be met there at all
-     * @return The methods, worded for the message, empty where every method can be reached
+     * @return The methods, worded for the message. Empty where every method can be
+     *         reached
      */
     List<String> of(
         String workflowModuleId,
@@ -556,18 +559,18 @@ public class ProcessVersions {
   }
 
   /**
-   * Names the methods of one BPMN process which never run because no BPMS serving it
-   * keeps a catalog of its versions, ONCE per process, and says what would make them run.
+   * Names the methods of one BPMN process which never run, because no BPMS which serves it
+   * keeps a list of its versions. It does that ONCE per process, and says what would make
+   * them run.
    * <p>
    * Only a BPMS which SAID so gets here. Where an adapter simply registered no catalog,
-   * nothing is reported: the two look the same from the core and they are not the same
-   * thing, which is what
+   * nothing is reported. For the core the two look the same, but they are not the same.
    * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#reportNoProcessVersionCatalog}
-   * exists for.
+   * exists for that.
    * <p>
-   * A warning rather than the end of the boot: a method named here can be the right one
-   * on another BPMS the application runs on, and the same code then serves both. Why the
-   * core warns instead of refusing is decision 60 in the repository's DECISIONS.md.
+   * It is a warning and does not end the boot. A method named here can be the right one on
+   * another BPMS the application runs on, and the same code then serves both. Decision 60
+   * in the repository's DECISIONS.md says why the core warns and does not refuse.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The plain BPMN process ID
@@ -611,10 +614,10 @@ public class ProcessVersions {
   }
 
   /**
-   * What a delivery of a BPMS without a version catalog carries, written for the
-   * developer reading either message about such a BPMS - the one at the start about the
-   * methods which never run, and the one at a delivery naming a version nobody can place.
-   * One wording, so the two cannot start contradicting each other.
+   * What a delivery of a BPMS without a list of versions carries. It is written for the
+   * developer who reads either message about such a BPMS: the one at the start about the
+   * methods which never run, and the one at a delivery which names a version nobody can
+   * place. There is one wording, so that the two cannot start to contradict each other.
    *
    * @param reported What such a delivery carries as its process version
    * @return The sentences saying what still works

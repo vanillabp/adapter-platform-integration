@@ -14,11 +14,11 @@ import io.vanillabp.integration.adapter.migration.delivery.TaskDeliveryRetention
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The retention cleanup of the task-delivery records used to delete hourly whether or not
- * anything had been written, which woke a sleeping application twenty-four times a day for a
- * statement that found nothing. Its records only come into being when the application does
- * work, so an hour which recorded nothing has nothing left to delete that an earlier hour did
- * not already delete.
+ * The retention cleanup of the task-delivery records used to delete every hour, whether or
+ * not anything had been written. That woke a sleeping application twenty-four times a day
+ * for a statement which found nothing. Its records only come into being when the
+ * application does work. So an hour which recorded nothing has nothing left to delete which
+ * an earlier hour did not already delete.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class RetentionCleanupFollowsTheWorkTest {

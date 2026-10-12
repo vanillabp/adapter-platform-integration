@@ -24,11 +24,11 @@ import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The Micrometer binding of both sets of numbers: what the election asked of any
- * cache, and what the in-memory default knows about itself. The second set is
- * published under the prefix of that implementation, and a cache which is not it
- * publishes no such meter at all - which is the difference between a number which is
- * missing and one which is wrong.
+ * The Micrometer binding of both sets of numbers: what the election asked of any cache, and
+ * what the default in memory knows about itself. The second set is published under the
+ * prefix of that implementation. A cache which is not that implementation publishes no such
+ * meter at all. That is the difference between a number which is missing and one which is
+ * wrong.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowAdapterCacheMetersTest {
@@ -144,8 +144,8 @@ public class WorkflowAdapterCacheMetersTest {
     new WorkflowAdapterCacheMeters(statistics).bindTo(registry);
     new InMemoryWorkflowAdapterCacheMeters(new ACacheOfTheApplicationsOwn()).bindTo(registry);
 
-    // not NaN and not zero: absent. A meter which cannot mean anything is worse than a
-    // meter which is missing, because a dashboard shows it as a cache which is broken
+    // not NaN and not zero, but absent. A meter which cannot mean anything is worse than a
+    // missing meter, because a dashboard shows it as a broken cache
     for (final var neverPublished : new String[]{
         InMemoryWorkflowAdapterCacheStatistics.METER_SIZE, InMemoryWorkflowAdapterCacheStatistics.METER_SIZE_ENDED, InMemoryWorkflowAdapterCacheStatistics.METER_EVICTIONS, InMemoryWorkflowAdapterCacheStatistics.METER_EVICTIONS_UNUSED, InMemoryWorkflowAdapterCacheStatistics.METER_LOST_HINTS
     }) {
@@ -156,7 +156,7 @@ public class WorkflowAdapterCacheMetersTest {
               + neverPublished);
     }
 
-    // what the election asks is published for it like for any other cache
+    // what the election asks is published for it, like for any other cache
     assertEquals(
         0.0,
         registry.get(WorkflowAdapterCacheStatistics.METER_HITS).functionCounter().count());
@@ -164,8 +164,8 @@ public class WorkflowAdapterCacheMetersTest {
   }
 
   /**
-   * A cache on infrastructure of the application's own: it knows neither a size nor an
-   * eviction, and nothing about this test cares what it does hold.
+   * A cache on infrastructure of the application itself. It knows neither a size nor an
+   * eviction, and this test does not care what it holds.
    */
   private static class ACacheOfTheApplicationsOwn implements WorkflowAdapterCache {
 

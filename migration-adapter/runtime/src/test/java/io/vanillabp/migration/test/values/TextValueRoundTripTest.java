@@ -38,15 +38,15 @@ import io.vanillabp.integration.adapter.spi.AggregateSyncMode;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The way out and the way back, measured against each other: an aggregate shares a value
- * with the BPMS, and a handler declares the type it was shared from. The way out is
- * {@link AggregateSyncSupport}, which writes an enum as the name of its constant and a
- * value type as the string form the type itself writes, and the way back is
+ * The way out and the way back, measured against each other. An aggregate shares a value
+ * with the BPMS, and a handler declares the type from which it was shared. The way out is
+ * {@link AggregateSyncSupport}. It writes an enum as the name of its constant, and a value
+ * type as the string form which the type itself writes. The way back is
  * {@link ValueConversion}, which reads exactly those forms.
  * <p>
- * The texts are asserted as well as the values, because the text is what an operator
- * reads in the BPMS and what a BPMN expression works on. A form which changed would be a
- * change to the model side, not only to this conversion.
+ * The texts are asserted as well as the values. An operator reads the text in the BPMS, and
+ * a BPMN expression works on it. A changed form would be a change to the model side, not only
+ * to this conversion.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TextValueRoundTripTest {
@@ -57,7 +57,7 @@ public class TextValueRoundTripTest {
   }
 
   /**
-   * One attribute of a workflow aggregate, which is all the way out needs to walk.
+   * One attribute of a workflow aggregate. The way out needs nothing more to walk.
    */
   public static class Holder {
 
@@ -87,7 +87,7 @@ public class TextValueRoundTripTest {
   }
 
   /**
-   * @return What a handler declaring the value's own type receives back
+   * @return What a handler which declares the own type of the value receives back
    */
   private static Object handedBack(
       final Object value) {
@@ -162,8 +162,8 @@ public class TextValueRoundTripTest {
         what,
         value) -> assertEquals(value, handedBack(value), what));
 
-    // a zone and a time zone are the values whose runtime class is not the type an
-    // application declares, so the declared type is named here rather than read off the
+    // for a zone and a time zone, the runtime class of the value is not the type which an
+    // application declares. So the declared type is named here, and not read off the
     // value
     final var zone = ZoneId.of("Europe/Berlin");
     assertEquals(zone, ValueConversion.convert(shared(zone), ZoneId.class, "the parameter"), "a zone");
@@ -246,9 +246,9 @@ public class TextValueRoundTripTest {
     assertEquals("GMT+05:30", shared(fixedOffset), "a fixed offset is a zone id of its own");
     assertEquals(fixedOffset, ValueConversion.convert(shared(fixedOffset), TimeZone.class, "the parameter"));
 
-    // measured on 2026-09-17, Java 21: the three-letter ids are not zone names, and
-    // TimeZone.toZoneId() replaces them by the zone they stand for. The rules are the
-    // same, the id is not, and an application comparing ids has to know that.
+    // measured on 2026-09-17, Java 21: the three-letter ids are not zone names.
+    // TimeZone.toZoneId() replaces them by the zone they stand for. The rules are the same,
+    // the id is not. An application which compares ids has to know that.
     final var india = TimeZone.getTimeZone("IST");
     assertEquals("Asia/Kolkata", shared(india), "the id of the zone the abbreviation means");
 

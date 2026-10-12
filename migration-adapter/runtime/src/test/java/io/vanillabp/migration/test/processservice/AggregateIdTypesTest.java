@@ -16,10 +16,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.persistence.Id;
 
 /**
- * The ID's name and value are determined by the same walk as its type,
- * because the persistence implementations VanillaBP provides on Quarkus answer
- * {@code getAggregateIdName}, {@code getAggregateIdType} and {@code getAggregateId}
- * from it.
+ * The same walk determines the name, the value and the type of the ID. The persistence
+ * implementations which VanillaBP provides on Quarkus answer {@code getAggregateIdName},
+ * {@code getAggregateIdType} and {@code getAggregateId} from it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AggregateIdTypesTest {

@@ -49,12 +49,13 @@ import io.vanillabp.spi.service.BpmsStartTrigger;
 import io.vanillabp.spi.service.WorkflowStartedByBpms;
 
 /**
- * A report of a changed aggregate made from inside the <code>&#64;WorkflowStartedByBpms</code>
+ * A report of a changed aggregate, made from inside the <code>&#64;WorkflowStartedByBpms</code>
  * method which builds that aggregate. On Camunda 8 the method runs in the job of the start
- * listener, before the row naming the BPMS of the workflow is written and while the cluster does
- * not show the workflow yet, so the report would ask a BPMS which has nothing to say. For an
- * aggregate the method is building, the report does nothing, and an extension can ask the same
- * question. For an aggregate which exists already, the report runs as always.
+ * listener. That is before the row which names the BPMS of the workflow is written, and while
+ * the cluster does not show the workflow yet. So the report would ask a BPMS which has
+ * nothing to say. For an aggregate which the method is building, the report does nothing, and
+ * an extension can ask the same question. For an aggregate which exists already, the report
+ * runs as always.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AReportInsideTheStartOfAWorkflowTest {
@@ -103,9 +104,10 @@ public class AReportInsideTheStartOfAWorkflowTest {
   }
 
   /**
-   * The application's workflow service. Its method reports the aggregate it builds the way an
-   * application does which calls {@code ProcessService#aggregateChanged} wherever it changes one,
-   * and it writes down what an extension would be told at that moment.
+   * The workflow service of the application. Its method reports the aggregate it builds. An
+   * application which calls {@code ProcessService#aggregateChanged} wherever it changes one
+   * does the same. The method also writes down what an extension would be told at that
+   * moment.
    */
   public static class TheWorkflowService {
 
@@ -113,7 +115,7 @@ public class AReportInsideTheStartOfAWorkflowTest {
 
     static WorkflowElection election;
 
-    /** What the method builds; set by each test. */
+    /** What the method builds. Each test sets it. */
     static Supplier<Ride> rideToReturn;
 
     static final List<Boolean> insideTheStartAnswers = new ArrayList<>();
@@ -131,7 +133,7 @@ public class AReportInsideTheStartOfAWorkflowTest {
 
   }
 
-  /** Stores the aggregates in memory and gives one an id where it has none. */
+  /** Stores the aggregates in memory, and gives one an id where it has none. */
   static class RidesInMemory implements AggregatePersistenceAware<Ride> {
 
     final Map<String, Ride> stored = new ConcurrentHashMap<>();
@@ -197,7 +199,7 @@ public class AReportInsideTheStartOfAWorkflowTest {
 
   }
 
-  /** A Camunda 8 cluster whose read model does not show the workflow yet, and which counts the questions. */
+  /** A Camunda 8 cluster whose read model does not show the workflow yet. It counts the questions. */
   static class AClusterWhichDoesNotShowTheWorkflowYet implements MigratableProcessService<Ride> {
 
     final AtomicInteger workflowProbes = new AtomicInteger();
@@ -461,7 +463,7 @@ public class AReportInsideTheStartOfAWorkflowTest {
     final var existing = new Ride();
     existing.setId("ride-with-history");
     rides.stored.put(existing.getId(), existing);
-    // an earlier workflow of this aggregate, which is what lets the report be planned while the
+    // an earlier workflow of this aggregate. It lets the report be planned while the
     // cluster does not show the workflow
     deliveryLog
         .recordWorkflowStart(

@@ -13,10 +13,10 @@ import io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapter
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What the election asked of the cache, whichever cache that is. These three numbers
- * are produced by the decorator around the cache rather than by the cache, which is
- * why they are the same for VanillaBP's in-memory default, for a shared cache and for
- * one an application wrote itself.
+ * What the election asked of the cache, whichever cache that is. The decorator around the
+ * cache produces these three numbers, not the cache itself. That is why they are the same
+ * for the default of VanillaBP in memory, for a shared cache, and for a cache which an
+ * application wrote itself.
  * <p>
  * What an implementation knows about itself is asserted where it is produced, in
  * {@code InMemoryWorkflowAdapterCacheStatisticsTest}.
@@ -85,7 +85,7 @@ public class WorkflowAdapterCacheStatisticsTest {
   }
 
   /**
-   * An application-provided cache: it knows neither size nor evictions.
+   * A cache which the application provides. It knows neither size nor evictions.
    */
   private static class RecordingCache implements io.vanillabp.integration.spi.WorkflowAdapterCache {
 

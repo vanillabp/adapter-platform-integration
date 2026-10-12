@@ -25,10 +25,9 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What the word a call says about replacing does to that call: it changes nothing a
- * store persists, it reaches no derivation rule, only an extension may say it, and a
- * store which never learned replacing says so instead of keeping the older state
- * quietly.
+ * What the word about replacing does to the call which says it. It changes nothing that a
+ * store persists. It reaches no derivation rule. Only an extension may say it. And a store
+ * which never learned replacing says so, instead of quietly keeping the older state.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PhaseTwoReplacementMarkTest {
@@ -39,8 +38,8 @@ public class PhaseTwoReplacementMarkTest {
       .build();
 
   /**
-   * An operation deriving its key from EVERY argument, which is the rule the mark would
-   * break if it travelled in the arguments.
+   * An operation which derives its key from EVERY argument. The mark would break this rule
+   * if it travelled in the arguments.
    */
   private static final PhaseOperation KEYED_OVER_ALL_ARGS = PhaseOperation
       .extensionOperation("sample:NOTIFY_ALL")
@@ -48,8 +47,8 @@ public class PhaseTwoReplacementMarkTest {
       .build();
 
   /**
-   * A store of an application's own which never heard of replacing: it implements the
-   * one method the contract demands and inherits everything else.
+   * A store of the application itself which never heard of replacing. It implements the one
+   * method which the contract demands, and inherits everything else.
    */
   private static class AStoreWhichCannotReplace implements PhaseTwoOutbox {
 
@@ -100,8 +99,8 @@ public class PhaseTwoReplacementMarkTest {
     final var replacing = plain.replacingWhatIsStillWaiting();
 
     assertTrue(replacing.replacesWhatIsStillWaiting());
-    // the key is derived while the call is built, long before anybody says this word,
-    // so a rule reading every argument sees the same arguments either way
+    // the key is derived while the call is built, long before anybody says this word. So a
+    // rule which reads every argument sees the same arguments either way
     assertEquals(plain.idempotencyKey(), replacing.idempotencyKey());
     assertEquals(plain.args(), replacing.args());
     assertEquals(plain.operation(), replacing.operation());
@@ -172,7 +171,7 @@ public class PhaseTwoReplacementMarkTest {
     }
 
     assertFalse(scheduled);
-    // it did what it always did - the call reached its schedule unchanged
+    // it did what it always did. The call reached its schedule unchanged
     assertEquals(call, store.scheduled);
     final var reported = recorded.list
         .stream()

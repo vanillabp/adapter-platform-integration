@@ -13,9 +13,8 @@ import io.vanillabp.integration.adapter.migration.outbox.HousekeepingBatchSize;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * How many rows one housekeeping batch takes on. Nobody can name that number in advance,
- * so the rule finds it by measuring - and what it does with a measurement is what these
- * tests hold.
+ * How many rows one housekeeping batch takes on. Nobody can name that number in advance. So
+ * the rule finds it by measuring, and these tests hold what it does with a measurement.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class HousekeepingBatchSizeTest {

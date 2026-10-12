@@ -25,13 +25,13 @@ import io.vanillabp.integration.spi.WorkflowStartKey;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The row about the start of a workflow, and the four questions about open work which must not
- * count it. That is where it otherwise goes wrong without a sound: a row without a task would be a
+ * The row about the start of a workflow, and the four questions about open work which must
+ * not count it. Without this, it goes wrong silently. A row without a task would be a
  * phantom task in each of those answers, and the core reads them when a workflow wakes up.
  * <p>
- * The SQL is shared by both platforms, so this is where it is pinned, on H2. The log in front of it
- * is the interface itself, because the read of the start row is a default method and every store
- * answers it without code of its own.
+ * Both platforms share the SQL, so it is pinned here, on H2. The log in front of it is the
+ * interface itself. The read of the start row is a default method, and every store answers
+ * it without code of its own.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AStartIsNoOpenWorkTest {
@@ -49,8 +49,8 @@ public class AStartIsNoOpenWorkTest {
   private final JdbcTaskDeliveryStore store;
 
   /**
-   * The store behind the interface: a log which hands every call on, so the default methods of
-   * {@link TaskDeliveryLog} are the ones under test.
+   * The store behind the interface. It is a log which hands every call on. So the default
+   * methods of {@link TaskDeliveryLog} are under test.
    */
   private final TaskDeliveryLog testee;
 
@@ -140,8 +140,8 @@ public class AStartIsNoOpenWorkTest {
   @DisplayName("The open tasks of one workflow of the BPMS leave the start of that workflow out")
   public void theOpenTasksOfAWorkflowLeaveTheStartOut() {
 
-    // the start row carries a workflow id, which is exactly what this read is keyed by - so it
-    // would be in this answer of all four without the filter
+    // the start row carries a workflow id, and this read is keyed by exactly that. So of all
+    // four answers, it would be in this one without the filter
     givenAStartedWorkflow("instance-4711", Instant.now());
 
     assertTrue(store.openTasksOfWorkflow(MODULE, "instance-4711").isEmpty());
@@ -305,9 +305,9 @@ public class AStartIsNoOpenWorkTest {
   @DisplayName("A SECOND workflow of one aggregate takes the row of the first one")
   public void aSecondWorkflowOfOneAggregateTakesTheRow() {
 
-    // an aggregate may outlive its workflow and carry another one afterwards, which is what the
-    // release of an ended workflow is bounded by a moment for. The row is keyed by the aggregate and
-    // not by the workflow, so the second start meets the first one's row
+    // an aggregate may outlive its workflow and carry another one afterwards. That is why
+    // the release of an ended workflow is bounded by a moment. The row is keyed by the
+    // aggregate and not by the workflow. So the second start meets the row of the first
     givenAStartedWorkflow("instance-4711", Instant.now().minusSeconds(600));
 
     assertTrue(
@@ -334,8 +334,8 @@ public class AStartIsNoOpenWorkTest {
   @DisplayName("A row which says nothing about its kind is a task delivery")
   public void aRowWithoutAKindIsADelivery() {
 
-    // every row of a table which existed before the column did, filled by the ALTER of the
-    // changelog and by the default of the DDL
+    // every row of a table which existed before the column. The ALTER of the changelog and
+    // the default of the DDL fill it
     givenAnOpenTask("a", "job-1", "instance-4711");
 
     final var delivery = store

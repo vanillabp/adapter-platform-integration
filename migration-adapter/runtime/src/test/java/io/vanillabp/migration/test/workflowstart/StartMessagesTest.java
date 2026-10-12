@@ -33,10 +33,10 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The check of <code>ProcessService#startWorkflowByMessage</code> against the messages the
- * adapters reported as starting a process: what is refused, what passes, which adapter is
- * asked while two of them serve the process, and what the start says where nothing was
- * reported.
+ * The check of <code>ProcessService#startWorkflowByMessage</code> against the messages which
+ * the adapters reported as starting a process. It covers what is refused, what passes, which
+ * adapter is asked while two of them serve the process, and what the start says where
+ * nothing was reported.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class StartMessagesTest {
@@ -46,8 +46,8 @@ public class StartMessagesTest {
   private static final String PROCESS = "OrderProcess";
 
   /**
-   * The sentence the start writes for a process whose adapter reported nothing. The case
-   * which has to say it and the case which must not both quote it.
+   * The sentence which the start writes for a process whose adapter reported nothing. The
+   * case which has to say it and the case which must not both quote it.
    */
   private static final String NOT_CHECKED = "so ProcessService#startWorkflowByMessage is not checked for it";
 
@@ -116,9 +116,9 @@ public class StartMessagesTest {
   @DisplayName("A message is compared by its plain name, the one the application passes")
   public void theNameIsComparedPlain() {
 
-    // the adapter strips its prefix before it reports, so the scoped form is a
-    // different name to the check, exactly as it is to the adapter which scopes what
-    // the application passes
+    // the adapter strips its prefix before it reports. So the scoped form is a different
+    // name to the check, exactly as it is to the adapter which scopes what the application
+    // passes
     final var startMessages = new StartMessages(null);
     startMessages.report("c7", MODULE, PROCESS, List.of("OrderPlaced"));
 
@@ -137,7 +137,7 @@ public class StartMessagesTest {
     final var startMessages = new StartMessages(null);
     startMessages.report("c8", MODULE, PROCESS, List.of("OrderPlaced"));
 
-    // another adapter, another process: neither reported anything
+    // another adapter, another process, and neither reported anything
     assertDoesNotThrow(
         () -> startMessages.refuseAMessageWhichStartsAnotherProcess("c7", MODULE, PROCESS, "InvoicePaid"));
     assertDoesNotThrow(
@@ -166,7 +166,8 @@ public class StartMessagesTest {
   public void theStartingAdapterIsAsked() {
 
     final var startMessages = new StartMessages(null);
-    // the new BPMS got a model where the message was renamed, the old one still has the old name
+    // the new BPMS got a model in which the message was renamed. The old one still has the
+    // old name
     startMessages.report("c8", MODULE, PROCESS, List.of("OrderReceived"));
     startMessages.report("c7", MODULE, PROCESS, List.of("OrderPlaced"));
 
@@ -179,7 +180,7 @@ public class StartMessagesTest {
     assertTrue(refusal.getMessage().contains("adapter 'c8'"), refusal.getMessage());
     assertTrue(refusal.getMessage().contains("'OrderReceived'"), refusal.getMessage());
 
-    // the accepted one walks on to the save, which this test stops there
+    // the accepted one walks on to the save, and this test stops it there
     assertThrows(
         SaveReached.class,
         () -> processService.startWorkflowByMessage(new Object(), "OrderReceived"));
@@ -212,7 +213,7 @@ public class StartMessagesTest {
     assertThrows(
         SaveReached.class,
         () -> processService.startWorkflowByMessage(new Object(), "InvoicePaid"));
-    // and says nothing at the start either
+    // and it says nothing at the start either
     assertTrue(whatTheStartSays(processService::sayWhereStartMessagesAreNotCheckedAfterDeployment).isEmpty());
 
   }

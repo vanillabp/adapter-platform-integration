@@ -5,18 +5,16 @@ import java.util.Optional;
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
 
 /**
- * Counts what the BPMS election asks of the cache and passes every call on
- * unchanged. EVERY implementation is wrapped, VanillaBP's in-memory default as well
- * as an application-provided bean, so hits and misses are reported whatever cache is
- * in use - a metric which disappears once an application plugs in its own cache
- * would surprise exactly the operator who needs it. Size and evictions are a
- * different matter: only the implementation itself knows them, so it reports them
- * under a name of its own (the in-memory default:
- * {@link InMemoryWorkflowAdapterCacheStatistics}) rather than into the numbers of the
- * election.
+ * Counts what the BPMS election asks of the cache, and passes every call on unchanged.
+ * EVERY implementation is wrapped, VanillaBP's in-memory default as well as a bean which the
+ * application provides. So hits and misses are reported whatever cache is in use. A metric
+ * which disappears once an application plugs in its own cache would surprise exactly the
+ * operator who needs it. Size and evictions are a different matter. Only the implementation
+ * itself knows them. So it reports them under a name of its own (for the in-memory default:
+ * {@link InMemoryWorkflowAdapterCacheStatistics}), and not in the numbers of the election.
  * <p>
- * The decorator is created per process service while the statistics are one per
- * application - the numbers are of the cache, not of a workflow.
+ * The decorator is created per process service, while there is one statistics object per
+ * application. The numbers are about the cache, not about a workflow.
  */
 public class InstrumentedWorkflowAdapterCache implements WorkflowAdapterCache {
 
@@ -25,9 +23,9 @@ public class InstrumentedWorkflowAdapterCache implements WorkflowAdapterCache {
   private final WorkflowAdapterCacheStatistics statistics;
 
   /**
-   * Wraps a cache for counting, tolerating both parts being absent: without a cache
-   * there is nothing to count (the election probes every time), and without
-   * statistics the cache is used as it is.
+   * Wraps a cache for counting. Both parts may be missing. Without a cache there is nothing to
+   * count (the election probes every time). Without statistics the cache is used as it
+   * is.
    *
    * @param cache The cache in use or <code>null</code>
    * @param statistics The application's statistics or <code>null</code>
@@ -46,13 +44,13 @@ public class InstrumentedWorkflowAdapterCache implements WorkflowAdapterCache {
 
   /**
    * Wraps a cache which is really there. Callers use
-   * {@link #instrument(WorkflowAdapterCache, WorkflowAdapterCacheStatistics)} instead,
-   * which also handles the two cases where there is nothing to wrap - neither argument may
-   * be <code>null</code> here, and a <code>null</code> would fail at the first lookup
-   * rather than while the application boots.
+   * {@link #instrument(WorkflowAdapterCache, WorkflowAdapterCacheStatistics)} instead, which
+   * also handles the two cases where there is nothing to wrap. Neither argument may be
+   * <code>null</code> here. A <code>null</code> would fail at the first lookup, and not
+   * while the application boots.
    *
    * @param delegate The cache every call is passed on to
-   * @param statistics The application's counters, shared by all process services
+   * @param statistics The application's counters, which all process services share
    */
   public InstrumentedWorkflowAdapterCache(
       final WorkflowAdapterCache delegate,

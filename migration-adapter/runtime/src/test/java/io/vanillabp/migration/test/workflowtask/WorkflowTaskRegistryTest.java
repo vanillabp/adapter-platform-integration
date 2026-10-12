@@ -46,18 +46,18 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * Unit tests of the core-owned <code>&#64;WorkflowTask</code> handler model: method
- * scanning and parameter binding, the three invocation outcomes (completed / BPMN
- * error / failure), version-range matching and the two-directional wiring
- * validation with guiding messages.
+ * Unit tests of the <code>&#64;WorkflowTask</code> handler model which the core owns. They
+ * cover the scan of the methods and the binding of the parameters, and the three outcomes of
+ * an invocation (completed, BPMN error, failure). They also cover the matching of version
+ * ranges, and the wiring check in both directions with its guiding messages.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowTaskRegistryTest {
 
   /**
-   * The base class an aggregate inherits attributes from - the shape the attribute
-   * resolution has to cope with, because a V1 application typically has its
-   * ID and its tenant on a base entity.
+   * The base class from which an aggregate inherits attributes. The attribute resolution
+   * has to cope with this shape. A V1 application typically has its ID and its tenant on a
+   * base entity.
    */
   public static class BaseAggregate {
 
@@ -80,8 +80,8 @@ public class WorkflowTaskRegistryTest {
     int total;
 
     /**
-     * Excluded from what the BPMS sees - which derives opt-out for the
-     * whole class: everything else IS shared.
+     * Kept away from what the BPMS sees. That makes the whole class opt-out, so everything
+     * else IS shared.
      */
     @io.vanillabp.spi.service.NoSyncWithBPMS
     @Getter
@@ -97,8 +97,8 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * Records requireNew/inCurrent usage and mimics the transactional contract: a
-   * RuntimeException thrown by the work propagates (the "rollback"), a normal
+   * Records whether requireNew or inCurrent was used, and acts like the transaction
+   * contract. A RuntimeException thrown by the work passes through (the "rollback"). A normal
    * return is the "commit".
    */
   static class RecordingTransactionRunner implements TransactionRunner {
@@ -108,8 +108,8 @@ public class WorkflowTaskRegistryTest {
     boolean inCurrentUsed = false;
 
     /**
-     * Mimics a transaction annotation of the application having marked the
-     * transaction rollback-only while the handler ran.
+     * Acts like a transaction annotation of the application which marked the transaction
+     * rollback-only while the handler ran.
      */
     boolean rollbackOnly = false;
 
@@ -147,8 +147,8 @@ public class WorkflowTaskRegistryTest {
     boolean saved = false;
 
     /**
-     * Makes {@link #loadById(Object)} fail - the sync seam has to answer with an
-     * empty map instead of breaking a task completion.
+     * Makes {@link #loadById(Object)} fail. The sync seam then has to answer with an empty
+     * map instead of breaking the completion of a task.
      */
     boolean failLoad = false;
 
@@ -300,8 +300,8 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * Two methods serving ONE BPMN element, one of them keeping the task open: what an
-   * adapter has to treat as "this element cannot complete on return".
+   * Two methods which serve ONE BPMN element, and one of them keeps the task open. An
+   * adapter has to treat this as "this element cannot complete on return".
    */
   static class MixedAsyncService {
 
@@ -326,9 +326,9 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * A V1 aggregate may compute an attribute in its getter - and that computation may
-   * fail. An expression resolved while the engine transaction runs must not be the
-   * place where that surfaces as an engine failure.
+   * A V1 aggregate may compute an attribute in its getter, and that computation may fail.
+   * An expression resolved while the engine transaction runs must not be the place where
+   * this turns into an engine failure.
    */
   public static class BrokenGetterAggregate extends Aggregate {
 
@@ -482,8 +482,8 @@ public class WorkflowTaskRegistryTest {
     @DisplayName("A rollback-only transaction fails the task with a guiding message")
     public void rollbackOnlyTransactionFailsGuiding() {
 
-      // what a transaction annotation of the application does to VanillaBP's
-      // transaction as soon as an exception passes it, e.g. a TaskException
+      // a transaction annotation of the application does this to the transaction of
+      // VanillaBP as soon as an exception passes it, for example a TaskException
       transactionRunner.rollbackOnly = true;
 
       final var exception = assertThrows(
@@ -602,7 +602,8 @@ public class WorkflowTaskRegistryTest {
 
           }));
 
-      // what the BPMS named, so the workflow can be looked up in whichever application owns it
+      // what the BPMS named, so the workflow can be looked up in the application which owns
+      // it
       assertTrue(exception.getMessage().contains("no-such-id"), exception.getMessage());
       assertTrue(exception.getMessage().contains(Aggregate.class.getName()), exception.getMessage());
       assertEquals("no-such-id", exception.getWorkflowAggregateId());
@@ -916,8 +917,8 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * Two methods serving ONE BPMN element in different process versions, each reading a
-   * variable of its own - what a subscription serving that element has to bring along.
+   * Two methods which serve ONE BPMN element in different process versions. Each reads a
+   * variable of its own, and a subscription which serves that element has to bring both.
    */
   static class ParameterizedVersionsService {
 
@@ -999,8 +1000,8 @@ public class WorkflowTaskRegistryTest {
     @DisplayName("An adapter not implementing the SPI method sees the previous behaviour")
     public void theDefaultAnswersNothing() {
 
-      // the wiring interface, which is where the parameter names live since the SPI was
-      // split into wiring-time and runtime duties
+      // the wiring interface. The parameter names live there since the SPI was split into
+      // duties at wiring time and duties at runtime
       final var untouched = new io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring() {
 
         @Override
@@ -1038,9 +1039,9 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * Two methods serving ONE BPMN element in different process versions, each asking for
-   * the item of an iteration of its own - what the model behind that element has to hand
-   * over, whichever of the two runs.
+   * Two methods which serve ONE BPMN element in different process versions. Each asks for
+   * the item of an iteration of its own. The model behind that element has to hand it over,
+   * whichever of the two runs.
    */
   static class IteratingVersionsService {
 
@@ -1065,9 +1066,9 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * A handler which counts rather than reads: it is told which round it is in and how
-   * many rounds there are, and never asks for the item. An element iterating a fixed
-   * number of times serves it, which is why it must not be reported.
+   * A handler which counts and does not read. It is told which round it is in and how many
+   * rounds there are, and it never asks for the item. An element which iterates a fixed
+   * number of times serves it. So it must not be reported.
    */
   static class CountingService {
 
@@ -1132,8 +1133,8 @@ public class WorkflowTaskRegistryTest {
     @DisplayName("A resolver bean is asked which elements it reads")
     public void theResolverBeanIsAsked() {
 
-      // the bean arrives AFTER the workflow service was registered, which is the order a
-      // booting application has: the scan must not have looked it up yet
+      // the bean arrives AFTER the workflow service was registered. A booting application
+      // has this order, so the scan must not have looked it up yet
       beans.put(ItemResolver.class, new ItemResolver() {
 
         @Override
@@ -1298,8 +1299,8 @@ public class WorkflowTaskRegistryTest {
     @DisplayName("A handler wired in ONE of several processes passes the per-module check")
     public void handlerWiredInAnotherProcessPasses() {
 
-      // 'withResolver' matches in a second process of the module - the method is
-      // legitimate although the first process does not use it
+      // 'withResolver' matches in a second process of the module. So the method is
+      // legitimate, although the first process does not use it
       registry.validateTaskWiring(
           MODULE,
           PROCESS,
@@ -1339,9 +1340,9 @@ public class WorkflowTaskRegistryTest {
     @DisplayName("A process no @WorkflowService claims is not validated and not claimed")
     public void noServiceRegisteredIsNotValidated() {
 
-      // a BPMN file travels to the BPMS as a whole, so a process drawn next to the one
-      // the application asked for may arrive here from an adapter which still wires it -
-      // demanding methods for it would end the boot over a model somebody else owns
+      // a BPMN file travels to the BPMS as a whole. So a process drawn next to the one the
+      // application asked for may arrive here from an adapter which still wires it. Asking
+      // for methods for it would end the boot over a model which somebody else owns
       registry.validateTaskWiring(
           MODULE,
           "UnclaimedProcess",
@@ -1364,8 +1365,8 @@ public class WorkflowTaskRegistryTest {
     @DisplayName("An unclaimed process leaves the reverse check as loud as it was")
     public void anUnclaimedProcessDoesNotSilenceTheReverseCheck() {
 
-      // the module's served process is wired without 'withResolver' - and the
-      // unclaimed process next to it must not turn that orphan method into a pass
+      // the served process of the module is wired without 'withResolver'. The unclaimed
+      // process next to it must not turn that orphan method into a pass
       registry.validateTaskWiring(
           MODULE,
           PROCESS,
@@ -1401,15 +1402,14 @@ public class WorkflowTaskRegistryTest {
     assertEquals(TaskEvent.Event.CREATED, context.getTaskEvent());
 
     final var outcome = registry.invokeWorkflowTask(MODULE, PROCESS, context);
-    // a @TaskId method stays open even if the BPMS supplies no task ID
+    // a @TaskId method stays open, even if the BPMS supplies no task ID
     assertEquals(WorkflowTaskOutcome.Kind.COMPLETION_PENDING, outcome.kind());
     assertNull(persistence.aggregates.get("4711").taskId);
 
   }
 
   /**
-   * A second aggregate class - used where a test needs a process working on an aggregate
-   * of its own.
+   * A second aggregate class. Tests use it where a process needs an aggregate of its own.
    */
   public static class GetterAggregate {
 
@@ -1418,8 +1418,8 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * An aggregate whose getters carry the sync model the check reads: what a BPMN
-   * expression may read is what the aggregate shares.
+   * An aggregate whose getters carry the sync model which the check reads. A BPMN
+   * expression may read what the aggregate shares.
    */
   @io.vanillabp.spi.service.SyncWithBPMS
   public static class SharingAggregate {
@@ -1427,8 +1427,8 @@ public class WorkflowTaskRegistryTest {
     private String id;
 
     /**
-     * A field without a getter: VanillaBP 1 resolved it in expressions, the sync model
-     * does not - which the check has to say (migration).
+     * A field without a getter. VanillaBP 1 resolved it in expressions, the sync model does
+     * not. The check has to say so (migration).
      */
     private String riskClass;
 
@@ -1437,7 +1437,7 @@ public class WorkflowTaskRegistryTest {
     }
 
     /**
-     * An isX() method returning something other than boolean: version 1 read it, the
+     * An isX() method which returns something other than boolean. Version 1 read it, the
      * JavaBean rule does not (migration).
      */
     public String isRiskLevel() {
@@ -1450,8 +1450,8 @@ public class WorkflowTaskRegistryTest {
     }
 
     /**
-     * A decimal, the type an adapter asks about: a BPMS may store it in a format which
-     * hands something else back.
+     * A decimal, the type an adapter asks about. A BPMS may store it in a format which hands
+     * something else back.
      */
     public java.math.BigDecimal getTotal() {
       return new java.math.BigDecimal("120.50");
@@ -1464,7 +1464,7 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * A nested type of the sharing aggregate: what a model reads past the first dot.
+   * A nested type of the sharing aggregate. A model reads it past the first dot.
    */
   public static class SharingShipment {
 
@@ -1480,9 +1480,9 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * A registry serving the sharing aggregate, with the real sync model behind it: what
-   * the check asks about is the aggregate's own annotations, so a stub would answer
-   * nothing worth asserting.
+   * A registry which serves the sharing aggregate, with the real sync model behind it. The
+   * check asks about the annotations of the aggregate itself. So a stub would answer nothing
+   * worth asserting.
    *
    * @return The registry
    */
@@ -1550,9 +1550,9 @@ public class WorkflowTaskRegistryTest {
 
     final var registryWithSync = registryServingTheSharingAggregate();
 
-    // the attribute the application excluded is reported, the shared one is not, and a
-    // name which is no attribute at all is none of this check's business (the model may
-    // well provide that variable itself)
+    // the attribute which the application excluded is reported, and the shared one is not.
+    // A name which is no attribute at all is none of the business of this check. The model
+    // may well provide that variable itself
     assertEquals(
         List.of("internalNote"),
         registryWithSync.unsharedWorkflowAggregateProperties(
@@ -1561,8 +1561,8 @@ public class WorkflowTaskRegistryTest {
             List.of("approvable", "internalNote", "somethingTheModelProvides"),
             io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL));
 
-    // migration: what VanillaBP 1 resolved and the sync model cannot share is
-    // reported as well - a field without a getter, and an isX() returning non-boolean
+    // migration: what VanillaBP 1 resolved and the sync model cannot share is reported as
+    // well. That is a field without a getter, and an isX() which does not return boolean
     assertEquals(
         List.of("riskClass", "riskLevel"),
         registryWithSync.unsharedWorkflowAggregateProperties(
@@ -1571,8 +1571,8 @@ public class WorkflowTaskRegistryTest {
             List.of("riskClass", "riskLevel", "approvable"),
             io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL));
 
-    // the class states its own mode, so the adapter's default changes nothing here -
-    // what the application said wins either way
+    // the class states its own mode, so the default of the adapter changes nothing here.
+    // What the application said wins either way
     assertEquals(
         List.of("internalNote"),
         registryWithSync.unsharedWorkflowAggregateProperties(
@@ -1581,7 +1581,7 @@ public class WorkflowTaskRegistryTest {
             List.of("approvable", "internalNote"),
             io.vanillabp.integration.adapter.spi.AggregateSyncMode.NONE));
 
-    // an unknown process yields nothing rather than a guess
+    // an unknown process yields nothing instead of a guess
     assertEquals(
         List.of(),
         registryWithSync.unsharedWorkflowAggregateProperties(
@@ -1610,9 +1610,9 @@ public class WorkflowTaskRegistryTest {
             "somethingTheModelProvides.deeper"),
         io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL);
 
-    // the shared path is silent; the unshared segment and the one the nested type has
-    // not got are named, and a FIRST segment which is no attribute stays out either way
-    // - the model may well provide that variable itself
+    // the shared path stays silent. The unshared segment and the one the nested type does
+    // not have are named. A FIRST segment which is no attribute stays out either way,
+    // because the model may well provide that variable itself
     assertEquals(
         Set.of("shipment.carrierSecret", "shipment.town", "internalNote"),
         reported.keySet());
@@ -1628,7 +1628,7 @@ public class WorkflowTaskRegistryTest {
         io.vanillabp.integration.adapter.spi.WorkflowAggregateSync.PathVerdict.Kind.NOT_SHARED,
         reported.get("internalNote").kind());
 
-    // an unknown process yields nothing rather than a guess
+    // an unknown process yields nothing instead of a guess
     assertEquals(
         Map.of(),
         registryWithSync.unsharedWorkflowAggregatePaths(
@@ -1657,13 +1657,13 @@ public class WorkflowTaskRegistryTest {
             "somethingTheModelProvides"),
         io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL);
 
-    // only the paths which reach a value the BPMS holds are answered: what the sync
-    // model keeps back never gets there, and a name which is no attribute never was one
+    // only the paths which reach a value the BPMS holds are answered. What the sync model
+    // keeps back never gets there, and a name which is no attribute never was one
     assertEquals(Set.of("total", "shipment.trackingCode"), types.keySet());
     assertEquals(java.math.BigDecimal.class, types.get("total"));
     assertEquals(String.class, types.get("shipment.trackingCode"));
 
-    // an unknown process yields nothing rather than a guess
+    // an unknown process yields nothing instead of a guess
     assertEquals(
         Map.of(),
         registryWithSync.declaredTypesOfWorkflowAggregatePaths(
@@ -1782,8 +1782,8 @@ public class WorkflowTaskRegistryTest {
 
     }
 
-    // a version tag cannot be validated at registration time: no BPMS was asked yet,
-    // and the tagged version may even be deployed by this very boot
+    // a version tag cannot be checked at registration time. No BPMS was asked yet, and this
+    // very boot may deploy the tagged version
     registry.registerWorkflowService(
         MODULE,
         "TaggedProcess",
@@ -1795,19 +1795,19 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * The registry is the seam through which an adapter holding no
-   * aggregate (a task worker of a remote BPMS completing a job) obtains the values
-   * shared with the BPMS - and the place where the sync model of every registered
-   * workflow-aggregate class is validated at STARTUP.
+   * An adapter which holds no aggregate gets the values shared with the BPMS through the
+   * registry. An example is a task worker of a remote BPMS which completes a job. The
+   * registry is also where the sync model of every registered class of a workflow aggregate
+   * is checked at STARTUP.
    */
   @Nested
   @DisplayName("Processes sharing a workflow aggregate")
   class SharedWorkflowAggregates {
 
     /**
-     * Registers a second BPMN process of the module on a workflow aggregate of its
-     * own - the "reuse" case, where a called process must NOT be handed the caller's
-     * identity.
+     * Registers a second BPMN process of the module on a workflow aggregate of its own. This
+     * is the "reuse" case, where a called process must NOT get the identity of the
+     * caller.
      */
     private void registerProcessOfAnotherAggregate(
         final String bpmnProcessId) {
@@ -1852,8 +1852,8 @@ public class WorkflowTaskRegistryTest {
     @DisplayName("Two processes of one aggregate share it, a process with its own does not")
     public void aggregatesAreComparedByClass() {
 
-      // a secondary process of the same aggregate: the class declaring it named the
-      // same aggregate, which is what the adapter asks about a call activity
+      // a secondary process of the same aggregate. The class which declares it named the
+      // same aggregate. The adapter asks about this for a call activity
       registry.registerWorkflowService(
           MODULE,
           "SecondaryProcess",
@@ -1913,8 +1913,8 @@ public class WorkflowTaskRegistryTest {
           "4711",
           io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL);
 
-      // the engine completes the task in the transaction the handler ran in, so a new
-      // one would read the state before the handler - or wait for its row
+      // the engine completes the task in the transaction in which the handler ran. A new one
+      // would read the state from before the handler, or wait for its row
       assertTrue(transactionRunner.inCurrentUsed, "the values were not read in the caller's transaction");
       assertFalse(transactionRunner.requireNewUsed, "a new transaction was opened although one is running");
       assertEquals("4711", values.get("id"));
@@ -1933,8 +1933,8 @@ public class WorkflowTaskRegistryTest {
           "4711",
           io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL);
 
-      // 'parameterValue' is annotated @NoSyncWithBPMS, which derives opt-out for
-      // the whole aggregate class
+      // 'parameterValue' is annotated @NoSyncWithBPMS. That makes the whole aggregate class
+      // opt-out
       assertEquals("4711", values.get("id"));
       assertFalse(values.containsKey("parameterValue"), "@NoSyncWithBPMS excludes an attribute");
       assertTrue(
@@ -1987,12 +1987,12 @@ public class WorkflowTaskRegistryTest {
   }
 
   /**
-   * The migration fallback for an EMBEDDED BPMS: it resolves BPMN expressions
-   * against the workflow aggregate while its own transaction runs. Version 1 resolved
-   * an attribute without a getter as well, so the order is getter, boolean getter,
-   * field - and the field is looked up along the class hierarchy, because a V1
-   * aggregate typically inherits from a base entity. The two methods are deprecated
-   * for removal, and the Camunda 7 adapter's expression resolver calls them today.
+   * The migration fallback for an EMBEDDED BPMS. It resolves BPMN expressions against the
+   * workflow aggregate while its own transaction runs. Version 1 also resolved an attribute
+   * without a getter. So the order is getter, boolean getter, field. The field is looked up
+   * along the class hierarchy, because a V1 aggregate typically inherits from a base entity.
+   * The two methods are deprecated for removal. The expression resolver of the Camunda 7
+   * adapter calls them today.
    */
   @Nested
   @DisplayName("Attribute resolution for an embedded BPMS")
@@ -2018,7 +2018,7 @@ public class WorkflowTaskRegistryTest {
     @SuppressWarnings("removal") // the fallback under test, which will be removed
     public void anUnknownProcessAnnouncesNoAttribute() {
 
-      // the expression may name something entirely unrelated to VanillaBP - saying
+      // the expression may name something which has nothing to do with VanillaBP. Saying
       // "not mine" lets the engine resolve it elsewhere
       assertFalse(registry.workflowAggregateHasProperty(MODULE, "NoSuchProcess", "processedBy"));
       assertNull(registry.resolveWorkflowAggregateProperty(MODULE, "NoSuchProcess", "4711", "processedBy"));
@@ -2040,8 +2040,8 @@ public class WorkflowTaskRegistryTest {
           "processedBy"));
       assertEquals(Boolean.TRUE, registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "urgent"));
       assertEquals("Task_1", registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "taskId"));
-      // announcing an inherited attribute and then reading it as null is the silent
-      // half-failure this asserts against: both steps walk the class hierarchy
+      // this asserts against a silent half-failure: an inherited attribute is announced and
+      // then read as null. Both steps walk the class hierarchy
       assertEquals("tenant-4711", registry.resolveWorkflowAggregateProperty(MODULE, PROCESS, "4711", "tenantId"));
 
     }
@@ -2073,9 +2073,9 @@ public class WorkflowTaskRegistryTest {
 
   /**
    * The three questions an embedded BPMS asks the registry outside a task invocation:
-   * whether an element is wired at all, and what the aggregate-ID variable is called.
-   * Each of them can be asked for something unknown, and the answer is what a
-   * developer sees when a model and the code drift apart.
+   * whether an element is wired at all, and what the aggregate-ID variable is called. Each
+   * of them can be asked for something unknown. A developer sees the answer when a model and
+   * the code drift apart.
    */
   @Nested
   @DisplayName("Questions of an embedded BPMS")

@@ -28,10 +28,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.WorkflowNotFoundException;
 
 /**
- * Pushing a changed workflow-aggregate to the BPMS. The shape is the one
- * of message correlation - save, probe, outbox - so these tests cover
- * what is different: the task id deciding the scope, the missing idempotency key and
- * an ended workflow being a warning instead of a failure.
+ * Pushing a changed workflow aggregate to the BPMS. The shape is the one of message
+ * correlation: save, probe, outbox. So these tests cover what is different. The task id
+ * decides the scope. There is no idempotency key. And an ended workflow is a warning, not a
+ * failure.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AggregateChangedTest {
@@ -83,8 +83,8 @@ public class AggregateChangedTest {
   }
 
   /**
-   * Hands back the aggregate it was given and reports a fixed ID - the core saves
-   * before it probes, which is what the tests rely on.
+   * Hands back the aggregate it was given and reports a fixed ID. The core saves before it
+   * probes, and the tests rely on that.
    */
   static class PersistenceStub implements AggregatePersistenceAware<Object> {
 
@@ -185,12 +185,12 @@ public class AggregateChangedTest {
         .aggregateChanged(aggregate, null);
 
     assertSame(aggregate, attached);
-    // the aggregate is saved BEFORE the BPMS is told - the caller changed it, and
-    // that change is what the BPMS is supposed to see
+    // the aggregate is saved BEFORE the BPMS is told. The caller changed it, and the BPMS
+    // is supposed to see that change
     assertEquals(List.of(aggregate), persistence.saved);
     assertEquals(1, adapter.phaseOnePushes.size());
     assertSame(aggregate, adapter.phaseOnePushes.getFirst().aggregate());
-    // no task id: the workflow's global scope
+    // no task id, so the global scope of the workflow
     assertNull(adapter.phaseOnePushes.getFirst().taskId());
 
   }
@@ -211,11 +211,11 @@ public class AggregateChangedTest {
     assertEquals("AGGREGATE_CHANGED", call.operation());
     assertEquals("42", call.workflowAggregateId());
     assertEquals("task-1", call.args().get(PhaseTwoCall.ARG_TASK_ID));
-    // no adapter id is persisted: the BPMS holding the workflow answers at dispatch
-    // time, like every other probing operation
+    // no adapter id is persisted. The BPMS which holds the workflow answers at dispatch
+    // time, like for every other probing operation
     assertNull(call.adapterId());
-    // the values are read when the entry is dispatched, so a repeated dispatch
-    // writes the then-current state - there is nothing to deduplicate
+    // the values are read when the entry is dispatched. So a repeated dispatch writes the
+    // state of that moment, and there is nothing to deduplicate
     assertTrue(call.idempotencyKey().isEmpty());
 
   }
@@ -302,7 +302,7 @@ public class AggregateChangedTest {
   @DisplayName("An adapter whose BPMS cannot update a running instance says so")
   public void anAdapterWithoutSupportFailsGuiding() {
 
-    // how an adapter says it: the operation is missing from its map, which is allowed
+    // how an adapter says it: the operation is missing from its map. That is allowed,
     // because a push is not required of every adapter
     final var adapter = new SendSignalTest.RecordingAdapter("first-adapter") {
 

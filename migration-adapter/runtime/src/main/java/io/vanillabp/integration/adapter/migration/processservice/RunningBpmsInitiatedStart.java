@@ -1,20 +1,20 @@
 package io.vanillabp.integration.adapter.migration.processservice;
 
 /**
- * The <code>&#64;WorkflowStartedByBpms</code> method running on this thread, if any, named by
- * the workflow module and the BPMN process whose start it builds.
+ * The <code>&#64;WorkflowStartedByBpms</code> method which runs on this thread, if any. It is
+ * named by the workflow module and the BPMN process whose start it builds.
  * <p>
- * Such a method runs before the workflow has an aggregate, and on Camunda 8 before VanillaBP wrote
- * down which BPMS holds the workflow. A report of a changed aggregate from inside it would ask a
- * BPMS about a workflow that BPMS does not show yet, and it reports nothing the start does not
- * carry anyway: the start hands the aggregate's values to the BPMS when it ends. So a report about
- * the aggregate the method is building is skipped, see
- * {@link MigrationProcessService#isInsideTheStartOf(Object)}.
+ * Such a method runs before the workflow has an aggregate. On Camunda 8 it also runs before
+ * VanillaBP wrote down which BPMS holds the workflow. A report of a changed aggregate from
+ * inside it would ask a BPMS about a workflow which that BPMS does not show yet. And it
+ * reports nothing which the start does not carry anyway, because the start hands the
+ * aggregate's values to the BPMS when it ends. So a report about the aggregate which the
+ * method builds is skipped, see {@link MigrationProcessService#isInsideTheStartOf(Object)}.
  * <p>
- * Held per thread because the method runs on the thread of the notification which started it,
- * and nothing else is told about that method. Starts may nest, a start whose method starts
- * another workflow which the BPMS reports on the same thread, so closing one gives the previous
- * one back.
+ * It is held per thread, because the method runs on the thread of the notification which
+ * started it, and nothing else learns about that method. Starts may be nested: a start whose
+ * method starts another workflow, which the BPMS reports on the same thread. So closing one
+ * gives the previous one back.
  */
 public final class RunningBpmsInitiatedStart implements AutoCloseable {
 
@@ -38,8 +38,8 @@ public final class RunningBpmsInitiatedStart implements AutoCloseable {
   }
 
   /**
-   * Marks the thread as running the <code>&#64;WorkflowStartedByBpms</code> method of the given
-   * BPMN process, until the result is closed.
+   * Marks the thread as running the <code>&#64;WorkflowStartedByBpms</code> method of the
+   * given BPMN process, until the result is closed.
    *
    * @param workflowModuleId The workflow module of the started workflow
    * @param bpmnProcessId The BPMN process of the started workflow

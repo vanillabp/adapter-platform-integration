@@ -28,12 +28,12 @@ import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The second sieve in front of deleting a workflow-start row: a period is a guess, and the
- * application's own persistence knows whether anybody can still ask about that aggregate.
+ * The second sieve in front of deleting a workflow-start row. A period is a guess. The own
+ * persistence of the application knows whether anybody can still ask about that aggregate.
  * <p>
- * Every answer but a plain "the aggregate is gone" KEEPS the row, and that is the point of this
- * test: a persistence which cannot be asked must not be read as "gone", because the row it would
- * cost cannot be written again.
+ * Every answer but a plain "the aggregate is gone" KEEPS the row. That is the point of this
+ * test. A persistence which cannot be asked must not be read as "gone", because the row
+ * which that would cost cannot be written again.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheAggregateDecidesWhenAStartRowMayGoTest {
@@ -50,7 +50,7 @@ public class TheAggregateDecidesWhenAStartRowMayGoTest {
   static class AnAggregate {
   }
 
-  /** An adapter which does nothing: this test never reaches a BPMS. */
+  /** An adapter which does nothing, because this test never reaches a BPMS. */
   static class AnAdapterDoingNothing implements MigratableProcessService<AnAggregate> {
 
     @Override
@@ -100,8 +100,8 @@ public class TheAggregateDecidesWhenAStartRowMayGoTest {
   }
 
   /**
-   * The persistence of the application, which either holds the aggregate, does not hold it, or
-   * cannot be asked at all - the last one being a custom implementation which did not override
+   * The persistence of the application. It either holds the aggregate, does not hold it, or
+   * cannot be asked at all. The last one is a custom implementation which did not override
    * <code>loadById</code>.
    */
   private static AggregatePersistenceAware<AnAggregate> persistenceWhich(
@@ -179,8 +179,8 @@ public class TheAggregateDecidesWhenAStartRowMayGoTest {
   @DisplayName("A persistence which cannot be asked keeps the row, and says so once")
   public void aPersistenceWhichCannotBeAskedKeepsTheRow() {
 
-    // the default of AggregatePersistenceAware#loadById, which a custom implementation keeps when
-    // it does not override the method
+    // the default of AggregatePersistenceAware#loadById. A custom implementation keeps it
+    // when it does not override the method
     final var sieve = sieveOf(new AggregatePersistenceAware<>() {
 
       @Override

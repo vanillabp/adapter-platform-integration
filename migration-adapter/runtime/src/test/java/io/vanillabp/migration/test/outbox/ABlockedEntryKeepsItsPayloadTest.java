@@ -29,14 +29,14 @@ import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What the housekeeping of the JDBC outbox removes and what it leaves: the retention
- * counts at the entry, so an entry which is blocked keeps its payload however long the
- * repair takes, a dispatched entry takes its payload with it when it goes, and a payload
- * no entry names is removed by age.
+ * What the housekeeping of the JDBC outbox removes and what it leaves. The retention counts
+ * at the entry. A blocked entry keeps its payload, however long the repair takes. A
+ * dispatched entry takes its payload with it when it goes. A payload which no entry names is
+ * removed by its age.
  * <p>
- * The rows are written here rather than scheduled, because what is under test is a
- * store which has been standing for longer than the retention. Nothing dispatches during
- * the test: the entries are BLOCKED respectively DONE, and the poller passes over both.
+ * The test writes the rows itself and does not schedule them. What is under test is a store
+ * which has been standing for longer than the retention. Nothing dispatches during the test.
+ * The entries are BLOCKED or DONE, and the poller passes over both.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ABlockedEntryKeepsItsPayloadTest {
@@ -52,14 +52,14 @@ public class ABlockedEntryKeepsItsPayloadTest {
 
   /**
    * How long the test waits for the poll which cleans up. The first poll runs when the
-   * dispatcher starts, so this is a guard against a machine which leaves the JVM without
-   * a turn, not a measurement of speed.
+   * dispatcher starts. So this guards against a machine which leaves the JVM without a turn.
+   * It does not measure speed.
    */
   private static final long UNTIL_THE_HOUSEKEEPING_RAN = 30_000;
 
   /**
-   * Older than the default retention of seven days, so everything written here is old
-   * enough to be removed - which makes the entries the only reason a payload stays.
+   * Older than the default retention of seven days. So everything written here is old
+   * enough to be removed, and only the entries can be the reason a payload stays.
    */
   private static final Instant LONG_BEFORE_THE_RETENTION = Instant.now().minus(Duration.ofDays(10));
 
@@ -91,7 +91,7 @@ public class ABlockedEntryKeepsItsPayloadTest {
   /**
    * Writes an entry the way a store left it behind before this test began.
    *
-   * @param call The call the entry stands for - its arguments name its payload
+   * @param call The call the entry stands for. Its arguments name its payload
    * @param status What became of the entry
    * @param doneAt When it was dispatched, <code>null</code> for an entry which was not
    * @return The entry's id
@@ -107,8 +107,8 @@ public class ABlockedEntryKeepsItsPayloadTest {
       statement.setString(2, call.operation());
       statement.setString(3, PhaseTwoCall.serializeArgs(call.args()));
       statement.setString(4, call.payloadReference());
-      // the key of a blocked entry is released the way a dispatched one releases it,
-      // which is why both carry their own id here
+      // a blocked entry releases its key the same way a dispatched one does. So both carry
+      // their own id here
       statement.setString(5, id);
       statement.setString(6, status);
       statement.setTimestamp(7, Timestamp.from(LONG_BEFORE_THE_RETENTION));
@@ -121,7 +121,7 @@ public class ABlockedEntryKeepsItsPayloadTest {
   }
 
   /**
-   * Writes the payload of a call and backdates it, so the age is not what decides.
+   * Writes the payload of a call and backdates it, so the age does not decide.
    */
   private void payloadOlderThanTheRetention(
       final JdbcPhaseTwoPayloadStore payloadStore,
@@ -151,7 +151,7 @@ public class ABlockedEntryKeepsItsPayloadTest {
 
   /**
    * The outbox with a housekeeping window which is open while this test runs. The default
-   * window is an hour of the night, so a test which wants to watch the housekeeping work
+   * window is an hour of the night. So a test which wants to watch the housekeeping work
    * says when it may.
    *
    * @return The configuration to build the dispatcher with
@@ -187,8 +187,8 @@ public class ABlockedEntryKeepsItsPayloadTest {
 
     try {
       dispatcher.start();
-      // the payload sweep is the last thing the housekeeping does, so a gone orphan says
-      // that the whole window ran
+      // the payload sweep is the last thing the housekeeping does. So once an orphan is
+      // gone, the whole window has run
       final var deadline = System.currentTimeMillis() + UNTIL_THE_HOUSEKEEPING_RAN;
       while (payloadStore.read(orphan.payloadReference()) != null) {
         assertTrue(System.currentTimeMillis() < deadline, "the housekeeping did not remove the orphaned payload");

@@ -15,37 +15,37 @@ import io.vanillabp.spi.service.WorkflowStartedByBpms;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * Two ways of writing a handler method which the developer cannot tell apart from a
- * working one, and which the scanners of this package never get to see, because both
- * scanners read the PUBLIC methods of the workflow service class:
+ * Two ways of writing a handler method which the developer cannot tell from a working one,
+ * and which the scanners of this package never see. Both scanners read the PUBLIC methods
+ * of the workflow service class:
  * <ul>
- * <li>a handler method which is not public - the scan lists public methods only, so a
+ * <li>a handler method which is not public. The scan lists public methods only, so a
  * protected, package private or private one is not there at all;</li>
- * <li>an override which repeats none of the annotations - Java never inherits a method
- * annotation, so the overriding method replaces the annotated one with a method carrying
- * nothing.</li>
+ * <li>an override which repeats none of the annotations. Java never inherits a method
+ * annotation. So the overriding method replaces the annotated one with a method which has
+ * no annotation.</li>
  * </ul>
- * Both end in a task nobody serves, and the message about that task says the method is
- * missing, which is the one thing the developer can see is not true. So the startup names the
- * method together with the class it is declared in and says what to do about it, and it does
+ * Both end in a task which nobody serves. The message about that task says that the method
+ * is missing, and the developer can see that this is not true. So the startup names the
+ * method, together with the class which declares it, and says what to do about it. It does
  * that from the core, because a class reaches the scanners the same way on both platforms.
  * <p>
- * WHICH annotations make a method a handler is the caller's answer rather than a list here.
- * The three of VanillaBP's own SPI are {@link #CORE_HANDLER_ANNOTATIONS}, and an extension
- * registering a handler contract adds its own, so a non-public
- * <code>&#64;UserTaskDetailsProvider</code> is reported the way a
- * <code>&#64;WorkflowTask</code> is - it is lost for exactly the same reason, the scan of
- * an extension's contract reading the public methods too.
+ * The caller says WHICH annotations make a method a handler. There is no list here. The
+ * three of VanillaBP's own SPI are {@link #CORE_HANDLER_ANNOTATIONS}. An extension which
+ * registers a handler contract adds its own. So a non-public
+ * <code>&#64;UserTaskDetailsProvider</code> is reported like a
+ * <code>&#64;WorkflowTask</code>. It is lost for exactly the same reason, because the scan of
+ * an extension's contract also reads the public methods only.
  * <p>
- * What this deliberately does not do is serve those methods anyway. Reflection could lift
- * the visibility of a handler, and from the moment VanillaBP does it, which methods a
- * class offers stops being the decision of whoever wrote the class.
+ * This deliberately does not serve those methods anyway. Reflection could make a handler
+ * visible. But from the moment VanillaBP does that, whoever wrote the class no longer
+ * decides which methods it offers.
  */
 public final class HandlerMethodsNobodySees {
 
   /**
-   * The annotations of VanillaBP's own SPI which turn a method into a handler. All three
-   * are read off the class the same way, so all three are lost the same way.
+   * The annotations of VanillaBP's own SPI which turn a method into a handler. All three are
+   * read from the class the same way, so all three are lost the same way.
    */
   public static final List<Class<? extends Annotation>> CORE_HANDLER_ANNOTATIONS = List.of(
       WorkflowTask.class,
@@ -56,18 +56,18 @@ public final class HandlerMethodsNobodySees {
   }
 
   /**
-   * Looks for handler methods the scan cannot reach, before the class is scanned.
+   * Looks for handler methods which the scan cannot reach, before the class is scanned.
    * <p>
-   * The superclasses are walked as well, because the second defect only shows up there: an
-   * override which drops the annotation is a method the scan does reach, and the annotated
-   * one it replaced sits further up.
+   * The superclasses are walked as well, because the second defect only shows up there. The
+   * scan does reach an override which drops the annotation. The annotated method which it
+   * replaced is further up.
    *
    * @param workflowServiceClass The class the platform integration hands to the scanners
-   * @param handlerAnnotations The annotations which make a method a handler here -
-   *          {@link #CORE_HANDLER_ANNOTATIONS} for VanillaBP's own scan, the annotation
-   *          of a handler contract for an extension's
-   * @return The message naming every handler method of the class and of its superclasses
-   *     which the scan cannot reach, or <code>null</code> where there is none
+   * @param handlerAnnotations The annotations which make a method a handler here:
+   *          {@link #CORE_HANDLER_ANNOTATIONS} for VanillaBP's own scan, or the annotation of
+   *          a handler contract for an extension's scan
+   * @return The message which names every handler method of the class and of its
+   *     superclasses that the scan cannot reach, or <code>null</code> where there is none
    */
   public static String reportFor(
       final Class<?> workflowServiceClass,
@@ -93,11 +93,11 @@ public final class HandlerMethodsNobodySees {
   }
 
   /**
-   * Every method declared by the class or by one of its superclasses, grouped by the
-   * signature which decides whether one overrides another, most derived declaration first.
-   * The methods the compiler added itself are left out: a bridge method of a covariant
-   * override carries the annotations of neither declaration and would look like a handler
-   * lost on the way.
+   * Every method declared by the class or by one of its superclasses. They are grouped by
+   * the signature which decides whether one overrides another, the most derived declaration
+   * first. The methods which the compiler added itself are left out. A bridge method of a
+   * covariant override has the annotations of neither declaration. It would look like a
+   * handler which got lost on the way.
    */
   private static LinkedHashMap<String, List<Method>> declarationsBySignature(
       final Class<?> workflowServiceClass) {
@@ -118,9 +118,8 @@ public final class HandlerMethodsNobodySees {
   }
 
   /**
-   * The declarations of one signature, most derived first: what the scan reaches is the
-   * first of them, and whether that one carries an annotation decides which of the two
-   * defects this is.
+   * The declarations of one signature, the most derived first. The scan reaches the first of
+   * them. Whether that one has an annotation decides which of the two defects this is.
    */
   private static void collectFindingsOfOneSignature(
       final List<Method> declarations,
@@ -138,9 +137,9 @@ public final class HandlerMethodsNobodySees {
       if (!isHandler(inherited, handlerAnnotations)) {
         continue;
       }
-      // a private method is not overridden by anything, so the method of the same name
-      // further down is a method of its own and the annotated one is invisible for the
-      // reason the other finding names
+      // a private method is not overridden by anything. So the method of the same name
+      // further down is a method of its own. The annotated one is invisible for the reason
+      // which the other finding names
       if (Modifier.isPrivate(inherited.getModifiers())) {
         findings.add(notPublic(inherited, handlerAnnotations));
       } else {
@@ -205,7 +204,7 @@ public final class HandlerMethodsNobodySees {
   }
 
   /**
-   * The handler annotations of a method, written the way they are written in the source, so
+   * The handler annotations of a method, written the way they are written in the source. So
    * the reader can search their own class for the text of the message.
    */
   private static String handlerAnnotationsOf(

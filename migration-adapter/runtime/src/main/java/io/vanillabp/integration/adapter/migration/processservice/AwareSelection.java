@@ -9,14 +9,13 @@ import java.util.Set;
 import java.util.function.Function;
 
 /**
- * Most-specific-wins selection of "aware" implementations
+ * Picks the most specific "aware" implementation
  * ({@link io.vanillabp.integration.spi.AggregatePersistenceAware},
- * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware}) for a workflow
- * aggregate: among all candidates whose aggregate class the given aggregate type is
- * assignable to, the one with the smallest inheritance distance is chosen -
- * superclasses and implemented interfaces are considered. The selection logic is
- * shared by both platform integrations and both aware SPIs (extracted here so it is
- * implemented exactly once).
+ * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware}) for a workflow aggregate. Of all
+ * candidates whose aggregate class the given aggregate type can be assigned to, the one with
+ * the smallest inheritance distance is chosen. Superclasses and implemented interfaces
+ * count. Both platform integrations and both aware SPIs share this logic. It lives here so
+ * that it is implemented exactly once.
  */
 public final class AwareSelection {
 
@@ -25,10 +24,10 @@ public final class AwareSelection {
   }
 
   /**
-   * Selects the most specific candidate for the given aggregate type: candidates
-   * whose aggregate class is not assignable from the aggregate type are filtered
-   * out; among the rest the smallest inheritance distance between the candidate's
-   * aggregate class and the aggregate type wins.
+   * Picks the most specific candidate for the given aggregate type. Candidates whose
+   * aggregate class cannot be assigned from the aggregate type are filtered out. Of the rest,
+   * the smallest inheritance distance between the candidate's aggregate class and the
+   * aggregate type wins.
    *
    * @param <T> The candidate type (an "aware" SPI)
    * @param candidates The candidates to select from
@@ -53,11 +52,11 @@ public final class AwareSelection {
   }
 
   /**
-   * Selects the most specific candidate like {@link #mostSpecific(Collection, Function,
-   * Class)}, but reports a tie instead of deciding it silently: where two candidates
-   * cover the aggregate at the same inheritance distance, the given function builds the
-   * exception to throw. Used where the choice must not depend on the order beans are
-   * found in - a transaction boundary being the case this was written for.
+   * Picks the most specific candidate like {@link #mostSpecific(Collection, Function,
+   * Class)}, but reports a tie instead of deciding it silently. Where two candidates cover the
+   * aggregate at the same inheritance distance, the given function builds the exception to
+   * throw. It is used where the choice must not depend on the order in which beans are found.
+   * A transaction boundary is the case this was written for.
    *
    * @param <T> The candidate type (an "aware" SPI)
    * @param candidates The candidates to select from

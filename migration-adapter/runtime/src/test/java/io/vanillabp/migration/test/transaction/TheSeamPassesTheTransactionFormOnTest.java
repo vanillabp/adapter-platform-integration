@@ -17,19 +17,19 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Every way of working in a transaction can be ordered at the seam, and the seam picks the
+ * Every way of working in a transaction can be ordered at the seam. The seam picks the
  * method of the runner which means it.
  * <p>
- * The seam used to carry a boolean, which reached two of the three: a caller who wanted to
+ * The seam used to carry a boolean, which reached two of the three. A caller who wanted to
  * take part in a transaction which might or might not be running had to guess which of the
- * two to ask for. What is pinned here is that the choice travels unchanged, including the
- * form that boolean could not name.
+ * two to ask for. This pins that the choice travels unchanged, including the form which
+ * that boolean could not name.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheSeamPassesTheTransactionFormOnTest {
 
   /**
-   * Writes down which method of the runner the seam reached for.
+   * Writes down which method of the runner the seam used.
    */
   private static class RecordingTransactionRunner implements TransactionRunner {
 

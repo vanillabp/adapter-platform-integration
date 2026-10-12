@@ -15,9 +15,9 @@ import io.vanillabp.integration.adapter.migration.config.MetricsProperties;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * How long the measurement of a gauge which has to ask somebody is reused.
- * The default is one collection interval, zero is the way to switch the holding off,
- * and a negative span is a typo the boot names.
+ * How long the measurement of a gauge which has to ask somebody is reused. The default is
+ * one collection interval. Zero switches the reuse off. A negative span is a typo, and the
+ * boot names it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MetricsPropertiesTest {

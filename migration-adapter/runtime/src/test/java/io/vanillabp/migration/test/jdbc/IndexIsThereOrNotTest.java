@@ -13,10 +13,10 @@ import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Whether an index a later version of VanillaBP reads by is there, which is what decides between a
- * startup saying nothing and a startup naming the statement which adds it. The question is asked of
- * the JDBC metadata, where the spelling of an unquoted identifier depends on the database, so it is
- * worth a test of its own.
+ * Whether an index is there by which a later version of VanillaBP reads. That decides
+ * between a startup which says nothing and a startup which names the statement that adds
+ * it. The question is asked of the JDBC metadata. There the spelling of an unquoted
+ * identifier depends on the database, so it is worth a test of its own.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class IndexIsThereOrNotTest {

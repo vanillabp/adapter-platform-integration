@@ -1,32 +1,33 @@
 package io.vanillabp.integration.adapter.migration.outbox;
 
 /**
- * Whether what a store just threw is the node being stopped rather than something wrong.
+ * Whether what a store just threw means that the node is being stopped, and not that
+ * something is wrong.
  * <p>
- * A dispatch which is interrupted while it writes down how it ended throws out of the
- * database driver, and the two readings of that exception could not be further apart. One
- * is an outbox which cannot reach its database, which somebody has to look at. The other
- * is a pod being replaced, where the entry stays open, keeps its lease, and is dispatched
- * again by whoever picks it up next - the ordinary case, and nothing to look for at
- * three in the morning.
+ * A dispatch may be interrupted while it writes down how it ended. Then the database driver
+ * throws, and the two ways to read that exception could not be further apart. One is an
+ * outbox which cannot reach its database, and somebody has to look at it. The other is a
+ * pod which is being replaced. There the entry stays open, keeps its lease, and is
+ * dispatched again by whoever picks it up next. That is the ordinary case, and nothing to
+ * look for at three in the morning.
  * <p>
- * The reason it is asked here and not in each store is that all four ask it: the
- * distinction belongs to the outbox, not to one database.
+ * It is asked here and not in each store, because all four stores ask it. The distinction
+ * belongs to the outbox, not to one database.
  *
  * <h2>How it is recognized</h2>
  *
- * The interrupt flag of the thread is the first answer, and the most reliable: a driver
- * which turns an interruption into an exception of its own restores the flag while it does
- * so. The chain of causes is the second, for a driver which does not. The MongoDB driver's
- * own wrapper is matched by NAME rather than by type, because the core carries no MongoDB
- * dependency and must not gain one for a question a name answers.
+ * The interrupt flag of the thread is the first answer, and the most reliable one. A driver
+ * which turns an interruption into an exception of its own sets the flag again while it
+ * does so. The chain of causes is the second answer, for a driver which does not. The
+ * wrapper of the MongoDB driver is matched by NAME and not by type. The core has no MongoDB
+ * dependency, and must not get one for a question which a name answers.
  */
 public final class AStoppingNode {
 
   /**
-   * The MongoDB driver's wrapper around an interruption
-   * (<code>com.mongodb.MongoInterruptedException</code>). Matched by name: this module has
-   * no MongoDB dependency, and the two stores which do are not the only callers.
+   * The wrapper of the MongoDB driver around an interruption
+   * (<code>com.mongodb.MongoInterruptedException</code>). It is matched by name. This module
+   * has no MongoDB dependency, and the two stores which have one are not the only callers.
    */
   private static final String MONGO_INTERRUPTION = "MongoInterruptedException";
 
@@ -52,7 +53,7 @@ public final class AStoppingNode {
         return true;
       }
       if (cause.getCause() == cause) {
-        // a driver which wrapped an exception in itself would keep this walking
+        // a driver which wrapped an exception in itself would keep this loop going forever
         return false;
       }
     }

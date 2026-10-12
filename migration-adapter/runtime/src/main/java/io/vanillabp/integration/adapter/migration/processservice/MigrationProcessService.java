@@ -54,26 +54,25 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * What every {@code ProcessService} call of an application ends up in, one instance per workflow
- * module and BPMN process: it saves the workflow aggregate, elects the adapter which holds the
- * workflow, runs the part of the operation which may run before the caller commits, and hands the
- * rest to the phase-two outbox.
+ * Every {@code ProcessService} call of an application ends up here. There is one instance per
+ * workflow module and BPMN process. It saves the workflow aggregate, elects the adapter which
+ * holds the workflow, runs the part of the operation which may run before the caller commits,
+ * and hands the rest to the phase-two outbox.
  * <p>
- * The order the methods below share is the order of the guarantees. The aggregate is saved in the
- * caller's transaction, so an operation which the application rolls back leaves no trace anywhere.
- * What follows only ASKS the BPMS, which is what keeps a guiding error synchronous, thrown where
- * the application made the call (decision 3 in the repository's DECISIONS.md). What changes the
- * BPMS is planned as an outbox entry and executed after the commit
- * (decision 2 in the repository's DECISIONS.md), which is why
- * every one of those steps has to survive being executed twice.
+ * The methods below share an order, and that order is the order of the guarantees. The
+ * aggregate is saved in the caller's transaction. So an operation which the application rolls
+ * back leaves no trace anywhere. What follows only ASKS the BPMS. That keeps a guiding error
+ * synchronous: it is thrown where the application made the call (decision 3 in the
+ * repository's DECISIONS.md). What changes the BPMS is planned as an outbox entry and executed
+ * after the commit (decision 2 in the repository's DECISIONS.md). That is why every one of
+ * those steps has to survive being executed twice.
  * <p>
- * Two more rules of this class are written down because other places rely on them: a failure of
- * phase two is classified by the adapter and judged here
- * (decision 12 in the repository's DECISIONS.md), and the transaction the work runs in is the one
- * resolved for THIS aggregate rather than the platform's
- * (decision 11 in the repository's DECISIONS.md).
+ * Two more rules of this class are written down, because other places rely on them. The
+ * adapter classifies a failure of phase two, and this class judges it (decision 12 in the
+ * repository's DECISIONS.md). And the work runs in the transaction resolved for THIS
+ * aggregate, not in the platform's (decision 11 in the repository's DECISIONS.md).
  *
- * @param <A> The workflow-aggregate type of this BPMN process - the class a
+ * @param <A> The workflow-aggregate type of this BPMN process: the class which a
  *          <code>&#64;WorkflowService</code> of the application names
  */
 @Slf4j
@@ -91,13 +90,13 @@ public class MigrationProcessService<A> {
   private final Class<A> workflowAggregateClass;
 
   /**
-   * Map of known adapters. The key is the adapter id, the value is the adapter type.
+   * The known adapters. The key is the adapter id, the value is the adapter type.
    */
   @Getter
   private final Map<String, String> adapters;
 
   /**
-   * List of adapter ids sorted by priority.
+   * The adapter ids, sorted by priority.
    */
   @Getter
   private final List<String> prioritizedAdapters;
@@ -105,116 +104,111 @@ public class MigrationProcessService<A> {
   private final List<MigratableProcessService<A>> adapterProcessServices;
 
   /**
-   * The process services of every adapter the workflow module is DEPLOYED to, which
-   * is more than the prioritized adapters of this process
-   * whenever another workflow of the module elects a different BPMS. A broadcast
-   * signal goes to all of them: while a migration runs, workflows waiting for the
-   * signal legitimately live in more than one BPMS.
+   * The process services of every adapter to which the workflow module is DEPLOYED. These
+   * are more than the prioritized adapters of this process whenever another workflow of the
+   * module elects a different BPMS. A broadcast signal goes to all of them. While a migration
+   * runs, workflows which wait for the signal may well live in more than one BPMS.
    */
   private final List<MigratableProcessService<A>> deploymentAdapterProcessServices;
 
   private final AggregatePersistenceAware<A> aggregatePersistenceSupport;
 
   /**
-   * The type of the aggregate's ID property or <code>null</code> if not determinable
-   * (custom persistence owning the serialized form). Determined once at construction
-   * and validated to round-trip losslessly through the outbox's String serialization
+   * The type of the aggregate's ID property, or <code>null</code> if it cannot be found out
+   * (a custom persistence which owns the serialized form). It is found once at construction.
+   * It is also checked that it survives the String serialization of the outbox without loss
    * (see {@link AggregateIdRoundTrip}).
    */
   private final Class<?> aggregateIdType;
 
   /**
-   * Resolves the outbox used to schedule phase two of every outbound operation.
-   * Provided by the platform integration; may be <code>null</code> in tests -
-   * {@link #validatePhaseTwoOutboxAtStartup()} fails the startup with a guiding
-   * message when no outbox can be resolved.
+   * Resolves the outbox in which phase two of every outbound operation is planned. The
+   * platform integration provides it. It may be <code>null</code> in tests.
+   * {@link #validatePhaseTwoOutboxAtStartup()} fails the startup with a guiding message when
+   * no outbox can be resolved.
    */
   private final PhaseTwoOutboxResolver phaseTwoOutboxResolver;
 
   /**
-   * The outbox resolved for this process service's aggregate,
-   * <code>null</code> until resolved (at startup via
-   * {@link #validatePhaseTwoOutboxAtStartup()} or lazily as backstop).
+   * The outbox resolved for the aggregate of this process service. It is <code>null</code>
+   * until it is resolved, at startup in {@link #validatePhaseTwoOutboxAtStartup()}, or
+   * lazily as a safety net.
    */
   private volatile PhaseTwoOutbox phaseTwoOutbox;
 
   /**
-   * The election for operations on existing workflows (see
-   * {@link WorkflowLocator}).
+   * The election for operations on existing workflows (see {@link WorkflowLocator}).
    */
   private final WorkflowLocator workflowLocator;
 
   /**
-   * The bound <code>vanillabp.*</code> tree - kept because adapter-scoped properties
+   * The bound <code>vanillabp.*</code> tree. It is kept because adapter-scoped properties
    * are resolved per DELIVERY (workflow module &gt; workflow &gt; task, see
    * {@link MigrationAdapterProperties#resolveForAdapter}).
    */
   private final MigrationAdapterProperties properties;
 
   /**
-   * The leftovers of an adapter id which is gone from the configuration, as far as they
-   * were named already. The box folds what a start finds, but a dispatch meeting a stale
-   * entry reports after the box was written, and there it is a line of its own: a
-   * backlog of a thousand entries is owed one message per adapter id and store, not a
-   * thousand.
+   * The leftovers of an adapter id which is gone from the configuration, as far as they were
+   * named already. The box folds what a start finds. But a dispatch which meets a stale entry
+   * reports after the box was written. There it is a line of its own. A backlog of a
+   * thousand entries is owed one message per adapter id and store, not a thousand.
    */
   private final Set<String> leftoversAlreadyNamed = ConcurrentHashMap.newKeySet();
 
   /**
-   * Where a startup check of this process service reports what it found, so the whole
-   * start says it once instead of a line per BPMN process.
+   * Where a startup check of this process service reports what it found. So the whole start
+   * says it once, instead of one line per BPMN process.
    */
   private final io.vanillabp.integration.adapter.migration.startup.StartupFindings findings;
 
   /**
-   * The reading half - what a viewer shows about a workflow: the process definitions it
-   * uses, their BPMN XML, and its execution history.
+   * The reading half: what a viewer shows about a workflow. That is the process definitions
+   * it uses, their BPMN XML, and its execution history.
    */
   private final WorkflowViewer<A> workflowViewer;
 
   /**
-   * What VanillaBP remembers about the task deliveries of this BPMN process - the
+   * What VanillaBP remembers about the task deliveries of this BPMN process: the
    * deduplication of a repeated delivery, the age of a task left open, and which adapter
-   * delivered a task the application names later.
+   * delivered a task which the application names later.
    */
   private final DeliveryRecords deliveryRecords;
 
   /**
-   * Resolves the transaction VanillaBP runs the work on this aggregate in.
-   * Provided by the platform integration; may be <code>null</code> in tests and for
-   * adapters handing their runner in directly - the runner passed by the caller is
-   * used then.
+   * Resolves the transaction in which VanillaBP runs the work on this aggregate. The platform
+   * integration provides it. It may be <code>null</code> in tests, and for adapters which hand
+   * in their runner directly. Then the runner passed by the caller is used.
    */
   private final TransactionRunnerResolver transactionRunnerResolver;
 
   /**
-   * The runner resolved for this process service's aggregate, <code>null</code> until
-   * resolved (at startup via {@link #validateTransactionRunnerAtStartup()} or lazily
-   * as backstop).
+   * The runner resolved for the aggregate of this process service. It is <code>null</code>
+   * until it is resolved, at startup in {@link #validateTransactionRunnerAtStartup()}, or
+   * lazily as a safety net.
    */
   private volatile TransactionRunner transactionRunner;
 
   /**
-   * What the application counts about its deliveries. Handed in by the
-   * platform integration after construction, because it exists once per application
-   * while process services exist per BPMN process;
-   * {@link VanillaBpMetrics#NONE}
-   * until then and for an application without a metrics backend.
+   * What the application counts about its deliveries. The platform integration hands it in
+   * after construction, because it exists once per application, while process services exist
+   * per BPMN process. It is {@link VanillaBpMetrics#NONE} until then, and for an application
+   * without a metrics backend.
    */
   private volatile VanillaBpMetrics metrics = VanillaBpMetrics.NONE;
 
   /**
-   * The messages the adapters reported as starting their processes, which a call of
-   * {@link #startWorkflowByMessage} is checked against. Handed in by the workflow-task
-   * registry when it registers this process service, because the registry is where the
-   * adapters report. <code>null</code> until then, and in a test building this service
-   * alone: nothing is checked then.
+   * The messages which the adapters reported as starting their processes. A call of
+   * {@link #startWorkflowByMessage} is checked against them. The workflow-task registry hands
+   * them in when it registers this process service, because the adapters report to the
+   * registry. It is <code>null</code> until then, and in a test which builds this service
+   * alone. Then nothing is checked.
    */
   private volatile io.vanillabp.integration.adapter.migration.workflowstart.StartMessages startMessages;
 
   /**
-   * Hands over the messages a call of {@link #startWorkflowByMessage} is checked
-   * against. Called by the workflow-task registry when it registers this process service.
+   * Hands over the messages against which a call of {@link #startWorkflowByMessage} is
+   * checked. The workflow-task registry calls it when it registers this process service.
    *
    * @param startMessages The messages the adapters reported, never <code>null</code>
    */
@@ -226,9 +220,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Hands over what to count into, called by the platform integration once the metrics of
-   * the application are known. It passes them on to the delivery records, so both count
-   * into the same place without the platform having to know that there are two.
+   * Hands over what to count into. The platform integration calls it once the metrics of the
+   * application are known. It passes them on to the delivery records. So both count into the
+   * same place, and the platform does not have to know that there are two.
    *
    * @param metrics What to count deliveries into, never <code>null</code>
    */
@@ -243,10 +237,10 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Starts a process service for one BPMN process of one workflow module. What follows on
-   * the builder is what the platform integration knows about that process - see
-   * {@link Builder}, which refuses to build a service missing something no application can
-   * work without.
+   * Starts a process service for one BPMN process of one workflow module. What follows on the
+   * builder is what the platform integration knows about that process. See {@link Builder},
+   * which refuses to build a service that misses something no application can work
+   * without.
    *
    * @param <A> The workflow-aggregate type, taken from the class handed in
    * @param workflowModuleId The workflow module the process belongs to
@@ -281,9 +275,9 @@ public class MigrationProcessService<A> {
     this.adapters = properties.adapterTypes();
     this.prioritizedAdapters = properties.getPrioritizedAdaptersFor(workflowModuleId, bpmnProcessId);
     this.aggregatePersistenceSupport = aggregatePersistenceSupport;
-    // fail fast: EVERY prioritized adapter id must have a matching process
-    // service - silently dropping one would make workflows start in the wrong
-    // BPMS (exactly the error VanillaBP is meant to prevent)
+    // fail fast: EVERY prioritized adapter id must have a matching process service.
+    // Silently dropping one would make workflows start in the wrong BPMS, which is exactly
+    // the error VanillaBP is meant to prevent
     this.adapterProcessServices = prioritizedAdapters
         .stream()
         .map(adapterId -> processServices
@@ -319,9 +313,9 @@ public class MigrationProcessService<A> {
         .toList();
     this.phaseTwoOutboxResolver = builder.phaseTwoOutboxResolver;
 
-    // startup check: the aggregate's ID has to round-trip losslessly through the
-    // outbox's String serialization (fails with a guiding message otherwise); a
-    // null ID type means a custom persistence layer owns the serialized form
+    // startup check: the aggregate's ID has to survive the String serialization of the
+    // outbox without loss. Otherwise this fails with a guiding message. A null ID type means
+    // that a custom persistence layer owns the serialized form
     this.aggregateIdType = aggregatePersistenceSupport.getAggregateIdType();
     AggregateIdRoundTrip.validateIdTypeConvertible(workflowAggregateClass, aggregateIdType);
 
@@ -338,16 +332,15 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Validates AT STARTUP that an outbox is available - a configuration defect must not
-   * surface first at runtime, and every adapter needs one, because phase two of every
-   * outbound operation is dispatched through it (decision 26 in the repository's
-   * DECISIONS.md). Called by the platform integration once the application context is
-   * ready (not mid-bean-construction, so no persistence infrastructure is materialized
-   * early).
+   * Checks AT STARTUP that an outbox is available. A configuration defect must not show up
+   * first at runtime. Every adapter needs an outbox, because phase two of every outbound
+   * operation is dispatched through it (decision 26 in the repository's DECISIONS.md). The
+   * platform integration calls this once the application context is ready, and not while the
+   * beans are built. So no persistence infrastructure is created early.
    * <p>
-   * A missing outbox is reported rather than thrown: it is collected with every other
-   * reason not to start and thrown once, at the end of the start, so an application
-   * with ten workflows learns about all ten of them in one start.
+   * A missing outbox is reported, not thrown. It is collected with every other reason not to
+   * start and thrown once, at the end of the start. So an application with ten workflows
+   * learns about all ten of them in one start.
    */
   public void validatePhaseTwoOutboxAtStartup() {
 
@@ -365,8 +358,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The adapters serving this workflow, in the order they are elected in. Read by the
-   * startup checks which have to ask every BPMS of a workflow the same question.
+   * The adapters which serve this workflow, in the order in which they are elected. The
+   * startup checks which have to ask every BPMS of a workflow the same question read this.
    *
    * @return The process services of the prioritized adapters, never <code>null</code>
    */
@@ -377,30 +370,29 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Validates AFTER THE DEPLOYMENT that every prioritized adapter of this BPMN process
-   * can locate workflows, and refuses a combination in which one of them cannot.
+   * Checks AFTER THE DEPLOYMENT that every prioritized adapter of this BPMN process can
+   * find workflows. It refuses a combination in which one of them cannot.
    * <p>
-   * An adapter which cannot ask its BPMS answers the election optimistically, which is
-   * right while it is the only BPMS configured and a guess as soon as it is not: the
-   * walk stops at the first <code>ACTIVE</code>, so the guessing adapter takes the
-   * operations of every adapter behind it in the list. That is a migration which
-   * silently routes half of its workflows to the wrong BPMS.
+   * An adapter which cannot ask its BPMS answers the election optimistically. That is right
+   * while it is the only BPMS configured, and a guess as soon as it is not. The walk stops at
+   * the first <code>ACTIVE</code>. So the guessing adapter takes the operations of every
+   * adapter behind it in the list. That is a migration which silently routes half of its
+   * workflows to the wrong BPMS.
    * <p>
-   * This runs after the deployment rather than with the other startup validations,
-   * because an adapter may only learn what its BPMS can do while it deploys - Camunda 8
-   * finds out about the query API from the first query which fails. It still runs before
-   * workflow processing starts, so nothing has touched a workflow when the message
-   * arrives.
+   * This runs after the deployment and not with the other startup checks. An adapter may only
+   * learn what its BPMS can do while it deploys. Camunda 8 finds out about the query API from
+   * the first query which fails. It still runs before the workflow processing starts. So
+   * nothing has touched a workflow when the message arrives.
    * <p>
-   * Where the module does not accept the guessing, the reason is reported rather than
-   * thrown: it is collected with every other reason not to start and thrown once, at the
-   * end of the start.
+   * Where the module does not accept the guessing, the reason is reported and not thrown. It
+   * is collected with every other reason not to start, and thrown once, at the end of the
+   * start.
    */
   public void validateElectionCapabilityAfterDeployment() {
 
     if (adapterProcessServices.size() < 2) {
-      // nothing to guess between: whatever the single adapter answers, it is the only
-      // BPMS which could hold the workflow
+      // nothing to guess between. Whatever the single adapter answers, it is the only BPMS
+      // which could hold the workflow
       return;
     }
 
@@ -443,12 +435,13 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Says once, after the deployment, that {@link #startWorkflowByMessage} is not checked
-   * for this process, where the adapter which starts its workflows reported no messages
-   * for it. Such an adapter either cannot read its model or does not know about the
-   * report yet, and the calls go to the BPMS unchecked, as they did before.
+   * Says once, after the deployment, that {@link #startWorkflowByMessage} is not checked for
+   * this process. That is so where the adapter which starts its workflows reported no
+   * messages for it. Such an adapter either cannot read its model, or does not know about the
+   * report yet. The calls go to the BPMS unchecked, as before.
    * <p>
-   * After the deployment, because the adapters report while they wire the models.
+   * This runs after the deployment, because the adapters report while they wire the
+   * models.
    */
   public void sayWhereStartMessagesAreNotCheckedAfterDeployment() {
 
@@ -466,16 +459,16 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The transaction runner serving this process service's aggregate: the most specific
-   * {@link io.vanillabp.integration.spi.TransactionRunnerAware} bean, a
-   * {@link TransactionRunner} bean of the application, or the platform's own runner.
-   * Resolved once and cached - a resolution per delivery would ask the
-   * bean container on every task.
+   * The transaction runner which serves the aggregate of this process service: the most
+   * specific {@link io.vanillabp.integration.spi.TransactionRunnerAware} bean, a
+   * {@link TransactionRunner} bean of the application, or the platform's own runner. It is
+   * resolved once and cached. Resolving it per delivery would ask the bean container on every
+   * task.
    *
-   * @param fallback The runner the caller would use, taken where no resolver was
-   *          provided or the resolver knows nothing better (adapters and tests handing
-   *          their runner in directly)
-   * @return The runner to run work on this aggregate in
+   * @param fallback The runner which the caller would use. It is taken where no resolver was
+   *          provided, or where the resolver knows nothing better (adapters and tests which
+   *          hand in their runner directly)
+   * @return The runner in which to run work on this aggregate
    */
   public TransactionRunner getTransactionRunner(
       final TransactionRunner fallback) {
@@ -493,21 +486,21 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Validates AT STARTUP that the work VanillaBP does on this aggregate has a
-   * transaction to run in, and reports what that transaction covers.
+   * Checks AT STARTUP that the work which VanillaBP does on this aggregate has a transaction
+   * to run in, and reports what that transaction covers.
    * <p>
-   * Three outcomes. No runner at all ends the boot: such an application cannot start a
-   * single workflow (the aggregate and the outbox entry have to be written in one
-   * transaction), so booting green would only move the failure to the first workflow.
-   * A store the platform can tell is not covered gets a warning naming what is given up.
-   * A combination the platform can name a fix for ends the boot as well, unless the
-   * application accepts unguarded writes
-   * (<code>vanillabp.transactions.unguarded-aggregate-writes</code>) - the message stays
-   * a warning then, because a decision like this has to stay visible.
+   * There are three outcomes. No runner at all ends the boot. Such an application cannot
+   * start a single workflow, because the aggregate and the outbox entry have to be written in
+   * one transaction. A green boot would only move the failure to the first workflow. A store
+   * which the platform can tell is not covered gets a warning, which names what is given up.
+   * A combination for which the platform can name a fix ends the boot as well. The exception
+   * is an application which accepts unguarded writes
+   * (<code>vanillabp.transactions.unguarded-aggregate-writes</code>). Then the message stays
+   * a warning, because a decision like this has to stay visible.
    * <p>
-   * What ends the boot is reported rather than thrown: it is collected with the other
-   * reasons and thrown once, at the end of the start, so an application with ten
-   * workflows learns about all ten of them in one start.
+   * What ends the boot is reported and not thrown. It is collected with the other reasons,
+   * and thrown once at the end of the start. So an application with ten workflows learns
+   * about all ten of them in one start.
    */
   public void validateTransactionRunnerAtStartup() {
 
@@ -521,8 +514,8 @@ public class MigrationProcessService<A> {
               io.vanillabp.integration.spi.startup.StartupTopic.CODE,
               aggregateScope(),
               buildNoTransactionRunnerMessage());
-      // nothing below can be answered without a runner, and the refusal ends this start
-      // at its end anyway
+      // nothing below can be answered without a runner. And the refusal ends this start at
+      // its end anyway
       return;
     }
     log.info(
@@ -537,9 +530,9 @@ public class MigrationProcessService<A> {
     switch (coverage.verdict()) {
       case COVERED, UNKNOWN -> {
       }
-      // where the aggregate's store is the trouble the fix is a machine (a MongoDB which
-      // is no replica set), and where the two stores cannot be held together the fix is a
-      // bean of the application
+      // where the aggregate's store is the trouble, the fix is a machine (a MongoDB which is
+      // no replica set). Where the two stores cannot be held together, the fix is a bean of
+      // the application
       case UNGUARDED -> findings
           .warn(
               io.vanillabp.integration.spi.startup.StartupTopic.INFRASTRUCTURE,
@@ -592,7 +585,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The guiding message of a workflow aggregate nothing can open a transaction for.
+   * The guiding message for a workflow aggregate for which nothing can open a
+   * transaction.
    */
   private String buildNoTransactionRunnerMessage() {
 
@@ -616,10 +610,10 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Converts the serialized (String) workflow-aggregate ID of an outbox entry back
-   * into the aggregate's ID type. If the ID type is not determinable (custom
-   * persistence), the String is passed through unchanged - the custom persistence
-   * layer is responsible for handling the serialized form.
+   * Converts the serialized (String) workflow-aggregate ID of an outbox entry back into the
+   * aggregate's ID type. If the ID type cannot be found out (custom persistence), the String
+   * is passed through unchanged. Then the custom persistence layer handles the serialized
+   * form.
    *
    * @param serializedAggregateId The aggregate ID in serialized form
    * @return The aggregate ID in the aggregate's ID type
@@ -633,8 +627,8 @@ public class MigrationProcessService<A> {
 
   /**
    * The name of the aggregate's ID property (see
-   * {@link AggregatePersistenceAware#getAggregateIdName()}) - remote BPMS store
-   * the aggregate's ID as a process variable of this name.
+   * {@link AggregatePersistenceAware#getAggregateIdName()}). A remote BPMS stores the
+   * aggregate's ID as a process variable of this name.
    *
    * @return The ID property's name
    */
@@ -645,10 +639,10 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Loads the workflow aggregate by its serialized ID within the CALLER's
-   * transaction - used to resolve aggregate attributes referenced by BPMN
-   * expressions of embedded BPMS (the expression evaluates inside an engine
-   * transaction the aggregate has to join).
+   * Loads the workflow aggregate by its serialized ID, within the CALLER's transaction. It is
+   * used to resolve aggregate attributes which BPMN expressions of an embedded BPMS refer to.
+   * The expression is evaluated inside an engine transaction, and the aggregate has to join
+   * it.
    *
    * @param serializedAggregateId The aggregate ID in serialized form
    * @return The aggregate or <code>null</code>
@@ -662,7 +656,7 @@ public class MigrationProcessService<A> {
 
   /**
    * The type of the workflow aggregate's ID attribute, or <code>null</code> if the
-   * persistence layer does not report one (it then owns the serialized form).
+   * persistence layer does not report one. Then it owns the serialized form.
    *
    * @return The ID type or <code>null</code>
    */
@@ -673,9 +667,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Loads the workflow aggregate by its ID in the aggregate's own ID type - used
-   * where the ID was not serialized in the first place (a workflow the BPMS started
-   * on its own).
+   * Loads the workflow aggregate by its ID in the aggregate's own ID type. It is used where
+   * the ID was not serialized in the first place (a workflow which the BPMS started on its
+   * own).
    *
    * @param workflowAggregateId The ID in the aggregate's ID type
    * @return The aggregate or <code>null</code> if there is none
@@ -689,8 +683,9 @@ public class MigrationProcessService<A> {
 
   /**
    * Saves the workflow aggregate through the persistence of the application. An operation
-   * which changes a workflow does this first, in the caller's transaction, so an operation
-   * the application rolls back leaves neither a changed aggregate nor an outbox entry.
+   * which changes a workflow does this first, in the caller's transaction. So an operation
+   * which the application rolls back leaves neither a changed aggregate nor an outbox
+   * entry.
    *
    * @param workflowAggregate The aggregate to persist
    * @return The persisted aggregate (attached, in case of an ORM)
@@ -703,9 +698,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Reads the id of a workflow aggregate, asking the persistence rather than the class: the
-   * id may sit in a field the core knows nothing about. It is the value every operation is
-   * keyed by, the election and the outbox entry included.
+   * Reads the id of a workflow aggregate. It asks the persistence and not the class, because
+   * the id may sit in a field which the core knows nothing about. Every operation is keyed by
+   * this value, the election and the outbox entry included.
    *
    * @param workflowAggregate The aggregate to investigate
    * @return Its ID
@@ -719,9 +714,9 @@ public class MigrationProcessService<A> {
 
   /**
    * Whether the persistence of this workflow aggregate notices a second writer instead of
-   * writing over it. Asked while the application starts, by the checks which warn about an
-   * aggregate nothing can protect - and asked of the persistence rather than of an
-   * annotation, because a store may notice a second writer in a way of its own.
+   * writing over it. The checks which warn about an aggregate that nothing can protect ask
+   * this while the application starts. They ask the persistence and not an annotation,
+   * because a store may notice a second writer in a way of its own.
    *
    * @return What the aggregate's persistence answers
    */
@@ -732,34 +727,33 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Processes a BPMN task: loads the workflow aggregate by the context's serialized
-   * ID, invokes the given <code>&#64;WorkflowTask</code> handler and saves the
-   * aggregate - all within one transaction run by the given
-   * {@link TransactionRunner} (a new transaction, or the caller's if
-   * {@link TaskInvocationContext#runInCurrentTransaction()}).
+   * Processes a BPMN task. It loads the workflow aggregate by the serialized ID of the
+   * context, calls the given <code>&#64;WorkflowTask</code> handler, and saves the aggregate.
+   * All of that happens in one transaction which the given {@link TransactionRunner} runs: a
+   * new transaction, or the caller's if {@link TaskInvocationContext#runInCurrentTransaction()}.
    * <p>
    * The three outcomes of the restored V1 contract:
    * <ul>
-   * <li>normal return - aggregate saved, transaction commits;
+   * <li>normal return: the aggregate is saved, and the transaction commits. The outcome is
    * {@link WorkflowTaskOutcome.Kind#COMPLETED} (or
-   * {@link WorkflowTaskOutcome.Kind#COMPLETION_PENDING} for methods declaring a
+   * {@link WorkflowTaskOutcome.Kind#COMPLETION_PENDING} for methods which declare a
    * <code>&#64;TaskId</code> parameter).</li>
-   * <li>{@link TaskException} - aggregate saved anyway, transaction COMMITS,
-   * {@link WorkflowTaskOutcome.Kind#BPMN_ERROR} carries the error code for
-   * error-boundary routing.</li>
-   * <li>any other exception - propagates out of the transactional work, the
-   * transaction rolls back, the exception reaches the adapter: the task is not
-   * completed and BPMS retry semantics apply.</li>
+   * <li>{@link TaskException}: the aggregate is saved anyway, and the transaction COMMITS.
+   * {@link WorkflowTaskOutcome.Kind#BPMN_ERROR} carries the error code, so that an error
+   * boundary event can catch it.</li>
+   * <li>any other exception: it leaves the transactional work, the transaction rolls back,
+   * and the exception reaches the adapter. The task is not completed, and the BPMS retries
+   * the way it always does.</li>
    * </ul>
    *
    * @param handler The handler resolved by the
    *          {@link io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry}
    * @param context The invocation context supplied by the adapter
-   * @param platformTransactionRunner The platform's transaction runner, used unless the
+   * @param platformTransactionRunner The platform's transaction runner. It is used unless the
    *          application contributed one for this aggregate
-   * @param rollbackRuleRemedies How a rollback rule excluding a {@link TaskException} is
-   *          written on this platform, named by the failure of the rollback-only check
-   * @return The outcome the adapter maps to the BPMS
+   * @param rollbackRuleRemedies How a rollback rule which excludes a {@link TaskException} is
+   *          written on this platform. The failure of the rollback-only check names them
+   * @return The outcome which the adapter maps to the BPMS
    */
   public WorkflowTaskOutcome executeWorkflowTask(
       final WorkflowTaskHandler handler,
@@ -767,10 +761,9 @@ public class MigrationProcessService<A> {
       final TransactionRunner platformTransactionRunner,
       final List<String> rollbackRuleRemedies) {
 
-    // Everything the application logs while its handler runs carries the
-    // workflow it runs for, the delivery is counted and measured, and the running
-    // activation is readable - here, because this is the one place every BPMS passes
-    // through
+    // here, because this is the one place which every BPMS passes through: everything the
+    // application logs while its handler runs names the workflow it runs for, the delivery
+    // is counted and measured, and the running activation can be read
     final var startedAt = System.nanoTime();
     WorkflowTaskOutcome outcome = null;
     try (var ignored = DeliveryMdc
@@ -782,7 +775,7 @@ public class MigrationProcessService<A> {
             context.getTaskDefinition(),
             context.getDeliveryId());
          // what the application plans from inside this handler is planned by THIS
-         // activation, which is what tells multi-instance siblings apart
+         // activation. That tells multi-instance siblings apart
          var activation = RunningActivation
              .of(context.getActivationId())) {
       outcome = deliverWorkflowTask(handler, context, platformTransactionRunner, rollbackRuleRemedies);
@@ -801,9 +794,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * How a delivery ended, as the metrics see it: a delivery which produced no outcome
-   * threw, which means the transaction was rolled back and the BPMS gets the work
-   * back.
+   * How a delivery ended, as the metrics see it. A delivery which produced no outcome threw.
+   * That means the transaction was rolled back, and the BPMS gets the work back.
    *
    * @param outcome The outcome or <code>null</code> if the delivery threw
    * @return The outcome to count
@@ -826,14 +818,14 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * What a delivery is answered with where the handler did not raise a BPMN error: the task
-   * stays open where the method promised to complete it later, and it is over otherwise.
+   * What a delivery is answered with where the handler did not raise a BPMN error. The task
+   * stays open where the method promised to complete it later. Otherwise it is over.
    * <p>
-   * A delivery which reports that the BPMS took the task away is over whatever the method
+   * A delivery which reports that the BPMS took the task away is over, whatever the method
    * promised. {@code isAsynchronousTask} is true for every method with a
-   * <code>&#64;TaskId</code> parameter, a user-task method included, so answering by the
-   * method alone wrote a second OPEN record for a task which nobody can complete any more -
-   * and the election then read the younger of the two.
+   * <code>&#64;TaskId</code> parameter, a user-task method included. So answering by the
+   * method alone wrote a second OPEN record for a task which nobody can complete any more.
+   * And the election then read the younger of the two.
    *
    * @param handler The method serving the delivery
    * @param context The invocation context of the delivery
@@ -853,7 +845,7 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Whether this delivery says that the BPMS ended the task by itself, which is what a
+   * Whether this delivery says that the BPMS ended the task by itself. That is what a
    * cancellation is: a boundary event fired, the scope around the task was left, or the
    * workflow was canceled.
    *
@@ -868,14 +860,15 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Remembers this delivery, and where it reported a cancellation closes the record the
-   * task had left open. Both writes belong to the transaction of the delivery, so a
+   * Remembers this delivery. Where it reported a cancellation, it also closes the record
+   * which the task had left open. Both writes belong to the transaction of the delivery, so a
    * rollback takes them together.
    * <p>
-   * The mark runs on the DELIVERY path and not where the application asks for something,
-   * because nobody in the application asked for this one. It is safe here for the reason it
-   * is not safe when a caller merely asks: a task the BPMS cancelled is never handed out
-   * again, so no redelivery is left which would need the record to renew its lock.
+   * The mark runs on the DELIVERY path, and not where the application asks for something,
+   * because nobody in the application asked for this one. It is safe here, for the same
+   * reason it is not safe when a caller merely asks. A task which the BPMS cancelled is never
+   * handed out again. So no redelivery is left which would need the record to renew its
+   * lock.
    *
    * @param deliveryLog The store to write to, <code>null</code> where there is none
    * @param deliveryKey The identity of the delivery
@@ -902,17 +895,17 @@ public class MigrationProcessService<A> {
       final List<String> rollbackRuleRemedies) {
 
     // the runner of the application where it contributed one for this aggregate, the
-    // platform's otherwise - resolved once and cached by the process service
+    // platform's otherwise. The process service resolves it once and caches it
     final var runner = getTransactionRunner(platformTransactionRunner);
 
-    // a delivery proves which BPMS holds this workflow - recorded before anything
-    // else, so it also holds for a delivery the handler does not subscribe to
+    // a delivery proves which BPMS holds this workflow. It is recorded before anything else,
+    // so it also holds for a delivery to which the handler does not subscribe
     rememberWorkflowAdapter(
         context.getWorkflowAggregateId(), context.getAdapterId(), context.getWorkflowId());
 
-    // lifecycle-event filter: a delivery of an event the method does not
-    // subscribe to (e.g. CANCELED to a method without a @TaskEvent parameter) is
-    // skipped entirely - no transaction, no aggregate access, no side effects
+    // filter by lifecycle event. A delivery of an event to which the method does not
+    // subscribe (for example CANCELED to a method without a @TaskEvent parameter) is skipped
+    // entirely: no transaction, no access to the aggregate, no side effects
     if (!handler.acceptsEvent(context.getTaskEvent())) {
       log.debug(
           "Skipping delivery of task event '{}' to '{}': the method does not subscribe to it",
@@ -921,12 +914,12 @@ public class MigrationProcessService<A> {
       return outcomeOf(handler, context);
     }
 
-    // a BPMS repeating a delivery it never learned the result of must not run the
-    // business code twice - what was processed is remembered, and a redelivery is
-    // answered with the recorded outcome (leaving the task open instead would keep it
-    // open forever). A delivery whose adapter reports no identity is remembered as well
-    // and simply answers no repetition: the row still says which BPMS holds the task and
-    // which kind of id its id is
+    // a BPMS which repeats a delivery whose result it never learned must not run the
+    // business code twice. What was processed is remembered, and a redelivery is answered
+    // with the recorded outcome. Leaving the task open instead would keep it open forever.
+    // A delivery whose adapter reports no identity is remembered as well, and it simply
+    // answers no repetition. The row still says which BPMS holds the task, and which kind of
+    // id its id is
     final var identity = deliveryRecords.identityOf(context);
     final var deliveryKey = identity == null
         ? null
@@ -948,13 +941,13 @@ public class MigrationProcessService<A> {
       final var aggregateId = convertAggregateId(context.getWorkflowAggregateId());
       final var workflowAggregate = aggregatePersistenceSupport.loadById(aggregateId);
       if (workflowAggregate == null) {
-        // the hint written when this delivery arrived is taken back: it says which adapter
-        // holds an aggregate id this application never had, and the next caller asking for
-        // that id would wait out a BPMS on the strength of it
+        // the hint written when this delivery arrived is taken back. It says which adapter
+        // holds an aggregate id which this application never had. The next caller who asks
+        // for that id would wait for a BPMS because of it
         forgetWorkflowAdapter(context.getWorkflowAggregateId());
-        // the delivery is refused, and no record of it is written: the record would sit in
-        // the application which wrongly received the task, while whoever investigates reads
-        // the records of the application which owns the workflow. The row written at the start
+        // the delivery is refused, and no record of it is written. The record would sit in
+        // the application which wrongly received the task. But whoever investigates reads the
+        // records of the application which owns the workflow. The row written at the start
         // is read instead, because it says which of the two situations this is
         final var startRecord = deliveryRecords
             .startRecordOfAnUnknownWorkflow(context.getWorkflowAggregateId(), context.getWorkflowId());
@@ -976,10 +969,10 @@ public class MigrationProcessService<A> {
         failIfRollbackOnly(handler, context, runner, rollbackRuleRemedies);
         return outcome;
       } catch (final TaskException taskException) {
-        // the restored V1 contract: a TaskException is a BPMN error, not a
-        // failure - the aggregate changes are persisted and the transaction
-        // commits (V1 applications used @Transactional(noRollbackFor =
-        // TaskException.class) for exactly this)
+        // the restored V1 contract: a TaskException is a BPMN error, not a failure. The
+        // changes of the aggregate are persisted, and the transaction commits. V1
+        // applications used @Transactional(noRollbackFor = TaskException.class) for exactly
+        // this
         aggregatePersistenceSupport.save(workflowAggregate);
         final var outcome = WorkflowTaskOutcome
             .bpmnError(taskException.getErrorCode(), taskException.getErrorName());
@@ -1002,8 +995,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The store holding the delivery records of this workflow aggregate, resolved once and
-   * kept - what the derivation of a cancellation reads and claims in.
+   * The store with the delivery records of this workflow aggregate, resolved once and kept.
+   * The derivation of a cancellation reads and claims in it.
    *
    * @return The store or <code>null</code> where the application has none
    */
@@ -1015,10 +1008,11 @@ public class MigrationProcessService<A> {
 
   /**
    * Whether an ended workflow of this BPMN process releases the records of its processed
-   * task deliveries (<code>vanillabp.delivery.release-on-workflow-end</code>, overridable
-   * per workflow module). Asked by the end-of-workflow path, and by the adapters through
-   * {@link io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker#workflowEndedHandlerExists}
-   * - where it is on, the end has to be reported even without an application handler.
+   * task deliveries (<code>vanillabp.delivery.release-on-workflow-end</code>, which can be
+   * set per workflow module). The end-of-workflow path asks this, and so do the adapters
+   * through
+   * {@link io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker#workflowEndedHandlerExists}.
+   * Where it is on, the end has to be reported even without a handler of the application.
    *
    * @return Whether the records are released when a workflow ends
    */
@@ -1029,16 +1023,16 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Deletes the records of the processed task deliveries of ONE ended workflow. Invoked
+   * Deletes the records of the processed task deliveries of ONE ended workflow. It is called
    * within the transaction of the end notification (see
-   * {@link io.vanillabp.integration.adapter.migration.workflowend.WorkflowEndedHandlers}),
-   * so the deletion commits with it - and a notification whose transaction is rolled back
-   * leaves the records where they were, to be released by the redelivered notification or
-   * by the retention.
+   * {@link io.vanillabp.integration.adapter.migration.workflowend.WorkflowEndedHandlers}), so
+   * the deletion commits with it. A notification whose transaction is rolled back leaves the
+   * records where they were. Then the repeated notification or the retention releases
+   * them.
    *
    * @param workflowAggregateId The ID of the ended workflow's aggregate
-   * @param recordedBefore Only records written before this moment are deleted - the bound
-   *          which keeps the records of a SECOND workflow on the same aggregate
+   * @param recordedBefore Only records written before this moment are deleted. This limit
+   *          keeps the records of a SECOND workflow on the same aggregate
    * @return The number of records deleted
    */
   public int releaseDeliveryRecords(
@@ -1050,39 +1044,39 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Reports AT STARTUP an adapter id which the persisted state still names although the
+   * Reports AT STARTUP an adapter id which the persisted state still names, although the
    * application does not configure it any more.
    * <p>
-   * VanillaBP persists the adapter id twice: an outbox entry of a START operation names
-   * the adapter elected in phase one, and the key of every delivery record is built from
-   * the delivering adapter. An id which is gone from the configuration therefore has two
-   * readings, and both cost the application something:
+   * VanillaBP persists the adapter id in two places. An outbox entry of a START operation
+   * names the adapter elected in phase one. And the key of every delivery record is built
+   * from the delivering adapter. So an id which is gone from the configuration can mean two
+   * things, and both cost the application something:
    * <ul>
-   * <li>the id was RENAMED. Nothing serves the old name any more, so an outbox entry
-   * fails, is repeated and is finally blocked - the aggregate was persisted and its
-   * workflow never started - and a redelivery finds no record, so the
-   * <code>&#64;WorkflowTask</code> method runs a second time;</li>
-   * <li>the id was removed while entries or open tasks were still left, which is the last
+   * <li>the id was RENAMED. Nothing serves the old name any more. So an outbox entry fails,
+   * is repeated and is finally blocked. The aggregate was persisted, but its workflow never
+   * started. And a redelivery finds no record, so the <code>&#64;WorkflowTask</code> method
+   * runs a second time;</li>
+   * <li>the id was removed while entries or open tasks were still left. That is the last
    * step of a migration done one step too early.</li>
    * </ul>
-   * Neither is reported by anything else until the entry is dispatched respectively the
-   * task is delivered again, which is why this asks the stores instead of waiting. It
-   * WARNS rather than failing the boot: the entries are not lost, they wait, and a boot
-   * failure would stop the very application which is about to repair its configuration.
-   * <code>vanillabp.retired-adapters</code> states that the leftovers are known and turns
+   * Nothing else reports either case until the entry is dispatched, or the task is delivered
+   * again. That is why this asks the stores instead of waiting. It WARNS and does not fail the
+   * boot. The entries are not lost, they wait. And a boot failure would stop the very
+   * application which is about to repair its configuration.
+   * <code>vanillabp.retired-adapters</code> states that the leftovers are known, and turns
    * the message into a DEBUG line.
    * <p>
-   * Only stores which are already resolved are asked - this runs after the outbox and the
-   * delivery-log validations, so an application which needs neither is not made to
-   * materialize one for a question about it. A store which cannot answer (the SPI default,
-   * an empty set) is not asked twice and nothing is invented: what it would have said is
-   * said when one of its entries is read for its dispatch, see
+   * Only stores which are already resolved are asked. This runs after the checks of the
+   * outbox and of the delivery log. So an application which needs neither is not made to
+   * create one for a question about it. A store which cannot answer (the SPI default, an
+   * empty set) is not asked twice, and nothing is invented. What it would have said is said
+   * when one of its entries is read for its dispatch, see
    * {@link #reportUnconfiguredAdapterIdOfADispatch(String)}.
    * <p>
-   * Three questions per BPMN process, whatever the stores hold: each of them is a number or
-   * a set of adapter ids the database reduced to, never the entries themselves. Decision 19
-   * in the repository's DECISIONS.md says why a start may not be allowed to grow with what
-   * an application has been through.
+   * There are three questions per BPMN process, whatever the stores hold. Each of them is a
+   * number, or a set of adapter ids which the database reduced. It is never the entries
+   * themselves. Decision 19 in the repository's DECISIONS.md says why a start must not grow
+   * with what an application has been through.
    */
   public void validatePersistedAdapterIdsAtStartup() {
 
@@ -1102,21 +1096,21 @@ public class MigrationProcessService<A> {
 
 
   /**
-   * Reports an adapter id which an outbox entry named although the configuration does not,
-   * found at the moment that entry was read for its dispatch.
+   * Reports an adapter id which an outbox entry named although the configuration does not. It
+   * was found at the moment that entry was read for its dispatch.
    * <p>
-   * It is the same finding {@link #validatePersistedAdapterIdsAtStartup()} reports, and it
-   * is said in the same words. A store which cannot name the adapter ids of its waiting
-   * entries at a start - gruelbox keeps a call as a serialized invocation, so naming them
-   * would mean reading the table the start may not read (decision 47 in the repository's
-   * DECISIONS.md) - answers the question here instead, where the entry is read anyway and
-   * the id is at hand. The answer then arrives one dispatch later rather than never, and it
-   * costs nothing: what is read was going to be read.
+   * It is the same finding as in {@link #validatePersistedAdapterIdsAtStartup()}, said in the
+   * same words. Some stores cannot name the adapter ids of their waiting entries at a start.
+   * Gruelbox keeps a call as a serialized invocation, so naming them would mean reading the
+   * table which the start must not read (decision 47 in the repository's DECISIONS.md). Such
+   * a store answers the question here instead, where the entry is read anyway and the id is
+   * at hand. The answer then arrives one dispatch later, and not never. And it costs nothing,
+   * because what is read was going to be read.
    * <p>
-   * Said once per adapter id, however many entries name it, which is what keeps a backlog
-   * of a thousand stale entries from writing a thousand messages. The box folds the
-   * repetitions of the start; a dispatch after the box was written writes its line where
-   * it stands, because there is no box left to fold it into.
+   * It is said once per adapter id, however many entries name it. That keeps a backlog of a
+   * thousand stale entries from writing a thousand messages. The box folds the repetitions
+   * of the start. A dispatch after the box was written writes its line where it stands,
+   * because there is no box left to fold it into.
    */
   private void reportUnconfiguredAdapterIdOfADispatch(
       final String adapterId) {
@@ -1131,8 +1125,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Says once per adapter id and store what the persisted state names and the
-   * configuration does not.
+   * Says once per adapter id and store what the persisted state names and the configuration
+   * does not.
    *
    * @param persistedAdapterIds What the store answered
    * @param whatIsLeftOver How the leftovers are named in the message
@@ -1151,8 +1145,8 @@ public class MigrationProcessService<A> {
         .stream()
         .filter(Objects::nonNull)
         .filter(adapterId -> !configuredAdapterIds.contains(adapterId))
-        // the add answers whether nobody has named this leftover yet, which is what turns
-        // a backlog of entries naming one adapter id into a single message
+        // the add answers whether nobody has named this leftover yet. That turns a backlog of
+        // entries which name one adapter id into a single message
         .filter(adapterId -> leftoversAlreadyNamed.add(whatIsLeftOver
             + " of "
             + adapterId))
@@ -1199,17 +1193,16 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Validates AT STARTUP that a delivery log is available if any prioritized adapter
-   * may repeat a delivery
-   * ({@link MigratableProcessService#deliversTasksAtLeastOnce()}) and deduplication is
-   * switched on. Unlike the outbox this does NOT fail the boot: without a log
-   * VanillaBP behaves exactly as it did before the feature existed (at-least-once, the
-   * rule to key business decisions on the aggregate's state carries the case), so a
-   * guiding warning naming both remedies is the honest answer - and it goes into the
-   * block of the start instead of surfacing per delivery.
+   * Checks AT STARTUP that a delivery log is available, if any prioritized adapter may
+   * repeat a delivery ({@link MigratableProcessService#deliversTasksAtLeastOnce()}) and
+   * deduplication is switched on. Unlike the outbox, this does NOT fail the boot. Without a
+   * log VanillaBP behaves exactly as before the feature existed: at-least-once, and the rule
+   * to base business decisions on the aggregate's state covers the case. So a guiding
+   * warning which names both remedies is the honest answer. It goes into the block of the
+   * start, instead of showing up per delivery.
    * <p>
-   * Nothing is resolved where no adapter can repeat a delivery: an application using
-   * an embedded BPMS only must not be pushed towards a store it does not need.
+   * Nothing is resolved where no adapter can repeat a delivery. An application which only
+   * uses an embedded BPMS must not be pushed towards a store which it does not need.
    */
   public void validateTaskDeliveryLogAtStartup() {
 
@@ -1218,24 +1211,22 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Records which adapter holds the workflow of the given aggregate, for the
-   * moments VanillaBP knows it without asking anybody: scheduling a start (the
-   * elected adapter is decided then), phase two of that start, and every inbound
-   * delivery (a task, a user task, a start the BPMS performed). The end of a
-   * workflow is the exception and goes to
-   * {@link #rememberWorkflowEnded(Object, String)}.
+   * Records which adapter holds the workflow of the given aggregate. That happens at the
+   * moments when VanillaBP knows it without asking anybody: when a start is scheduled (the
+   * elected adapter is decided then), in phase two of that start, and at every inbound
+   * delivery (a task, a user task, a start which the BPMS performed). The end of a workflow
+   * is the exception and goes to {@link #rememberWorkflowEnded(Object, String)}.
    * <p>
-   * Recording at SCHEDULING time is what makes an operation following the start
-   * right away work at all: on a remote BPMS the instance is created after the
-   * commit, so an operation in the next transaction would otherwise find no hint
-   * and fail instead of waiting. The entry is a hint like every other one - a
-   * rolled-back start leaves one behind, at the price of one waited-out window the
-   * next time somebody asks for that aggregate ID.
+   * Recording when the start is SCHEDULED is what makes an operation right after the start
+   * work at all. On a remote BPMS the instance is created after the commit. So an operation
+   * in the next transaction would otherwise find no hint, and fail instead of waiting. The
+   * entry is a hint like every other one. A start which is rolled back leaves one behind. The
+   * price is one waited-out window the next time somebody asks for that aggregate ID.
    * <p>
-   * The next operation on that workflow probes the recorded adapter first, and an
-   * adapter whose BPMS is eventually consistent gets a second look there instead of
-   * an immediate failure. Nothing is recorded where the caller knows no adapter id
-   * (an adapter written before the inbound contexts carried it).
+   * The next operation on that workflow probes the recorded adapter first. An adapter whose
+   * BPMS is eventually consistent gets a second look there, instead of an immediate failure.
+   * Nothing is recorded where the caller knows no adapter id (an adapter written before the
+   * inbound contexts carried it).
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param adapterId The ID of the adapter holding the workflow or <code>null</code>
@@ -1250,7 +1241,8 @@ public class MigrationProcessService<A> {
 
   /**
    * The same, with the BPMS' own id of the workflow where the moment knew one. A delivery
-   * carries it, which is why the hint of a workflow VanillaBP ever heard from names both.
+   * carries it. That is why the hint of a workflow which VanillaBP ever heard from names
+   * both.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param adapterId The ID of the adapter holding the workflow or <code>null</code>
@@ -1266,19 +1258,19 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Writes down which workflow of the BPMS the given aggregate belongs to - called where a
-   * workflow was started and both values are known in one transaction.
+   * Writes down to which workflow of the BPMS the given aggregate belongs. It is called where
+   * a workflow was started and both values are known in one transaction.
    * <p>
-   * The start of the application does it after phase two reported the id. A workflow the BPMS
-   * started on its own does it in the transaction which persists the aggregate, which is where
-   * the notification already carries the id of the instance. Nothing is written where no store
-   * serves this aggregate or where the adapter names no workflow.
+   * The application's own start does it after phase two reported the id. A workflow which the
+   * BPMS started on its own does it in the transaction which persists the aggregate. There
+   * the notification already carries the id of the instance. Nothing is written where no
+   * store serves this aggregate, or where the adapter names no workflow.
    *
    * @param adapterId The ID of the adapter which started the workflow
    * @param workflowAggregateId The workflow aggregate of the started workflow
    * @param workflowId The BPMS' own id of the started workflow or <code>null</code>
-   * @param processVersion The version of the process definition the workflow was started on, or
-   *          <code>null</code> where the adapter does not say
+   * @param processVersion The version of the process definition on which the workflow was
+   *          started, or <code>null</code> where the adapter does not say
    */
   public void recordWorkflowStart(
       final String adapterId,
@@ -1293,7 +1285,7 @@ public class MigrationProcessService<A> {
   /**
    * Takes back the hint of a delivery which turned out to be about a workflow of another
    * application. The hint is written before the aggregate is read, because it has to hold
-   * for a delivery the handler does not subscribe to as well, and only the read tells
+   * for a delivery to which the handler does not subscribe as well. Only the read tells
    * whether this application owns the workflow at all.
    *
    * @param workflowAggregateId The ID of the workflow aggregate the delivery named
@@ -1306,16 +1298,16 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Records that the workflow of the given aggregate ENDED in the given adapter -
-   * called by the notification the BPMS sends when it does. The hint stays readable,
-   * because an operation which crossed the end still has to become the warned no-op it
-   * was before, but it is not refreshed: the end was the one inbound delivery which
-   * extended the lifetime of a hint at the very moment it became useless.
+   * Records that the workflow of the given aggregate ENDED in the given adapter. The
+   * notification which the BPMS sends at that moment calls it. The hint stays readable,
+   * because an operation which crossed the end still has to become the warned no-op it was
+   * before. But it is not refreshed. The end was the one inbound delivery which extended the
+   * life of a hint at the very moment it became useless.
    * <p>
-   * How long a marked hint lives is the cache's business - the in-memory default keeps
-   * it for <code>vanillabp.workflow-adapter-cache.ended-time-to-live</code>, an
-   * application's own cache for as long as it implements
-   * {@link io.vanillabp.integration.spi.WorkflowAdapterCache#putEnded} to say so.
+   * The cache decides how long a marked hint lives. The in-memory default keeps it for
+   * <code>vanillabp.workflow-adapter-cache.ended-time-to-live</code>. An application's own
+   * cache keeps it as long as it says by implementing
+   * {@link io.vanillabp.integration.spi.WorkflowAdapterCache#putEnded}.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param adapterId The ID of the adapter which held the ended workflow or
@@ -1330,16 +1322,16 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The startup check cannot see a transactional proxy three calls down the handler's
-   * call chain, the transaction's state can. Asked on both paths, the normal one
-   * included: a handler swallowing an exception thrown by a nested transactional bean
-   * returns normally and would otherwise report the task as completed while nothing
-   * was persisted.
+   * The startup check cannot see a transactional proxy three calls down the handler's call
+   * chain, but the state of the transaction can. It is asked on both paths, the normal one
+   * included. A handler which swallows an exception thrown by a nested transactional bean
+   * returns normally. It would otherwise report the task as completed while nothing was
+   * persisted.
    * <p>
-   * Throwing costs nothing that is not lost already, since the transaction cannot
-   * commit either way. What it buys is that the failure the BPMS reports names the
-   * cause instead of leaving the developer with Arjuna's or Spring's wording one layer
-   * away from it.
+   * Throwing costs nothing which is not lost already, because the transaction cannot commit
+   * either way. What it buys is that the failure which the BPMS reports names the cause. It
+   * does not leave the developer with the wording of Arjuna or Spring, one layer away from
+   * it.
    */
   private void failIfRollbackOnly(
       final WorkflowTaskHandler handler,
@@ -1372,10 +1364,10 @@ public class MigrationProcessService<A> {
 
   /**
    * How the rollback rules are written on THIS platform, supplied by the platform
-   * integration (an annotation Quarkus does not honor is none of the developer's options
-   * there). The names of the annotations' attributes are unknown to the core, and the
-   * annotation which marked the transaction cannot be identified at all: it sits on some
-   * bean of the call chain, not on the handler.
+   * integration. An annotation which Quarkus does not honor is none of the developer's
+   * options there. The core does not know the names of the annotations' attributes. And the
+   * annotation which marked the transaction cannot be identified at all, because it sits on
+   * some bean of the call chain, not on the handler.
    */
   private static String describeRollbackRuleRemedies(
       final List<String> rollbackRuleRemedies) {
@@ -1399,8 +1391,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The adapter id an operation is about: the elected one, or - where nothing reported
-   * the workflow yet - the one the hint names.
+   * The adapter id an operation is about: the elected one, or the one the hint names where
+   * nothing reported the workflow yet.
    */
   private String adapterIdOf(
       final WorkflowLocator.Location<A> location) {
@@ -1414,11 +1406,11 @@ public class MigrationProcessService<A> {
   /**
    * Says that an operation is planned although no BPMS reports the workflow yet.
    * <p>
-   * This is the ordinary case on an eventually consistent BPMS: VanillaBP started the
-   * workflow (or was handed a delivery for it) seconds ago, so it exists, and the read
-   * model the probe searches is a moment behind. Phase one refuses to wait for that
-   * inside the caller's transaction, so the operation is planned and the dispatch asks
-   * again - it may take the time (decision 27 in the repository's DECISIONS.md).
+   * This is the ordinary case on an eventually consistent BPMS. VanillaBP started the
+   * workflow seconds ago (or got a delivery for it), so it exists. But the read model which
+   * the probe searches is a moment behind. Phase one refuses to wait for that inside the
+   * caller's transaction. So the operation is planned, and the dispatch asks again. The
+   * dispatch may take the time (decision 27 in the repository's DECISIONS.md).
    *
    * @param hintedAdapterId The adapter which should hold the workflow
    * @param subject The workflow the operation is about
@@ -1439,23 +1431,23 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * What phase two throws while the workflow is still not findable: the entry is worth
-   * repeating, because the hint says the workflow exists. Nobody waits for it here -
-   * the lane dispatching it serves the other entries handed to it, and one workflow
-   * whose BPMS lags behind must not hold operations of workflows which are perfectly
-   * findable. So the entry goes back with the window of the adapter which should hold
-   * it, which is the time that adapter itself says its read model may need.
+   * What phase two throws while the workflow still cannot be found. The entry is worth
+   * repeating, because the hint says the workflow exists. Nobody waits for it here. The lane
+   * which dispatches it serves the other entries it got. One workflow whose BPMS lags behind
+   * must not hold up operations of workflows which can be found perfectly well. So the entry
+   * goes back with the window of the adapter which should hold it. That is the time which
+   * that adapter itself says its read model may need.
    * <p>
-   * What ends this for a workflow which never becomes visible is TIME, not the number of
-   * repetitions: a store counts no attempt for this answer, and it blocks the entry once
-   * <code>vanillabp.outbox.wait-for-visibility-at-most</code> passed since the entry was
-   * written, which is where an exporter nobody noticed becomes visible. The due time only
-   * decides how often the question is asked in between. Counting the repetitions blocked
-   * an entry after fifty windows, which were eight minutes of a stopped Camunda 8 exporter.
+   * For a workflow which never becomes visible, TIME ends this, not the number of
+   * repetitions. A store counts no attempt for this answer. It blocks the entry once
+   * <code>vanillabp.outbox.wait-for-visibility-at-most</code> has passed since the entry was
+   * written. That is where an exporter which nobody noticed becomes visible. The due time only
+   * decides how often the question is asked in between. Counting the repetitions blocked an
+   * entry after fifty windows, which were eight minutes of a stopped Camunda 8 exporter.
    * <p>
-   * The window is asked for THIS workflow: an adapter which knows the workflow by its
-   * own id may name a shorter one than a freshly started workflow needs, and the entry
-   * then comes back sooner.
+   * The window is asked for THIS workflow. An adapter which knows the workflow by its own id
+   * may name a shorter window than a newly started workflow needs. Then the entry comes back
+   * sooner.
    *
    * @param hintedAdapterId The adapter which should hold the workflow
    * @param subject The workflow the operation is about
@@ -1486,10 +1478,11 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * How long the given adapter says its BPMS may need until a workflow it holds becomes
-   * searchable, or <code>null</code> where it needs no time at all (an embedded BPMS) or
-   * is not configured any more. Both leave the store with its own backoff, which is the
-   * right answer for a failure nothing knows a better moment for.
+   * How long the given adapter says its BPMS may need until a workflow which it holds can be
+   * searched for. It is <code>null</code> where the BPMS needs no time at all (an embedded
+   * BPMS), or where the adapter is not configured any more. Both leave the store with its
+   * own backoff. That is the right answer for a failure for which nothing knows a better
+   * moment.
    *
    * @param adapterId The adapter to ask
    * @param workflowId The BPMS' own id of the workflow, or <code>null</code> where
@@ -1533,15 +1526,14 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Executes an operation on the workflow of the given aggregate: the aggregate is
-   * saved, the BPMS which serves the operation is elected, the operation's phase one
-   * runs inside the caller's transaction and its phase two is planned in the outbox.
+   * Executes an operation on the workflow of the given aggregate. The aggregate is saved, the
+   * BPMS which serves the operation is elected, the operation's phase one runs inside the
+   * caller's transaction, and its phase two is planned in the outbox.
    * <p>
-   * This is the one method every outbound call of an application ends up in. What
-   * differs per operation is the operation itself - which BPMS serves it
-   * ({@link Election}), what its handler asks and does, how its idempotency key is
-   * built - so an operation added later is a constant in {@link PhaseOperation} and a
-   * handler per adapter, and nothing here.
+   * Every outbound call of an application ends up in this one method. What differs per
+   * operation is the operation itself: which BPMS serves it ({@link Election}), what its
+   * handler asks and does, and how its idempotency key is built. So an operation added later
+   * is a constant in {@link PhaseOperation} plus a handler per adapter, and nothing here.
    *
    * @param operation The operation to execute
    * @param workflowAggregate The workflow aggregate, <code>null</code> for an operation
@@ -1578,13 +1570,11 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Starts a new workflow by a message start event - start semantics like
-   * {@link #startWorkflow(Object)}: the FIRST prioritized adapter starts, its ID is
-   * persisted with the outbox entry, and a workflow is started at most once per
-   * aggregate.
-   *
+   * Starts a new workflow by a message start event. The start works like
+   * {@link #startWorkflow(Object)}: the FIRST prioritized adapter starts, its ID is persisted
+   * with the outbox entry, and a workflow is started at most once per aggregate.
    * <p>
-   * The message has to start THIS process. One which starts another process is refused
+   * The message has to start THIS process. A message which starts another process is refused
    * before anything is saved, where the adapter which starts the workflow reported the
    * messages of its model (see
    * {@link io.vanillabp.integration.adapter.migration.workflowstart.StartMessages}).
@@ -1619,7 +1609,7 @@ public class MigrationProcessService<A> {
 
   /**
    * Completes an asynchronous task (a <code>&#64;WorkflowTask</code> method with a
-   * <code>&#64;TaskId</code> parameter returned without completing).
+   * <code>&#64;TaskId</code> parameter, which returned without completing).
    *
    * @param workflowAggregate The workflow aggregate
    * @param taskId The task's ID (as reported to the <code>&#64;TaskId</code> parameter)
@@ -1654,8 +1644,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Completes a USER task - user-task IDs live in a namespace of their own, which is
-   * why this is an operation of its own.
+   * Completes a USER task. User-task IDs live in a namespace of their own, so this is an
+   * operation of its own.
    *
    * @param workflowAggregate The workflow aggregate
    * @param taskId The user task's ID
@@ -1690,9 +1680,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Correlates a message with the aggregate's workflow. PAYLOAD DOCTRINE: no message
-   * content travels to the BPMS - only the message name and the optional correlation
-   * id.
+   * Correlates a message with the aggregate's workflow. PAYLOAD DOCTRINE: no message content
+   * travels to the BPMS, only the message name and the optional correlation id.
    *
    * @param workflowAggregate The workflow aggregate
    * @param messageName The BPMN message name
@@ -1714,17 +1703,16 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Pushes a changed workflow-aggregate to the BPMS holding its workflow.
+   * Pushes a changed workflow aggregate to the BPMS which holds its workflow.
    * <p>
-   * WHICH values travel is the sync model's business ({@code @SyncWithBPMS}), not this
-   * method's. WHERE they land depends on the task ID: <code>null</code> means the
-   * workflow's global scope, a task ID means the scope of that task instance only - a
-   * task-scoped push deliberately leaves the global values as they were.
-   *
+   * WHICH values travel is the business of the sync model ({@code @SyncWithBPMS}), not of
+   * this method. WHERE they land depends on the task ID. <code>null</code> means the global
+   * scope of the workflow. A task ID means the scope of that task instance only. A push to
+   * the scope of a task deliberately leaves the global values as they were.
    * <p>
-   * Called from inside the <code>&#64;WorkflowStartedByBpms</code> method of this BPMN process
-   * for the aggregate that method is building, it does nothing and returns the aggregate as it
-   * was handed over, see {@link #isInsideTheStartOf(Object)}.
+   * Called from inside the <code>&#64;WorkflowStartedByBpms</code> method of this BPMN
+   * process, for the aggregate which that method builds, it does nothing. It returns the
+   * aggregate as it was handed over, see {@link #isInsideTheStartOf(Object)}.
    *
    * @param workflowAggregate The workflow aggregate
    * @param taskId The ID of the task whose scope receives the values, or
@@ -1755,24 +1743,25 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Tells whether the given aggregate is the one the <code>&#64;WorkflowStartedByBpms</code>
-   * method of this BPMN process is building right now, on this thread.
+   * Tells whether the given aggregate is the one which the <code>&#64;WorkflowStartedByBpms</code>
+   * method of this BPMN process builds right now, on this thread.
    * <p>
-   * That is the case where such a method runs and the aggregate is NEW: it has no id yet, or an
-   * id the persistence does not know. The id often is not known before the start saves the
-   * aggregate after the method returned, which is the normal case for a generated id. An
-   * aggregate the persistence knows already is NOT new: the method may return an existing
-   * aggregate, which may have other workflows and open tasks, so a report about it runs as
-   * always. So does every report where the persistence cannot load by id, because nothing then
-   * tells a new aggregate from an existing one.
+   * That is the case where such a method runs and the aggregate is NEW: it has no id yet, or
+   * an id which the persistence does not know. Often the id is not known before the start
+   * saves the aggregate after the method returned. That is the normal case for a generated
+   * id. An aggregate which the persistence knows already is NOT new. The method may return an
+   * existing aggregate, which may have other workflows and open tasks. So a report about it
+   * runs as always. So does every report where the persistence cannot load by id, because
+   * then nothing tells a new aggregate from an existing one.
    * <p>
-   * Skipping a report about a new aggregate loses nothing. Phase two would push the values to a
-   * workflow whose start job has not finished, and finishing that job hands the same values to
-   * the BPMS. An extension observing the start reports it on its own, see
+   * Skipping a report about a new aggregate loses nothing. Phase two would push the values to
+   * a workflow whose start job has not finished. And finishing that job hands the same values
+   * to the BPMS. An extension which observes the start reports it on its own, see
    * {@link io.vanillabp.integration.extension.spi.election.WorkflowElection#isInsideTheStartOf}.
    *
    * @param workflowAggregate The aggregate a report is about
-   * @return Whether it is the aggregate the running start of this BPMN process builds
+   * @return Whether it is the aggregate which the running start of this BPMN process
+   *         builds
    */
   public boolean isInsideTheStartOf(
       final Object workflowAggregate) {
@@ -1796,10 +1785,10 @@ public class MigrationProcessService<A> {
   /**
    * Broadcasts a BPMN signal to every BPMS the workflow module is deployed to.
    * <p>
-   * A signal is not addressed to a workflow, so nothing is probed and no aggregate is
-   * loaded or saved. Every deployed BPMS is asked, not only the first-priority one:
-   * during a migration the workflows waiting for the signal are spread across them, and
-   * a broadcast reaching half of them would be worse than none.
+   * A signal is not addressed to a workflow. So nothing is probed, and no aggregate is loaded
+   * or saved. Every deployed BPMS is asked, not only the first-priority one. During a
+   * migration the workflows which wait for the signal are spread across them. A broadcast
+   * which reached half of them would be worse than none.
    *
    * @param signalName The PLAIN BPMN signal name
    */
@@ -1818,11 +1807,11 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Executes phase two of an operation, dispatched by the {@link PhaseTwoRouter} after
-   * the local transaction was committed. The BPMS is elected the way the operation says
-   * ({@link Election}): the adapter persisted with the entry for the operations which
-   * chose one in phase one, a fresh probe for the operations which address whichever
-   * BPMS holds the workflow now.
+   * Executes phase two of an operation. The {@link PhaseTwoRouter} dispatches it after the
+   * local transaction was committed. The BPMS is elected the way the operation says
+   * ({@link Election}). Operations which chose an adapter in phase one use the adapter
+   * persisted with the entry. Operations which address whichever BPMS holds the workflow now
+   * probe again.
    *
    * @param operation The operation to execute
    * @param workflowAggregateId The ID of the workflow aggregate in its own type, or
@@ -1850,27 +1839,26 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Phase one of an operation which STARTS a workflow: there is nothing to probe yet,
-   * so the first prioritized adapter is elected and its id travels with the entry -
-   * phase two uses exactly this adapter instead of re-electing one from the then-current
-   * priorities.
+   * Phase one of an operation which STARTS a workflow. There is nothing to probe yet. So the
+   * first prioritized adapter is elected, and its id travels with the entry. Phase two uses
+   * exactly this adapter, and does not elect one again from the priorities of that later
+   * moment.
    */
   private A startWorkflow(
       final PhaseOperation operation,
       final A workflowAggregate,
       final Map<String, String> args) {
 
-    // persist to get ID in case of @Id @GeneratedValue
-    // or force optimistic locking exceptions before running
-    // the workflow if aggregate was already persisted before
+    // persist to get the ID in case of @Id @GeneratedValue, or to force optimistic locking
+    // exceptions before the workflow runs, if the aggregate was already persisted before
     final var attachedAggregate = aggregatePersistenceSupport
         .save(workflowAggregate);
 
     final var aggregateId = aggregatePersistenceSupport
         .getAggregateId(attachedAggregate);
 
-    // checked ONCE here for all adapters: the aggregate's ID is the workflow's
-    // identifier (business key / process variable) and the outbox idempotency key
+    // checked ONCE here for all adapters. The aggregate's ID is the identifier of the
+    // workflow (business key or process variable), and the idempotency key of the outbox
     if ((aggregateId == null) || aggregateId.toString().isBlank()) {
       throw new IllegalStateException(
           """
@@ -1889,10 +1877,10 @@ public class MigrationProcessService<A> {
 
     schedulePhaseTwo(operation, aggregateId, adapter.getAdapterId(), adapter.getAdapterId(), args);
 
-    // the workflow belongs to this adapter from now on, which the next operation on
-    // it has to know BEFORE phase two ran: on a remote BPMS the start is dispatched
-    // asynchronously, so an operation following right away would otherwise find no
-    // hint at all and fail instead of waiting for the BPMS to catch up
+    // the workflow belongs to this adapter from now on. The next operation on it has to know
+    // that BEFORE phase two ran. On a remote BPMS the start is dispatched asynchronously. So
+    // an operation which follows right away would otherwise find no hint at all, and fail
+    // instead of waiting for the BPMS to catch up
     rememberWorkflowAdapter(aggregateId, adapter.getAdapterId());
 
     return attachedAggregate;
@@ -1900,18 +1888,17 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Phase two of an operation which STARTS a workflow. The adapter elected in phase one
-   * was persisted with the outbox entry and is used here - there is no re-election from
-   * the then-current priorities. If the entry was dispatched before (a recovered or
-   * retried entry), the re-dispatch mitigation asks FIRST whether the previous dispatch
-   * already started the workflow: the row written when the recorded adapter started it
-   * says so without asking anybody, and where there is no such row
+   * Phase two of an operation which STARTS a workflow. The adapter elected in phase one was
+   * persisted with the outbox entry, and it is used here. It is not elected again from the
+   * priorities of that later moment. If the entry was dispatched before (a recovered or
+   * retried entry), the re-dispatch mitigation first asks whether the previous dispatch
+   * already started the workflow. The row written when the recorded adapter started it says
+   * so without asking anybody. Where there is no such row,
    * {@link MigratableProcessService#awarenessOfWorkflowForRedispatch} is probed on that
-   * adapter. A workflow already known means the entry is consumed without starting a
-   * second instance. The residual
-   * at-least-once window (a crash between the remote start and marking the entry done,
-   * before any awareness lag caught up) remains and is ACCEPTED - this mitigation
-   * minimizes duplicates, it does not close the window.
+   * adapter. If the workflow is known already, the entry is consumed without starting a
+   * second instance. A remaining at-least-once window is ACCEPTED: a crash between the remote
+   * start and marking the entry done, before any lag of the awareness caught up. This
+   * mitigation makes duplicates rare, it does not close the window.
    */
   private void startWorkflowPhaseTwo(
       final PhaseOperation operation,
@@ -1926,9 +1913,9 @@ public class MigrationProcessService<A> {
         .filter(processService -> processService.getAdapterId().equals(adapterId))
         .findFirst()
         .orElseThrow(() -> {
-          // the entry has just been read, so the id it waits for is known now even where a
-          // start could not ask for it - which is the whole answer a store like gruelbox
-          // gives to that question
+          // the entry has just been read. So the id for which it waits is known now, even
+          // where a start could not ask for it. That is the whole answer which a store like
+          // gruelbox gives to that question
           reportUnconfiguredAdapterIdOfADispatch(adapterId);
           return new IllegalStateException(
               """
@@ -1944,9 +1931,10 @@ public class MigrationProcessService<A> {
         plannedAtOf(args))) {
       return;
     }
-    // where the adapter says which workflow it created, this is the one moment anybody ever
-    // learns it: phase two returns nothing, and the instance was created on the other side of
-    // the commit. The version of the process definition comes along where the adapter names it
+    // where the adapter says which workflow it created, this is the one moment when anybody
+    // ever learns it. Phase two returns nothing, and the instance was created on the other
+    // side of the commit. The version of the process definition comes along where the
+    // adapter names it
     final var startedWorkflow = new StartedWorkflow();
     runPhaseTwo(
         adapter,
@@ -1954,12 +1942,12 @@ public class MigrationProcessService<A> {
         () -> handlerOf(adapter, operation, args)
             .phaseTwo(phaseTwoRequest(workflowAggregateId, args, startedWorkflow)));
     final var startedWorkflowId = startedWorkflow.workflowId;
-    // the workflow exists now, and this adapter created it: the next operation on it
-    // (the classic one is correlating the message which lets it continue) probes this
-    // adapter first and waits out its BPMS' visibility delay instead of failing
+    // the workflow exists now, and this adapter created it. The next operation on it (the
+    // classic one is correlating the message which lets it continue) probes this adapter
+    // first, and waits for the visibility delay of its BPMS instead of failing
     rememberWorkflowAdapter(workflowAggregateId, adapterId, startedWorkflowId.get());
-    // and it is written down, because a cache is bounded and does not survive a restart while
-    // the question "which workflow does this aggregate belong to" outlives both
+    // and it is written down, because a cache is limited and does not survive a restart,
+    // while the question "which workflow does this aggregate belong to" outlives both
     deliveryRecords
         .recordWorkflowStart(adapterId, workflowAggregateId, startedWorkflowId.get(),
             startedWorkflow.processVersion.get());
@@ -1967,9 +1955,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * What phase two of a START says about the workflow it created. Both methods of the sink are
-   * implemented, so an adapter which names no version reports the id all the same and leaves the
-   * version empty.
+   * What phase two of a START says about the workflow it created. Both methods of the sink
+   * are implemented. So an adapter which names no version reports the id all the same, and
+   * leaves the version empty.
    */
   private static final class StartedWorkflow implements io.vanillabp.integration.adapter.spi.workflowstart.WorkflowStartReport {
 
@@ -2001,7 +1989,7 @@ public class MigrationProcessService<A> {
    * When the START in the given arguments was planned.
    *
    * @return The moment, or <code>null</code> for an entry planned before the moment was
-   *         recorded, or one whose value nobody can read
+   *         recorded, or for one whose value nobody can read
    */
   private Instant plannedAtOf(
       final Map<String, String> args) {
@@ -2013,8 +2001,8 @@ public class MigrationProcessService<A> {
     try {
       return Instant.parse(plannedAt);
     } catch (final java.time.format.DateTimeParseException e) {
-      // without the moment every workflow of the aggregate counts, which is what the
-      // re-dispatch did before the moment was recorded
+      // without the moment every workflow of the aggregate counts. The re-dispatch did that
+      // before the moment was recorded
       log.debug("Ignored unreadable planning moment '{}' of a start of BPMN process '{}'", plannedAt,
           bpmnProcessId, e);
       return null;
@@ -2023,21 +2011,21 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The re-dispatch mitigation: whether the recorded adapter already knows the workflow
-   * of a previously attempted START entry. The start row is read first. It is written
-   * once the adapter reported the workflow it created, so it answers in the window where a
-   * BPMS which answers from a read model does not know the workflow yet.
+   * The re-dispatch mitigation: whether the recorded adapter already knows the workflow of a
+   * START entry which was tried before. The start row is read first. It is written once the
+   * adapter reported the workflow it created. So it answers in the window in which a BPMS
+   * that answers from a read model does not know the workflow yet.
    * <p>
-   * An aggregate may carry a second workflow once its first one ended, so the row and the
-   * probe may both be about that earlier workflow. Only a workflow started at or after the
-   * moment the entry was planned counts. The row counts where it was written then, and the
-   * adapter is handed the moment for its probe.
+   * An aggregate may have a second workflow once its first one ended. So the row and the probe
+   * may both be about that earlier workflow. Only a workflow started at or after the moment
+   * the entry was planned counts. The row counts where it was written then, and the adapter
+   * gets the moment for its probe.
    *
    * @param plannedAt When the entry was planned, <code>null</code> where nobody knows
-   * @return Whether the start has to be SKIPPED (the workflow already exists -
-   *         the previous dispatch succeeded)
-   * @throws IllegalStateException If the BPMS is unavailable - the outbox entry
-   *         stays pending and is retried
+   * @return Whether the start has to be SKIPPED (the workflow already exists, so the previous
+   *         dispatch succeeded)
+   * @throws IllegalStateException If the BPMS is unavailable. The outbox entry stays pending
+   *         and is retried
    */
   private boolean skipRedispatchedStart(
       final MigratableProcessService<A> adapter,
@@ -2045,8 +2033,9 @@ public class MigrationProcessService<A> {
       final String operationDescription,
       final Instant plannedAt) {
 
-    // the row written when this adapter started the workflow is the answer a search cannot give
-    // while the BPMS' read model is behind, and asking anyway would start a second instance
+    // the row written when this adapter started the workflow is the answer which a search
+    // cannot give while the BPMS' read model is behind. Asking anyway would start a second
+    // instance
     final var started = deliveryRecords.workflowStartRowOf(workflowAggregateId);
     if ((started != null) && adapter.getAdapterId().equals(started.adapterId()) && writtenForThisEntry(started,
         plannedAt)) {
@@ -2087,8 +2076,8 @@ public class MigrationProcessService<A> {
               previous dispatch attempt! The outbox entry stays pending and is retried."""
               .formatted(adapter.getAdapterId(), workflowAggregateId, bpmnProcessId, workflowModuleId));
       default -> {
-        // UNKNOWN_TO_BPMS - the previous attempt did not start the workflow (or
-        // the adapter cannot tell): proceed, the adapter's phase two is idempotent
+        // UNKNOWN_TO_BPMS: the previous attempt did not start the workflow (or the adapter
+        // cannot tell). Go on, because the adapter's phase two is idempotent
       }
     }
     return false;
@@ -2099,11 +2088,11 @@ public class MigrationProcessService<A> {
    * Whether the start row was written by an earlier attempt of the entry planned at the given
    * moment. A row older than the entry belongs to an earlier workflow of the same aggregate.
    * <p>
-   * Both moments are read from the clocks of the application's nodes. The row is written after
-   * the entry was dispatched, so for this entry's own workflow it is younger by the time the
-   * dispatch took. Where the clocks of two nodes differ by more than that, the row looks older,
-   * and the adapter's probe answers instead: the workflow exists, so the probe finds it, and at
-   * worst it starts a duplicate.
+   * Both moments are read from the clocks of the application's nodes. The row is written
+   * after the entry was dispatched. So for this entry's own workflow it is younger, by the
+   * time which the dispatch took. Where the clocks of two nodes differ by more than that, the
+   * row looks older. Then the adapter's probe answers instead. The workflow exists, so the
+   * probe finds it. At worst it starts a duplicate.
    */
   private static boolean writtenForThisEntry(
       final TaskDelivery started,
@@ -2117,18 +2106,18 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Phase one of an operation addressed to whichever BPMS holds the task respectively
-   * the workflow: the aggregate is saved, the adapters are probed the way the
-   * operation's election says, the elected adapter's handler asks its question and the
-   * operation is planned in the outbox.
+   * Phase one of an operation addressed to whichever BPMS holds the task or the workflow. The
+   * aggregate is saved, and the adapters are probed the way the operation's election says.
+   * The elected adapter's handler asks its question, and the operation is planned in the
+   * outbox.
    */
   private A addressWorkflow(
       final PhaseOperation operation,
       final A workflowAggregate,
       final Map<String, String> args) {
 
-    // persist changes made before the operation - identical to a workflow start, the
-    // aggregate rides the caller's transaction
+    // persist changes made before the operation, the same as for a workflow start. The
+    // aggregate uses the caller's transaction
     final var attachedAggregate = aggregatePersistenceSupport
         .save(workflowAggregate);
     final var aggregateId = aggregatePersistenceSupport
@@ -2143,8 +2132,8 @@ public class MigrationProcessService<A> {
 
     switch (location.awareness()) {
       case COMPLETED -> {
-        // what the operation would advance is over: a no-op with a warning, and the
-        // aggregate is saved either way - which is what the caller mainly wanted
+        // what the operation would move forward is over: a no-op with a warning. The
+        // aggregate is saved either way, and that is what the caller mainly wanted
         log.warn(
             "Ignored {} of {}: adapter '{}' reports it as already completed",
             operation.describe(args),
@@ -2156,13 +2145,13 @@ public class MigrationProcessService<A> {
         if (!addressesTheWorkflow(operation) || !location.isUnknownButExpected()) {
           throw unknownToEveryBpms(operation, aggregateId, args, subject);
         }
-        // the workflow exists - the hinted adapter holds it - but its read model has
-        // not caught up. Plan the operation and let the dispatch ask again, where
-        // waiting costs an attempt instead of the caller's database connection
+        // the workflow exists, because the hinted adapter holds it. But its read model has
+        // not caught up. Plan the operation and let the dispatch ask again. There waiting
+        // costs an attempt, not the caller's database connection
         reportNotVisibleYet(location.hintedAdapterId(), subject, operation.describe(args));
       }
       default -> {
-        // ACTIVE - fall through
+        // ACTIVE: go on below
       }
     }
 
@@ -2172,8 +2161,8 @@ public class MigrationProcessService<A> {
           .phaseOne(phaseOneRequest(attachedAggregate, args));
     }
 
-    // NO adapter id is persisted: the BPMS which holds the workflow is asked again at
-    // dispatch time, because between the two phases a migration may have moved it
+    // NO adapter id is persisted. The BPMS which holds the workflow is asked again at
+    // dispatch time, because a migration may have moved it between the two phases
     schedulePhaseTwo(operation, aggregateId, null, adapterIdOf(location), args);
 
     return attachedAggregate;
@@ -2181,9 +2170,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Phase two of an operation addressed to whichever BPMS holds the task respectively
-   * the workflow - the election runs again here, and what is gone by now is a stale
-   * entry (logged, consumed).
+   * Phase two of an operation addressed to whichever BPMS holds the task or the workflow.
+   * The election runs again here. What is gone by now is a stale entry, which is logged and
+   * consumed.
    */
   private void addressWorkflowPhaseTwo(
       final PhaseOperation operation,
@@ -2193,9 +2182,9 @@ public class MigrationProcessService<A> {
     final var subject = subjectOf(workflowAggregateId);
 
     // an unreachable BPMS is worth a second question here, where no application
-    // transaction is open. A read model which has not caught up is not waited for: this
-    // thread dispatches the entries of every workflow of this store, and the entry of
-    // the one workflow nobody can find yet is given back with a due time instead
+    // transaction is open. A read model which has not caught up is not waited for. This
+    // thread dispatches the entries of every workflow of this store. The entry of the one
+    // workflow which nobody can find yet is given back with a due time instead
     final var location = elect(
         operation, workflowAggregateId, args, subject, WorkflowLocator.Patience.RETRY_UNAVAILABLE);
 
@@ -2218,7 +2207,7 @@ public class MigrationProcessService<A> {
           "Skipped phase two of {} of {}: it has ended already; the entry is consumed",
           operation.describe(args),
           subject);
-      // BPMS_UNAVAILABLE cannot reach here (locate throws) - the outbox retries
+      // BPMS_UNAVAILABLE cannot get here (locate throws). The outbox retries
       default -> {
         final var workflowId = addressesTheWorkflow(operation)
             ? workflowIdStartedBy(location.adapter(), workflowAggregateId)
@@ -2239,8 +2228,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Phase one of an operation every deployed BPMS gets: one outbox entry per BPMS, each
-   * carrying the adapter it was written for.
+   * Phase one of an operation which every deployed BPMS gets: one outbox entry per BPMS, each
+   * with the adapter for which it was written.
    */
   private A broadcast(
       final PhaseOperation operation,
@@ -2257,9 +2246,9 @@ public class MigrationProcessService<A> {
             .phaseOne(phaseOneRequest(null, args));
         schedulePhaseTwo(operation, null, adapter.getAdapterId(), adapter.getAdapterId(), args);
       } catch (final RuntimeException e) {
-        // every BPMS is asked before the first failure is reported: a broadcast
-        // which stopped at the first unreachable BPMS would leave the others
-        // waiting, and the outbox retries what was scheduled anyway
+        // every BPMS is asked before the first failure is reported. A broadcast which
+        // stopped at the first unreachable BPMS would leave the others waiting. And the
+        // outbox retries what was scheduled anyway
         log.error(
             "{} of workflow module '{}' through adapter '{}' failed",
             operation.describe(args),
@@ -2279,8 +2268,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Phase two of an operation every deployed BPMS gets. The adapter of the entry is the
-   * one it was written for - there is no election, a broadcast is not about a workflow.
+   * Phase two of an operation which every deployed BPMS gets. The adapter of the entry is
+   * the one for which it was written. There is no election, because a broadcast is not about
+   * a workflow.
    */
   private void broadcastPhaseTwo(
       final PhaseOperation operation,
@@ -2292,8 +2282,8 @@ public class MigrationProcessService<A> {
         .filter(candidate -> candidate.getAdapterId().equals(adapterId))
         .findFirst()
         .orElseThrow(() -> {
-          // an entry carrying an adapter id is part of what a start asks the store about,
-          // so the dispatch of this one answers that question too where the start could not
+          // an entry with an adapter id is part of what a start asks the store about. So the
+          // dispatch of this one answers that question too, where the start could not
           reportUnconfiguredAdapterIdOfADispatch(adapterId);
           return new IllegalStateException(
               """
@@ -2318,8 +2308,8 @@ public class MigrationProcessService<A> {
    *          <code>null</code> where it is about none
    * @param persistedAdapterId The adapter which has to execute phase two, or
    *          <code>null</code> where it is elected at dispatch time
-   * @param electedAdapterId The adapter phase one talked to - names the adapter in the
-   *          message about a missing outbox, where the persisted one is null
+   * @param electedAdapterId The adapter to which phase one talked. The message about a
+   *          missing outbox names it, where the persisted one is null
    * @param args The operation's arguments
    */
   private void schedulePhaseTwo(
@@ -2331,8 +2321,8 @@ public class MigrationProcessService<A> {
 
     final var scheduledArgs = withPlannedAt(operation, withActivation(operation, args));
 
-    // backstop only: the outbox was already resolved and validated at startup
-    // (validatePhaseTwoOutboxAtStartup) - this fires only if that was skipped
+    // only a safety net. The outbox was already resolved and checked at startup
+    // (validatePhaseTwoOutboxAtStartup). This only fires if that was skipped
     final var outbox = resolvePhaseTwoOutbox();
     if (outbox == null) {
       throw new IllegalStateException(
@@ -2360,8 +2350,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Adds the moment a START is planned to its arguments, so the dispatch which repeats it can
-   * tell an earlier workflow of the same aggregate from the one this entry starts, see
+   * Adds the moment when a START is planned to its arguments. Then the dispatch which repeats
+   * it can tell an earlier workflow of the same aggregate from the one this entry starts, see
    * {@link PhaseTwoCall#ARG_PLANNED_AT}.
    */
   private static Map<String, String> withPlannedAt(
@@ -2372,21 +2362,21 @@ public class MigrationProcessService<A> {
       return args;
     }
     final var withPlannedAt = new LinkedHashMap<>(args);
-    // milliseconds, because that is what the stores keep of the moment a start row is written,
-    // and a finer moment would make a row written in the same millisecond look older
+    // milliseconds, because the stores keep the moment of a start row in milliseconds. A
+    // finer moment would make a row written in the same millisecond look older
     withPlannedAt.put(PhaseTwoCall.ARG_PLANNED_AT, Instant.now().truncatedTo(ChronoUnit.MILLIS).toString());
     return withPlannedAt;
 
   }
 
   /**
-   * Adds the activation the call is planned in to the arguments of an operation which
+   * Adds the activation in which the call is planned to the arguments of an operation which
    * asked to carry it.
    * <p>
-   * Read HERE and not while the idempotency key is derived: this is the one path such
-   * an operation is planned on, it runs on the thread the handler runs on, and the
-   * value has to reach the adapter at dispatch time as well - by then nothing remembers
-   * that thread.
+   * It is read HERE, and not while the idempotency key is derived. This is the one path on
+   * which such an operation is planned, and it runs on the thread of the handler. The value
+   * has to reach the adapter at dispatch time as well, and by then nothing remembers that
+   * thread.
    */
   private static Map<String, String> withActivation(
       final PhaseOperation operation,
@@ -2408,18 +2398,18 @@ public class MigrationProcessService<A> {
   /**
    * The election of an operation on an existing workflow, in both phases.
    * <p>
-   * An operation about the workflow itself reads the row written when the workflow started
-   * before it asks anybody. That row is durable, while the election cache lives in the memory
-   * of one node: after a restart, on a second node and once the cache forgot, the row is the
-   * only thing which still says that the workflow exists. Without it an adapter which answers
-   * from a read model that has not caught up reads as "nobody knows this workflow", and the
-   * operation fails in phase one or is consumed as stale in phase two. With it the same answer
-   * reads as "not visible yet", like it does with a cached hint. A row naming an adapter which
-   * is not configured for this workflow any more does not count. See decision 112 in the
-   * repository's DECISIONS.md.
+   * An operation about the workflow itself reads the row written when the workflow started,
+   * before it asks anybody. That row is durable. The election cache lives in the memory of
+   * one node. After a restart, on a second node, and once the cache forgot, the row is the
+   * only thing which still says that the workflow exists. Without the row, an adapter which
+   * answers from a read model that has not caught up reads as "nobody knows this workflow".
+   * Then the operation fails in phase one, or is consumed as stale in phase two. With the
+   * row, the same answer reads as "not visible yet", just like with a cached hint. A row
+   * which names an adapter that is no longer configured for this workflow does not count.
+   * See decision 112 in the repository's DECISIONS.md.
    * <p>
-   * The BPMS' own id of the workflow goes to the probe as well, so an adapter can ask its
-   * engine by key instead of searching. An operation about a task asks by the task's id and
+   * The BPMS' own id of the workflow goes to the probe as well. So an adapter can ask its
+   * engine by key instead of searching. An operation about a task asks by the task's id, and
    * reads no row.
    */
   private WorkflowLocator.Location<A> elect(
@@ -2450,13 +2440,13 @@ public class MigrationProcessService<A> {
 
   /**
    * What VanillaBP wrote down about the workflow of the given aggregate. It is read before an
-   * election of the workflow asks any adapter. The election of an operation uses it, and so does
-   * the {@link WorkflowViewer}. So a read and an operation find a young workflow the same way,
-   * also on a node whose election cache never saw it.
+   * election of the workflow asks any adapter. The election of an operation uses it, and so
+   * does the {@link WorkflowViewer}. So a read and an operation find a young workflow the same
+   * way, also on a node whose election cache never saw it.
    * <p>
-   * The start row comes first. Where it names an adapter this workflow is elected among, it gives
-   * the adapter and the id. Where there is no row, the id comes from {@link #workflowIdOf(Object)},
-   * which also reads the rows of open tasks.
+   * The start row comes first. Where it names an adapter among which this workflow is
+   * elected, it gives the adapter and the id. Where there is no row, the id comes from
+   * {@link #workflowIdOf(Object)}, which also reads the rows of open tasks.
    */
   private WorkflowLocator.WrittenDown writtenDownAbout(
       final Object workflowAggregateId) {
@@ -2467,8 +2457,8 @@ public class MigrationProcessService<A> {
           new WorkflowLocator.RecordedStart(started.adapterId(), started.workflowId()), started.workflowId());
     }
     if (started != null) {
-      // the row is about an adapter this workflow is not elected among any more, so its id
-      // would be handed to adapters which never knew that workflow
+      // the row is about an adapter among which this workflow is no longer elected. So its id
+      // would go to adapters which never knew that workflow
       return new WorkflowLocator.WrittenDown(null, workflowLocator.rememberedWorkflowId(workflowAggregateId));
     }
     return new WorkflowLocator.WrittenDown(null, workflowIdOf(workflowAggregateId));
@@ -2476,10 +2466,10 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Asks one adapter the question the operation's election is about.
+   * Asks one adapter the question which the operation's election is about.
    *
-   * @param workflowId The BPMS' own id of the workflow, handed to a probe about the workflow,
-   *          or <code>null</code> where VanillaBP holds none
+   * @param workflowId The BPMS' own id of the workflow, handed to a probe about the
+   *          workflow, or <code>null</code> where VanillaBP holds none
    */
   private WorkflowAwareness probe(
       final PhaseOperation operation,
@@ -2503,12 +2493,12 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Whether the operation addresses the workflow itself rather than a task of it, which
-   * decides three things: how patiently the BPMS is looked for, whether an operation may
-   * be planned although no BPMS reports the workflow yet, and what a failure is called.
-   * A workflow is SEARCHED for, so a read model which is a moment behind is the ordinary
-   * case on an eventually consistent BPMS; a task is asked about by its ID, which is an
-   * exact question, so an unknown task is a definite answer.
+   * Whether the operation addresses the workflow itself and not a task of it. That decides
+   * three things: how patiently the BPMS is looked for, whether an operation may be planned
+   * although no BPMS reports the workflow yet, and what a failure is called. A workflow is
+   * SEARCHED for. So on an eventually consistent BPMS, a read model which is a moment behind
+   * is the ordinary case. A task is asked about by its ID, which is an exact question. So an
+   * unknown task is a definite answer.
    */
   private static boolean addressesTheWorkflow(
       final PhaseOperation operation) {
@@ -2518,7 +2508,7 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * What phase one throws where every configured BPMS says it does not know what the
+   * What phase one throws where every configured BPMS says that it does not know what the
    * operation addresses.
    */
   private RuntimeException unknownToEveryBpms(
@@ -2547,17 +2537,19 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Why no BPMS knows what the operation addressed: what the delivery record SAYS about the
-   * id where it holds one, and the list of likely causes where it does not.
+   * Why no BPMS knows what the operation addressed. Where the delivery record holds the id, it
+   * says what the record SAYS about it. Where it does not, it gives the list of likely
+   * causes.
    * <p>
-   * The record is read for an operation about a TASK only. An operation about the workflow
-   * may name a task as well - pushing a changed aggregate into the scope of one - but what
-   * was not found then is the workflow, and the record of a task says nothing about that.
+   * The record is read only for an operation about a TASK. An operation about the workflow
+   * may name a task as well, for example a push of a changed aggregate into the scope of one.
+   * But then what was not found is the workflow, and the record of a task says nothing about
+   * that.
    * <p>
-   * This reads the same table the deduplication of a delivery reads, and it is not that
-   * question. The deduplication decides whether a delivery ran before; this looks up what a
-   * caller's id is known as. Nothing about idempotency hangs here, and a record which is
-   * missing costs nothing but the sharper sentence.
+   * This reads the same table as the deduplication of a delivery, but it is not that
+   * question. The deduplication decides whether a delivery ran before. This looks up what a
+   * caller's id is known as. Nothing about idempotency depends on it. A missing record costs
+   * nothing but the sharper sentence.
    *
    * @param operation The operation no BPMS could serve
    * @param workflowAggregateId The workflow aggregate it was about
@@ -2585,14 +2577,14 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * What the record answers where the id a caller named is the id of the other kind of
-   * task - the mistake behind the case this message was written for:
-   * <code>completeTask</code> called with the id of a user task, answered by the BPMS with
-   * "not found" because no job carries that key.
+   * What the record answers where the id which a caller named is the id of the other kind of
+   * task. That is the mistake for which this message was written: <code>completeTask</code>
+   * called with the id of a user task, and the BPMS answers "not found", because no job has
+   * that key.
    * <p>
-   * It says what the id is and which method asks for that kind of key. It does NOT say that
-   * the other method would succeed: whether the task is still there is a question only that
-   * call can answer, and this one has no business pretending otherwise.
+   * It says what the id is, and which method asks for that kind of key. It does NOT say that
+   * the other method would succeed. Whether the task is still there is a question which only
+   * that call can answer, and this one must not pretend otherwise.
    *
    * @param operation The operation no BPMS could serve
    * @param args The operation's arguments, which name the task
@@ -2629,12 +2621,13 @@ public class MigrationProcessService<A> {
 
   /**
    * Which method of the <code>ProcessService</code> asks about the OTHER kind of task than
-   * the named operation does. Four operations and four counterparts: every mix-up of a task
-   * and a user task, in both directions, has a method it was meant for.
+   * the named operation. Four operations and four counterparts: every mix-up of a task and a
+   * user task, in both directions, has a method it was meant for.
    * <p>
-   * An operation an EXTENSION contributed is not in here although its election may ask about
-   * a task. Such an operation has no method of its own in the <code>ProcessService</code>,
-   * so the message names the kind and leaves the method out rather than inventing one.
+   * An operation which an EXTENSION contributed is not in here, although its election may
+   * ask about a task. Such an operation has no method of its own in the
+   * <code>ProcessService</code>. So the message names the kind, and leaves the method out
+   * instead of inventing one.
    */
   private static final Map<PhaseOperation, String> METHOD_ASKING_ABOUT_THE_OTHER_KIND = Map
       .of(
@@ -2644,7 +2637,7 @@ public class MigrationProcessService<A> {
           PhaseOperation.CANCEL_USER_TASK, "cancelTask");
 
   /**
-   * A kind of task as a reader of the message says it.
+   * A kind of task, as a reader of the message would say it.
    *
    * @param kind The kind to spell out
    * @return The words for it
@@ -2668,12 +2661,12 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Why the answer stayed a list of causes although VanillaBP keeps a record per delivery:
-   * the record of this id is gone or was never written, so what the id is cannot be read
-   * back any more.
+   * Why the answer stayed a list of causes, although VanillaBP keeps a record per delivery.
+   * The record of this id is gone or was never written. So what the id is cannot be read back
+   * any more.
    * <p>
-   * The retention is named because it is the reason a task completed a while ago gets the
-   * list rather than the sentence. An application without a store hears nothing about a
+   * The retention is named, because it is the reason why a task completed a while ago gets
+   * the list and not the sentence. An application without a store hears nothing about a
    * record, because there is none to miss.
    *
    * @return One sentence, or nothing where the application keeps no records
@@ -2693,28 +2686,29 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The adapter holding the workflow of the given aggregate - the election an EXTENSION
-   * needs before it talks to a BPMS about a running workflow.
+   * The adapter which holds the workflow of the given aggregate. An EXTENSION needs this
+   * election before it talks to a BPMS about a running workflow.
    * <p>
-   * It is the read shape of the election, not the operation shape: a COMPLETED workflow
-   * is a regular answer, because an extension may well have something to say about a
-   * workflow which ended, the way the viewer API reads its history. And like a read it
-   * waits out the visibility window of an adapter a hint points at - nobody repeats the
-   * question for an extension either.
+   * It is the read shape of the election, not the operation shape. A COMPLETED workflow is a
+   * regular answer, because an extension may well have something to say about a workflow
+   * which ended, the way the viewer API reads its history. And like a read, it waits out the
+   * visibility window of an adapter which a hint points to. Nobody repeats the question for an
+   * extension either.
    * <p>
-   * What a read does not pay and this caller may: an extension which REPORTS something
-   * asks this while the transaction which wrote what it reports is still open, so the
-   * wait holds that transaction, its database connection and the locks on the workflow
-   * aggregate. With the ten-second window of a Camunda 8 cluster whose exporter is behind,
-   * as few concurrent reports as the connection pool is wide empty it for everybody. The
+   * But this caller may pay something which a read does not pay. An extension which REPORTS
+   * something asks this while the transaction which wrote what it reports is still open. So
+   * the wait holds that transaction, its database connection and the locks on the workflow
+   * aggregate. Take the ten-second window of a Camunda 8 cluster whose exporter is behind.
+   * Then as few concurrent reports as the connection pool is wide empty it for everybody. The
    * measurement is in {@code migration-adapter/README.md}, under "What an election costs a
-   * caller which holds a transaction". Where the row about the start of the workflow is there,
-   * nothing of this is paid: see {@link #locationOfWorkflow(Object)}.
+   * caller which holds a transaction". Where the row about the start of the workflow is
+   * there, nothing of this is paid: see {@link #locationOfWorkflow(Object)}.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return The id of the adapter holding the workflow
-   * @throws IllegalStateException If there is no start row naming a configured adapter, and no
-   *           configured BPMS knows the workflow, or the BPMS which should hold it is unreachable
+   * @throws IllegalStateException If there is no start row which names a configured adapter,
+   *           and no configured BPMS knows the workflow, or the BPMS which should hold it
+   *           cannot be reached
    */
   public String adapterIdOfWorkflow(
       final Object workflowAggregateId) {
@@ -2724,37 +2718,39 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The same election, answering the adapter id AND the BPMS' own id of the workflow - see
+   * The same election. It answers the adapter id AND the BPMS' own id of the workflow, see
    * {@link io.vanillabp.integration.extension.spi.election.WorkflowElection#locationOfWorkflow}.
    * <p>
-   * Both values stand in the same place, so handing back only one of them and making the
-   * caller ask again would be the odd design. The id is read from what VanillaBP already
-   * holds and nothing new is asked of any BPMS for it: the record of a task delivery of
-   * that workflow first, then the election cache. A <code>null</code> id is a regular
-   * answer.
+   * Both values are in the same place. Handing back only one of them, and making the caller
+   * ask again, would be odd. The id is read from what VanillaBP already holds, and nothing
+   * new is asked of any BPMS for it: first the record of a task delivery of that workflow,
+   * then the election cache. A <code>null</code> id is a regular answer.
    * <p>
-   * The row written when the workflow started is read FIRST. Its adapter started the workflow, and
-   * a workflow does not change its BPMS: a new workflow starts in the first adapter of the list,
-   * and a running one stays where it is. So where that adapter is still one of this workflow's
-   * adapters, its id and the workflow id of the row are the answer, without asking any BPMS and
-   * without waiting for a read model. That is also why this does not throw after the workflow
-   * ended, for as long as the row lives (<code>vanillabp.delivery.workflow-start-retention</code>):
-   * the row says who started the workflow, not whether it still runs. Without such a row (a
-   * workflow started before the row existed, a row past its period, an adapter which reports no
-   * workflow id, or an adapter which is not configured any more), the election runs as it always
-   * did.
+   * The row written when the workflow started is read FIRST. Its adapter started the
+   * workflow, and a workflow does not change its BPMS. A new workflow starts in the first
+   * adapter of the list, and a running one stays where it is. So where that adapter is still
+   * one of this workflow's adapters, its id and the workflow id of the row are the answer.
+   * No BPMS is asked, and nobody waits for a read model. That is also why this does not
+   * throw after the workflow ended, for as long as the row lives
+   * (<code>vanillabp.delivery.workflow-start-retention</code>). The row says who started the
+   * workflow, not whether it still runs. Without such a row the election runs as it always
+   * did. That is the case for a workflow started before the row existed, a row past its
+   * period, an adapter which reports no workflow id, or an adapter which is not configured
+   * any more.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return Where the workflow is
-   * @throws IllegalStateException If there is no start row naming a configured adapter, and no
-   *           configured BPMS knows the workflow, or the BPMS which should hold it is unreachable
+   * @throws IllegalStateException If there is no start row which names a configured adapter,
+   *           and no configured BPMS knows the workflow, or the BPMS which should hold it
+   *           cannot be reached
    */
   public io.vanillabp.integration.extension.spi.election.WorkflowLocation locationOfWorkflow(
       final Object workflowAggregateId) {
 
-    // the adapter which started the workflow holds it until its end, so the row about the start
-    // answers without a round trip and without the wait for a read model. The election would give
-    // the same answer later, and on a BPMS which forgot an ended workflow it would throw instead
+    // the adapter which started the workflow holds it until its end. So the row about the
+    // start answers without a round trip, and without waiting for a read model. The election
+    // would give the same answer later. On a BPMS which forgot an ended workflow, it would
+    // throw instead
     final var started = deliveryRecords.workflowStartRowOf(workflowAggregateId);
     if ((started != null) && isAdapterOfThisWorkflow(started.adapterId())) {
       return new io.vanillabp.integration.extension.spi.election.WorkflowLocation(
@@ -2797,18 +2793,19 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The BPMS' own id of the given workflow, as far as VanillaBP holds one - a hint handed
-   * to an adapter so it can ask its engine by key instead of searching a read model, and
-   * handed to an extension which asked where a workflow is, or which only asked for the id
+   * The BPMS' own id of the given workflow, as far as VanillaBP holds one. It is a hint
+   * handed to an adapter, so that it can ask its engine by key instead of searching a read
+   * model. It is also handed to an extension which asked where a workflow is, or which only
+   * asked for the id
    * ({@link io.vanillabp.integration.extension.spi.election.WorkflowElection#workflowIdOf}).
    * <p>
-   * Two sources, in this order. The record of a task delivery of that workflow is the first
-   * one: it is written per delivery, it survives a restart and it names the id the BPMS
-   * reported. The election cache is the second: it is free to read but bounded and
+   * There are two sources, in this order. The record of a task delivery of that workflow is
+   * the first. It is written per delivery, it survives a restart, and it names the id which
+   * the BPMS reported. The election cache is the second. It is free to read, but limited and
    * expiring, so it knows less. Nothing new is asked of any BPMS.
    * <p>
-   * <code>null</code> where neither knew one, which is what an adapter which reports no
-   * workflow id and a workflow nobody ever delivered anything for both look like.
+   * It is <code>null</code> where neither knew one. An adapter which reports no workflow id
+   * looks like that, and so does a workflow for which nobody ever delivered anything.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return The workflow's id in the BPMS or <code>null</code>
@@ -2824,9 +2821,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Whether the given adapter is one this workflow is elected among. A start row names the adapter
-   * which started the workflow, and an id the configuration dropped since would send an extension
-   * to an adapter which is not there.
+   * Whether this workflow is elected among the given adapter. A start row names the adapter
+   * which started the workflow. An id which the configuration dropped since would send an
+   * extension to an adapter which is not there.
    */
   private boolean isAdapterOfThisWorkflow(
       final String adapterId) {
@@ -2838,13 +2835,15 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The BPMS' own id of the given workflow together with the version of the process definition
-   * it runs on, as far as VanillaBP holds them, and whether an empty version may still come
+   * The BPMS' own id of the given workflow, together with the version of the process
+   * definition on which it runs, as far as VanillaBP holds them. It also says whether an empty
+   * version may still come
    * ({@link io.vanillabp.integration.extension.spi.election.WorkflowElection#workflowStartOf}).
    * <p>
-   * The same two sources as {@link #workflowIdOf(Object)}, in the same order. The election cache
-   * knows no version and no adapter of a row, so an id only the cache knows is answered without an
-   * adapter and without a version, and with no promise that one will come.
+   * The same two sources as {@link #workflowIdOf(Object)}, in the same order. The election
+   * cache knows no version and no adapter of a row. So an id which only the cache knows is
+   * answered without an adapter and without a version, and with no promise that one will
+   * come.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @return What VanillaBP holds about the workflow, or <code>null</code> where it holds no id
@@ -2864,8 +2863,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The open user tasks of the workflow of the given aggregate, as far as the delivery log holds
-   * them ({@link io.vanillabp.integration.extension.spi.election.WorkflowElection#openUserTasksOf}).
+   * The open user tasks of the workflow of the given aggregate, as far as the delivery log
+   * holds them
+   * ({@link io.vanillabp.integration.extension.spi.election.WorkflowElection#openUserTasksOf}).
    * The election cache knows no tasks, so the log is the only source.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
@@ -2879,9 +2879,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Hands over what the adapters said about the versions of their BPMN processes. Called by the
-   * registry of the workflow tasks when it registers this process, because that registry is
-   * where the adapters report their catalogs while they wire their BPMN.
+   * Hands over what the adapters said about the versions of their BPMN processes. The
+   * registry of the workflow tasks calls it when it registers this process. The adapters
+   * report their catalogs to that registry while they wire their BPMN.
    *
    * @param processVersions What the adapters registered
    */
@@ -2893,8 +2893,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * What every message about an operation names: the workflow it happened to. What
-   * happened is the operation's own words ({@link PhaseOperation#describe(Map)}).
+   * What every message about an operation names: the workflow it happened to. The
+   * operation's own words say what happened ({@link PhaseOperation#describe(Map)}).
    */
   private String subjectOf(
       final Object workflowAggregateId) {
@@ -2925,9 +2925,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The same request, with the BPMS' own id of the workflow where the adapter which runs phase two
-   * started that workflow, and with the row of the task the operation names where that adapter
-   * delivered the task.
+   * The same request, with the BPMS' own id of the workflow where the adapter which runs phase
+   * two started that workflow. And with the row of the task which the operation names, where
+   * that adapter delivered the task.
    */
   private PhaseTwoRequest<A> phaseTwoRequestAbout(
       final Object workflowAggregateId,
@@ -2941,9 +2941,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The row of the task the operation names, where the given adapter is the one which delivered
-   * that task. A row another BPMS wrote names ids which mean nothing to this adapter, so it is not
-   * handed over.
+   * The row of the task which the operation names, where the given adapter is the one which
+   * delivered that task. A row which another BPMS wrote names ids which mean nothing to this
+   * adapter. So it is not handed over.
    */
   private TaskDelivery taskRowDeliveredBy(
       final MigratableProcessService<A> adapter,
@@ -2958,9 +2958,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The workflow id the start row names, where the given adapter is the one which started the
-   * workflow. An id which another BPMS gave its workflow means nothing to this adapter, so it is
-   * not handed over.
+   * The workflow id which the start row names, where the given adapter is the one which
+   * started the workflow. An id which another BPMS gave its workflow means nothing to this
+   * adapter. So it is not handed over.
    */
   private String workflowIdStartedBy(
       final MigratableProcessService<A> adapter,
@@ -2974,9 +2974,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The same request, with the sink phase two of a START says the created workflow's id into.
-   * Only a start gets one: every other operation has nothing to report, and a sink which is
-   * never called would only invite an adapter to call it.
+   * The same request, with the sink into which phase two of a START says the id of the
+   * created workflow. Only a start gets one. Every other operation has nothing to report, and
+   * a sink which is never called would only invite an adapter to call it.
    */
   private PhaseTwoRequest<A> phaseTwoRequest(
       final Object workflowAggregateId,
@@ -3001,9 +3001,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * What ONE adapter does for ONE operation. Answered from the map the adapter
-   * contributed, which is read once per adapter: a handler is a collaborator of the
-   * adapter, not a per-call object.
+   * What ONE adapter does for ONE operation. It is answered from the map which the adapter
+   * contributed, and that map is read once per adapter. A handler is a helper of the
+   * adapter, not an object per call.
    */
   private PhaseOperationHandler<A> handlerOf(
       final MigratableProcessService<A> adapter,
@@ -3021,8 +3021,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The handlers of one adapter, by operation. Cached per adapter id: the adapters of a
-   * process service are fixed, and an adapter is free to build its map fresh.
+   * The handlers of one adapter, by operation. They are cached per adapter id. The adapters
+   * of a process service are fixed, and an adapter is free to build its map anew.
    */
   private Map<PhaseOperation, PhaseOperationHandler<A>> phaseOperationsOf(
       final MigratableProcessService<A> adapter) {
@@ -3038,23 +3038,22 @@ public class MigrationProcessService<A> {
   private final Map<String, Map<PhaseOperation, PhaseOperationHandler<A>>> phaseOperations = new ConcurrentHashMap<>();
 
   /**
-   * Refuses AT STARTUP an adapter which cannot serve an operation every adapter has to
+   * Refuses AT STARTUP an adapter which cannot serve an operation that every adapter has to
    * serve.
    * <p>
-   * An adapter contributes a handler per operation, and the map may miss one for two
-   * reasons: the BPMS has nothing like the operation, which is legitimate for an
-   * operation which says so ({@link PhaseOperation#requiredOfEveryAdapter()}), or the
-   * adapter was written against an older SPI and never learned about it. The second one
-   * would show as a workflow standing still, hours after the application booted, which
-   * is why the boot asks instead.
+   * An adapter contributes a handler per operation. The map may miss one for two reasons.
+   * Either the BPMS has nothing like the operation. That is fine for an operation which says
+   * so ({@link PhaseOperation#requiredOfEveryAdapter()}). Or the adapter was written against
+   * an older SPI and never learned about it. The second case would show as a workflow which
+   * stands still, hours after the application booted. That is why the boot asks instead.
    * <p>
-   * The map is the whole question. Asking the adapter's class whether it implements
-   * something would mean reflection, and reflection is a lie in a native image: a method
-   * nobody registered looks like a method nobody wrote, so every adapter of a native
+   * The map is the whole question. Asking the adapter's class whether it implements something
+   * would mean reflection. And reflection lies in a native image: a method which nobody
+   * registered looks like a method which nobody wrote. So every adapter of a native
    * application would be refused.
    * <p>
-   * An adapter which cannot serve an operation is reported rather than thrown: the
-   * reason is collected with the others and thrown once, at the end of the start.
+   * An adapter which cannot serve an operation is reported, not thrown. The reason is
+   * collected with the others and thrown once, at the end of the start.
    */
   public void validateAdapterOperationsAtStartup() {
 
@@ -3098,22 +3097,22 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The BPMN processes this process service serves, the primary one first.
+   * The BPMN processes which this process service serves, the primary one first.
    * <p>
-   * A {@code @WorkflowService} declares one primary process and may declare
-   * {@code secondaryBpmnProcesses}; all of them run on this aggregate, so an instance of
-   * any of them is a legitimate answer to an awareness probe. The platform integration
-   * knows the full list when it registers the process service and sets it here. Where it
-   * is not set - a test constructing this service directly - the primary process is the
-   * scope, which is the narrowest honest answer.
+   * A {@code @WorkflowService} declares one primary process, and may declare
+   * {@code secondaryBpmnProcesses}. All of them run on this aggregate. So an instance of any
+   * of them is a valid answer to an awareness probe. The platform integration knows the full
+   * list when it registers the process service, and sets it here. Where it is not set, as in
+   * a test which builds this service directly, the primary process is the scope. That is the
+   * narrowest honest answer.
    */
   private List<String> servedBpmnProcessIds;
 
   /**
-   * Tells this process service which BPMN processes it serves. Called by the platform
-   * integration while the beans are built, because only it sees every workflow service of
-   * the aggregate at once. It also decides which ids a delivery record and an election hint
-   * are looked for under, so the three lists can never drift apart.
+   * Tells this process service which BPMN processes it serves. The platform integration calls
+   * it while the beans are built, because only the platform sees every workflow service of the
+   * aggregate at once. It also decides under which ids a delivery record and an election hint
+   * are looked for. So the three lists can never drift apart.
    *
    * @param servedBpmnProcessIds The plain BPMN process ids of this aggregate's workflow
    *          services, the primary one first
@@ -3125,9 +3124,9 @@ public class MigrationProcessService<A> {
         ? null
         : List.copyOf(servedBpmnProcessIds);
 
-    // the same list is what a delivery record and an election hint are looked for under,
-    // because both are written by the instance of the process which was running and read
-    // by the instance the application calls
+    // a delivery record and an election hint are looked for under the same list. Both are
+    // written by the instance of the process which was running, and read by the instance
+    // which the application calls
     final var idsToReadUnder = bpmnProcessIdsToReadUnder();
     deliveryRecords.setBpmnProcessIdsToReadUnder(idsToReadUnder);
     workflowLocator.setBpmnProcessIdsToReadUnder(idsToReadUnder);
@@ -3136,19 +3135,19 @@ public class MigrationProcessService<A> {
 
   /**
    * The BPMN process ids under which something written down about a workflow of this
-   * aggregate may sit, THIS instance's own id first.
+   * aggregate may be, THIS instance's own id first.
    * <p>
-   * A delivery record and an election hint carry the id of the process which was running
-   * when VanillaBP learned what they say, and that is the process which delivered the
-   * task rather than the one the application addresses: an application calls its
-   * operations on the primary process service, always, while a task of a secondary
-   * process is delivered to the instance of the secondary id. All those processes run on
-   * one workflow aggregate, so what one of them wrote down is a statement about the same
-   * workflow, and the own id goes first because it is where the answer usually is.
+   * A delivery record and an election hint carry the id of the process which was running when
+   * VanillaBP learned what they say. That is the process which delivered the task, not the one
+   * which the application addresses. An application always calls its operations on the
+   * primary process service. But a task of a secondary process is delivered to the instance
+   * of the secondary id. All those processes run on one workflow aggregate. So what one of
+   * them wrote down is a statement about the same workflow. The own id goes first, because
+   * the answer is usually there.
    * <p>
-   * The ids a rename left behind are part of it as well (they are declared, so they are
-   * served): a task an application still completes after the rename is exactly the one
-   * whose record sits under the old id.
+   * The ids which a rename left behind are part of it as well, because they are declared and
+   * so served. A task which an application still completes after the rename is exactly the
+   * one whose record is under the old id.
    *
    * @return The ids to read under, never empty
    */
@@ -3168,8 +3167,8 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * What an awareness probe is asked about: this workflow module and the processes this
-   * service serves. Built per call rather than cached, because the platform sets the
+   * What an awareness probe is asked about: this workflow module, and the processes which
+   * this service serves. It is built per call and not cached, because the platform sets the
    * process ids after construction.
    *
    * @return The scope handed to every probe
@@ -3183,20 +3182,19 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The viewer/history API: returns the process definitions used by the workflow
-   * of the given aggregate. Read-only - the aggregate is NOT saved (unlike every
-   * operation advancing a workflow); the BPMS holding the workflow is elected by
-   * probing {@code awarenessOfWorkflow} like message correlation does, but a
-   * COMPLETED workflow is a perfectly valid subject here (viewers show ended
-   * workflows).
+   * The viewer and history API: returns the process definitions which the workflow of the
+   * given aggregate uses. It only reads, so the aggregate is NOT saved (unlike every operation
+   * which moves a workflow forward). The BPMS which holds the workflow is elected by probing
+   * {@code awarenessOfWorkflow}, like message correlation does. But a COMPLETED workflow is a
+   * perfectly valid subject here, because viewers show ended workflows.
    * <p>
-   * The adapter-native definition ids are namespaced with the answering adapter's
-   * id (see {@link ProcessDefinitionIds}) so {@link #getBpmnXml(String)} - which
-   * has no aggregate to elect by - stays resolvable.
+   * The definition ids of the adapter are put into a namespace with the id of the answering
+   * adapter (see {@link ProcessDefinitionIds}). So {@link #getBpmnXml(String)}, which has no
+   * aggregate to elect by, can still resolve them.
    *
    * @param workflowAggregate The workflow aggregate
-   * @param historyContext <code>null</code> for the primary process or a
-   *        secondary history context of a call activity
+   * @param historyContext <code>null</code> for the primary process, or a secondary history
+   *        context of a call activity
    * @return The process definitions
    */
   public List<ProcessDefinition> getProcessDefinitions(
@@ -3208,10 +3206,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The viewer/history API: returns the BPMN XML of a process definition
-   * previously reported by
-   * {@link #getProcessDefinitions(Object, String)}. The composite definition id
-   * names the adapter which can resolve it - there is no aggregate to elect by.
+   * The viewer and history API: returns the BPMN XML of a process definition which
+   * {@link #getProcessDefinitions(Object, String)} reported before. The composite definition
+   * id names the adapter which can resolve it, because there is no aggregate to elect by.
    *
    * @param processDefinitionId The composite process definition id
    * @return The BPMN XML
@@ -3224,13 +3221,13 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The viewer/history API: returns the execution history of the workflow of the
-   * given aggregate - same election and read-only semantics as
+   * The viewer and history API: returns the execution history of the workflow of the given
+   * aggregate. Election and read-only behavior are the same as in
    * {@link #getProcessDefinitions(Object, String)}.
    *
    * @param workflowAggregate The workflow aggregate
-   * @param historyContext <code>null</code> for the primary process or a
-   *        secondary history context of a call activity
+   * @param historyContext <code>null</code> for the primary process, or a secondary history
+   *        context of a call activity
    * @return The workflow history
    */
   public WorkflowHistory getWorkflowHistory(
@@ -3242,17 +3239,15 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * The tail of a "no BPMS knows this workflow" message: the causes which really
-   * apply.
+   * The tail of a "no BPMS knows this workflow" message: the causes which really apply.
    * <p>
-   * A BPMS answering from an eventually consistent read model gets two more, and both
-   * are about the same window. VanillaBP does not wait that window out here - phase one
-   * asks once and never sleeps (decision 27 in the repository's DECISIONS.md) - and it
-   * only knows that the workflow is worth waiting for where something told it so: it
-   * started the workflow itself, or a delivery for it arrived. On a cluster that
-   * knowledge sits on the node it happened on, unless the application shares its
-   * {@code WorkflowAdapterCache}, which is the difference between "retry in a second"
-   * and "this fails on two nodes out of three".
+   * A BPMS which answers from an eventually consistent read model gets two more, and both are
+   * about the same window. VanillaBP does not wait that window out here. Phase one asks once
+   * and never sleeps (decision 27 in the repository's DECISIONS.md). And it only knows that
+   * the workflow is worth waiting for where something told it so: it started the workflow
+   * itself, or a delivery for it arrived. On a cluster that knowledge stays on the node where
+   * it happened, unless the application shares its {@code WorkflowAdapterCache}. That is the
+   * difference between "retry in a second" and "this fails on two nodes out of three".
    *
    * @return The cause list, ending in a full stop
    */
@@ -3261,7 +3256,7 @@ public class MigrationProcessService<A> {
     final var eventuallyConsistent = adapterProcessServices
         .stream()
         .anyMatch(adapter -> {
-          // no workflow to ask about: this message is written where nobody knows one
+          // no workflow to ask about. This message is written where nobody knows one
           final var delay = adapter.workflowVisibilityDelay(null);
           return (delay != null) && delay.isWaiting();
         });
@@ -3277,27 +3272,27 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Says that an operation the application asked for will not happen: the store found
-   * an identical one still waiting for its dispatch and discarded this one.
+   * Says that an operation which the application asked for will not happen. The store found
+   * an identical one still waiting for its dispatch, and discarded this one.
    * <p>
-   * The message names both causes because nothing can tell them apart here. A
-   * redelivered dispatch of a call which was recorded already loses nothing; a second,
-   * legitimate operation of the same key loses everything, and the workflow waits for
-   * something which will never arrive.
+   * The message names both causes, because nothing can tell them apart here. A repeated
+   * dispatch of a call which was recorded already loses nothing. But a second, valid
+   * operation with the same key loses everything, and the workflow waits for something which
+   * will never arrive.
    * <p>
    * What the message asks for depends on what the running activation is, because that
-   * decides which repetitions are already told apart. Inside an invocation of an adapter
-   * which names its activations, multi-instance siblings carry different keys and only a
-   * caller repeating itself WITHIN one activation can collide (see decision 23 in the
-   * repository's DECISIONS.md). Outside one - a REST endpoint, an adapter reporting no
-   * activation - the correlation id is still the only thing left to vary.
-   *
-   * Counted as well as logged, because a line in a log is found by somebody already
-   * looking. The counter carries the operation, so a discarded correlation and a
+   * decides which repetitions are told apart already. Inside a call of an adapter which names
+   * its activations, multi-instance siblings have different keys. Only a caller which repeats
+   * itself WITHIN one activation can collide (see decision 23 in the repository's
+   * DECISIONS.md). Outside an activation, for example in a REST endpoint or with an adapter
+   * which reports no activation, the correlation id is still the only thing left to vary.
+   * <p>
+   * It is counted as well as logged, because only somebody who is already looking finds a
+   * line in a log. The counter carries the operation. So a discarded correlation and a
    * discarded start can be alarmed on separately.
    *
    * @param operation The operation which was dropped
-   * @param subject What was dropped, named the way the caller would recognise it
+   * @param subject What was dropped, named so that the caller would recognise it
    */
   private void reportDiscardedSchedule(
       final PhaseOperation operation,
@@ -3335,10 +3330,9 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Runs a phase-two operation and lets the adapter classify a failure:
-   * the outbox repeats what may succeed on the next attempt - a concurrency conflict
-   * is the case this exists for - while a failure repeating cannot fix blocks the
-   * entry right away.
+   * Runs a phase-two operation, and lets the adapter classify a failure. The outbox repeats
+   * what may succeed on the next attempt. A concurrency conflict is the case this exists for.
+   * A failure which repeating cannot fix blocks the entry right away.
    *
    * @param adapter The adapter executing the operation
    * @param operationDescription What was attempted, for the message
@@ -3367,16 +3361,17 @@ public class MigrationProcessService<A> {
 
 
   /**
-   * Collects what a process service is built from and refuses an incomplete set.
+   * Collects what a process service is built from, and refuses an incomplete set.
    * <p>
-   * Three of them are mandatory, because a service without them cannot do anything an
-   * application would call it for: the configuration it reads its adapters from, the
-   * persistence of its workflow aggregate, and the adapters themselves. The rest are
-   * handed over by the platform integrations and left out by tests which do not need them
-   * - an adapter cache (elections probe every time without one), a store for the delivery
-   * records (deliveries are not deduplicated without one), a transaction runner resolver
-   * (the runner the caller passes is used), and the outbox resolver, whose absence
-   * {@link MigrationProcessService#validatePhaseTwoOutboxAtStartup()} reports.
+   * Three of them are mandatory, because without them a service cannot do anything for which
+   * an application would call it. Those are the configuration from which it reads its
+   * adapters, the persistence of its workflow aggregate, and the adapters themselves. The
+   * platform integrations hand over the rest, and tests which do not need them leave them
+   * out: an adapter cache (without one, elections probe every time), a store for the delivery
+   * records (without one, deliveries are not deduplicated), a transaction runner resolver (the
+   * runner which the caller passes is used), and the outbox resolver.
+   * {@link MigrationProcessService#validatePhaseTwoOutboxAtStartup()} reports when that is
+   * missing.
    *
    * @param <A> The workflow aggregate
    */
@@ -3414,8 +3409,8 @@ public class MigrationProcessService<A> {
     }
 
     /**
-     * Mandatory. Everything an adapter is chosen and configured by is read from here, so a
-     * service without it cannot answer a single call.
+     * Mandatory. Everything by which an adapter is chosen and configured is read from here. So
+     * a service without it cannot answer a single call.
      *
      * @param properties The bound <code>vanillabp.*</code> tree
      * @return This builder
@@ -3429,8 +3424,8 @@ public class MigrationProcessService<A> {
     }
 
     /**
-     * Mandatory. It is also where the id of an aggregate and its type come from, which is
-     * what the outbox stores and the election is keyed by.
+     * Mandatory. The id of an aggregate and its type also come from here. The outbox stores
+     * them, and the election is keyed by them.
      *
      * @param aggregatePersistence How the workflow aggregate is loaded and saved
      * @return This builder
@@ -3444,13 +3439,13 @@ public class MigrationProcessService<A> {
     }
 
     /**
-     * Mandatory. The whole list is handed over and the prioritized ones are picked out of
-     * it while the service is built, so a configured adapter id which no adapter serves
-     * ends the boot with a message naming it rather than silently starting workflows in the
-     * wrong BPMS.
+     * Mandatory. The whole list is handed over, and the prioritized ones are picked from it
+     * while the service is built. So a configured adapter id which no adapter serves ends the
+     * boot with a message that names it. Otherwise workflows would silently start in the wrong
+     * BPMS.
      *
-     * @param processServices The process service of every adapter of this application -
-     *          the prioritized ones of this BPMN process have to be among them
+     * @param processServices The process service of every adapter of this application. The
+     *          prioritized ones of this BPMN process have to be among them
      * @return This builder
      */
     public Builder<A> processServices(
@@ -3462,13 +3457,13 @@ public class MigrationProcessService<A> {
     }
 
     /**
-     * Left out by a test which plans no operation. In an application it is always there:
-     * phase two of every outbound operation is dispatched through the outbox
-     * (see decision 2 in the repository's DECISIONS.md), and a missing one is reported
-     * while the application starts.
+     * A test which plans no operation leaves it out. In an application it is always there.
+     * Phase two of every outbound operation is dispatched through the outbox (see decision 2
+     * in the repository's DECISIONS.md), and a missing one is reported while the application
+     * starts.
      *
-     * @param phaseTwoOutboxResolver Resolves the outbox phase two of every outbound
-     *          operation is planned in
+     * @param phaseTwoOutboxResolver Resolves the outbox in which phase two of every outbound
+     *          operation is planned
      * @return This builder
      */
     public Builder<A> phaseTwoOutboxResolver(
@@ -3480,12 +3475,12 @@ public class MigrationProcessService<A> {
     }
 
     /**
-     * Optional, and only ever an accelerator: what the cache holds is a hint, so an
-     * application without one gets the same answers and pays more probes for them
-     * (see decision 5 in the repository's DECISIONS.md).
+     * Optional, and only ever an accelerator. What the cache holds is a hint. So an
+     * application without one gets the same answers, and pays more probes for them (see
+     * decision 5 in the repository's DECISIONS.md).
      *
-     * @param workflowAdapterCache Where an elected adapter is remembered; without one
-     *          every election probes
+     * @param workflowAdapterCache Where an elected adapter is remembered. Without one every
+     *          election probes
      * @return This builder
      */
     public Builder<A> workflowAdapterCache(
@@ -3497,14 +3492,13 @@ public class MigrationProcessService<A> {
     }
 
     /**
-     * Optional. What a record is for is to answer a repeated delivery without running the
-     * <code>&#64;WorkflowTask</code> method a second time
-     * (see decision 6 in the repository's DECISIONS.md). Without a store that method does
-     * run again, and the guards in the handlers carry the case, as they did before the
-     * records existed.
+     * Optional. A record answers a repeated delivery without running the
+     * <code>&#64;WorkflowTask</code> method a second time (see decision 6 in the repository's
+     * DECISIONS.md). Without a store that method does run again, and the guards in the
+     * handlers cover the case, as they did before the records existed.
      *
-     * @param taskDeliveryLogResolver Resolves the store of the delivery records; without
-     *          one deliveries are not deduplicated
+     * @param taskDeliveryLogResolver Resolves the store of the delivery records. Without one
+     *          deliveries are not deduplicated
      * @return This builder
      */
     public Builder<A> taskDeliveryLogResolver(
@@ -3516,11 +3510,11 @@ public class MigrationProcessService<A> {
     }
 
     /**
-     * Optional, and what lets an aggregate of its own kind be written in a transaction of
-     * its own kind (see decision 11 in the repository's DECISIONS.md).
+     * Optional. It lets an aggregate of its own kind be written in a transaction of its own
+     * kind (see decision 11 in the repository's DECISIONS.md).
      *
-     * @param transactionRunnerResolver Resolves the transaction the work on this
-     *          aggregate runs in; without one the runner the caller passes is used
+     * @param transactionRunnerResolver Resolves the transaction in which the work on this
+     *          aggregate runs. Without one the runner which the caller passes is used
      * @return This builder
      */
     public Builder<A> transactionRunnerResolver(
@@ -3532,13 +3526,12 @@ public class MigrationProcessService<A> {
     }
 
     /**
-     * Builds the process service, or says what is missing. The check happens here and not
-     * at the first call, so a wiring defect ends the boot instead of a business
-     * transaction.
+     * Builds the process service, or says what is missing. The check happens here and not at
+     * the first call. So a wiring defect ends the boot, and not a business transaction.
      *
      * @return The process service
-     * @throws IllegalStateException If something mandatory is missing - the message names
-     *           the BPMN process and every one of them
+     * @throws IllegalStateException If something mandatory is missing. The message names the
+     *           BPMN process and every missing part
      */
     public MigrationProcessService<A> build() {
 

@@ -11,10 +11,10 @@ import io.vanillabp.integration.extension.spi.handler.HandlerValueSource;
 import io.vanillabp.spi.service.TaskException;
 
 /**
- * One <code>&#64;WorkflowTask</code> annotated method wired to a BPMN task: the
- * target bean, the method and the parameter binders resolved at registration time.
- * Built by {@link WorkflowTaskScanner}, registered per (workflow module, BPMN
- * process ID) in the {@link WorkflowTaskRegistry} and invoked by
+ * One method with <code>&#64;WorkflowTask</code> which is wired to a BPMN task: the target
+ * bean, the method, and the parameter binders resolved at registration time.
+ * {@link WorkflowTaskScanner} builds it. It is registered per workflow module and BPMN
+ * process ID in the {@link WorkflowTaskRegistry}, and called by
  * {@link io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService#executeWorkflowTask}.
  */
 // see decision 1 in the repository's DECISIONS.md
@@ -30,67 +30,66 @@ public class WorkflowTaskHandler {
   private final List<HandlerValueSource> parameterBinders;
 
   /**
-   * The task definition this handler is wired to, or <code>null</code> if wired by
-   * activity ID only.
+   * The task definition to which this handler is wired, or <code>null</code> if it is wired
+   * by activity ID only.
    */
   private final String taskDefinition;
 
   /**
-   * The BPMN activity ID this handler is wired to, or <code>null</code> if wired by
-   * task definition only.
+   * The BPMN activity ID to which this handler is wired, or <code>null</code> if it is wired
+   * by task definition only.
    */
   private final String activityId;
 
   /**
-   * The process versions this method serves, which the whole registry shares with the
-   * other handler kinds and with the methods of an extension.
+   * The process versions this method serves. The whole registry shares this object with
+   * the other handler kinds and with the methods of an extension.
    */
   private final ServedVersions versions;
 
   /**
-   * Whether the method declares a <code>&#64;TaskId</code> parameter: the task is
-   * completed asynchronously later and MUST NOT be completed when the method
+   * Whether the method declares a <code>&#64;TaskId</code> parameter. Then the task is
+   * completed later, by somebody else, and MUST NOT be completed when the method
    * returns.
    */
   private final boolean asynchronousTask;
 
   /**
-   * The lifecycle events the method subscribes to (union of its
-   * <code>&#64;TaskEvent</code> parameters' filters; only CREATED without such a
-   * parameter). {@link io.vanillabp.spi.service.TaskEvent.Event#ALL} subscribes to
-   * everything.
+   * The lifecycle events to which the method subscribes. That is the union of the filters
+   * of its <code>&#64;TaskEvent</code> parameters, or only CREATED without such a parameter.
+   * {@link io.vanillabp.spi.service.TaskEvent.Event#ALL} subscribes to everything.
    */
   private final java.util.Set<io.vanillabp.spi.service.TaskEvent.Event> subscribedEvents;
 
   /**
-   * The process variables the method reads with <code>&#64;TaskParam</code>, sorted and
-   * duplicate-free. The core reports them to the adapters through
-   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#taskParameterNames},
-   * so a BPMS delivering a variable payload knows what to put into it.
+   * The process variables which the method reads with <code>&#64;TaskParam</code>, sorted
+   * and without duplicates. The core reports them to the adapters through
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#taskParameterNames}.
+   * So a BPMS which delivers a payload of variables knows what to put into it.
    */
   private final List<String> taskParameters;
 
   /**
-   * Which iterations the method wants the ITEM of, one entry per
-   * <code>&#64;MultiInstanceElement</code> parameter. A parameter naming its element
-   * answers itself, one using a resolver bean asks that bean, and the bean is looked up
-   * when the answer is first needed rather than while the method is scanned - the
-   * application's beans are not all there yet at that point.
+   * The iterations whose ITEM the method wants, one entry per
+   * <code>&#64;MultiInstanceElement</code> parameter. A parameter which names its element
+   * answers itself. One which uses a resolver bean asks that bean. The bean is looked up
+   * when the answer is first needed, not while the method is scanned, because not all of
+   * the application's beans exist at that point.
    */
   private final List<Supplier<java.util.Collection<String>>> multiInstanceElements;
 
   /**
-   * What {@link #getMultiInstanceElementNames()} answered the first time, kept because
-   * the deployment asks it once per BPMN element and a resolver bean is looked up for
+   * What {@link #getMultiInstanceElementNames()} answered the first time. It is kept,
+   * because the deployment asks once per BPMN element, and a resolver bean is looked up for
    * every question.
    */
   private volatile List<String> knownMultiInstanceElementNames;
 
   /**
-   * Whether some BPMN task matched this handler during wiring validation - input
-   * for the per-module unwired-methods check (a handler registered under several
-   * BPMN processes via {@code secondaryBpmnProcesses} legitimately matches in only
-   * one of them).
+   * Whether some BPMN task matched this handler during the wiring check. The check for
+   * unwired methods per module reads it. A handler registered under several BPMN processes
+   * through {@code secondaryBpmnProcesses} may match in only one of them, and that is
+   * fine.
    */
   private volatile boolean wired = false;
 
@@ -131,10 +130,10 @@ public class WorkflowTaskHandler {
   }
 
   /**
-   * The BPMN element ids the method wants the item of an iteration for, sorted and
-   * duplicate-free. The core reports them to the adapters through
-   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#multiInstanceElementNames},
-   * so an adapter reading its own BPMN can say that a model hands over no such item.
+   * The BPMN element ids for which the method wants the item of an iteration, sorted and
+   * without duplicates. The core reports them to the adapters through
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring#multiInstanceElementNames}.
+   * So an adapter which reads its own BPMN can say that a model hands over no such item.
    *
    * @return The element ids, empty where the method declares no
    *         <code>&#64;MultiInstanceElement</code>
@@ -158,9 +157,9 @@ public class WorkflowTaskHandler {
   }
 
   /**
-   * Whether the method subscribes to the given lifecycle event - non-matching
-   * deliveries (e.g. CANCELED to a method without a <code>&#64;TaskEvent</code>
-   * parameter) are skipped by the core without invoking the method.
+   * Whether the method subscribes to the given lifecycle event. The core skips other
+   * deliveries without calling the method, for example CANCELED to a method without a
+   * <code>&#64;TaskEvent</code> parameter.
    *
    * @param event The delivered event
    * @return Whether to invoke the method
@@ -173,7 +172,7 @@ public class WorkflowTaskHandler {
   }
 
   /**
-   * One of the two keys this handler can be reached by: what the BPMS subscribed to.
+   * One of the two keys by which this handler can be reached: what the BPMS subscribed to.
    * <p>
    * A delivery is routed by both keys, because the boot accepts both (decision 67 in the
    * repository's DECISIONS.md).
@@ -188,7 +187,7 @@ public class WorkflowTaskHandler {
   }
 
   /**
-   * The other of the two keys: the element of the model, which is what
+   * The other of the two keys: the element of the model, which
    * <code>&#64;WorkflowTask(id = ...)</code> names.
    *
    * @return The activity ID, or <code>null</code> where this handler is wired by task
@@ -204,8 +203,8 @@ public class WorkflowTaskHandler {
    * Whether completing the task is somebody else's job.
    * <p>
    * The method took a <code>&#64;TaskId</code>, so it keeps that id and completes the task
-   * later. Completing it when the method returns would end a task the application still
-   * works on.
+   * later. Completing the task when the method returns would end a task on which the
+   * application still works.
    *
    * @return Whether the task stays open after the method returned
    */
@@ -218,9 +217,9 @@ public class WorkflowTaskHandler {
   /**
    * Says that a BPMN element of the deployed model matched this handler.
    * <p>
-   * Called while the wiring is validated, so the check for methods nothing ever calls can
-   * tell a method the model dropped from one which simply belongs to another of the BPMN
-   * processes its class declares.
+   * It is called while the wiring is checked. So the check for methods which nothing ever
+   * calls can tell a method which the model dropped from one which simply belongs to another
+   * of the BPMN processes its class declares.
    */
   public void markWired() {
 
@@ -231,7 +230,8 @@ public class WorkflowTaskHandler {
   /**
    * Whether any deployed BPMN element matched this handler during this boot.
    *
-   * @return Whether something wired it - <code>false</code> for a method no model names
+   * @return Whether something wired it. <code>false</code> for a method which no model
+   *         names
    */
   public boolean isWired() {
 
@@ -240,7 +240,7 @@ public class WorkflowTaskHandler {
   }
 
   /**
-   * The method, named the way a developer finds it: the class it was declared in and its
+   * The method, named so that a developer can find it: the class it was declared in, and its
    * name. Every message about this handler starts with it.
    *
    * @return The class name and the method name
@@ -252,7 +252,7 @@ public class WorkflowTaskHandler {
   }
 
   /**
-   * The key(s) this handler is wired by, for guiding messages.
+   * The keys by which this handler is wired, for guiding messages.
    *
    * @return What a model has to name to reach this method
    */
@@ -269,8 +269,8 @@ public class WorkflowTaskHandler {
   }
 
   /**
-   * The version specification(s) this method names, for messages about a method
-   * serving no version the BPMS holds.
+   * The version specifications this method names, for messages about a method which serves
+   * no version the BPMS holds.
    *
    * @return The specifications, comma separated
    */
@@ -281,10 +281,10 @@ public class WorkflowTaskHandler {
   }
 
   /**
-   * The version specification(s) plus, where the method named none itself, the
-   * declaration they came from. Every message about an ambiguity or a method serving
-   * nothing uses this: a complaint about a range the reader cannot see in front of the
-   * method reads like a defect of VanillaBP.
+   * The version specifications and, where the method named none itself, the declaration
+   * they came from. Every message about an ambiguity, or about a method which serves
+   * nothing, uses this. A complaint about a range which the reader cannot see at the method
+   * looks like a defect of VanillaBP.
    *
    * @return The specifications and their origin
    */
@@ -305,7 +305,7 @@ public class WorkflowTaskHandler {
   }
 
   /**
-   * Where the range came from, ready to be appended to a description of the method -
+   * Where the range came from, ready to be added to a description of the method. It is
    * empty where the method names its range itself.
    *
    * @return The clause to append, or an empty string
@@ -325,8 +325,8 @@ public class WorkflowTaskHandler {
   }
 
   /**
-   * Whether this handler and the given one serve at least one common process version -
-   * two handlers wired to the same BPMN task are ambiguous exactly then.
+   * Whether this handler and the given one serve at least one common process version. Two
+   * handlers wired to the same BPMN task are ambiguous exactly then.
    *
    * @param other The other handler
    * @param resolver Resolves version tags of the BPMN process both belong to
@@ -360,10 +360,9 @@ public class WorkflowTaskHandler {
   }
 
   /**
-   * Invokes the handler method with parameters bound from the aggregate and the
-   * invocation context. {@link TaskException} and other
-   * {@link RuntimeException}s of the method propagate unchanged; checked
-   * exceptions are wrapped.
+   * Calls the handler method with parameters bound from the aggregate and the invocation
+   * context. {@link TaskException} and other {@link RuntimeException}s of the method are
+   * passed on unchanged. Checked exceptions are wrapped.
    *
    * @param workflowAggregate The loaded workflow aggregate
    * @param context The invocation context supplied by the adapter

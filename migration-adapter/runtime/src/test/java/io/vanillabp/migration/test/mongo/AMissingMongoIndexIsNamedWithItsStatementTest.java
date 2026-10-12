@@ -24,12 +24,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 /**
  * What an application on MongoDB is told when it manages its schema itself.
  * <p>
- * A collection is created by the first document, so there is nothing to verify there. The
- * indexes are the whole of it: nothing creates them where
- * <code>vanillabp.outbox.create-schema</code> is <code>false</code>, and without a word at
- * startup the application meets them as a query which got slow, months later. So the
- * startup names each missing one together with the statement which creates it, the way the
- * relational stores name theirs.
+ * The first document creates a collection, so there is nothing to check there. The indexes
+ * are the whole of it. Nothing creates them where <code>vanillabp.outbox.create-schema</code>
+ * is <code>false</code>. Without a word at startup, the application meets them months later,
+ * as a query which got slow. So the startup names each missing one, together with the
+ * statement which creates it, as the relational stores name theirs.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AMissingMongoIndexIsNamedWithItsStatementTest {

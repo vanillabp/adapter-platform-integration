@@ -4,11 +4,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Reads an attribute of a workflow aggregate by reflection: getter
- * (<code>getX()</code>), boolean getter (<code>isX()</code>) or field access, in
- * this order - the resolution order BPMN expressions of embedded BPMS rely on
- * (best practice: intention-revealing getters decouple the BPMN from the data
- * model, computed on the fly if needed).
+ * Reads an attribute of a workflow aggregate by reflection: getter (<code>getX()</code>),
+ * boolean getter (<code>isX()</code>) or field access, in this order. BPMN expressions of
+ * embedded BPMS rely on this order. Best practice is getters with a telling name, computed
+ * on the fly if needed. They keep the BPMN independent of the data model.
  */
 class AggregatePropertyReader {
 
@@ -18,10 +17,10 @@ class AggregatePropertyReader {
   }
 
   /**
-   * Whether the aggregate CLASS declares such an attribute - the same resolution
-   * order as {@link #read}, but without loading an aggregate. Adapters ask this
-   * while resolving a BPMN expression, to tell an attribute of the workflow
-   * aggregate from a name meaning something else.
+   * Whether the aggregate CLASS declares such an attribute. It uses the same order as
+   * {@link #read}, but without loading an aggregate. Adapters ask this while they resolve a
+   * BPMN expression, to tell an attribute of the workflow aggregate from a name which means
+   * something else.
    *
    * @param aggregateClass The workflow aggregate's class
    * @param propertyName The attribute's name
@@ -94,10 +93,10 @@ class AggregatePropertyReader {
       return null;
     }
 
-    // the field is looked up along the class hierarchy, exactly like has() does it -
-    // an aggregate inheriting its attributes from a base entity is the common case,
-    // and answering 'the attribute exists' while reading it as null would leave the
-    // BPMN expression with a silent null
+    // the field is looked up along the class hierarchy, exactly like has() does it. An
+    // aggregate which inherits its attributes from a base entity is the common case.
+    // Answering 'the attribute exists' and then reading it as null would leave the BPMN
+    // expression with a silent null
     var currentClass = aggregateClass;
     while ((currentClass != null) && (currentClass != Object.class)) {
       try {

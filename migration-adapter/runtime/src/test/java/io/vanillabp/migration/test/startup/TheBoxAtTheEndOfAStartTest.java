@@ -25,13 +25,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 /**
  * What a start says about itself when it is over.
  * <p>
- * Every word of the box is asserted here, the shape included: the two rulers, the head
- * line, the headings with their counts, and the fact that a start with nothing to say
- * writes nothing at all - no ruler, no heading, no empty message. The shape is the
- * feature, so it is held by tests like any other promise.
+ * Every word of the box is asserted here, and its shape too: the two rulers, the head line,
+ * the headings with their counts. And a start with nothing to say writes nothing at all: no
+ * ruler, no heading, no empty message. The shape is the feature, so tests hold it like any
+ * other promise.
  * <p>
- * The box goes into the log in ONE call, which is the other thing asserted here: written
- * line by line, the INFO line of the next library would land in the middle of it.
+ * The box goes into the log in ONE call. That is the other thing asserted here. If it were
+ * written line by line, the INFO line of the next library would land in the middle of it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheBoxAtTheEndOfAStartTest {
@@ -328,8 +328,8 @@ public class TheBoxAtTheEndOfAStartTest {
     assertEquals(1, logWatcher.list.size());
     final var box = logWatcher.list.get(0).getFormattedMessage();
     assertTrue(box.contains("The window runs at four UTC."), box);
-    // the refusal is part of the block here: it will never be thrown, and the exception
-    // ending this start is the one the developer is about to read
+    // the refusal is part of the block here. It will never be thrown, and the developer is
+    // about to read the exception which ends this start
     assertTrue(box.contains("Two methods serve version 3."), box);
     assertTrue(box.contains("The start ended on something else"), box);
 

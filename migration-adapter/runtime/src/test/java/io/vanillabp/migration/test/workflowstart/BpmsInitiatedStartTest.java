@@ -33,8 +33,8 @@ import io.vanillabp.spi.service.TaskParam;
 import io.vanillabp.spi.service.WorkflowStartedByBpms;
 
 /**
- * Unit tests of what a workflow started by the BPMS itself needs. The application builds
- * the workflow aggregate and hands it over; VanillaBP saves it, and a process the BPMS
+ * Unit tests of what a workflow needs which the BPMS starts itself. The application builds
+ * the workflow aggregate and hands it over, and VanillaBP saves it. A process which the BPMS
  * can start without such a method does not let the application boot.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -85,7 +85,7 @@ public class BpmsInitiatedStartTest {
 
   }
 
-  /** An aggregate whose ID is assigned by the persistence layer while saving. */
+  /** An aggregate whose ID the persistence layer assigns while saving. */
   public static class GeneratedIdAggregate {
 
     Long id;
@@ -199,7 +199,7 @@ public class BpmsInitiatedStartTest {
         final BpmsStartTrigger trigger) {
 
       final var aggregate = new Aggregate();
-      // an id of the application's own choosing, stable across a repeated delivery
+      // an id which the application chooses itself, stable across a repeated delivery
       aggregate.setId("settlement-"
           + trigger.startEventId());
       aggregate.setRegion("built by "
@@ -210,7 +210,7 @@ public class BpmsInitiatedStartTest {
 
   }
 
-  /** Builds from the trigger and from what the model set, the way a real one does. */
+  /** Builds from the trigger and from what the model set, as a real one does. */
   static class SignalService {
 
     BpmsStartTrigger seenTrigger;
@@ -231,7 +231,7 @@ public class BpmsInitiatedStartTest {
 
   }
 
-  /** Leaves the id to the persistence layer, which is what a generated id looks like. */
+  /** Leaves the id to the persistence layer. A generated id looks like this. */
   static class GeneratedIdService {
 
     @WorkflowStartedByBpms
@@ -297,8 +297,8 @@ public class BpmsInitiatedStartTest {
     }
 
     /**
-     * Serves whatever the deployed model brings, so the check about a start event without
-     * a method stays quiet and the one about the kept method is what the test reads.
+     * Serves whatever the deployed model brings. So the check about a start event without
+     * a method stays quiet, and the test reads the one about the kept method.
      */
     @WorkflowStartedByBpms
     public Aggregate buildsWhateverStarts() {
@@ -451,8 +451,8 @@ public class BpmsInitiatedStartTest {
   }
 
   /**
-   * A notification of a BPMS which keeps a business key, the way Camunda 7 reports one: the
-   * key is the name that workflow already goes by.
+   * A notification of a BPMS which keeps a business key, as Camunda 7 reports one. The key
+   * is the name by which that workflow already goes.
    */
   private BpmsInitiatedStartContext context(
       final BpmsStartTrigger.Kind kind,
@@ -523,10 +523,10 @@ public class BpmsInitiatedStartTest {
     assertEquals("settlement-"
         + TIMER_EVENT, result.workflowAggregateId());
     assertEquals("id", result.workflowAggregateIdName());
-    // the ID variable is what a remote BPMS needs to address the workflow later
+    // a remote BPMS needs the ID variable to address the workflow later
     assertEquals(result.workflowAggregateId(), result.variables().get("id"));
     assertEquals("built by TIMER", persistence.aggregates.get(result.workflowAggregateId()).getRegion());
-    // a new transaction, since the notification did not ask to join one
+    // a new transaction, because the notification did not ask to join one
     assertTrue(transactionRunner.requireNewUsed);
 
   }
@@ -687,18 +687,17 @@ public class BpmsInitiatedStartTest {
   public void aMethodKeptForADeclaredOnlyIdIsExempt() {
 
     final var testee = registry(new TransactionRunnerStub());
-    // registered, but validateTaskWiring never runs for this id: nothing was
-    // deployed under it, which is what declaring the old id of a renamed process
-    // looks like from in here
+    // registered, but validateTaskWiring never runs for this id. Nothing was deployed under
+    // it. From in here, declaring the old id of a renamed process looks like that
     testee
         .registerWorkflowService(
             MODULE, PROCESS, OldStartEventService.class, OldStartEventService::new, type -> null, processService(
                 stringIdPersistence(), Aggregate.class));
     testee.registerProcessVersions("test-adapter", MODULE, PROCESS, catalogHolding("1"));
 
-    // the deployed model (of some other generation's shape) does not carry the
-    // method's start event - and must not be what the method is judged by, because
-    // the BPMS holds a version which does
+    // the deployed model (in the shape of some other generation) does not carry the start
+    // event of the method. It must not be what the method is judged by, because the BPMS
+    // holds a version which does
     assertDoesNotThrow(
         () -> testee
             .validateBpmsInitiatedStarts(
@@ -735,7 +734,7 @@ public class BpmsInitiatedStartTest {
   }
 
   /**
-   * A catalog answering that the BPMS holds exactly the given versions.
+   * A catalog which answers that the BPMS holds exactly the given versions.
    */
   private static io.vanillabp.integration.adapter.spi.version.ProcessVersionCatalog catalogHolding(
       final String... versions) {
@@ -790,7 +789,8 @@ public class BpmsInitiatedStartTest {
                 MODULE, PROCESS, context(BpmsStartTrigger.Kind.TIMER, TIMER_EVENT, Map.of())));
 
     assertEquals("no aggregate today", exception.getMessage());
-    // the transaction stub propagates instead of committing: nothing was saved
+    // the transaction stub passes the failure on instead of committing, so nothing was
+    // saved
     assertTrue(persistence.aggregates.isEmpty());
 
   }
@@ -812,8 +812,8 @@ public class BpmsInitiatedStartTest {
             .startWorkflowByBpms(
                 MODULE, PROCESS, context(BpmsStartTrigger.Kind.TIMER, TIMER_EVENT, Map.of())));
 
-    // reflection hands a checked exception over wrapped, and the wrapper says nothing
-    // about where it came from - the method's name is what the developer needs
+    // reflection hands a checked exception over wrapped, and the wrapper says nothing about
+    // where it came from. The developer needs the name of the method
     assertTrue(exception.getMessage().contains(CheckedExceptionService.class.getName()), exception.getMessage());
     assertTrue(exception.getMessage().contains("checked exception"), exception.getMessage());
     assertEquals("a checked one", exception.getCause().getMessage());
@@ -1004,7 +1004,7 @@ public class BpmsInitiatedStartTest {
 
     assertFalse(result.created());
     assertEquals("named-by-the-application", result.workflowAggregateId());
-    // the method never ran: this workflow was started by the application
+    // the method never ran, because the application started this workflow
     assertNull(service.seenTrigger);
     assertEquals("set while starting", persistence.aggregates.get("named-by-the-application").getRegion());
     assertEquals(1, persistence.aggregates.size());

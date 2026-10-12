@@ -32,15 +32,15 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Adding an operation costs ONE place in the core and ONE in an adapter, and nothing
- * else. This test is that promise: it adds an operation the way a new core operation
- * would be added (the constant below stands in for a constant in
- * {@link PhaseOperation}), lets an adapter contribute a handler for it, and runs it
- * through both phases without touching the outbox SPI, the router, the process service
- * or a pair of methods per operation.
+ * Adding an operation costs ONE place in the core and ONE in an adapter, and nothing else.
+ * This test is that promise. It adds an operation the way a new core operation would be
+ * added. The constant below stands in for a constant in {@link PhaseOperation}. An adapter
+ * contributes a handler for it. The test runs it through both phases. It touches neither the
+ * outbox SPI, nor the router, nor the process service, and it needs no pair of methods per
+ * operation.
  * <p>
  * The adapter here is written the way an adapter is written: a map of handlers and the
- * three probes, no phase methods at all.
+ * three probes, and no phase methods at all.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AddingAnOperationTest {
@@ -52,8 +52,8 @@ public class AddingAnOperationTest {
   private static final String ARG_ARCHIVE = "archive";
 
   /**
-   * The whole definition of a new operation: its persisted name, what deduplicates it,
-   * which BPMS serves it and how it names itself in a message.
+   * The whole definition of a new operation: its persisted name, what deduplicates it, which
+   * BPMS serves it, and how it names itself in a message.
    */
   private static final PhaseOperation ARCHIVE_WORKFLOW = PhaseOperation
       .extensionOperation("test:ARCHIVE_WORKFLOW")
@@ -70,9 +70,9 @@ public class AddingAnOperationTest {
       .build();
 
   /**
-   * An adapter in the shape every adapter has: it answers the probes and contributes one
-   * handler per operation it serves. Whether it serves the new operation is one entry in
-   * that map, which is the second and last place adding an operation touches.
+   * An adapter in the shape which every adapter has. It answers the probes and contributes
+   * one handler per operation it serves. Whether it serves the new operation is one entry in
+   * that map. That is the second and last place which adding an operation touches.
    */
   private static class ArchivingAdapter implements MigratableProcessService<Object> {
 
@@ -229,14 +229,14 @@ public class AddingAnOperationTest {
         .execute(ARCHIVE_WORKFLOW, new Object(), Map.of(ARG_ARCHIVE, "cold-storage"));
 
     assertEquals(List.of("cold-storage"), adapter.phaseOne);
-    // nothing reached the BPMS inside the caller's transaction
+    // nothing reached the BPMS inside the transaction of the caller
     assertTrue(adapter.phaseTwo.isEmpty());
 
     final var call = outbox.scheduled.getFirst();
     assertEquals("test:ARCHIVE_WORKFLOW", call.operation());
     assertEquals("4711", call.workflowAggregateId());
     assertEquals("cold-storage", call.args().get(ARG_ARCHIVE));
-    // the operation's own key rule, applied by the core without knowing it
+    // the own key rule of the operation, which the core applies without knowing it
     assertEquals(
         "test:ARCHIVE_WORKFLOW|test-module|TestProcess|4711",
         call.idempotencyKey().orElseThrow());

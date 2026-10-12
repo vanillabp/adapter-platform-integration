@@ -43,8 +43,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * From then on the id can be read without asking any BPMS, which is what the election of an
  * operation about a workflow does today - it probes every configured adapter and remembers nothing.
  * <p>
- * An adapter which reports nothing is in here as well, because it has to keep behaving exactly as
- * it did: no row, no id, and the probing which was there before.
+ * An adapter which reports nothing is in here as well. It has to keep behaving exactly as it
+ * did: no row, no id, and the probing which was there before.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheStartOfAWorkflowLeavesItsBpmsIdBehindTest {
@@ -60,8 +60,8 @@ public class TheStartOfAWorkflowLeavesItsBpmsIdBehindTest {
   private static final String WORKFLOW = "2251799813685249";
 
   /**
-   * An adapter which creates an instance in phase two and says what it called it. Which is the
-   * only moment anybody ever learns that name: phase two returns nothing.
+   * An adapter which creates an instance in phase two and says what it called it. That is
+   * the only moment anybody ever learns that name, because phase two returns nothing.
    */
   static class AnAdapterWhichSaysWhatItCreated implements MigratableProcessService<Object> {
 
@@ -145,7 +145,7 @@ public class TheStartOfAWorkflowLeavesItsBpmsIdBehindTest {
 
   }
 
-  /** A delivery log in memory which answers by key, which is all the start row needs. */
+  /** A delivery log in memory which answers by key. The start row needs nothing more. */
   static class DeliveryLogInMemory implements TaskDeliveryLog {
 
     final Map<String, TaskDelivery> records = new HashMap<>();
@@ -294,7 +294,7 @@ public class TheStartOfAWorkflowLeavesItsBpmsIdBehindTest {
   }
 
   /**
-   * Phase two of the start, which is what the outbox dispatches once the caller's transaction
+   * Phase two of the start. The outbox dispatches it once the transaction of the caller has
    * committed.
    */
   private static void dispatchTheStart(
@@ -381,8 +381,8 @@ public class TheStartOfAWorkflowLeavesItsBpmsIdBehindTest {
     final var service = serviceOf(new AnAdapterWhichSaysWhatItCreated(WORKFLOW));
     dispatchTheStart(service);
 
-    // what answered this question before: an OPEN task delivery of that aggregate. It is gone the
-    // moment the application completes the task, and then only the start row is left
+    // what answered this question before: an OPEN task delivery of that aggregate. It is
+    // gone the moment the application completes the task. Then only the start row is left
     deliveryLog
         .record(
             new TaskDelivery(

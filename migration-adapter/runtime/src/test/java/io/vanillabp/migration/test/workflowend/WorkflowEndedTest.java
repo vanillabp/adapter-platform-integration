@@ -33,10 +33,10 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * Telling the application that a workflow ended: the aggregate is loaded,
- * the method is called and the aggregate is saved - and everything about it is
- * optional, so a process without such a method reports nothing and an aggregate
- * already deleted is not an error.
+ * Telling the application that a workflow ended. The aggregate is loaded, the method is
+ * called, and the aggregate is saved. Everything about it is optional. So a process without
+ * such a method reports nothing, and an aggregate which is already deleted is not an
+ * error.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowEndedTest {
@@ -145,7 +145,7 @@ public class WorkflowEndedTest {
 
   static class SilentService {
 
-    // no @WorkflowEnded method: the application does not want to know
+    // no @WorkflowEnded method, because the application does not want to know
 
   }
 
@@ -176,7 +176,7 @@ public class WorkflowEndedTest {
   }
 
   /**
-   * The application's own failure while it reacts to the end - the notification runs in
+   * The own failure of the application while it reacts to the end. The notification runs in
    * the transaction which ends the workflow, so this must not be swallowed.
    */
   static class FailingService {
@@ -435,7 +435,7 @@ public class WorkflowEndedTest {
     storeAggregate("4713");
 
     assertFalse(testee.workflowEndedHandlerExists(MODULE, PROCESS));
-    // an adapter which notifies anyway (a deployed model outliving its workflow
+    // an adapter which notifies anyway (a deployed model which outlives its workflow
     // service) must not fail
     testee
         .workflowEnded(MODULE, PROCESS, context("4713", WorkflowEnd.Kind.COMPLETED, null, false));
@@ -531,8 +531,8 @@ public class WorkflowEndedTest {
         () -> testee
             .workflowEnded(MODULE, PROCESS, context("4716", WorkflowEnd.Kind.COMPLETED, null, false)));
 
-    // wrapping it would hide the application's own message and, worse, could let a
-    // caller treat it as a VanillaBP defect
+    // wrapping it would hide the own message of the application. Worse, a caller could
+    // treat it as a defect of VanillaBP
     assertEquals("the application refused the end", exception.getMessage());
 
   }

@@ -1,26 +1,27 @@
 package io.vanillabp.integration.adapter.migration.config;
 
 /**
- * Configuration of what VanillaBP does when the store of a workflow aggregate is not
- * covered by the transaction it opens (properties section
- * <code>vanillabp.transactions</code>, overridable per workflow module as
+ * The configuration of what VanillaBP does when the store of a workflow aggregate is not
+ * covered by the transaction which it opens (properties section
+ * <code>vanillabp.transactions</code>, which can be overridden per workflow module as
  * <code>vanillabp.workflow-modules.&lt;id&gt;.transactions</code>).
  * <p>
- * The only setting is whether unguarded writes are accepted. VanillaBP refuses to boot
- * where a platform can name both the defect and its fix - a MongoDB-managed aggregate in
- * an application whose only transaction manager is a JPA one is the case this exists for.
- * An application which knowingly wants that behaviour states it here, and the message
- * stays as a WARN so the decision remains visible in the log.
+ * The only setting is whether unguarded writes are accepted. VanillaBP refuses to boot where
+ * a platform can name both the defect and its fix. The case this exists for is an aggregate
+ * managed by MongoDB in an application whose only transaction manager is a JPA one. An
+ * application which wants that behaviour on purpose says so here. Then the message stays as a
+ * WARN, so that the decision stays visible in the log.
  */
 public class TransactionsProperties {
 
   /**
-   * The empty section a configuration binder starts from: both platforms create the object
-   * and then write the keys the application configured into it, one setter per key.
+   * The empty section from which a configuration binder starts. Both platforms create the
+   * object, and then write the keys which the application configured into it, one setter per
+   * key.
    * <p>
-   * It asks the builder for the values, which is how a field given a default one day
-   * keeps it: the default then stands on the builder as well, and this constructor reads
-   * it from there.
+   * It asks the builder for the values. That is how a field which gets a default one day
+   * keeps it. The default is then on the builder as well, and this constructor reads it from
+   * there.
    */
   public TransactionsProperties() {
 
@@ -29,37 +30,35 @@ public class TransactionsProperties {
   }
 
   /**
-   * What VanillaBP does about a workflow aggregate whose store is demonstrably not
-   * covered by the transaction it opens.
+   * What VanillaBP does about a workflow aggregate whose store is shown not to be covered by
+   * the transaction which it opens.
    */
   public enum UnguardedAggregateWrites {
 
     /**
-     * The boot ends with a guiding message naming the fix. The default.
+     * The boot ends with a guiding message which names the fix. This is the default.
      */
     REJECTED,
 
     /**
-     * The application accepts writes which do not commit or roll back together. The
-     * message is logged as a WARN instead of ending the boot.
+     * The application accepts writes which do not commit or roll back together. The message
+     * is logged as a WARN, and the boot goes on.
      */
     ACCEPTED
 
   }
 
   /**
-   * Whether writes to a store outside VanillaBP's transaction are accepted.
-   * <code>null</code> in a workflow module's section means "whatever is configured
-   * globally"; the default of the global section is
-   * {@link UnguardedAggregateWrites#REJECTED}.
+   * Whether writes to a store outside VanillaBP's transaction are accepted. <code>null</code>
+   * in the section of a workflow module means "whatever is configured globally". The default
+   * of the global section is {@link UnguardedAggregateWrites#REJECTED}.
    */
   private UnguardedAggregateWrites unguardedAggregateWrites;
 
   /**
-   * The builder of {@link TransactionsProperties}. Its two type parameters carry the
-   * class being built and the builder itself, so a call inherited from a base class
-   * comes back as the builder of the subclass and the next call in the chain sees every
-   * key again.
+   * The builder of {@link TransactionsProperties}. Its two type parameters are the class
+   * being built and the builder itself. So a call inherited from a base class comes back as
+   * the builder of the subclass, and the next call in the chain sees every key again.
    *
    * @param <C> The class this builder builds
    * @param <B> The builder itself, which every method of the chain returns
@@ -72,7 +71,7 @@ public class TransactionsProperties {
     private UnguardedAggregateWrites unguardedAggregateWrites;
 
     /**
-     * The builder of a subclass calls this while it is built. Nobody else needs one:
+     * The builder of a subclass calls this while it is built. Nobody else needs one.
      * {@link TransactionsProperties#builder()} hands out the builder of this class.
      */
     public TransactionsPropertiesBuilder() {
@@ -93,9 +92,8 @@ public class TransactionsProperties {
     }
 
     /**
-     * The builder itself, typed as the builder of the subclass. Every method of the
-     * chain returns it, which is what keeps a chain started on a subclass builder at
-     * that subclass.
+     * The builder itself, typed as the builder of the subclass. Every method of the chain
+     * returns it. That keeps a chain which started on a subclass builder at that subclass.
      *
      * @return This builder
      */
@@ -126,8 +124,8 @@ public class TransactionsProperties {
   }
 
   /**
-   * The builder {@link #builder()} hands out: the one which builds
-   * {@link TransactionsProperties} itself rather than a subclass of it.
+   * The builder which {@link #builder()} hands out: the one which builds
+   * {@link TransactionsProperties} itself, and not a subclass of it.
    */
   private static final class TransactionsPropertiesBuilderImpl extends TransactionsProperties.TransactionsPropertiesBuilder<TransactionsProperties, TransactionsProperties.TransactionsPropertiesBuilderImpl> {
 
@@ -164,8 +162,8 @@ public class TransactionsProperties {
   }
 
   /**
-   * What every builder of this class and of its subclasses builds through. It is the one
-   * place the values of this class move from the builder into the object, so a subclass
+   * Every builder of this class and of its subclasses builds through this. It is the one
+   * place where the values of this class move from the builder into the object. So a subclass
    * builder fills the keys of its base class as well.
    *
    * @param b The builder holding what was written
@@ -178,8 +176,8 @@ public class TransactionsProperties {
   }
 
   /**
-   * A builder of {@link TransactionsProperties}, empty except for the values which have
-   * a default.
+   * A builder of {@link TransactionsProperties}. It is empty, except for the values which
+   * have a default.
    *
    * @return The builder
    */

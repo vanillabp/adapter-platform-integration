@@ -37,18 +37,19 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackgroundOutput;
 
 /**
- * What the lease of the JDBC outbox is for: a dispatch which takes longer than the distance
- * the claim leased it for keeps its entry instead of being carried out a second time.
+ * What the lease of the JDBC outbox is for. A dispatch may take longer than the time the
+ * claim leased the entry for. It then keeps its entry, and nobody carries it out a second
+ * time.
  * <p>
- * Measured before the lease existed, with the numbers below: one operation, six counted
- * attempts, six calls into the adapter and five of them after the entry was already marked
- * DONE - the late ones read a payload which had been removed, wrote DONE_AT anew, and one of
- * them could have written BLOCKED over a DONE. The claim leased the entry for one
- * <code>attempt-frequency</code> and the next poll simply took it back.
+ * This was measured before the lease existed, with the numbers below. One operation had six
+ * counted attempts and six calls into the adapter. Five of the calls came after the entry
+ * was already marked DONE. The late calls read a payload which had been removed, and wrote
+ * DONE_AT anew. One of them could have written BLOCKED over a DONE. The claim leased the
+ * entry for one <code>attempt-frequency</code>, and the next poll simply took it back.
  * <p>
- * What the three tests assert: one delivery for one operation, an <code>ATTEMPTS</code> which
- * counts what was attempted rather than what was claimed, and an entry whose holder died going
- * to whoever polls next.
+ * The three tests assert this. One operation is delivered once. <code>ATTEMPTS</code> counts
+ * what was attempted, not what was claimed. And an entry whose holder died goes to whoever
+ * polls next.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -57,20 +58,20 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 public class ADispatchWhichOutlastsItsLeaseTest {
 
   /**
-   * How long a claim lasts here. Short enough that every poll during the dispatch below would
-   * have taken the entry back, which is what made the defect visible in the first place.
+   * How long a claim lasts here. It is so short that every poll during the dispatch below
+   * would have taken the entry back. That made the defect visible in the first place.
    */
   private static final Duration LEASE = Duration.ofMillis(500);
 
   /**
-   * How long one dispatch takes here - six times the lease, the shape a handler calling a
-   * system of somebody else's has.
+   * How long one dispatch takes here. It is six times the lease, like a handler which calls
+   * a system of somebody else.
    */
   private static final Duration A_DISPATCH_WHICH_TAKES_ITS_TIME = Duration.ofSeconds(3);
 
   /**
-   * How long a test waits for something it expects to happen. It is a guard against a machine
-   * which leaves the JVM without a turn, not a measurement of speed.
+   * How long a test waits for something it expects to happen. It guards against a machine
+   * which leaves the JVM without a turn. It does not measure speed.
    */
   private static final Duration UNTIL_IT_HAPPENED = Duration.ofSeconds(30);
 
@@ -92,19 +93,19 @@ public class ADispatchWhichOutlastsItsLeaseTest {
   private MigrationProcessService<Object> processService;
 
   /**
-   * How often the adapter was called, which is the number the whole story is about.
+   * How often the adapter was called. The whole story is about this number.
    */
   private final AtomicInteger callsIntoTheAdapter = new AtomicInteger();
 
   /**
-   * Counted down by the first call into the adapter, so a test can wait for the dispatch to
-   * have STARTED rather than sleeping for a while.
+   * The first call into the adapter counts it down. So a test can wait until the dispatch
+   * has STARTED, instead of sleeping for a while.
    */
   private final CountDownLatch theFirstCallStarted = new CountDownLatch(1);
 
   /**
-   * A database per test, because every test of this class writes into the outbox table and
-   * reads what is in it afterwards.
+   * A database per test. Every test of this class writes into the outbox table and reads
+   * what is in it afterwards.
    */
   private JdbcConnectionAccess databaseNamed(
       final String name) {
@@ -114,24 +115,24 @@ public class ADispatchWhichOutlastsItsLeaseTest {
   }
 
   /**
-   * The properties of a store whose lease is short, so the poll which used to take a running
-   * dispatch's entry back happens several times per dispatch.
+   * The properties of a store with a short lease. The poll which used to take back the
+   * entry of a running dispatch then happens several times per dispatch.
    */
   private static PhaseTwoOutboxProperties leasingFor(
       final Duration lease) {
 
     final var properties = new PhaseTwoOutboxProperties();
     properties.setAttemptFrequency(lease);
-    // the poll interval is the cap on the sleep, and a short one is what makes the poll
-    // happen again while the dispatch below is still running
+    // the poll interval caps the sleep. A short one makes the poll happen again while the
+    // dispatch below is still running
     properties.setPollInterval(lease);
     return properties;
 
   }
 
   /**
-   * A router whose only process service is a double which takes its time and counts how often
-   * it was called.
+   * A router whose only process service is a double. The double takes its time and counts
+   * how often it was called.
    *
    * @param dispatchTakes How long one call into the adapter lasts
    */
@@ -253,12 +254,13 @@ public class ADispatchWhichOutlastsItsLeaseTest {
       assertTrue(
           theFirstCallStarted.await(UNTIL_IT_HAPPENED.toSeconds(), TimeUnit.SECONDS),
           "the entry was never dispatched");
-      // the dispatch runs for six leases, so every poll in that window is a poll which used
-      // to take the entry back. The entry is DONE when the one dispatch finished
+      // the dispatch runs for six leases. Every poll in that window used to take the entry
+      // back. The entry is DONE when the one dispatch finished
       waitUntil(
           "the dispatch never finished",
           () -> JdbcPhaseTwoOutboxDispatcher.STATUS_DONE.equals(entryOf(connections, table, entry).status()));
-      // long enough for two more polls after the entry was marked: a late call would land here
+      // long enough for two more polls after the entry was marked. A late call would land
+      // here
       Thread.sleep(2 * LEASE.toMillis());
     } finally {
       dispatcher.stop();
@@ -288,8 +290,8 @@ public class ADispatchWhichOutlastsItsLeaseTest {
       assertTrue(
           theFirstCallStarted.await(UNTIL_IT_HAPPENED.toSeconds(), TimeUnit.SECONDS),
           "the entry was never dispatched");
-      // the attempt is under way and has ended with nothing yet, so there is nothing to count
-      // - this is the number 'block-after-attempts' reads, and being slow must not spend it
+      // the attempt is under way and has not ended yet, so there is nothing to count.
+      // 'block-after-attempts' reads this number, and being slow must not use it up
       assertEquals(
           0,
           entryOf(connections, table, entry).attempts(),
@@ -311,8 +313,8 @@ public class ADispatchWhichOutlastsItsLeaseTest {
 
     final var table = "OUTBOX_WITHOUT_THE_LEASE";
     final var connections = databaseNamed("a-table-without-the-lease");
-    // the table an earlier version of VanillaBP created: everything but the two columns a
-    // claim writes. Every poll would fail on them, so the boot has to say so instead
+    // the table an earlier version of VanillaBP created. It has everything but the two
+    // columns a claim writes. Every poll would fail on them, so the boot has to say so
     try (var connection = connections.acquire(); var statement = connection.createStatement()) {
       statement
           .executeUpdate(
@@ -358,7 +360,7 @@ public class ADispatchWhichOutlastsItsLeaseTest {
     final var dispatcher = dispatcherOf(
         connections, leasingFor(LEASE), aRouterWhoseAdapterTakes(Duration.ZERO), table);
     dispatcher.prepareSchema();
-    // both are due, and the lease is the only thing telling them apart
+    // both are due, and only the lease tells them apart
     final var leftBehind = anEntryDueNow(
         connections, table, "a-node-which-died", Instant.now().minus(Duration.ofMinutes(1)));
     final var heldBySomebodyElse = anEntryDueNow(
@@ -370,7 +372,7 @@ public class ADispatchWhichOutlastsItsLeaseTest {
           "the entry of the node which died was never taken over",
           () -> JdbcPhaseTwoOutboxDispatcher.STATUS_DONE
               .equals(entryOf(connections, table, leftBehind).status()));
-      // two more polls, so "not dispatched" is a decision of the lease and not of timing
+      // two more polls, so the lease decides "not dispatched", not the timing
       Thread.sleep(3 * LEASE.toMillis());
     } finally {
       dispatcher.stop();

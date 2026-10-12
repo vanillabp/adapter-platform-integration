@@ -21,24 +21,24 @@ import io.vanillabp.integration.adapter.migration.outbox.DispatchLanes;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The two promises an outbox makes as soon as it dispatches on more than one thread: what
- * belongs to one workflow aggregate keeps its order, and what belongs to different ones
- * runs at the same time. And what the handover answers, which is how a caller learns that
- * a lane which is stopping will never run its work.
+ * The two promises an outbox makes once it dispatches on more than one thread. What belongs
+ * to one workflow aggregate keeps its order. What belongs to different ones runs at the
+ * same time. The test also covers what the handover answers. That is how a caller learns
+ * that a stopping lane will never run its work.
  * <p>
- * Both are asserted here rather than over a database, because a test which starts
- * workflows and waits for a BPMS double proves neither: a correct implementation and one
- * which quietly serialises everything look alike from the outside, and two entries which
- * happen to be dispatched in order prove nothing about the next run. What the integration
- * tests of the stores add is that the lanes are really wired in.
+ * The test asserts both here and not over a database. A test which starts workflows and
+ * waits for a BPMS double proves neither. A correct implementation and one which quietly
+ * runs everything one after the other look alike from the outside. And two entries which
+ * happen to be dispatched in order prove nothing about the next run. The integration tests
+ * of the stores add that the lanes are really wired in.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DispatchLanesTest {
 
   /**
-   * How long a test waits for work which has to arrive. It measures nothing - every claim
-   * below is read from what the lanes did, not from how fast they did it - so a loaded
-   * machine makes this test slower rather than red.
+   * How long a test waits for work which has to arrive. It measures nothing. Every claim
+   * below is read from what the lanes did, not from how fast they did it. So a loaded
+   * machine makes this test slower, not red.
    */
   private static final long UNTIL_A_LANE_COUNTS_AS_STUCK = 30;
 
@@ -62,8 +62,8 @@ public class DispatchLanesTest {
     final var arrived = new CopyOnWriteArrayList<Integer>();
     final var allArrived = new CountDownLatch(200);
 
-    // one key, handed in by one thread: what the lanes do with it is the whole
-    // question, and 200 of them leave no room for a lucky run
+    // one key, handed in by one thread. The whole question is what the lanes do with it.
+    // 200 of them leave no room for a lucky run
     IntStream
         .range(0, 200)
         .forEach(entry -> lanes.runInOrderOf("aggregate-1", () -> {
@@ -87,9 +87,9 @@ public class DispatchLanesTest {
 
     lanes = new DispatchLanes("test-concurrency", 4);
     final var keys = twoKeysOfDifferentLanes(4);
-    // each of the two waits for the other to have started. A store which dispatches one
-    // after the other never gets past the first of them, so this is the test which tells
-    // a working implementation from one that only looks like it
+    // each of the two waits for the other to start. A store which dispatches one after the
+    // other never gets past the first of them. So this test tells a working implementation
+    // from one which only looks like it
     final var bothStarted = new CountDownLatch(2);
     final var bothEnded = new CountDownLatch(2);
 
@@ -115,9 +115,9 @@ public class DispatchLanesTest {
   @DisplayName("A backlog waits in the queue instead of being run by whoever handed it in")
   public void aFullQueueMakesTheCallerWait() throws Exception {
 
-    // one lane, so everything meets the same queue, and the first entry holds it until
-    // the test lets go. A lane which let the caller run the work would break the order,
-    // so the caller has to wait - which is what the thread names below show
+    // one lane, so everything meets the same queue. The first entry holds it until the test
+    // lets go. A lane which let the caller run the work would break the order. So the caller
+    // has to wait, and the thread names below show that
     lanes = new DispatchLanes("test-backpressure", 1);
     final var holdTheLane = new CountDownLatch(1);
     final var ranOn = new CopyOnWriteArrayList<String>();
@@ -158,8 +158,8 @@ public class DispatchLanesTest {
 
     lanes = new DispatchLanes("test-shutdown", 1);
     final var ran = new AtomicBoolean();
-    // the lane the work is handed to below has stopped, which is what a node shutting down
-    // does while its poller is still handing entries in
+    // the lane which gets the work below has stopped. A node which shuts down does this
+    // while its poller still hands entries in
     lanes.stop();
 
     final var taken = lanes.runInOrderOf("aggregate-1", () -> ran.set(true));
@@ -186,8 +186,8 @@ public class DispatchLanesTest {
   }
 
   /**
-   * Two keys which the lanes send to different threads. Which key lands where is the
-   * implementation's business, so the test asks it instead of assuming it.
+   * Two keys which the lanes send to different threads. The implementation decides which
+   * key lands where. So the test asks it instead of assuming it.
    *
    * @param count How many lanes there are
    * @return Two keys of two different lanes

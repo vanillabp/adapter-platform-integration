@@ -7,23 +7,21 @@ import java.util.Map;
 import org.slf4j.MDC;
 
 /**
- * The logging context VanillaBP puts around everything it delivers to application
- * code: which BPMS, which workflow module, which BPMN process, which workflow, which
- * task, and what the BPMS calls this delivery. Every log line an application writes
- * inside a <code>&#64;WorkflowTask</code> method carries them, so a log search can
- * follow one workflow through a system without the application passing anything
- * around.
+ * The logging context which VanillaBP puts around everything it delivers to application
+ * code: which BPMS, which workflow module, which BPMN process, which workflow, which task,
+ * and what the BPMS calls this delivery. Every log line which an application writes inside
+ * a <code>&#64;WorkflowTask</code> method has these values. So a log search can follow one
+ * workflow through a system, and the application does not have to pass anything around.
  * <p>
- * The keys are listed in the wiki together with a log pattern to paste. Camunda
- * documents MDC keys around its own handler as well, but its 8.9 client does not set
- * any; what VanillaBP puts here is more, and it is the same on every BPMS because it
- * is set in the core rather than in an adapter.
+ * The wiki lists the keys, together with a log pattern to paste. Camunda documents MDC keys
+ * around its own handler as well, but its 8.9 client does not set any. VanillaBP sets more
+ * here, and the keys are the same on every BPMS, because the core sets them and not an
+ * adapter.
  * <p>
- * <b>VanillaBP touches its own keys and nothing else.</b> The previous values of
- * exactly these keys are remembered and restored on {@link #close()}, so a thread
- * which the application uses for other things as well - a Camunda 7 job-executor
- * thread, a request thread - looks afterwards the way it looked before. Use it as a
- * resource:
+ * <b>VanillaBP touches its own keys and nothing else.</b> It remembers the previous values
+ * of exactly these keys and restores them on {@link #close()}. The application may use the
+ * thread for other things as well, for example a Camunda 7 job-executor thread or a request
+ * thread. Afterwards that thread looks the way it looked before. Use it as a resource:
  *
  * <pre>
  * try (var mdc = DeliveryMdc.ofTaskDelivery(...)) {
@@ -34,43 +32,43 @@ import org.slf4j.MDC;
 public final class DeliveryMdc implements AutoCloseable {
 
   /**
-   * The id of the adapter (and therefore the BPMS instance) the work came from.
+   * The id of the adapter, and so of the BPMS instance, which the work came from.
    */
   public static final String ADAPTER = "vanillabp.adapter";
 
   /**
-   * The id of the workflow module owning the BPMN process.
+   * The id of the workflow module which owns the BPMN process.
    */
   public static final String WORKFLOW_MODULE = "vanillabp.workflow.module";
 
   /**
-   * The BPMN process id, as the application wrote it (without any prefixing a
-   * name-clash-avoidance mode applies).
+   * The BPMN process id as the application wrote it, without any prefix which a
+   * name-clash-avoidance mode adds.
    */
   public static final String BPMN_PROCESS = "vanillabp.bpmn.process";
 
   /**
-   * The id of the workflow aggregate, which is the id of the workflow itself - the
+   * The id of the workflow aggregate, which is the id of the workflow itself. This is the
    * value to search a log by.
    */
   public static final String WORKFLOW_AGGREGATE_ID = "vanillabp.workflow.aggregate.id";
 
   /**
-   * The task definition delivered (the BPMN task's task definition or its activity
-   * id), absent outside a task delivery.
+   * The task definition delivered (the task definition of the BPMN task, or its activity
+   * id). It is absent outside a task delivery.
    */
   public static final String TASK_DEFINITION = "vanillabp.task.definition";
 
   /**
-   * What the BPMS calls this delivery (the Camunda 8 job key, the task id of a
-   * remote engine), absent where the BPMS does not name its deliveries. Two log
-   * lines of one delivery share it, a redelivery repeats it.
+   * What the BPMS calls this delivery (the Camunda 8 job key, the task id of a remote
+   * engine). It is absent where the BPMS does not name its deliveries. Two log lines of one
+   * delivery share it, and a repeated delivery repeats it.
    */
   public static final String DELIVERY_ID = "vanillabp.delivery.id";
 
   /**
-   * Every key VanillaBP sets - the list to build a log pattern from, and the list
-   * restored when a scope ends.
+   * Every key which VanillaBP sets. Build a log pattern from this list. It is also the list
+   * which is restored when a scope ends.
    */
   public static final List<String> KEYS = List.of(
       ADAPTER,
@@ -122,10 +120,9 @@ public final class DeliveryMdc implements AutoCloseable {
   }
 
   /**
-   * The context of a phase-two call dispatched out of the transaction outbox. It
-   * knows no task and no delivery of a BPMS: the entry was written by this
-   * application, and what the BPMS answers to it is exactly what an operator is
-   * looking for when a connection is broken.
+   * The context of a phase-two call which the transaction outbox dispatches. It knows no
+   * task and no delivery of a BPMS. This application wrote the entry. What the BPMS answers
+   * to it is exactly what an operator looks for when a connection is broken.
    *
    * @param adapterId The id of the adapter the call goes to, if the entry names one
    * @param workflowModuleId The workflow module of the BPMN process

@@ -22,16 +22,16 @@ import io.vanillabp.integration.spi.startup.StartupTopic;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * A name which lives on in a version the BPMS still holds and in no model of this
- * deployment - what renaming a message leaves behind.
+ * A name which lives on in a version the BPMS still holds, and in no model of this
+ * deployment. Renaming a message leaves this behind.
  * <p>
- * The workflows on that version wait at their message event for something nothing sends
- * any more, and nothing else in VanillaBP would say so: the name is in a model the BPMS
- * holds and in no file of the application.
+ * The workflows on that version wait at their message event for something which nothing
+ * sends any more. Nothing else in VanillaBP would say so. The name is in a model the BPMS
+ * holds, and in no file of the application.
  * <p>
- * The line says "look at it" rather than "write this". The platform can see the case and
- * cannot know whether it is meant - a rename whose old workflows were finished by hand
- * looks exactly like a rename nobody finished - so it is a warning of the block a start
+ * The line says "look at it", not "write this". The platform can see the case, but it
+ * cannot know whether it is meant. A rename whose old workflows were finished by hand looks
+ * exactly like a rename which nobody finished. So it is a warning of the block which a start
  * writes at its end, never a refusal (decision 38 in the repository's DECISIONS.md).
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -61,8 +61,8 @@ public class ANameTheCurrentDeploymentNoLongerDeclaresTest {
   }
 
   /**
-   * What the adapter does while it deploys the models this application brings: it reads
-   * their identifiers out and reports them.
+   * What the adapter does while it deploys the models which this application brings. It
+   * reads their identifiers out and reports them.
    */
   private void theDeploymentDeclares(
       final ModelIdentifier... identifiers) {
@@ -72,7 +72,7 @@ public class ANameTheCurrentDeploymentNoLongerDeclaresTest {
   }
 
   /**
-   * What the core does once it read the model of a version the BPMS still holds.
+   * What the core does once it has read the model of a version the BPMS still holds.
    */
   private void aHeldVersionDeclares(
       final Long activeWorkflows,
@@ -179,7 +179,7 @@ public class ANameTheCurrentDeploymentNoLongerDeclaresTest {
 
     theDeploymentDeclares(message("PaymentSettled"));
 
-    // "cannot tell" is not "nobody", and a workflow waiting forever is what this is about
+    // "cannot tell" is not "nobody", and this is about a workflow which waits forever
     aHeldVersionDeclares(null, message("PaymentReceived"));
 
     assertTrue(
@@ -192,8 +192,8 @@ public class ANameTheCurrentDeploymentNoLongerDeclaresTest {
   @DisplayName("An adapter which never read the current models says nothing")
   public void anAdapterWhichReportsNoIdentifiersIsQuiet() {
 
-    // nobody said what this deployment declares, so every old name would look new - a
-    // check which cannot answer for sure stays silent
+    // nobody said what this deployment declares, so every old name would look new. A check
+    // which cannot answer for sure stays silent
     aHeldVersionDeclares(3L, message("PaymentReceived"));
 
     assertEquals(List.of(), whatTheStartNoticed());
@@ -210,8 +210,8 @@ public class ANameTheCurrentDeploymentNoLongerDeclaresTest {
         3L,
         new ModelIdentifier(ScopedIdentifierKind.ERROR_CODE, "PaymentFailed", null),
         new ModelIdentifier(ScopedIdentifierKind.ESCALATION_CODE, "TooSlow", null),
-        // a task definition nobody serves is the subject of its own check, which says
-        // more about it than this could
+        // a task definition which nobody serves is the subject of its own check. That check
+        // says more about it than this one could
         new ModelIdentifier(ScopedIdentifierKind.TASK_DEFINITION, "scoreApplicant", "Settlement"),
         new ModelIdentifier(ScopedIdentifierKind.BPMN_PROCESS_ID, "Settlement", "Settlement"));
 

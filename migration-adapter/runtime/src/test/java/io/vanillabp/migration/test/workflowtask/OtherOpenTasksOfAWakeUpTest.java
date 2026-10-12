@@ -38,14 +38,14 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * What a wake-up does with the OTHER tasks VanillaBP still believes are open in the same
- * workflow: it asks the adapter's probe about them and reports the ones which are gone as
- * canceled.
+ * What a wake-up does with the OTHER tasks of the same workflow which VanillaBP still
+ * believes to be open. It asks the probe of the adapter about them. It reports the ones
+ * which are gone as canceled.
  * <p>
- * The three answers of the probe are why this is a test of its own. A cancellation follows
- * only on {@link TaskExistence#GONE}, and a probe which cannot say is not a probe which
- * said no - reading a failed question as "gone" would cancel the open work of a workflow
- * whenever the engine hiccups.
+ * The probe has three answers, and that is why this is a test of its own. Only
+ * {@link TaskExistence#GONE} leads to a cancellation. A probe which cannot say is not a
+ * probe which said no. If a failed question counted as "gone", every hiccup of the engine
+ * would cancel the open work of a workflow.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OtherOpenTasksOfAWakeUpTest {
@@ -81,8 +81,8 @@ public class OtherOpenTasksOfAWakeUpTest {
   }
 
   /**
-   * A method which keeps its task open and wants to hear about the cancellation, which is
-   * the only shape this whole mechanism is about.
+   * A method which keeps its task open and wants to hear about the cancellation. This whole
+   * mechanism is only about this shape.
    */
   @WorkflowService(workflowAggregateClass = Aggregate.class, bpmnProcess = @BpmnProcess(bpmnProcessId = PROCESS))
   public static class SignatureService {
@@ -102,8 +102,8 @@ public class OtherOpenTasksOfAWakeUpTest {
     }
 
     /**
-     * A second open task of the same BPMN process, so a test can show a probe answering
-     * for one task definition and refusing for the other.
+     * A second open task of the same BPMN process. So a test can show a probe which answers
+     * for one task definition and refuses for the other.
      */
     @WorkflowTask
     public void countersign(
@@ -122,8 +122,8 @@ public class OtherOpenTasksOfAWakeUpTest {
   }
 
   /**
-   * A BPMN process whose method is done when it returns, so nothing of it can ever be
-   * open - which is what most applications look like.
+   * A BPMN process whose method is done when it returns. So nothing of it can ever be open,
+   * and most applications look like this.
    */
   @WorkflowService(
       workflowAggregateClass = Aggregate.class,
@@ -200,7 +200,7 @@ public class OtherOpenTasksOfAWakeUpTest {
   }
 
   /**
-   * A store which remembers what was asked of it, so a test can show that a BPMN process
+   * A store which remembers what was asked of it. So a test can show that a BPMN process
    * without an asynchronous task does not read it at all.
    */
   static class RecordingDeliveryLog implements TaskDeliveryLog {
@@ -405,7 +405,7 @@ public class OtherOpenTasksOfAWakeUpTest {
   }
 
   /**
-   * A probe answering per task, and writing down what it was asked about.
+   * A probe which answers per task and writes down what it was asked about.
    */
   private OpenTaskProbe probeAnswering(
       final Map<String, TaskExistence> answers) {
@@ -442,7 +442,7 @@ public class OtherOpenTasksOfAWakeUpTest {
     registry.invokeWorkflowTask(MODULE, PROCESS, delivery(PROCESS, "awaitSignature", "task-2"));
     assertEquals(2, openRecords());
 
-    // task-2 woke us up, so it is not probed, and task-1 is gone
+    // task-2 woke us up, so it is not probed. task-1 is gone
     registry
         .reportTasksTheBpmsNoLongerHas(
             MODULE,
@@ -575,8 +575,8 @@ public class OtherOpenTasksOfAWakeUpTest {
     registry.invokeWorkflowTask(MODULE, PROCESS, delivery(PROCESS, "awaitSignature", "task-1"));
     registry.invokeWorkflowTask(MODULE, PROCESS, delivery(PROCESS, "awaitSignature", "task-2"));
 
-    // a probe implementing the two-argument method alone, which is every probe written
-    // before the definition travelled
+    // a probe which implements only the method with two arguments. Every probe written
+    // before the definition travelled looks like this
     final var asked = new java.util.ArrayList<String>();
     registry
         .reportTasksTheBpmsNoLongerHas(
@@ -611,8 +611,8 @@ public class OtherOpenTasksOfAWakeUpTest {
     registry.invokeWorkflowTask(MODULE, PROCESS, delivery(PROCESS, "countersign", "task-2"));
     registry.invokeWorkflowTask(MODULE, PROCESS, delivery(PROCESS, "awaitSignature", "task-3"));
 
-    // what an adapter of a BPMS which answers for some kinds of task and not for others
-    // does: it refuses per record instead of per BPMN process
+    // an adapter of a BPMS which answers for some kinds of task and not for others does
+    // this. It refuses per record, not per BPMN process
     final var askedWithTheDefinition = new java.util.LinkedHashMap<String, String>();
     final var askedWithoutIt = new java.util.ArrayList<String>();
     registry
@@ -652,8 +652,8 @@ public class OtherOpenTasksOfAWakeUpTest {
         Map.of("task-1", "awaitSignature", "task-2", "countersign"),
         askedWithTheDefinition,
         "every record carries the definition it was delivered under");
-    // both facts in one assertion, so nobody can pass this by weakening the model: the
-    // task the probe could answer for is canceled and the one it refused is left alone
+    // both facts in one assertion, so nobody can pass this by weakening the model. The task
+    // the probe could answer for is canceled, and the one it refused is left alone
     assertEquals(
         "task-1",
         aggregate.canceled,

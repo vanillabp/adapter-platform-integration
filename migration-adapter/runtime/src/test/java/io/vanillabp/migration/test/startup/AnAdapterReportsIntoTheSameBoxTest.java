@@ -15,17 +15,17 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 /**
  * What an adapter reports stands in the same block as what the platform reports.
  * <p>
- * An adapter holds {@link StartupReport}, which is the reporting half of the collection
- * and nothing else. This is what that half is worth: a finding handed over through it is
- * folded, grouped and counted like any other, and the developer reads one block instead of
- * one per artifact their application is built from.
+ * An adapter holds {@link StartupReport}, which is the reporting half of the collection and
+ * nothing else. This test shows what that half is worth. A finding handed over through it is
+ * folded, grouped and counted like any other. The developer reads one block, instead of one
+ * per artifact from which their application is built.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AnAdapterReportsIntoTheSameBoxTest {
 
   /**
-   * An adapter holding nothing but the reporting half - the way both platform
-   * integrations hand it over.
+   * An adapter which holds nothing but the reporting half. Both platform integrations hand
+   * it over like this.
    */
   private static void theAdapterFoundSomething(
       final StartupReport report) {

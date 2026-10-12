@@ -22,10 +22,10 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport.ScopedIden
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The identifiers two workflow modules of ONE application share: the names the adapter
- * read out of the models it deploys, and the names a version the BPMS still holds carries.
- * Both are warnings which name the two modules, the form the BPMS sees and the way out,
- * and both stay silent where the modules are scoped apart.
+ * The identifiers which two workflow modules of ONE application share. These are the names
+ * the adapter read out of the models it deploys, and the names which a version the BPMS
+ * still holds carries. Both are warnings. They name the two modules, the form the BPMS sees
+ * and the way out. Both stay silent where the modules are scoped apart.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class CollidingIdentifiersOfWorkflowModulesTest {
@@ -37,8 +37,8 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
   private static final String ADAPTER = "c7";
 
   /**
-   * The configuration the service built last runs on - what a check reports into hangs
-   * on it, so this is where a test reads what was reported.
+   * The configuration on which the last built service runs. A check reports into what
+   * hangs on it. So a test reads here what was reported.
    */
   private static MigrationAdapterProperties lastProperties;
 
@@ -67,8 +67,8 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
   }
 
   /**
-   * Everything the checks reported while the given block ran - the message is the whole
-   * feature, so it is read rather than mocked.
+   * Everything the checks reported while the given block ran. The message is the whole
+   * feature, so the test reads it and does not mock it.
    */
   private static List<Finding> recorded(
       final Runnable reporting) {
@@ -90,8 +90,8 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
         findings.getFirst().severity(),
         "an application may have arranged the sharing");
     final var finding = findings.getFirst();
-    // the scope says what the finding is about and the message says what to do, so a
-    // test reading the whole warning reads both
+    // the scope says what the finding is about, and the message says what to do. So a test
+    // which reads the whole warning reads both
     return "%s: %s".formatted(finding.scope(), finding.message());
 
   }
@@ -118,7 +118,7 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
         + "'"), reported);
     assertTrue(reported.contains("mode 'none'"), reported);
     assertTrue(reported.contains("vanillabp.adapters.c7.name-clash-avoidance"), reported);
-    // with nothing scoped the collision is certain, so nothing is hedged
+    // with nothing scoped, the collision is certain. So nothing is hedged
     assertFalse(reported.contains("cannot see whether"), reported);
 
   }
@@ -153,10 +153,11 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
               testee.reportIdentifiersTheModelsDeclare(ADAPTER, PAYMENTS, List.of(message("PaymentReceived")));
             }));
 
-    // the fix under by-adapter is the scope the BPMS puts the modules into, not a prefix
+    // under by-adapter, the fix is the scope into which the BPMS puts the modules, not a
+    // prefix
     assertTrue(reported.contains("vanillabp.adapters.c7.tenant-id"), reported);
-    // and whether that scope really separates them is the adapter's knowledge, so the line
-    // says so instead of presenting a question as a verdict
+    // and only the adapter knows whether that scope really separates them. So the line says
+    // so, instead of presenting a question as a verdict
     assertTrue(reported.contains("VanillaBP cannot see whether it does"), reported);
 
   }
@@ -167,9 +168,9 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
 
     final var testee = serviceWith(NameClashAvoidance.NONE);
 
-    // the scope of such a name IS the workflow module: two of its processes waiting for the
-    // same message is how a module is built, and reporting it would teach a developer to
-    // ignore the message
+    // the scope of such a name IS the workflow module. A module is built with two of its
+    // processes waiting for the same message. Reporting it would teach a developer to ignore
+    // the message
     final var events = recorded(
         () -> {
           testee
@@ -245,9 +246,9 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
 
     final var testee = serviceWith(NameClashAvoidance.NONE);
 
-    // where a BPMS subscribes to a task definition cluster-wide, which a Camunda 8 job type
-    // is, this is the most expensive collision of the set: the worker of one module fetches
-    // the jobs of the other
+    // where a BPMS subscribes to a task definition across the whole cluster, as with a job
+    // type of Camunda 8, this is the most expensive collision of the set. The worker of one
+    // module fetches the jobs of the other
     final var reported = theOnlyWarning(
         recorded(
             () -> {
@@ -264,8 +265,8 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
             }));
 
     assertTrue(reported.contains("task definition 'scoreApplicant'"), reported);
-    // both sides are named with the process the name was read from, because that is where a
-    // developer has to go
+    // both sides are named with the process from which the name was read, because a
+    // developer has to go there
     assertTrue(reported.contains("(BPMN process 'RiskAssessment')"), reported);
     assertTrue(reported.contains("(BPMN process 'Settlement')"), reported);
     assertTrue(reported.contains("'"
@@ -280,9 +281,9 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
 
     final var testee = serviceWith(NameClashAvoidance.NONE);
 
-    // the same name in two processes of one module: reusing one task implementation across
-    // processes is an anti-pattern, and an application doing it deliberately has said so -
-    // it is not a clash between two modules
+    // the same name in two processes of one module. Reusing one task implementation across
+    // processes is an anti-pattern, and an application which does it on purpose has said so.
+    // It is not a clash between two modules
     final var events = recorded(
         () -> testee
             .reportIdentifiersTheModelsDeclare(
@@ -328,7 +329,7 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
     testee
         .reportIdentifiersTheModelsDeclare(ADAPTER, LOANS, List.of(taskDefinition("scoreApplicant", "RiskAssessment")));
 
-    // a job type of a version workflows still run on is live, not dormant
+    // a job type of a version on which workflows still run is live, not dormant
     final var reported = theOnlyWarning(
         recorded(
             () -> testee
@@ -344,7 +345,7 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
     assertTrue(reported.contains("'"
         + LOANS
         + "'"), reported);
-    // the process of the held version and the process which deploys the name today
+    // the process of the held version, and the process which deploys the name today
     assertTrue(reported.contains("(BPMN process 'Settlement')"), reported);
     assertTrue(reported.contains("(BPMN process 'RiskAssessment')"), reported);
     assertTrue(reported.contains("2 workflows still running"), reported);
@@ -377,8 +378,8 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
     assertTrue(reported.contains("'"
         + LOANS
         + "'"), reported);
-    // how urgent the line is depends on the workflows still running on that version, and
-    // the count is the one the check around it already asked for
+    // how urgent the line is depends on the workflows still running on that version. The
+    // count is the one which the check around it already asked for
     assertTrue(reported.contains("3 workflows still running"), reported);
     assertTrue(reported.contains("message name 'PaymentReceived'"), reported);
 
@@ -405,8 +406,8 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
             recorded(() -> one.reportIdentifiersOfHeldVersion(ADAPTER, PAYMENTS, "Settlement", "7", 1L, names)))
             .contains("one workflow still running on it"));
 
-    // a BPMS which cannot count says that instead of a number, rather than the line
-    // reading as if nobody were on that version
+    // a BPMS which cannot count says that instead of a number. Otherwise the line would read
+    // as if nobody were on that version
     final var unknown = serviceWith(NameClashAvoidance.NONE);
     unknown.reportIdentifiersTheModelsDeclare(ADAPTER, LOANS, names);
     assertTrue(
@@ -435,7 +436,7 @@ public class CollidingIdentifiersOfWorkflowModulesTest {
                   "2",
                   5L,
                   List.of(message("PaymentReceived")));
-          // a name nothing deploys today
+          // a name which nothing deploys today
           testee
               .reportIdentifiersOfHeldVersion(
                   ADAPTER,

@@ -10,9 +10,9 @@ import io.vanillabp.integration.extension.spi.handler.HandlerContext;
 import io.vanillabp.integration.extension.spi.handler.HandlerMultiInstance;
 
 /**
- * Turns what a caller has into the {@link HandlerContext} the parameter binders read.
- * The three callers bring three different things - a task invocation of an adapter, the
- * notification about a workflow the BPMS started, an event of an extension - and the
+ * Turns what a caller has into the {@link HandlerContext} which the parameter binders
+ * read. The three callers bring three different things: a task call of an adapter, the
+ * notification about a workflow the BPMS started, and an event of an extension. The
  * binders are the same for all of them.
  */
 public final class HandlerContexts {
@@ -21,13 +21,14 @@ public final class HandlerContexts {
   }
 
   /**
-   * The full context, whose multi-instance scopes are asked for only where one is needed.
+   * The full context. Its multi-instance scopes are asked for only where one is needed.
    * <p>
-   * Both suppliers are called when a binder reads them, not now: looking up a process
-   * variable costs the adapter a question, and a handler which binds none should cost none.
+   * Both suppliers are called when a binder reads them, not now. Looking up a process
+   * variable costs the adapter a question, and a handler which binds none should cost
+   * none.
    *
    * @param workflowAggregate The aggregate the handler works on
-   * @param payload What the binders which are not the core's read - the adapter's
+   * @param payload What the binders read which are not the core's: the adapter's
    *          invocation context, or the extension's own event object
    * @param variables Looks up a process variable by name
    * @param multiInstances Supplies the multi-instance scopes, asked only where a
@@ -76,10 +77,11 @@ public final class HandlerContexts {
   }
 
   /**
-   * The context for a caller which has its variables in hand and no iteration to speak of.
+   * The context for a caller which has its variables in hand and is not inside an
+   * iteration.
    * <p>
-   * A handler binding a multi-instance parameter gets an empty scope here, which is the
-   * honest answer: the caller is not inside an iteration.
+   * A handler which binds a multi-instance parameter gets an empty scope here. That is the
+   * honest answer, because the caller is not inside an iteration.
    *
    * @param workflowAggregate The aggregate the handler works on
    * @param payload What the binders which are not the core's read
@@ -102,8 +104,8 @@ public final class HandlerContexts {
   }
 
   /**
-   * Adapts the multi-instance values an adapter supplies, keeping their outermost-first
-   * order.
+   * Adapts the multi-instance values which an adapter supplies. The outermost stays
+   * first.
    *
    * @param multiInstances What the adapter supplied
    * @return The same scopes in the shape the binders read

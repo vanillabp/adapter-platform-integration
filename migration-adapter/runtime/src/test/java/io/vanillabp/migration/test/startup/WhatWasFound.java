@@ -9,15 +9,15 @@ import io.vanillabp.integration.adapter.migration.startup.StartupFindings.Severi
 /**
  * Reads a collection of startup findings the way a test used to read the log.
  * <p>
- * A check no longer writes its own line: it reports, and the whole start says it once at
- * its end. So a test which watched the logger of a check now asks this what the check
- * reported, and it asks in the same words - one entry per finding, the message as a
+ * A check no longer writes its own line. It reports, and the whole start says it once at its
+ * end. So a test which watched the logger of a check now asks this class what the check
+ * reported. It asks in the same words: one entry per finding, with the message as a
  * developer reads it.
  */
 public final class WhatWasFound {
 
   private WhatWasFound() {
-    // a helper of the tests, never built
+    // a helper of the tests, which is never built
   }
 
   /**
@@ -58,8 +58,8 @@ public final class WhatWasFound {
   }
 
   /**
-   * Every finding reported so far, each as the scope it is about plus its message - what
-   * a test reads where the scope carries half of what the check said.
+   * Every finding reported so far, each as the scope it is about plus its message. A test
+   * reads this where the scope carries half of what the check said.
    *
    * @param findings Where the checks reported
    * @return One entry per finding
@@ -78,8 +78,8 @@ public final class WhatWasFound {
   }
 
   /**
-   * Every message reported so far, each with the scope it is about, as one text - what a
-   * test asserts a phrase against.
+   * Every message reported so far, each with the scope it is about, as one text. A test
+   * asserts a phrase against it.
    *
    * @param findings Where the checks reported
    * @return The messages, one per line block

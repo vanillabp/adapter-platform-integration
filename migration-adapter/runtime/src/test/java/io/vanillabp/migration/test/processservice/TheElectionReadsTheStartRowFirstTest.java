@@ -38,10 +38,11 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The election an extension asks for, answered from the row written when the workflow started.
- * That row names the adapter which started the workflow, and a workflow does not change its BPMS,
- * so where the row is there no BPMS is asked and nothing is waited for. Where it is not there, or
- * names an adapter the configuration dropped, the election probes as it always did.
+ * The election an extension asks for, answered from the row written when the workflow
+ * started. That row names the adapter which started the workflow, and a workflow does not
+ * change its BPMS. So where the row is there, no BPMS is asked and nothing is waited for.
+ * Where it is not there, or names an adapter which the configuration dropped, the election
+ * probes as it always did.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheElectionReadsTheStartRowFirstTest {
@@ -55,8 +56,8 @@ public class TheElectionReadsTheStartRowFirstTest {
   private static final String WORKFLOW = "2251799813685249";
 
   /**
-   * An adapter which starts workflows, reports their ids and counts how often it is asked whether
-   * it holds one. What it answers to that question is set by the test.
+   * An adapter which starts workflows, reports their ids, and counts how often it is asked
+   * whether it holds one. The test sets what it answers to that question.
    */
   static class AnAdapterWhichCountsItsProbes implements MigratableProcessService<Object> {
 
@@ -117,7 +118,7 @@ public class TheElectionReadsTheStartRowFirstTest {
 
   }
 
-  /** A delivery log in memory which answers by key, which is all the start row needs. */
+  /** A delivery log in memory which answers by key. The start row needs nothing more. */
   static class DeliveryLogInMemory implements TaskDeliveryLog {
 
     final Map<String, TaskDelivery> records = new HashMap<>();
@@ -273,7 +274,7 @@ public class TheElectionReadsTheStartRowFirstTest {
   public void theStartRowOutlivesTheWorkflow() {
 
     dispatchTheStartOf("4711");
-    // the BPMS forgot the workflow, which is what a cleaned-up history of an ended one looks like
+    // the BPMS forgot the workflow. A cleaned-up history of an ended one looks like this
     adapter.answer = WorkflowAwareness.UNKNOWN_TO_BPMS;
 
     assertEquals(ADAPTER, election().adapterIdOfWorkflow(MODULE, PROCESS, "4711"));
