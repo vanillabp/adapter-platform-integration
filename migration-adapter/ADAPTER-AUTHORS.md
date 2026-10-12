@@ -1174,8 +1174,11 @@ So the window you name is a due time. Every store which VanillaBP ships makes th
 
 None of them makes your window shorter, and none of them makes it longer. So a window longer than
 `vanillabp.outbox.attempt-frequency` is waited out, and a shorter one is not waited past. That is
-what lets your documentation name a number (decision 49). What a store adds on top is the poll it
-takes to pick a due entry up, `vanillabp.outbox.poll-interval`, ten seconds by default.
+what lets your documentation name a number (decision 49). A store adds no wait of its own on top.
+Its poller sleeps until the earliest entry is due, and it learns the new due time when your attempt
+ends. `vanillabp.outbox.poll-interval` (ten seconds by default) only caps that sleep, for a node
+which went away while it held work. A store written somewhere else decides on its own whether it
+polls or plans its wake-up, and one which polls adds its poll on top.
 
 Name a window which your BPMS really needs, because the entry sits for that long. A window of ten
 seconds for a read model which is one second behind costs nine seconds per call.
