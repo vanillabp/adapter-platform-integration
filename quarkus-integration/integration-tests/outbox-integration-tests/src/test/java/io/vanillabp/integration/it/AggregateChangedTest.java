@@ -30,8 +30,9 @@ import jakarta.transaction.UserTransaction;
  * Pushing a changed workflow aggregate on Quarkus, with the dummy adapter forced to need a
  * two-phase commit. A REMOTE BPMS is written to after the local transaction was committed,
  * so the push travels in an outbox entry. This test pins three things. The task id travels
- * in the entry's ARGS. The entry carries no idempotency key, because the values are read at
- * dispatch time. And a rollback pushes nothing at all.
+ * with the entry: the test sees it arrive at the adapter, it does not read the outbox table
+ * for it. The entry carries no idempotency key, because the values are read at dispatch
+ * time. And a rollback pushes nothing at all.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AggregateChangedTest {

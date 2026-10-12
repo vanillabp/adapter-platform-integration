@@ -1,6 +1,7 @@
 package io.vanillabp.integration.test.outbox;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -14,6 +15,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.wait.strategy.Wait;
@@ -36,9 +38,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * The record has to disappear when the transaction it was written in does not commit.
  * Where a MongoDB transaction covers the write (a replica set plus a
  * <code>MongoTransactionManager</code>, which this application has), the rollback removes
- * the document anyway; the compensation is what carries the case in which it does not,
- * and it must not make things worse where it does. Both are pinned here, the second one by
- * a transaction which is synchronized but writes nothing MongoDB would roll back.
+ * the document anyway. The compensation is what carries the case in which it does not, and
+ * it must not make things worse where it does. Both are pinned here. The case without a
+ * MongoDB transaction is a transaction which is synchronized but not real
+ * (<code>SUPPORTS</code>), so the write goes to MongoDB at once and nothing MongoDB would
+ * roll back.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -116,6 +120,30 @@ public class MongoDeliveryLogCompensationTest {
         records(),
         "the delivery record survived the rollback - a repeated delivery would be skipped "
             + "although nothing was persisted");
+
+  }
+
+  @Test
+  @DisplayName("Where no MongoDB transaction covers the write, the compensation removes the record")
+  public void withoutAMongoTransactionTheCompensationRemovesTheRecord() {
+
+    final var synchronizedOnly = new TransactionTemplate(transactionTemplate.getTransactionManager());
+    synchronizedOnly.setPropagationBehavior(TransactionDefinition.PROPAGATION_SUPPORTS);
+
+    assertThrowsExactly(
+        RuntimeException.class,
+        () -> synchronizedOnly.execute(status -> {
+          assertTrue(
+              TransactionSynchronizationManager.isSynchronizationActive(),
+              "without synchronization the compensation cannot register");
+          assertFalse(TransactionSynchronizationManager.isActualTransactionActive());
+          deliveryLog.record(delivery("uncovered-delivery"));
+          // visible at once, so no MongoDB transaction holds it back
+          assertEquals(1, records());
+          throw new RuntimeException("no commit for this one");
+        }));
+
+    assertEquals(0, records(), "the compensation did not remove the record of the rolled-back work");
 
   }
 

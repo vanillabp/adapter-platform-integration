@@ -33,9 +33,10 @@ import jakarta.transaction.UserTransaction;
 
 /**
  * {@code completeTask} and {@code cancelTask} through the Quarkus JDBC phase-two outbox.
- * The adapter is elected by probing. The task ID and the BPMN error code travel in the
- * ARGS column of the outbox entry. Phase two dispatches after the commit. A rollback
- * leaves nothing. An unknown task raises the guiding {@link TaskNotFoundException}.
+ * The task ID and the BPMN error code travel with the outbox entry. The tests see them
+ * arrive at the adapter after the dispatch. They do not read the outbox table for them.
+ * Phase two dispatches after the commit. A rollback leaves no completion. An unknown task
+ * raises the guiding {@link TaskNotFoundException}.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TaskOperationsDispatchTest {

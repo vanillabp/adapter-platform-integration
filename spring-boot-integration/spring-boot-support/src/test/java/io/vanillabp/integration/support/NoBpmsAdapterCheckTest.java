@@ -1,6 +1,7 @@
 package io.vanillabp.integration.support;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -73,11 +74,16 @@ public class NoBpmsAdapterCheckTest {
         NoBpmsAdapterCheck
             .anyWorkflowModuleInClasspath(NoBpmsAdapterCheckTest.class.getClassLoader()));
 
+    final var beanCreated = new java.util.concurrent.atomic.AtomicBoolean(false);
     new ApplicationContextRunner()
         .withConfiguration(AutoConfigurations.of(VanillaBpSupportAutoConfiguration.class))
-        .withBean("aBeanOfTheApplication", Object.class, Object::new)
+        .withBean("aBeanOfTheApplication", Object.class, () -> {
+          beanCreated.set(true);
+          return new Object();
+        })
         .run(context -> {
           assertTrue(context.getStartupFailure() != null, "expected the boot to end");
+          assertFalse(beanCreated.get(), "the bean of the application was created before the check ran");
           assertTrue(
               stackTraceOf(context.getStartupFailure())
                   .contains("No VanillaBP BPMS adapter found in classpath!"),

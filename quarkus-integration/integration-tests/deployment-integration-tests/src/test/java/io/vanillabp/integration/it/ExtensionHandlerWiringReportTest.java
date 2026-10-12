@@ -20,9 +20,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * What a boot says about the handler methods of an extension: which method serves which
- * key of which BPMN process, and which of them runs where no key is served at all. The
- * same line the Spring Boot integration writes, measured here because a report the core
- * writes says nothing about a platform ever reaching the place it is written at.
+ * key of which BPMN process. The line also says which method runs where no key is served.
+ * No method of this application serves every element, so only that sentence is checked,
+ * not a method name. It is the same line the Spring Boot integration writes. It is
+ * measured here because a report the core writes says nothing about a platform ever
+ * reaching the place it is written at.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ExtensionHandlerWiringReportTest {

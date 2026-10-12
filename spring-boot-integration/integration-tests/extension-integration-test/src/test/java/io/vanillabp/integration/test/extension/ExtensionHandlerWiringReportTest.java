@@ -12,8 +12,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * What a boot says about the handler methods of an extension. It says which method serves
- * which key of which BPMN process, and which of them runs where no key is served at all.
- * The <code>&#64;WorkflowTask</code> side of a workflow module is reported in the same
+ * which key of which BPMN process. The line also says which method runs where no key is
+ * served. No method of this application serves every element, so only that sentence is
+ * checked, not a method name. The <code>&#64;WorkflowTask</code> side of a workflow module is reported in the same
  * way. Before this report, a developer whose extension method was never called had
  * nothing to read.
  * <p>
@@ -25,7 +26,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 public class ExtensionHandlerWiringReportTest {
 
   @Test
-  @DisplayName("The boot names the method serving each key and the one serving every element")
+  @DisplayName("The boot names the method serving each key")
   public void theWiringOfTheExtensionIsReported(
       final CapturedOutput output) {
 

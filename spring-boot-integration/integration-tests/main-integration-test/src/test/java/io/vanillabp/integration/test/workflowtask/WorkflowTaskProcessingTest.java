@@ -48,9 +48,11 @@ import lombok.Getter;
  * aggregate. It maps the three outcomes of the restored V1 contract: completed; BPMN
  * error by {@code TaskException}, with COMMITTED aggregate changes; failure, with the
  * changes rolled back. Also covered: parameter binding (aggregate, {@code @TaskParam},
- * multi-instance), asynchronous tasks ({@code @TaskId} stays open), the
- * two-directional wiring validation with guiding messages and the task-level
- * adapter-configuration resolution from real application config.
+ * multi-instance), asynchronous tasks ({@code @TaskId} stays open), the wiring
+ * validation of a BPMN task without a method with its guiding message, and the task-level
+ * adapter-configuration resolution from real application config. The other direction of
+ * the wiring validation, a method without a BPMN task, is the business of
+ * {@code OrphanWorkflowTaskMethodTest}.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowTaskProcessingTest {
@@ -490,7 +492,8 @@ public class WorkflowTaskProcessingTest {
           });
 
       final var message = rootMessage(failure);
-      // both directions in ONE message, incl. the fixes
+      // a BPMN task without a method, with the fix, and the methods which were found. A
+      // method without a task is reported by a later check, which this boot never reaches
       Assertions.assertTrue(
           message.contains("Task wiring of BPMN process 'TaskProcess' of workflow module 'test-module'"),
           "unexpected message: "
@@ -501,6 +504,10 @@ public class WorkflowTaskProcessingTest {
               + message);
       Assertions.assertTrue(
           message.contains("@WorkflowTask(taskDefinition = \"notImplemented\")"),
+          "unexpected message: "
+              + message);
+      Assertions.assertTrue(
+          message.contains("@WorkflowTask methods found: ") && message.contains("processTask"),
           "unexpected message: "
               + message);
 

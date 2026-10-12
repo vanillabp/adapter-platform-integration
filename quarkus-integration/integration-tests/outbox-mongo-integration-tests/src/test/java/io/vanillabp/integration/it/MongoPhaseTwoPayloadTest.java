@@ -33,7 +33,9 @@ import jakarta.transaction.UserTransaction;
  * A payload on the MongoDB store: the document with the bytes is written where the
  * outbox entry is written, the dispatch reads it back, and it is gone once the entry was
  * marked DONE. And the whole way of a younger report which takes the place of one still
- * waiting - one dispatch, the younger bytes, one payload document left.
+ * waiting: one dispatch, the younger bytes, and the bytes of the replaced report gone. How
+ * many payload documents are left is not counted there, because the dispatch may already
+ * have removed the younger one.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoPhaseTwoPayloadTest {
