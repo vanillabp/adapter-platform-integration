@@ -70,10 +70,10 @@ public class TransactionalObserversTest {
     tx.commit();
     List<String> actions = Actions.getActions();
     Assertions.assertEquals(4, actions.size());
-    Actions.contains(TransactionalObserversTest.AFTER_COMPLETION, TransactionalObserversTest.AFTER_SUCCESS,
-        TransactionalObserversTest.BEFORE_COMPLETION);
-    Actions.precedes(TransactionalObserversTest.BEFORE_COMPLETION, TransactionalObserversTest.AFTER_COMPLETION,
-        TransactionalObserversTest.AFTER_SUCCESS);
+    Assertions.assertTrue(Actions.contains(TransactionalObserversTest.AFTER_COMPLETION,
+        TransactionalObserversTest.AFTER_SUCCESS, TransactionalObserversTest.BEFORE_COMPLETION), actions::toString);
+    Assertions.assertTrue(Actions.precedes(TransactionalObserversTest.BEFORE_COMPLETION,
+        TransactionalObserversTest.AFTER_COMPLETION, TransactionalObserversTest.AFTER_SUCCESS), actions::toString);
   }
 
   @Test
@@ -84,7 +84,8 @@ public class TransactionalObserversTest {
     Assertions.assertTrue(Actions.contains(TransactionalObserversTest.PLAIN));
     tx.rollback();
     Assertions.assertEquals(3, Actions.getActions().size());
-    Actions.contains(TransactionalObserversTest.AFTER_COMPLETION, TransactionalObserversTest.AFTER_FAILURE);
+    Assertions.assertTrue(Actions.contains(TransactionalObserversTest.AFTER_COMPLETION,
+        TransactionalObserversTest.AFTER_FAILURE), () -> Actions.getActions().toString());
   }
 
   @Test
@@ -95,9 +96,10 @@ public class TransactionalObserversTest {
     System.err.println("After: "
         + Actions.getActions());
     Assertions.assertEquals(5, Actions.getActions().size());
-    Actions.contains(TransactionalObserversTest.AFTER_COMPLETION, TransactionalObserversTest.AFTER_FAILURE,
-        TransactionalObserversTest.BEFORE_COMPLETION, TransactionalObserversTest.AFTER_SUCCESS,
-        TransactionalObserversTest.PLAIN);
+    Assertions.assertTrue(Actions.contains(TransactionalObserversTest.AFTER_COMPLETION,
+        TransactionalObserversTest.AFTER_FAILURE, TransactionalObserversTest.BEFORE_COMPLETION,
+        TransactionalObserversTest.AFTER_SUCCESS, TransactionalObserversTest.PLAIN),
+        () -> Actions.getActions().toString());
   }
 
   @ApplicationScoped

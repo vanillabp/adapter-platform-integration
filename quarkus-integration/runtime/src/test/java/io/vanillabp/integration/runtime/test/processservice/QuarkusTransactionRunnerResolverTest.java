@@ -294,7 +294,7 @@ public class QuarkusTransactionRunnerResolverTest {
   }
 
   @Test
-  @DisplayName("Two aware beans at the same distance end the startup naming both")
+  @DisplayName("Two aware beans at the same distance end the startup naming the aggregate")
   public void ambiguousAwareBeansEndTheStartup() {
 
     final var aggregateSpecific = passThroughRunner();
@@ -319,6 +319,9 @@ public class QuarkusTransactionRunnerResolverTest {
         IllegalStateException.class,
         () -> tied.resolveFor(OrderAggregate.class));
     assertTrue(failure.getMessage().contains("same distance"), failure.getMessage());
+    // both doubles are instances of the same anonymous class, so the two bean names in the
+    // message cannot be told apart here. The aggregate can
+    assertTrue(failure.getMessage().contains(OrderAggregate.class.getName()), failure.getMessage());
 
   }
 
@@ -400,7 +403,7 @@ public class QuarkusTransactionRunnerResolverTest {
   }
 
   @Test
-  @DisplayName("A question the deployment did not answer does not become a verdict")
+  @DisplayName("A question the deployment did not answer counts as covered, not as unguarded")
   public void unansweredProbeIsNoVerdict() {
 
     assertEquals(
@@ -412,7 +415,7 @@ public class QuarkusTransactionRunnerResolverTest {
   }
 
   @Test
-  @DisplayName("Without the MongoDB extension nothing is probed, and nothing is claimed")
+  @DisplayName("Without the MongoDB extension nothing is probed, and the aggregate counts as covered")
   public void withoutTheMongoExtensionNothingIsProbed() {
 
     assertEquals(

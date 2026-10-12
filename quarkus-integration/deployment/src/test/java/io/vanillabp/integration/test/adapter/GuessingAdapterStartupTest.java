@@ -50,9 +50,12 @@ public class GuessingAdapterStartupTest {
             failure.contains("cannot ask their BPMS"),
             "expected the guiding startup message but got: "
                 + failure);
+        // the adapter which guesses is 'test'. test-adapter.can-locate-workflows is false
+        Assertions.assertTrue(failure.contains("The adapter(s) [test] cannot ask"), failure);
         Assertions.assertTrue(failure.contains("test-module"), failure);
-        // the message contains the ways out
+        // the message contains the three ways out
         Assertions.assertTrue(failure.contains("secondary storage"), failure);
+        Assertions.assertTrue(failure.contains("prioritize exactly one adapter"), failure);
         Assertions.assertTrue(
             failure.contains("vanillabp.workflow-modules.test-module.election.guessing-adapters"),
             failure);

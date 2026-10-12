@@ -11,6 +11,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
+import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
 import io.vanillabp.integration.runtime.processservice.ProcessServiceBaseCdiBean;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.samples.sample.Aggregate;
@@ -43,6 +45,9 @@ public class AcceptedGuessingAdapterStartupTest {
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter());
 
   @Inject
+  MigrationAdapterProperties properties;
+
+  @Inject
   @SuppressWarnings("CdiUnsatisfiedInjection")
   ProcessService<Aggregate> processService;
 
@@ -57,6 +62,15 @@ public class AcceptedGuessingAdapterStartupTest {
     Assertions.assertEquals(
         List.of("test", "test2"),
         migrationProcessService.getPrioritizedAdapters());
+
+    final var findings = properties.startupFindings().findings();
+    Assertions.assertTrue(
+        findings
+            .stream()
+            .anyMatch(finding -> (finding.severity() == StartupFindings.Severity.WARNING) && finding.message()
+                .contains("cannot ask their BPMS")),
+        () -> "expected a WARN about the guessing adapter but got: "
+            + findings);
 
   }
 
