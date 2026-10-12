@@ -438,10 +438,10 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   }
 
   /**
-   * Stops this process service on graceful shutdown - invoked by the deployment
-   * runner after workflow processing of adapters and extensions was stopped
-   * (parity with the Spring Boot integration's
-   * <code>ProcessServiceSpringBean.stopService()</code>).
+   * Called on graceful shutdown of the application by the deployment runner, after the
+   * workflow processing of adapters and extensions was stopped. It only logs that the
+   * process service stops. It holds nothing which needs to be stopped (parity with the
+   * Spring Boot integration's <code>ProcessServiceSpringBean.stopService()</code>).
    */
   public void stopService() {
 

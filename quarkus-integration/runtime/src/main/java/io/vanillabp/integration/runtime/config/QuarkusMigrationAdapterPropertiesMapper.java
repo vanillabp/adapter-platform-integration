@@ -34,7 +34,7 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterPr
  * takes its place. It walks both sides by reflection. It fails as soon as a value is read
  * nowhere or written nowhere.
  * <p>
- * Three fields of the core are set by nobody here. {@code conventionalResourcesLocations}
+ * Five fields of the core are set by nobody here. {@code conventionalResourcesLocations}
  * is derived from the classpath by {@code MigrationAdapterProperties#normalize}, and
  * {@code startupFindings} is where the startup checks leave what they found. The
  * back-references {@code workflowModuleId}, {@code bpmnProcessId} and
@@ -42,8 +42,10 @@ import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterPr
  * once the whole tree stands.
  * <p>
  * The outbox defaults are declared TWICE by necessity (SmallRye requires
- * {@code @WithDefault} on the interface, the core carries them as field initializers) -
- * their equality is pinned by {@code QuarkusMigrationAdapterPropertiesMapperTest}.
+ * {@code @WithDefault} on the interface, the core carries them as field initializers).
+ * {@code QuarkusMigrationAdapterPropertiesMapperTest} compares most of them. It does not
+ * compare the housekeeping window ({@code housekeeping.start} and {@code housekeeping.end})
+ * and {@code mongo.housekeepingCollection}.
  */
 public final class QuarkusMigrationAdapterPropertiesMapper {
 

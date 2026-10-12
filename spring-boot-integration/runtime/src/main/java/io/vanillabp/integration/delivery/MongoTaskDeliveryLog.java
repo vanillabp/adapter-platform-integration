@@ -89,8 +89,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   private final OpenTaskTouches touches;
 
   /**
-   * Builds the log, and nothing more: the indexes and the cleanup wait for
-   * {@link #start()}, which the auto-configuration calls once every singleton exists.
+   * Builds the log, and nothing more. The auto-configuration creates the indexes. The
+   * cleanup waits for {@link #start()}, which the auto-configuration calls once every
+   * singleton exists.
    *
    * @param mongoTemplate The template the records are written and read through. The
    *          aggregates use the same one. So both take part in one MongoDB transaction
@@ -126,7 +127,8 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   }
 
   /**
-   * Starts the retention cleanup - called once the application context is ready.
+   * Starts the retention cleanup. The auto-configuration calls it once every singleton
+   * exists, which is before the application context is ready.
    */
   public void start() {
 

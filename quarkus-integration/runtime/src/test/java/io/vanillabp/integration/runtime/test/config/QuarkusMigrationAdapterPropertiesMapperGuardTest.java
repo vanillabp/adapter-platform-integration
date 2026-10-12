@@ -326,7 +326,8 @@ public class QuarkusMigrationAdapterPropertiesMapperGuardTest {
    * What SmallRye binds a key to: a method without parameters and without a body.
    *
    * @param section The interface to look at
-   * @return Its accessors, in the order the source declares them
+   * @return Its accessors, in the order the JVM reports them, which need not be the order of the
+   *         source
    */
   private static List<Method> theAccessorsOf(
       final Class<?> section) {

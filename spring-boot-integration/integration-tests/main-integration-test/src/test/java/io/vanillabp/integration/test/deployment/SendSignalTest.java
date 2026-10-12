@@ -29,7 +29,7 @@ import io.vanillabp.spi.process.ProcessService;
 
 /**
  * Acceptance test of broadcasting a BPMN signal with the dummy adapter
- * standing in for a BPMS. Two adapter ids are configured, one of them named at the
+ * standing in for a BPMS. Two adapter ids are configured, one of them prioritized at the
  * WORKFLOW level only - the deployment union. What the test pins: the broadcast
  * reaches BOTH of them, because during a migration the workflows waiting for the
  * signal are spread across the BPMS, and each of them gets an outbox entry of its

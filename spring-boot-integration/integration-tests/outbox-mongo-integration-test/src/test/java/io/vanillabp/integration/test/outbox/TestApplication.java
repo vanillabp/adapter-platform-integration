@@ -7,7 +7,7 @@ import org.springframework.data.mongodb.MongoTransactionManager;
 
 /**
  * Test application for the MongoDB {@link io.vanillabp.integration.spi.PhaseTwoOutbox}.
- * The dummy adapter is forced to need a two-phase commit for starting workflows (property
+ * The dummy adapter plays a BPMS which repeats deliveries (property
  * <code>dummy-adapter.at-least-once-delivery</code>). A {@link RecordingPhaseTwoListener}
  * watches phase two and can make it fail. The application defines a
  * {@link MongoTransactionManager}, so aggregate and outbox entry are written in one

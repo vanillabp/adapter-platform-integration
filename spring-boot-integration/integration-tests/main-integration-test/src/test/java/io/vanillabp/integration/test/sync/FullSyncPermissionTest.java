@@ -30,8 +30,8 @@ import lombok.Getter;
 /**
  * An aggregate which keeps nothing back from the BPMS stops the Spring Boot startup until
  * its workflow allows exactly that. The same behaviour is held for Quarkus by
- * {@code FullSyncPermissionTest} of the deployment integration tests, because the two
- * platforms start their applications differently.
+ * {@code FullSyncWithoutPermissionTest} and {@code FullSyncAllowedTest} of the deployment
+ * integration tests, because the two platforms start their applications differently.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class FullSyncPermissionTest {

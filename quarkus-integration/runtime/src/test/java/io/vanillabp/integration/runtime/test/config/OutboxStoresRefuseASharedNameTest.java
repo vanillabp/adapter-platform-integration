@@ -26,7 +26,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * STARTING Quarkus application. The rule itself is the core's
  * ({@code OutboxStoresRefuseASharedNameTest} of the migration adapter holds it); what
  * this asks is whether the keys a Quarkus application writes reach that rule, over the
- * config mapping and the generated mapper onto the core model.
+ * config mapping and the hand-written mapper onto the core model.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OutboxStoresRefuseASharedNameTest {

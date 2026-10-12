@@ -39,21 +39,22 @@ import io.vanillabp.spi.process.ProcessService;
  * <p>
  * The tests boot applications whose workflow service cannot be found by looking at
  * classes: one arrives with the auto-configuration of a library, one carries no
- * annotation of its own, and one belongs to a profile which is not active. The last one
- * is the case the discovery deliberately says nothing about - a class annotated
- * {@code @WorkflowService} without a bean is indistinguishable from one another profile
- * brings - and its BPMN process is deployed with nothing to serve it. The application
- * starts and the deployment reports the process, which is what a process no workflow
- * service claims costs; see
+ * annotation of its own, and one belongs to a profile which is not active. In the last
+ * case, a class annotated {@code @WorkflowService} without a bean cannot be told apart
+ * from one which another profile brings. Its BPMN process is deployed with nothing to
+ * serve it. So the start fails. The message names the process which nothing serves, and
+ * it names the class of the inactive profile as a possible reason, not as a defect. See
  * {@link io.vanillabp.integration.test.deployment.UnclaimedBpmnProcessTest} for the file
  * which carries such a process on purpose.
  * <p>
- * Two applications here do not start at all, and they are the boundary of what the
+ * Five applications here do not start. Two of them are the boundary of what the
  * annotation reaches: {@code AnnotationUtils.findAnnotation} searches implemented
  * interfaces and annotations of the application's own, which {@code @Inherited} does not,
  * so a class which carries the annotation nowhere itself used to pass as a workflow
  * service and to end the start with a message naming nothing. A subclass of an annotated
- * class stays a workflow service, which is the case next door.
+ * class stays a workflow service, which is the case next door. The other three are the
+ * inactive profile above, a workflow service which nothing made a bean, and the same in
+ * the global workflow module.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowServiceDiscoveryTest {

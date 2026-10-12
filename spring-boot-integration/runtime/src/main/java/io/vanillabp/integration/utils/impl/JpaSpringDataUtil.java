@@ -20,9 +20,9 @@ import org.springframework.data.repository.support.Repositories;
 import io.vanillabp.integration.utils.SpringDataUtil;
 
 /**
- * The {@link SpringDataUtil} of workflow aggregates which are JPA entities. Everything it
- * answers it asks Spring Data or Hibernate, so VanillaBP keeps no knowledge of its own about
- * how an aggregate is mapped.
+ * The {@link SpringDataUtil} of workflow aggregates which are JPA entities. It asks Spring
+ * Data or Hibernate for the repository and the id value. The NAME of the id property is the
+ * exception: {@link #getIdName(Class)} looks for the {@code @Id} annotation by reflection.
  * <p>
  * A repository is searched for the entity's class and then up its superclasses. An
  * application may map a hierarchy and declare the repository on a base class. What is found

@@ -8,7 +8,8 @@ import lombok.Setter;
  * The aggregate of the task-processing acceptance test (see
  * {@code WorkflowTaskProcessingTest}). Lives in this package for the same
  * classpath-scan reason as {@code OverriddenAggregate}: @WorkflowService classes
- * leak into every test of this Maven module, and this package sorts last.
+ * leak into every test of this Maven module, and this package sorts after the
+ * {@code sample} and {@code sample2} packages.
  */
 @Getter
 @Setter

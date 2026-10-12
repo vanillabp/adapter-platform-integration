@@ -204,9 +204,9 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
   }
 
   /**
-   * Stops the process service. Called by
-   * {@link io.vanillabp.integration.deployment.SpringBootDeploymentService} on
-   * graceful shutdown of the application.
+   * Called on graceful shutdown of the application by
+   * {@link io.vanillabp.integration.deployment.SpringBootDeploymentService}. It only logs
+   * that the process service stops. It holds nothing which needs to be stopped.
    */
   public void stopService() {
 
@@ -430,7 +430,9 @@ public class ProcessServiceSpringBean<A> extends ProcessServiceBase<A> {
 
   /**
    * Whether something is open the aggregate could be persisted in - the same question
-   * every operation of this bean asks itself before it does anything. The answer comes
+   * every operation of this bean which changes a workflow asks itself before it does
+   * anything. The methods which only read (process definitions, BPMN XML, history) do not
+   * ask. The answer comes
    * from the runner serving this aggregate and not from Spring, so an application with a
    * unit of work of its own is asked about its own (see decision 11 in the repository's
    * DECISIONS.md).

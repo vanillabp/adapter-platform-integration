@@ -9,8 +9,8 @@ import io.vanillabp.spi.service.WorkflowService;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The application's side of the sample extension on Quarkus - the same two methods the
- * Spring Boot integration's scenario has.
+ * The application's side of the sample extension on Quarkus - the same six handler
+ * methods which the Spring Boot integration's scenario has ({@code NotedWorkflowService}).
  */
 @ApplicationScoped
 @WorkflowService(

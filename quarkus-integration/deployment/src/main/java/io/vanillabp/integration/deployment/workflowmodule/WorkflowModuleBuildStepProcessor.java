@@ -660,7 +660,7 @@ public class WorkflowModuleBuildStepProcessor {
   /**
    * Builds the rule saying whether a file is one the config source providers of a workflow
    * module read: the file named after the workflow module ID and every profile-specific
-   * variant of it, at the classpath root as well as inside a subdirectory named after the ID,
+   * variant of it, in each of the four directories of {@link WorkflowModuleConfigFiles#directoriesOf},
    * for each file extension both providers support.
    * <p>
    * It reads a path relative to the root of an archive or of a resource directory, which is
@@ -705,7 +705,7 @@ public class WorkflowModuleBuildStepProcessor {
   /**
    * Searches all application archives for the configuration files of the workflow modules
    * found. A file is collected by its path relative to the archive root rather than by its
-   * name, because the providers read two locations and a native image resource is named by
+   * name, because the providers read four locations and a native image resource is named by
    * the path it is loaded under.
    *
    * @param applicationArchives The archives of this Quarkus build

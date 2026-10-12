@@ -10,8 +10,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * Stands in for the BPMN model of the acceptance test of a start by message:
- * 'StartProcess' starts on the message 'OrderPlaced', next to the timer and the signal start
- * event its workflow service serves. Every other process of the module has none of them.
+ * 'StartProcess' starts on the message 'OrderPlaced', next to the timer, signal and
+ * conditional start events its workflow service serves. Every other process of the module
+ * has none of them.
  */
 @ApplicationScoped
 public class StartProcessStartMessageSource implements DummyBpmsInitiatedStartSource {

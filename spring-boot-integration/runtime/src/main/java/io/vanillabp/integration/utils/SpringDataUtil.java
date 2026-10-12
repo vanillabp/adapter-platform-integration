@@ -4,7 +4,8 @@ import org.springframework.data.annotation.Id;
 import org.springframework.data.repository.CrudRepository;
 
 /**
- * Utility to handle Spring data repositories. A string identifier is expected for workflow entities.
+ * Utility to handle Spring data repositories. The identifier of a workflow entity may be of any
+ * type, for example a string or a long.
  */
 public interface SpringDataUtil {
 

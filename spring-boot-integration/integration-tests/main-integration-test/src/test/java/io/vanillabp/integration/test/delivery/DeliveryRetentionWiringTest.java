@@ -53,9 +53,8 @@ public class DeliveryRetentionWiringTest {
 
   /**
    * A data source, so the JDBC delivery log is created at all, plus the transaction
-   * manager it rides on. The dummy adapter stays EMBEDDED here (no two-phase commit), so
-   * no outbox is required - what is asserted is which retention the delivery log runs
-   * with, and that question is the same either way.
+   * manager it rides on. The outbox is the test double of {@code TestPhaseTwoOutboxConfiguration},
+   * because what is asserted is only which retention the delivery log runs with.
    */
   @Configuration
   static class DataSourceConfiguration {

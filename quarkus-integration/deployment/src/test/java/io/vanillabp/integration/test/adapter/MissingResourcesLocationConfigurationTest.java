@@ -18,7 +18,8 @@ import jakarta.inject.Inject;
  * module without any resources-location reads its BPMN from the CONVENTIONAL
  * location instead of failing the boot. The workflow module here is
  * declared by the application itself (the test archive IS the root application
- * archive), so its BPMN lives below 'processes/' without a module-id namespace.
+ * archive). So two places are searched: first below the module id
+ * ('test-module/processes/'), then below 'processes/' without the module id.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MissingResourcesLocationConfigurationTest {

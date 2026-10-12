@@ -150,13 +150,11 @@ public class ProcessServiceBuildStepProcessor {
 
     // scan for classes annotated by @WorkflowService and group them by aggregate
     // type: ONE injectable ProcessService bean per aggregate (the SPI's injection
-    // contract), whose primary BPMN process is the first class found declaring the
-    // aggregate. ALL classes declaring the aggregate and ALL their declared BPMN
-    // process IDs (bpmnProcess + secondaryBpmnProcesses) are recorded for
-    // phase-two routing and @WorkflowTask processing at runtime.
-    // "First class found" needs a stable archive order to be reproducible, which is
-    // why getAllArchives is used: it lists the root archive first and the remaining
-    // archives in the order Quarkus resolved them.
+    // contract). Its primary BPMN process is the 'bpmnProcess' which the classes of
+    // the aggregate declare. If they declare different ones, the build ends (see
+    // primaryWorkflowService). ALL classes declaring the aggregate and ALL their
+    // declared BPMN process IDs (bpmnProcess + secondaryBpmnProcesses) are recorded
+    // for phase-two routing and @WorkflowTask processing at runtime.
     final var workflowServiceAnnotations = applicationArchivesBuildItem
         .getAllArchives()
         .stream()

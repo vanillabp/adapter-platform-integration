@@ -10,8 +10,8 @@ import lombok.Setter;
 
 /**
  * An entity which carries the ID annotation at the getter, which JPA allows and
- * applications use. The getter is written by hand because Lombok cannot be told to
- * annotate the one it generates.
+ * applications use. The getter is written by hand, so the annotation is plainly visible
+ * at the place it sits.
  */
 @Entity
 @Table(name = "test4_entity")

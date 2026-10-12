@@ -23,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * The default {@link PhaseTwoOutbox} implementation for Spring Boot applications using
- * MongoDB for aggregate persistence (gruelbox is JDBC-only). The outbox entry is
+ * MongoDB for aggregate persistence. The outbox entry is
  * written with {@link MongoTemplate}, which takes part in the running Spring-managed
  * MongoDB transaction. The entry stores all fields of the {@link PhaseTwoCall},
  * including the operation discriminator and the elected adapter ID.
@@ -45,12 +45,13 @@ import lombok.extern.slf4j.Slf4j;
  * discarded against it, where it says so
  * ({@link PhaseTwoCall#replacingWhatIsStillWaiting()}). The document keeps its id and
  * its key and gets everything the dispatch reads, and the payload of the entry it
- * replaced is removed with it. What decides is <code>attempts</code>: the dispatcher
- * counts the attempt when it claims an entry, so a zero there means no dispatch has
- * read this entry and none is holding its payload. The update carries that condition,
- * which makes it the same atomic claim - if a poller wins the document, the update
- * matches nothing and the call becomes an entry of its own, with <code>dedupKey</code>
- * set to its own id because the key belongs to the entry on its way.
+ * replaced is removed with it. Two fields decide: <code>attempts</code> and the lease.
+ * The dispatcher takes the lease when it claims an entry, and it counts the attempt when
+ * the attempt ends. So zero attempts and a free lease mean that no dispatch has read this
+ * entry and none holds its payload. The update carries both conditions. That makes it
+ * the same atomic claim. If a poller wins the document, the update matches nothing. Then
+ * the call becomes an entry of its own, with <code>dedupKey</code> set to its own id,
+ * because the key belongs to the entry on its way.
  * <p>
  * <strong>Note:</strong> MongoDB transactions need a replica set. Without a MongoDB
  * transaction (no <code>MongoTransactionManager</code>, or a standalone server), the

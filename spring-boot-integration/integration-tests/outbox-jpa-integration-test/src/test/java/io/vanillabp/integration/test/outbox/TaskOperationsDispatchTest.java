@@ -27,8 +27,8 @@ import io.vanillabp.spi.process.TaskNotFoundException;
 
 /**
  * The asynchronous-task operations {@code completeTask}/{@code cancelTask} through
- * the phase-two outbox, using the dummy adapter forced to require a
- * two-phase commit:
+ * the phase-two outbox, using the dummy adapter (phase two always goes through the
+ * outbox):
  * <ul>
  * <li>the adapter is elected by probing ({@code awarenessOfTask}), and phase two is
  * dispatched AFTER the commit (task ID and BPMN error code travel in the args of the

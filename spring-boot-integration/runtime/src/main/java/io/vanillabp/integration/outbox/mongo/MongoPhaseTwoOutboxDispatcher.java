@@ -285,8 +285,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Claims all due entries and hands each of them to the lane of its aggregate, then deletes
-   * DONE entries whose retention passed. Exceptions are caught to keep the poller alive.
+   * Claims all due entries and hands each of them to the lane of its aggregate. Exceptions
+   * are caught to keep the poller alive. The housekeeping deletes the DONE entries, not this
+   * method.
    * <p>
    * This thread does the claim, and a lane does the dispatch. The order matters. An entry
    * is claimed before it is handed over. So the claim of the next poll, here or on another
@@ -419,8 +420,8 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   /**
    * Dispatches a single claimed entry through the core's {@link PhaseTwoRouter}. On
-   * success the entry is marked DONE; on failure it stays claimed and is retried
-   * after the configured backoff, until it is blocked.
+   * success the entry is marked DONE. On failure the attempt is counted, the lease is given
+   * back, and the entry is due again after the configured backoff, until it is blocked.
    * <p>
    * The renewal ends here, before the write which says how the attempt ended. That write
    * needs a lease which has not run out, and the last renewal gave it one. It does not need

@@ -94,7 +94,7 @@ public final class MongoIndexes {
    * if the database says so, this is not an error here.
    *
    * @param collection The collection to ask
-   * @return The indexes it carries, without MongoDB's own one over the document id
+   * @return The indexes it carries. MongoDB's own index over the document id is one of them
    */
   private static List<MongoSchema.IndexInPlace> indexesInPlace(
       final MongoCollection<Document> collection) {

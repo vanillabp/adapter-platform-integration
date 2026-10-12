@@ -26,18 +26,19 @@ import jakarta.transaction.UserTransaction;
 
 /**
  * Integration test of the MongoDB-based phase-two outbox on Quarkus using the dummy
- * adapter forced to require a two-phase commit
- * (<code>dummy-adapter.at-least-once-delivery: true</code>) against a STANDALONE
- * MongoDB started by Quarkus Dev Services (best-effort mode - the only mode of this outbox, see
- * {@code MongoPhaseTwoOutbox}):
+ * adapter, which plays a BPMS that repeats deliveries
+ * (<code>dummy-adapter.at-least-once-delivery: true</code>), against a MongoDB started by
+ * Quarkus Dev Services. That MongoDB is a single-node replica set. But this application has
+ * no MongoDB Panache, so there is no MongoDB session to join. The outbox runs in its
+ * best-effort mode (see {@code MongoPhaseTwoOutbox}):
  * <ul>
  *   <li>the entry is written immediately (best-effort: visible before the commit)
  *       and phase two is dispatched after the commit, marking the entry DONE
  *       (deleted asynchronously after the retention period only),</li>
  *   <li>on rollback the already-written entry is deleted best-effort and phase two
  *       is never dispatched,</li>
- *   <li>a duplicate schedule for the same aggregate is a no-op (partial unique
- *       index on the idempotency key),</li>
+ *   <li>a duplicate schedule for the same aggregate is a no-op (unique index on
+ *       <code>dedupKey</code>),</li>
  *   <li>a failing dispatch is retried and</li>
  *   <li>a left-over entry (like after a crash) is dispatched by the recovery
  *       poller and</li>

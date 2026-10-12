@@ -52,12 +52,13 @@ import lombok.extern.slf4j.Slf4j;
  * discarded against it, where it says so
  * ({@link PhaseTwoCall#replacingWhatIsStillWaiting()}). The document keeps its id and
  * its key and gets everything the dispatch reads, and the payload of the entry it
- * replaced is removed with it. What decides is <code>attempts</code>: the dispatcher
- * counts the attempt when it claims an entry, so a zero there means no dispatch has
- * read this entry and none is holding its payload. The update carries that condition,
- * which makes it the same atomic claim - if a poller wins the document, the update
- * matches nothing and the call becomes an entry of its own, with <code>dedupKey</code>
- * set to its own id because the key belongs to the entry on its way.
+ * replaced is removed with it. Two fields decide: <code>attempts</code> and the lease.
+ * The dispatcher takes the lease when it claims an entry, and it counts the attempt when
+ * the attempt ends. So zero attempts and a free lease mean that no dispatch has read this
+ * entry and none holds its payload. The update carries both conditions. That makes it
+ * the same atomic claim. If a poller wins the document, the update matches nothing. Then
+ * the call becomes an entry of its own, with <code>dedupKey</code> set to its own id,
+ * because the key belongs to the entry on its way.
  * <p>
  * <strong>One transaction where MongoDB Panache provides a session:</strong> MongoDB Panache
  * joins the Narayana transaction by itself. It starts a <code>ClientSession</code> with a
