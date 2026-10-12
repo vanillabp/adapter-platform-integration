@@ -1,5 +1,6 @@
 package io.vanillabp.integration.test.processservice;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.jboss.jandex.*;
@@ -81,6 +82,22 @@ class AggregatePersistenceResolverTest {
     }
   }
 
+  /** An interface of the application which has nothing to do with persistence. */
+  interface Marker {
+  }
+
+  /** An aggregate which no persistence above is written for. */
+  static class Unrelated {
+  }
+
+  /** Reaches {@link AggregatePersistenceAware} one step up, and first passes an interface which does not. */
+  static class SubOfX extends X implements Marker {
+  }
+
+  /** Reaches {@link AggregatePersistenceAware} one step up, and has no interface of its own. */
+  static class PlainSubOfX extends X {
+  }
+
   /* -------------------------------------------------- */
   /* Test                                               */
   /* -------------------------------------------------- */
@@ -125,6 +142,41 @@ class AggregatePersistenceResolverTest {
 
     assertTrue(dxi < dx, "XI must be more specific than X");
     assertTrue(dxi < dg, "XI must be more specific than G");
+  }
+
+  @Test
+  void anInterfaceWithoutThePersistenceTypeDoesNotHideTheStepToTheSuperclass() throws Exception {
+    IndexView index = indexOf(
+        Z.class,
+        Marker.class,
+        AggregatePersistenceAware.class,
+        X.class,
+        SubOfX.class
+    );
+
+    DotName z = DotName.createSimple(Z.class.getName());
+
+    assertEquals(0, dist(index, X.class, z));
+    assertEquals(1000, dist(index, SubOfX.class, z), "SubOfX is one step further away than X");
+  }
+
+  @Test
+  void aSubclassOfAPersistenceForAnotherAggregateDoesNotFit() throws Exception {
+    IndexView index = indexOf(
+        Z.class,
+        Unrelated.class,
+        Marker.class,
+        AggregatePersistenceAware.class,
+        X.class,
+        SubOfX.class,
+        PlainSubOfX.class
+    );
+
+    DotName unrelated = DotName.createSimple(Unrelated.class.getName());
+
+    assertEquals(Integer.MAX_VALUE, dist(index, X.class, unrelated));
+    assertEquals(Integer.MAX_VALUE, dist(index, SubOfX.class, unrelated));
+    assertEquals(Integer.MAX_VALUE, dist(index, PlainSubOfX.class, unrelated));
   }
 
   /* -------------------------------------------------- */

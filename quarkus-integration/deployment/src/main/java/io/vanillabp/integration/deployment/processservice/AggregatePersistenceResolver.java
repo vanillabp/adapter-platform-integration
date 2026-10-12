@@ -42,6 +42,9 @@ public final class AggregatePersistenceResolver {
     }
 
     int genericDistance = genericArgumentDistance(index, implClass, aggregateType);
+    if (genericDistance == Integer.MAX_VALUE) {
+      return Integer.MAX_VALUE;
+    }
 
     // Raw type distance dominates generic distance
     return rawDistance * 1000 + genericDistance;
@@ -72,7 +75,7 @@ public final class AggregatePersistenceResolver {
       if (ifaceInfo != null) {
         best = Math.min(
             best,
-            1 + rawInterfaceDistance(index, ifaceInfo, targetInterface, visited));
+            oneStepFurther(rawInterfaceDistance(index, ifaceInfo, targetInterface, visited)));
       }
     }
 
@@ -82,11 +85,20 @@ public final class AggregatePersistenceResolver {
       if (superInfo != null) {
         best = Math.min(
             best,
-            1 + rawInterfaceDistance(index, superInfo, targetInterface, visited));
+            oneStepFurther(rawInterfaceDistance(index, superInfo, targetInterface, visited)));
       }
     }
 
     return best;
+  }
+
+  /**
+   * Adds the step to a distance found one level up. "Not reachable" stays "not reachable", and does
+   * not overflow into the smallest distance there is.
+   */
+  private static int oneStepFurther(
+      int distance) {
+    return distance == Integer.MAX_VALUE ? Integer.MAX_VALUE : 1 + distance;
   }
 
   /* ---------------------------------------------------------------------- */
