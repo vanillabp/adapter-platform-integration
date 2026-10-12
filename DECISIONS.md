@@ -1819,40 +1819,102 @@ every version here. An extension method which should be restricted says so itsel
 ### 57. The way back reads what the way out wrote, and refuses the forms which do not carry a value
 
 A workflow aggregate shares an enum as the name of its constant. It shares a value type like a
-`UUID`, a `LocalDate` or a `Duration` as the string form that type writes itself
-(`AggregateSyncSupport`). Reading such a value back was not possible. `ValueConversion` converted
-text into the eight wrappers, `BigDecimal` and `BigInteger`, and refused everything else. So a
-`@TaskParam UUID` failed against the very text the platform had written for it. An application could
-only declare a `String` and parse it again in every handler.
+`UUID`, a `LocalDate` or a `Duration` as a text (`AggregateSyncSupport`). Reading such a value back
+used to be impossible. `ValueConversion` converted text into the eight wrappers, `BigDecimal` and
+`BigInteger`, and refused everything else. So a `@TaskParam UUID` failed against the very text the
+platform had written for it. An application could only declare a `String` and parse it again in
+every handler.
 
-The way back now reads exactly the forms the way out writes: an enum from the name of its constant,
-and `UUID`, `Instant`, `LocalDate`, `LocalTime`, `LocalDateTime`, `OffsetDateTime`, `OffsetTime`,
-`ZonedDateTime`, `Year`, `YearMonth`, `MonthDay`, `Duration`, `Period`, `ZoneId` and `ZoneOffset`
-from the text each of them writes. Nothing else was added. Nothing can promise anything about a form
-the platform never writes. So a text in another shape is refused, with an example of the shape the
-type does write. `TextValueRoundTripTest` asserts both halves against each other. So a change to
-either one gives a failing test, not a handler which stops being served.
+**One list serves both ways.** `TextValueTypes` names the types for which a value travels as text,
+and the text each of them travels as. The way out writes that text, and the way back reads exactly
+that text and nothing else. The list holds an enum (by the name of its constant), `UUID`, `Instant`,
+`LocalDate`, `LocalTime`, `LocalDateTime`, `OffsetDateTime`, `OffsetTime`, `ZonedDateTime`, `Year`,
+`YearMonth`, `MonthDay`, `Duration`, `Period`, `ZoneId`, `ZoneOffset`, `java.util.Date` and
+`java.util.TimeZone`. Nothing can promise anything about a form the platform never writes. So a text
+in another shape is refused, with an example of the shape the type does write.
+`TextValueRoundTripTest` holds both ways against each other for every type in the list. So a change
+to either one gives a failing test, not a handler which stops being served.
+
+The list is a selection, and the documentation says so. It holds what a workflow aggregate carries
+often enough to be worth it: an identifier, a point in time, a length of time, a zone. Somebody who
+misses a type opens an issue for it. A list which promised the whole JDK would promise a text for
+types whose text says nothing.
+
+**A value type is recognised by what it is.** The way out used to share a value as text when the
+package of its class began with `java.` or `javax.`. That question was wrong at both ends. A
+`TimeZone` is a `sun.util.calendar.ZoneInfo` at runtime. So it failed the check, the walk read its
+getters, and the sync point ended with an `InaccessibleObjectException` (measured on 2026-09-16). A
+`Calendar` passed the check and reached the BPMS as its debug form. Now the way out asks which of the
+listed types a VALUE is one of. So an implementation class which the runtime hands out is recognised
+by the type it extends. The way back asks for the DECLARED type exactly, because the text is promised
+for the types named, and a subclass may write a text of its own. Everything else which the JDK wrote
+still travels as its own text. The check for that also asks which module a class comes from. So no
+package which the runtime exports to nobody is read by reflection.
 
 An unknown enum constant is refused, and the message names the constants the enum has. This is the
 case decision 55 exists for, in its other half. A handler which took a name the model invented would
 act on a value nobody declared.
 
-`java.util.Date`, `java.util.Calendar` and `java.util.Locale` stay refused, although the way out
-writes them as text. This part was measured first, on 2026-09-16. A `Date` is written as
-`Wed Sep 16 21:55:30 CEST 2026`. That text carries no milliseconds. So the point in time is already
-up to a second off before anything reads it back. And it names the zone by an abbreviation which
-several zones share. The same text written in `Asia/Kolkata` and read in `Europe/Dublin` parses to an
-instant four and a half hours away, and prints as the same text again. So the round-trip check which
-this repository uses everywhere else would pass a wrong value. A `Calendar` is written as its debug
-form. A `Locale` is written as `de_DE`, which no `Locale` method reads back, while `Locale.ROOT` is
-written as an empty text. Each of the three is refused with the type to declare instead. The text in
-the BPMS looks readable, so somebody has to say why it is not read.
+**A `Date` travels as the instant it holds**, `2026-09-16T19:55:30.123Z`. Its own text,
+`Wed Sep 16 21:55:30 CEST 2026`, was measured on 2026-09-16 and cannot be read back. It carries no
+milliseconds, so the point in time is up to a second off before anything reads it. And it names the
+zone by an abbreviation which several zones share. The same text written in `Asia/Kolkata` and read
+in `Europe/Dublin` parses to an instant four and a half hours away, and prints as the same text
+again. So a round-trip check would pass a wrong value. The form of `Instant` was chosen over the
+form of `OffsetDateTime` in the zone of the JVM, because a `Date` is a count of milliseconds and
+carries no zone of its own. Putting the offset of the writing node into the text would let two nodes
+of one application write two texts for the same value. And a value written in summer would read
+differently from the same value written in winter. An operator gives up local time in the model for
+that, and the documentation names it. Every subclass travels the same way, through
+`Instant.ofEpochMilli(getTime())`. So an attribute declared `Date` which a JPA provider fills with a
+`java.sql.Timestamp` reaches the BPMS as the same text a plain `Date` does. A `Timestamp` loses what
+it holds below the millisecond, which is all a `Date` holds anyway.
 
-Why was the way out not changed to write something better for a `Date`? The text in the BPMS is what
-an operator reads and what a BPMN expression works on. Changing it changes the model side for every
-application which already shares such an attribute. That deserves its own decision, not a side
-effect of teaching the way back to read. Refusing costs an upgrading application nothing, because
-the same declaration fails today.
+**A `TimeZone` travels as the id of `toZoneId()`** and comes back through
+`TimeZone.getTimeZone(ZoneId)`. `ZoneId.of` reads the text, because `TimeZone.getTimeZone(String)`
+answers GMT for every text it does not know, and a wrong zone would travel unnoticed. Measured on
+2026-09-17 against Java 21: a zone with a fixed offset survives as it was written. So `GMT+05:30` is
+shared and read back as `GMT+05:30`. A three-letter id does not survive, because it is no zone name.
+`IST` is shared as `Asia/Kolkata` and `EST` as `-05:00`. The zone is the same one and its rules are
+the same, but the id is not. An application which compares ids has to know that.
+
+**A `Calendar` the BPMS would be given stops the boot.** Its text is the debug form of the
+implementation. That text is 769 characters long (measured on 2026-09-17 against Java 21), and it
+would be written again at every sync point. It says nothing to a model and nothing to an operator,
+and reading a point in time out of it means guessing which of its fields to trust. This is to be
+prevented, not reported (Stephan, 2026-09-17). So `validateSyncModel` collects such an attribute as a
+defect, and the application does not boot. Leaving the attribute out of what is shared was refused. A
+process variable which stopped being written without a word would make a model read null and take a
+branch nobody chose. So the application has two choices. It declares a type which travels: an
+`Instant` for the point in time, and a `TimeZone` or a `ZoneId` next to it where the zone matters
+too. Or it says with `@NoSyncWithBPMS` that this attribute stays at home.
+
+A boot which fails must not rest on a guess. So the refusal asks whether the attribute really is
+shared, along the same chain a sync point walks. A class states its own mode or inherits it from the
+attribute which holds it, and an attribute may state its own. Only what is shared at the end of that
+chain is refused. What stays unknown is the adapter's default. The walk starts out sharing, because
+`FULL` is the default of every adapter there is (see `AggregateSyncMode`, whose `NONE` is meant for
+an adapter whose BPMS is fed by something else entirely). A type is validated once per path which
+leads to it, not once in total, because the same class may be shared below one attribute and hidden
+below another.
+
+**Every other type which cannot come back gets a warning at startup.** That is `java.util.Locale`,
+`java.net.URI` and everything else the list does not name. A `Locale` is written as `de_DE`, which
+no `Locale` method reads back, while `Locale.ROOT` is written as an empty text. Such a text carries no
+value back into a declared type. But it is text which a person can read and work with, and a boot
+which fails over it would cost more than it saves. The warning is not a failed boot for a second
+reason: `validateSyncModel` is not told the adapter's default, so it cannot know whether the attribute
+is shared at all. And an aggregate whose values only ever travel outwards is an ordinary application.
+An attribute marked `@NoSyncWithBPMS` is left out of the warning, because that one will certainly
+never travel. On the way back such a type is refused, and the message names the type to declare
+instead. The text in the BPMS looks readable, so somebody has to say why it is not read. That refusal
+costs an upgrading application nothing, because the same declaration failed before.
+
+Why was the way out not changed to write something better for these types? The text in the BPMS is
+what an operator reads and what a BPMN expression works on. Changing it changes the model side for
+every application which already shares such an attribute. That deserves its own decision, not a side
+effect of teaching the way back to read. A `Date` is the one exception, because its old text could
+not carry its value.
 
 One consequence is worth naming, because a model reads these texts back. Camunda takes a date, a
 duration or a cycle in a timer event. A `Duration` carries days down to seconds, and a `Period` years
@@ -1862,105 +1924,20 @@ more in hours, so `Duration.ofDays(14)` reaches the model as `PT336H`. The timer
 moment, because the engine reads both forms. The difference is the wording an operator sees. The
 documentation explains it. The conversion does not repair it.
 
-`AggregatePropertyWriter` uses the same method. So an aggregate which a start by the BPMS builds gets
-its `UUID`, its dates and its enum attributes the same way, and refuses the same texts.
-
-*Two parts of this entry changed later. Decision 58 lets a `Date` travel as the instant it holds and
-adds `TimeZone`, and decision 59 stops the boot where a `Calendar` would be shared. Of the three
-refusals above, only the one of `Locale` stays. And `AggregatePropertyWriter` is gone since decision
-92, so the last paragraph no longer applies.*
+`AggregateSyncSupportTest#whatCannotComeBackIsSaidAtStartup` holds the warning,
+`AggregateSyncSupportTest#aSharedCalendarStopsTheBoot` holds the refusal, and the tests next to it
+hold the aggregates which still boot.
 
 ### 58. A value type is recognised by what it is, and a Date travels as the instant it holds
 
-The way out shared a value as text when the package of its class began with `java.` or `javax.`.
-That question was wrong at both ends. A `TimeZone` is a `sun.util.calendar.ZoneInfo` at runtime. So
-it failed the check, the walk read its getters, and the sync point ended with an
-`InaccessibleObjectException` (measured on 2026-09-16). A `Calendar` passed the check and reached the
-BPMS as its debug form: several hundred characters which name every field of the implementation.
-
-`TextValueTypes` now names the types for which a value travels as text, and both ways read that one
-list. The way out asks which of those types a VALUE is one of. So an implementation class which the
-runtime hands out is recognised by the type it extends. The way back asks for the DECLARED type
-exactly, because the text is promised for the types named, and a subclass may write a text of its
-own. Everything which the JDK wrote and the list does not name still travels as its own text. The
-check for that now also asks which module a class comes from. So no package which the runtime
-exports to nobody is read by reflection again.
-
-The list is a selection, and the documentation says so. It holds what a workflow aggregate carries
-often enough to be worth it: an identifier, a point in time, a length of time, a zone. Somebody who
-misses a type opens an issue for it. A list which promised the whole JDK would promise a text for
-types whose text says nothing.
-
-`java.util.Date` travels as the instant it holds, `2026-09-16T19:55:30.123Z`. Decision 57 refused it
-for the text it used to travel as. The form of `Instant` was chosen over the form of
-`OffsetDateTime` in the zone of the JVM, because a `Date` is a count of milliseconds and carries no
-zone of its own. The offset of the writing node is not part of the value. Putting it into the text
-would let two nodes of one application write two texts for the same value. And a value written in
-summer would read differently from the same value written in winter. An operator gives up local time
-in the model for that, and the documentation names it. Every subclass travels the same way, through
-`Instant.ofEpochMilli(getTime())`. So an attribute declared `Date` which a JPA provider fills with a
-`java.sql.Timestamp` reaches the BPMS as the same text a plain `Date` does. A `Timestamp` loses what
-it holds below the millisecond, which is all a `Date` holds anyway.
-
-`java.util.TimeZone` travels as the id of `toZoneId()` and comes back through
-`TimeZone.getTimeZone(ZoneId)`. `ZoneId.of` reads the text, because `TimeZone.getTimeZone(String)`
-answers GMT for every text it does not know, and a wrong zone would travel unnoticed. Measured on
-2026-09-17 against Java 21: a zone with a fixed offset survives as it was written. So `GMT+05:30` is
-shared and read back as `GMT+05:30`. A three-letter id does not survive, because it is no zone name.
-`IST` is shared as `Asia/Kolkata` and `EST` as `-05:00`. The zone is the same one and its rules are
-the same, but the id is not. An application which compares ids has to know that.
-
-`java.util.Calendar` is carried neither way. Its text is the debug form, and reading a point in time
-out of it means guessing which of its fields to trust. An attribute of that type is named while the
-application boots, with `Instant` as the type to use instead. What a sync point writes for it does not
-change.
-An attribute which stopped being a process variable without a word would make a model read null and
-take a branch nobody chose. The message at startup is what makes the case stop being silent.
-`java.util.Locale` stays as decision 57 left it.
-
-That message is a warning and not a failed boot. `validateSyncModel` is not told the adapter's
-default, so it cannot know whether the attribute is shared at all. And an aggregate whose values only
-ever travel outwards is an ordinary application. An attribute marked `@NoSyncWithBPMS` is left out of
-it, because that one will certainly never travel.
-`AggregateSyncSupportTest#whatCannotComeBackIsSaidAtStartup` holds the message, and
-`TextValueRoundTripTest` holds both ways against each other for every type in the list.
-
-Entry 59 decides what happens to a `Calendar`, and it supersedes the two paragraphs above in that
-one point. Such an attribute stops the boot instead of getting a warning, and no sync point gets the
-chance to write it. Everything else here stands, including the warning for every other type.
+*Merged into decision 57 on 2026-10-12, before the 2.0 release.* Decision 57 now holds the list
+of types which travel as text, how a value type is recognised, and how a `Date` and a `TimeZone`
+travel.
 
 ### 59. A Calendar the BPMS would be given stops the boot
 
-Decision 58 named a `Calendar` attribute while the application boots and left the sync point alone.
-So the BPMS kept getting the debug form of the implementation. That text is 769 characters long
-(measured on 2026-09-17 against Java 21), and it is written again at every sync point. It says
-nothing to a model and nothing to an operator. This is to be prevented, not reported (Stephan,
-2026-09-17). So `validateSyncModel` collects such an attribute as a defect, and the application does
-not boot.
-
-The other way was to leave the attribute out of what is shared, and it was refused. A process
-variable which stopped being written without a word would make a model read null and take a branch
-nobody chose. So the application has two choices. It declares a type which travels: an `Instant` for
-the point in time, and a `TimeZone` or a `ZoneId` next to it where the zone matters too. Or it says
-with `@NoSyncWithBPMS` that this attribute stays at home.
-
-`Calendar` is the only type refused this way. Everything else decision 58 named keeps its warning,
-including a `java.util.Locale` and a `java.net.URI`. Their text carries no value back into a declared
-type. But it is text which a person can read and work with, and a boot which fails over it would cost
-more than it saves.
-
-A boot which fails must not rest on a guess. So the refusal asks whether the attribute really is
-shared, along the same chain a sync point walks. A class states its own mode or inherits it from the
-attribute which holds it, and an attribute may state its own. Only what is shared at the end of that
-chain is refused. What stays unknown is the adapter's default. The walk starts out sharing, because
-`FULL` is the default of every adapter there is (see `AggregateSyncMode`, whose `NONE` is meant for
-an adapter whose BPMS is fed by something else entirely). The warning of decision 58 stays as loose
-as it was, because a wrong warning costs only a log line.
-
-One consequence is worth naming. A type is now validated once per path which leads to it, not once
-in total, because the same class may be shared below one attribute and hidden below another.
-`AggregateSyncSupportTest#aSharedCalendarStopsTheBoot` holds the message, and the tests next to it
-hold the aggregates which still boot.
+*Merged into decision 57 on 2026-10-12, before the 2.0 release.* Decision 57 now says why a
+`Calendar` which the BPMS would be given stops the boot, while every other type gets a warning.
 
 ### 60. A BPMS which keeps no version catalog says so, and the methods which never run are named
 
