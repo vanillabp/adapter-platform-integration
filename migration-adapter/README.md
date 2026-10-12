@@ -1298,8 +1298,9 @@ task. The message names the value, the declared type and the number which would 
 instead. The alternative is a handler which acts on a number nobody wrote. That is why this is a
 refusal and not a rounding rule. It is [decision 55](../DECISIONS.md), and `UPGRADE.md` says what
 it means for an application which comes from version 1. `WorkflowTaskScannerEdgeCasesTest`, nested
-class "Task-parameter conversion", holds the cases. `AggregatePropertyWriterTest` holds the writing
-side. `TextValueRoundTripTest` holds the way out and the way back against each other. It asserts
+class "Task-parameter conversion", holds the cases. There is no writing side any more. A workflow
+the BPMS starts builds its own aggregate, so the platform writes no value of the BPMS into an
+attribute ([decision 92](../DECISIONS.md)). `TextValueRoundTripTest` holds the way out and the way back against each other. It asserts
 the text each of those types is shared as, and that the same text comes back as the same value.
 
 The message names the parameter as the developer wrote it, if the application was compiled with
@@ -2477,9 +2478,10 @@ store every ten seconds, 8640 turns a day whose answer was known. So the fixed r
 `DueEntryPoller` runs a store's poll, asks that store when the earliest entry it still owes
 something to is due, and sleeps until exactly that moment. An entry due in four minutes is
 dispatched in four minutes, not on the next tick. A store which owes nothing is left alone. The
-question each store answers is its own select of due entries without the time limit, plus the
-moment when the oldest dispatched entry may be deleted. So one wake-up covers the dispatch and the
-retention. A BLOCKED entry is in neither set, because it waits for a person and not for a clock.
+question each store answers is its own select of due entries without the time limit. The end of
+the retention of a DONE entry is not part of it. Those entries are deleted in the night window of
+the housekeeping, so a wake-up only dispatches. A BLOCKED entry is not in the set either, because it
+waits for a person and not for a clock.
 
 Both stores VanillaBP owns ship one index per question, over the status and that question's
 timestamp. An aggregate over a column without an index is a scan which grows with everything the

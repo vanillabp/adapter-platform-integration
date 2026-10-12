@@ -177,70 +177,36 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   /**
    * When this store owes something: the due time of the earliest entry which waits for its
-   * dispatch, or the moment the oldest dispatched entry may be deleted, whichever comes
-   * first. A BLOCKED entry is in neither set. It waits for a person, not for a clock, so it
-   * must not keep the poller awake.
+   * dispatch. A BLOCKED entry is not in that set. It waits for a person, not for a clock, so
+   * it must not keep the poller awake. The end of the retention of a DONE entry is no reason
+   * to wake up either. A wake-up only dispatches (see decision 42 in the repository's
+   * DECISIONS.md). The DONE entries are deleted in the night window of the housekeeping (see
+   * decision 91 in the repository's DECISIONS.md).
    * <p>
    * An entry which is being dispatched right now answers with the end of its lease, not
    * with "due". The claim and every renewal push <code>nextAttemptAt</code> along with
    * <code>leasedUntil</code>. Without that, the poller would be told "due now" for as long
    * as the dispatch runs, and it would ask again at its shortest sleep.
    *
-   * @return The earliest of the two moments, or <code>null</code> where the collection
-   *         holds neither
+   * @return The moment, or <code>null</code> where nothing waits for its dispatch
    */
   private Instant earliestDueAt() {
 
-    final var nextAttempt = earliest(
-        Query
-            .query(Criteria
-                .where("status")
-                .is(PhaseTwoOutboxEntry.STATUS_OPEN)
-                .and("attempts")
-                .lt(properties.getBlockAfterAttempts())),
-        "nextAttemptAt");
-    final var oldestDone = earliest(
-        Query
-            .query(Criteria
-                .where("status")
-                .is(PhaseTwoOutboxEntry.STATUS_DONE)),
-        "doneAt");
-    final var retentionRunsOut = oldestDone == null
-        ? null
-        : oldestDone.plus(properties.getRetention());
-    if (nextAttempt == null) {
-      return retentionRunsOut;
-    }
-    if (retentionRunsOut == null) {
-      return nextAttempt;
-    }
-    return nextAttempt.isBefore(retentionRunsOut) ? nextAttempt : retentionRunsOut;
-
-  }
-
-  /**
-   * The smallest value of one field among the documents a query matches. It is read as one
-   * document and not as an aggregation. So the index which this store creates over the
-   * status and that field serves the sort.
-   *
-   * @param query What to look at
-   * @param field The field to order by and to read
-   * @return The value or <code>null</code> where nothing matches
-   */
-  private Instant earliest(
-      final Query query,
-      final String field) {
-
+    final var query = Query
+        .query(Criteria
+            .where("status")
+            .is(PhaseTwoOutboxEntry.STATUS_OPEN)
+            .and("attempts")
+            .lt(properties.getBlockAfterAttempts()));
+    // read as one document and not as an aggregation. So the index which this store creates
+    // over the status and the due time serves the sort
     query
-        .with(Sort.by(Sort.Direction.ASC, field))
+        .with(Sort.by(Sort.Direction.ASC, "nextAttemptAt"))
         .limit(1)
         .fields()
-        .include(field);
+        .include("nextAttemptAt");
     final var entry = mongoTemplate.findOne(query, PhaseTwoOutboxEntry.class, collection);
-    if (entry == null) {
-      return null;
-    }
-    return "doneAt".equals(field) ? entry.getDoneAt() : entry.getNextAttemptAt();
+    return entry == null ? null : entry.getNextAttemptAt();
 
   }
 

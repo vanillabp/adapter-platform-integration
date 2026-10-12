@@ -1270,6 +1270,27 @@ public class WorkflowTaskRegistryTest {
     }
 
     @Test
+    @DisplayName("A user task without a form key is offered only its element id")
+    public void aUserTaskWithoutAFormKeyIsOfferedItsElementId() {
+
+      // a user task without a form key has no task definition. Only the element id can wire it
+      final var exception = assertThrows(
+          IllegalStateException.class,
+          () -> registry.validateTaskWiring(
+              MODULE,
+              PROCESS,
+              List.of(BpmnTaskSpec.userTask("MX_User", null))));
+
+      final var message = exception.getMessage();
+      assertTrue(message.contains("task 'MX_User' (no task definition)"), message);
+      assertTrue(message.contains("named 'MX_User'"), message);
+      assertTrue(message.contains("annotate an existing method with @WorkflowTask(id = \"MX_User\")."), message);
+      assertFalse(message.contains("taskDefinition = \"null\""), message);
+      assertFalse(message.contains("task definition 'null'"), message);
+
+    }
+
+    @Test
     @DisplayName("A handler matching no task of ANY wired process fails the per-module check")
     public void unmatchedHandlerFailsPerModule() {
 

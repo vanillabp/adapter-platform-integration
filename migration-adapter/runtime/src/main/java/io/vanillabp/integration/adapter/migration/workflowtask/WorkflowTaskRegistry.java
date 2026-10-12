@@ -859,10 +859,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
                       ? task.taskDefinition()
                       : task.activityId(),
                   serviceClasses,
-                  task.listener()
-                      ? "@WorkflowTask(taskDefinition = \"%s\")".formatted(task.taskDefinition())
-                      : "@WorkflowTask(taskDefinition = \"%s\") or @WorkflowTask(id = \"%s\")"
-                          .formatted(task.taskDefinition(), task.activityId()),
+                  annotationsWhichWire(task),
                   io.vanillabp.integration.adapter.spi.workflowtask.ImplementedExternally
                       .howToMark(workflowModuleId, bpmnProcessId, task)
                       .indent(4)
@@ -906,9 +903,35 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
   private static String describe(
       final BpmnTaskSpec task) {
 
+    final var taskDefinition = task.taskDefinition() == null
+        ? "no task definition"
+        : "task definition '%s'".formatted(task.taskDefinition());
     return task.listener()
-        ? "listener on '%s' (task definition '%s')".formatted(task.activityId(), task.taskDefinition())
-        : "task '%s' (task definition '%s')".formatted(task.activityId(), task.taskDefinition());
+        ? "listener on '%s' (%s)".formatted(task.activityId(), taskDefinition)
+        : "task '%s' (%s)".formatted(task.activityId(), taskDefinition);
+
+  }
+
+  /**
+   * The annotations a message offers for a task which has no method. A listener is wired only
+   * by its task definition. A task without a task definition is wired only by its element id,
+   * for example a user task without a form key. Then the message offers only that id, because
+   * <code>taskDefinition = "null"</code> would wire nothing.
+   *
+   * @param task The task which has no method
+   * @return The annotations, as an application writes them
+   */
+  static String annotationsWhichWire(
+      final BpmnTaskSpec task) {
+
+    if (task.listener()) {
+      return "@WorkflowTask(taskDefinition = \"%s\")".formatted(task.taskDefinition());
+    }
+    if (task.taskDefinition() == null) {
+      return "@WorkflowTask(id = \"%s\")".formatted(task.activityId());
+    }
+    return "@WorkflowTask(taskDefinition = \"%s\") or @WorkflowTask(id = \"%s\")"
+        .formatted(task.taskDefinition(), task.activityId());
 
   }
 
