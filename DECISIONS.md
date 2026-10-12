@@ -75,15 +75,45 @@ A fallback would mean working on a workflow which belongs to somebody else.
 
 ### 5. What the election remembered is a hint, never an answer
 
-`WorkflowAdapterCache` shortcuts the walk with the adapter which answered last time. The same
-link is written down whenever VanillaBP knows it for certain: when a start is scheduled, after
-phase two, and on every inbound delivery. A hit is still probed, never trusted. A stale hit repairs
-itself, because it falls through to the full walk.
+**A workflow is located by asking, not by a registry.** Every operation on an existing workflow asks
+the configured adapters which of them holds it. The answer is not written down anywhere persistent. A
+registry which maps workflow module, BPMN process and aggregate id to an adapter id was considered
+and rejected. It would be a second source of truth about something the BPMS already knows. It would
+need its own schema, cleanup and repair path. And it would be wrong exactly when it matters, after a
+crash or a migration.
 
-The hint also turns the meaning of an unknown answer around. Say an adapter SHOULD hold the
-workflow and does not report it. Then the core waits out that adapter's `workflowVisibilityDelay`
-and looks again, because an eventually consistent BPMS needs a moment after the start. The same
-answer without a hint means a workflow nobody ever heard of, and it fails at once.
+This costs one question per operation, plus the walk over the adapters until one answers. Against a
+remote BPMS the question is a query. Against an embedded one it costs nothing. Two kinds of hints
+make it cheaper, and both are records of something that happened, not a registry: the entries of
+`WorkflowAdapterCache`, and the rows which the delivery log writes when a workflow starts and when a
+task is delivered (decisions 30 and 108). The rows live in the application's database. So the HINT
+is kept there now, while the ANSWER still comes from the BPMS.
+
+This is sized for the workload VanillaBP is built for. That is a product decision, not a limit
+somebody forgot to lift. VanillaBP is built for the business processes of a normal company, fast or
+slow. A workflow may finish within seconds or wait for weeks. What matters is not how fast one
+workflow runs, but how many operations all of them add up to. VanillaBP is not built for thousands
+per second. An application which really moves thousands of operations per second has to be
+optimised anyway, and a project of that kind has the budget to build what it needs. If VanillaBP
+bought that case with complexity which everybody else pays for, that would be the wrong trade. So
+the probe per operation stays. An application of that other shape gets its own design, not a
+registry added on here.
+
+The cost first shows up in a cluster of application nodes. The lever there is the cache, not the
+design. A shared `WorkflowAdapterCache` (Redis, Hazelcast, whatever the application already runs)
+is written once when the workflow starts, and every node reads it. So the BPMS is asked once per
+workflow instead of once per node. That is the recommended answer to "the election is our
+bottleneck". It is also why the cache SPI (service provider interface, the interfaces the other side
+implements) is part of the integration SPI and not an internal class.
+
+An adapter which cannot be asked at all answers optimistically. That is safe while it is the only
+BPMS configured. It is also why a migration setup which contains such an adapter routes by list
+order (see the wiki page "BPMS migration").
+
+**A hint is probed, never trusted.** `WorkflowAdapterCache` shortcuts the walk with the adapter which
+answered last time. The same link is written down whenever VanillaBP knows it for certain: when a
+start is scheduled, after phase two, and on every inbound delivery. A hit is still probed. A stale
+hit repairs itself, because it falls through to the full walk.
 
 A hint is stored under the BPMN process id of the process which was running when VanillaBP learned
 the answer. That is not always the id the application addresses. A task of a secondary process is
@@ -96,9 +126,159 @@ elected wrote its answer there. A hint which turns out to be stale is dropped. A
 workflow ended is marked. Both happen under the id the hint was read from. If they happened under
 the own id, the entry which is read next time would still say the old thing.
 
-*Superseded in part by decision 27: the second paragraph, saying that the core waits out the
-`workflowVisibilityDelay`. Only a read still waits. Phase one asks once and plans the operation, and
-the dispatch gives the entry back with a due time.*
+**The start row is a hint as well.** The row written when a workflow started names the adapter which
+started it, and its workflow id. A workflow does not change its BPMS. A new workflow starts in the
+first adapter of the list, and a running one stays where it is and is looked for there. So the
+adapter which started a workflow holds it until its end, and the row says what the election would
+find out, only without the round trip. The row counts only where it names an adapter which is still
+one of the workflow's adapters. Sending a caller to an adapter which is not there helps nobody, and
+the workflow id of such a row is not handed to other adapters either.
+
+- The election of an extension, `WorkflowElection#adapterIdOfWorkflow` and `#locationOfWorkflow`,
+  reads the start row before it elects. Where the row counts, its adapter id and its workflow id are
+  the answer. No BPMS is asked, and nothing is waited for. So the two methods do not throw after a
+  workflow ended, for as long as its start row lives (`vanillabp.delivery.workflow-start-retention`).
+  The start row outlives the workflow exactly for that case: an extension names the adapter of a
+  workflow whose aggregate changed after its end. The answer says who started the workflow, not
+  whether it still runs, and the javadoc of both methods says so. Only the start row counts here. An
+  open task row is not read for this.
+- An operation about a workflow (`Election.HOLDS_THE_WORKFLOW`: correlating a message, pushing a
+  changed aggregate) reads the start row in phase one and in phase two, where the cache has no hint.
+  Then the row is the hint. Its adapter is probed first, and an unknown answer means "not visible
+  yet". The BPMS' own id of the workflow goes to the probe as well, through the four-argument
+  `awarenessOfWorkflow`. So an adapter can ask its engine by key instead of searching. Phase two
+  hands the workflow id of the row to the adapter as `PhaseTwoRequest#workflowId()`, where the row
+  names the adapter which runs that phase two. Where the row proved right, its adapter and workflow
+  id go into the cache, so the next operation does not read the row again. The cache comes first,
+  because it costs nothing to read, and an election wrote it more recently than the start.
+- A read of the viewer API reads the start row the same way, before it asks the adapters. Where
+  there is no row, it hands the probe the workflow id from the row of an open task, as an operation
+  does.
+- An operation about a task asks by the task's id, which is an exact question, and it reads no row.
+
+The election runs as before where there is no row. That is the case for a workflow started before
+the row existed, for a row past its period, for a start whose adapter reports no workflow id, and in
+the window after a first dispatch which crashed before the row was written.
+
+Before the row was read, only the hint in the election cache told "not visible yet" apart from
+"nobody knows this workflow". That hint lives in the memory of one node and expires after an hour.
+Measured against Camunda 8.10.0 with a stopped exporter on 2026-10-04: after a restart, all 480
+waiting `aggregateChanged` entries were consumed as stale, and the values never arrived. The
+application got `WorkflowNotFoundException` for workflows which were running. The same happened on a
+second node which took over an entry, after the hint expired, and for the viewer of a young
+workflow. The row is in the application's database, so it says what the cache said, and it says it
+after a restart too. For an extension it also removes a wait. An extension asks while the
+application's transaction is open, for example when it reports a changed aggregate. On Camunda 8 the
+election waits for the read model when the exporter is behind, up to ten seconds. The transaction,
+its database connection and its locks waited with it.
+
+**The re-dispatch of a START reads the start row before it probes.** The row may name the adapter the
+entry was written for, and may have been written at or after the moment the entry was planned. Then
+the earlier attempt created the workflow, and the entry is consumed without asking anybody. A row
+older than the entry belongs to an earlier workflow of the same aggregate (decision 116). Only where
+the row says nothing is `awarenessOfWorkflowForRedispatch` probed. That is why that probe must never
+answer optimistically. The probe is a search. While the read model is behind, it answers "unknown"
+for a workflow which the first attempt created. The start then runs again. A second instance has
+jobs of its own, so the delivery log sees no repetition. The row closes that window for every start
+which wrote one. The duplicate window which remains after a crash is documented per adapter, not
+closed.
+
+**Phase one asks once, and the waiting happens where no transaction is open.** An unreachable BPMS
+used to be retried twice, half a second apart, wherever the question was asked. An adapter which a
+hint said should hold the workflow was asked again until its `workflowVisibilityDelay` was used up,
+which is ten seconds on Camunda 8. In phase one this runs inside the transaction the application
+called from. That transaction holds a database connection and the locks on the workflow aggregate.
+One lagging exporter is then enough to park every caller in the connection pool. An application
+whose BPMS is slow can then do nothing at all, including the work which has nothing to do with that
+BPMS.
+
+So the walk asks how patient it may be. Phase one asks every adapter once and never sleeps. The
+dispatch of a phase-two entry may ask an unreachable BPMS again. No application transaction is open
+there, and a repeat costs the entry another attempt, not a connection. The dispatch does not wait for
+a read model which is behind. It gives the entry back with a due time (decision 49).
+
+Three goals decide what happens to the answers. They are Stephan's. They are written down here
+because they are the reason why the table below looks the way it does:
+
+1. a workflow which NO BPMS knows has to raise `WorkflowNotFoundException` out of the
+   `ProcessService` method the application called;
+2. the one to three seconds by which Camunda 8's secondary storage lags behind in normal operation
+   must not produce an error anywhere, while an exporter which stopped (a full Elasticsearch, say)
+   should end up in a Camunda incident;
+3. a BPMS which is not available right now produces an exception, and asking it is the only honest
+   way to find out.
+
+|                  The probe answers                  |                phase one does                |             the dispatch does              |                      a read does                       |                                                   a report does                                                   |
+|-----------------------------------------------------|----------------------------------------------|--------------------------------------------|--------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
+| `ACTIVE`                                            | the operation runs                           | the operation runs                         | the adapter answers                                    | asks nobody: the start row, or the row of an open task, names the adapter                                         |
+| `COMPLETED`                                         | warned no-op                                 | the entry is consumed                      | the adapter answers (an ended workflow is viewable)    | asks nobody: the start row names the adapter until its retention ends                                             |
+| `UNKNOWN_TO_BPMS`, task operation                   | `TaskNotFoundException` at once              | the entry is consumed (the task is gone)   | -                                                      | asks nobody: the row of the task names the adapter, or the entry goes without one                                 |
+| `UNKNOWN_TO_BPMS`, workflow operation, hint present | the operation is planned, the caller returns | gives the entry back, due after the window | waits out the window, then `WorkflowNotFoundException` | asks nobody: the entry goes without an adapter, and its dispatch elects one                                       |
+| `UNKNOWN_TO_BPMS`, no hint                          | `WorkflowNotFoundException` at once          | the entry is consumed (stale)              | `WorkflowNotFoundException` at once                    | asks nobody: the entry goes without an adapter; the dispatch tries again and blocks the entry when its time is up |
+| `BPMS_UNAVAILABLE`                                  | exception naming the adapter, at once        | retried twice, then the entry is repeated  | retried twice, then the exception                      | asks nobody: the dispatch meets it and repeats the entry                                                          |
+
+Why the hint is the dividing line: a hint exists only where VanillaBP knew the answer without asking
+anybody. Either it started the workflow itself, or a delivery for that workflow arrived from that
+BPMS. So the hint is evidence that the workflow exists. It turns "unknown" from a wrong id into a
+read model which runs behind. Without a hint, and with "unknown" from every adapter, nobody has ever
+seen this workflow.
+
+**A read waits.** A write operation is planned in phase one and does its waiting in the dispatch. A
+read has no second place to go. Nothing repeats it, so it either waits itself or hands the caller an
+error. A red blueprint nightly build showed it (story 176). The viewer of a workflow started seconds
+ago asked Camunda 8 while its exporter was still behind. It got the honest "unknown" and raised
+`WorkflowNotFoundException` in the application, which goal 2 forbids. So a read waits like the
+dispatch does, limited by a hint and by the adapter's `workflowVisibilityDelay`. The cost is the
+mirror image. A read which carries a stale hint answers after the window, not at once. The message
+then names the adapter which was expected to hold the workflow, because an exporter which stopped
+looks exactly like one which is behind.
+
+**A report never waits.** A report is a call which writes an outbox entry into the transaction of the
+application, for example when an extension tells the Business Cockpit that an aggregate changed. It
+never asks a BPMS. It takes the adapter from what VanillaBP wrote down: the start row, the row of an
+open task, or the one adapter the application has. Where none of them names the adapter, the entry
+is written without one, and the dispatch elects it. The dispatch may ask a BPMS, but it does not
+sleep. It gives the entry back with a due time, as decision 49 says. What is looked up does not
+depend on the extension. Whether the call may wait depends on its kind: a report never waits, a read
+may. So an extension calls `WorkflowElection#adapterIdOfWorkflow` and `#locationOfWorkflow` only
+where it reads, never where it reports. For a report it uses `#workflowStartOf` and
+`#openUserTasksOf`, which read the application's database and nothing else. The application's code
+does not need to know whether it is the first or the tenth call in its model. Measured on 2026-10-11
+against Camunda 8.10.0 with a stopped exporter: a report about a workflow started a moment ago took
+0 ms and sent no request to the cluster, and the start row was written 21 to 83 ms after the start,
+before the first task was delivered.
+
+A task probe is not a search, so it keeps the fast answer. On Camunda 8, `awarenessOfTask` updates
+the job's timeout, and `awarenessOfUserTask` sends an empty user-task update. Both are engine
+commands. They answer exactly and never touch the exporter. Only `awarenessOfWorkflow` searches the
+secondary storage. It is used by message correlation, the aggregate push, the viewer and the
+re-dispatch probe. Only that branch needed a new answer.
+
+Where an exporter outage becomes visible depends on what the work hangs on. That boundary is part of
+this decision, not something to discover later. Some work sits behind a JOB, for example a
+`@WorkflowTask`, or an asynchronous task whose completion never arrives. That work runs out of the
+job's retries in the cluster, and Camunda raises an incident, which is what goal 2 asks for. Other
+work has no job behind it, for example a correlation from a REST endpoint. Nothing there could
+become an incident. There, the blocked outbox entry and the counter of blocked entries are the place
+where it shows.
+
+Goal 3 cannot be met without asking. Without a question, the only thing available is the adapter's
+last known health, and that is always stale. "Was reachable n seconds ago" is either a false alarm
+or a false calm. The probe itself is where unreachability shows up. It is one question per
+operation, the price of locating by asking. Health may add to the MESSAGE ("this adapter has been
+reporting itself unreachable since 12:04"). It does not replace the question.
+
+What this leaves open is named, not closed. A hint lives as long as the start row
+(`vanillabp.delivery.workflow-start-retention`, thirty days), not just the hour of the cache. Take a
+workflow operation which carries a stale hint: the workflow ended, and its BPMS already forgot it
+inside that period. That operation is planned instead of refused at the call. Its entry is repeated
+and finally blocked, and that is where it becomes visible. The more common case is an ended workflow
+which the BPMS still knows. It keeps answering `COMPLETED` and stays a warned no-op. An earlier,
+ended workflow of the same aggregate is told apart from the one which a re-dispatched START is about
+by the moment the entry was planned, for the row and for the probe (decision 116). An entry planned
+before that moment was recorded has none. For such an entry, a second start whose first attempt
+failed before it created anything is still skipped. And an operation on a workflow costs one read by
+primary key, only where the cache has no hint.
 
 ### 6. A processed delivery is written down, and a redelivery is answered from the record
 
@@ -608,49 +788,8 @@ teaches its reader to ignore the next one.
 
 ### 25. A workflow is located by asking, not by a registry
 
-Every operation on an existing workflow asks the configured adapters which of them holds it. The
-answer is not written down anywhere persistent. A registry which maps workflow module, BPMN process
-and aggregate id to an adapter id was considered and rejected. It would be a second source of truth
-about something the BPMS already knows. It would need its own schema, cleanup and repair path. And
-it would be wrong exactly when it matters, after a crash or a migration.
-
-This costs one question per operation, plus the walk over the adapters until one answers. Against a
-remote BPMS the question is a query. Against an embedded one it costs nothing. The first speed-up
-was `WorkflowAdapterCache`. Its entries are hints and never answers (entry 5), so a lost hint costs
-a walk and never a wrong route. Two more came later. Both are records of something that happened,
-not a registry: the delivery record of a task (decision 30) and the start row of a workflow
-(decision 112).
-
-This is sized for the workload VanillaBP is built for. That is a product decision, not a limit
-somebody forgot to lift. VanillaBP is built for the business processes of a normal company, fast or
-slow. A workflow may finish within seconds or wait for weeks. What matters is not how fast one
-workflow runs, but how many operations all of them add up to. VanillaBP is not built for thousands
-per second. An application which really moves thousands of operations per second has to be
-optimised anyway, and a project of that kind has the budget to build what it needs. If VanillaBP
-bought that case with complexity which everybody else pays for, that would be the wrong trade. So
-the probe per operation stays. An application of that other shape gets its own design, not a
-registry added on here.
-
-The cost first shows up in a cluster of application nodes. The lever there is the cache, not the
-design. A shared `WorkflowAdapterCache` (Redis, Hazelcast, whatever the application already runs)
-is written once when the workflow starts, and every node reads it. So the BPMS is asked once per
-workflow instead of once per node. That is the recommended answer to "the election is our
-bottleneck". It is also why the cache SPI (service provider interface, the interfaces the other side
-implements) is part of the integration SPI and not an internal class.
-
-The code carries two consequences you can see. First, the re-dispatch of a workflow start reads the
-start row first (decision 112). It probes `awarenessOfWorkflowForRedispatch` only where the row says
-nothing. That is why that probe must never answer optimistically. The duplicate window which remains
-after a crash is documented per adapter, not closed. Second, an adapter which cannot be asked at all
-answers optimistically. That is safe while it is the only BPMS configured. It is also why a
-migration setup which contains such an adapter routes by list order (see the wiki page "BPMS
-migration").
-
-*Since decision 108 the start row names the adapter which started a workflow. That row is a hint
-for the election (decisions 111 and 112), not a source of truth. Where it is missing, or names an
-adapter which is no longer configured, the election asks the BPMS as before. So "not written down
-anywhere persistent" still holds for the answer. The hint, though, is now kept in the application's
-database.*
+*Merged into decision 5 on 2026-10-12, before the 2.0 release.* Decision 5 now says why a
+workflow is located by asking and not by a registry, and what that costs.
 
 ### 26. There is no switch which lets an adapter act in phase one
 
@@ -686,106 +825,8 @@ What was decided did not change.*
 
 ### 27. Phase one asks once, and the waiting happens where no transaction is open
 
-Finding the BPMS which holds a workflow is a question per operation (entry 25). Until now that
-question could take its time wherever it was asked. An unreachable BPMS was retried twice, half a
-second apart. An adapter which a hint said should hold the workflow was asked again until its
-`workflowVisibilityDelay` was used up, which is ten seconds on Camunda 8. In phase one this runs
-inside the transaction the application called from. That transaction holds a database connection
-and the locks on the workflow aggregate. One lagging exporter is then enough to park every caller in
-the connection pool. An application whose BPMS is slow can then do nothing at all, including the
-work which has nothing to do with that BPMS.
-
-So the walk asks how patient it may be. Phase one asks every adapter once and never sleeps. The
-dispatch of a phase-two entry may ask an unreachable BPMS again. No application transaction is open
-there, and a repeat costs the entry another attempt, not a connection. The dispatch does not wait
-for a read model which is behind. It gives the entry back with a due time (decision 49).
-
-Three goals decide what happens to the answers. They are Stephan's. They are written down here
-because they are the reason why the table below looks the way it does:
-
-1. a workflow which NO BPMS knows has to raise `WorkflowNotFoundException` out of the
-   `ProcessService` method the application called;
-2. the one to three seconds by which Camunda 8's secondary storage lags behind in normal operation
-   must not produce an error anywhere, while an exporter which stopped (a full Elasticsearch, say)
-   should end up in a Camunda incident;
-3. a BPMS which is not available right now produces an exception, and asking it is the only honest
-   way to find out.
-
-|                  The probe answers                  |                phase one does                |             the dispatch does              |                      a read does                       |                                                   a report does                                                   |
-|-----------------------------------------------------|----------------------------------------------|--------------------------------------------|--------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------|
-| `ACTIVE`                                            | the operation runs                           | the operation runs                         | the adapter answers                                    | asks nobody: the start row, or the row of an open task, names the adapter                                         |
-| `COMPLETED`                                         | warned no-op                                 | the entry is consumed                      | the adapter answers (an ended workflow is viewable)    | asks nobody: the start row names the adapter until its retention ends                                             |
-| `UNKNOWN_TO_BPMS`, task operation                   | `TaskNotFoundException` at once              | the entry is consumed (the task is gone)   | -                                                      | asks nobody: the row of the task names the adapter, or the entry goes without one                                 |
-| `UNKNOWN_TO_BPMS`, workflow operation, hint present | the operation is planned, the caller returns | gives the entry back, due after the window | waits out the window, then `WorkflowNotFoundException` | asks nobody: the entry goes without an adapter, and its dispatch elects one                                       |
-| `UNKNOWN_TO_BPMS`, no hint                          | `WorkflowNotFoundException` at once          | the entry is consumed (stale)              | `WorkflowNotFoundException` at once                    | asks nobody: the entry goes without an adapter; the dispatch tries again and blocks the entry when its time is up |
-| `BPMS_UNAVAILABLE`                                  | exception naming the adapter, at once        | retried twice, then the entry is repeated  | retried twice, then the exception                      | asks nobody: the dispatch meets it and repeats the entry                                                          |
-
-This decision first forgot the column for the read. A red blueprint nightly build pointed it out
-(story 176). The viewer of a workflow started seconds ago asked Camunda 8 while its exporter was
-still behind. It got the honest "unknown" and raised `WorkflowNotFoundException` in the application.
-Goal 2 above forbids that. A write operation is planned in phase one and does its waiting in the
-dispatch. A read has no second place to go. Nothing repeats it, so it either waits itself or hands
-the caller an error. So it waits like the dispatch does, limited by a hint and by the adapter's
-`workflowVisibilityDelay`. The cost is again the mirror image. A read which carries a stale hint
-answers after the window, not at once. The message then names the adapter which was expected to
-hold the workflow, because an exporter which stopped looks exactly like one which is behind.
-
-Why the hint is the dividing line: a hint exists only where VanillaBP knew the answer without asking
-anybody. Either it started the workflow itself, or a delivery for that workflow arrived from that
-BPMS. So the hint is evidence that the workflow exists. It turns "unknown" from a wrong id into a
-read model which runs behind. Without a hint, and with "unknown" from every adapter, nobody has ever
-seen this workflow.
-
-A task probe is not a search, so it keeps the fast answer. On Camunda 8, `awarenessOfTask` updates
-the job's timeout, and `awarenessOfUserTask` sends an empty user-task update. Both are engine
-commands. They answer exactly and never touch the exporter. Only `awarenessOfWorkflow` searches the
-secondary storage. It is used by message correlation, the aggregate push, the viewer and the
-re-dispatch probe. Only that branch needed a new answer.
-
-Where an exporter outage becomes visible depends on what the work hangs on. That boundary is part of
-this decision, not something to discover later. Some work sits behind a JOB, for example a
-`@WorkflowTask`, or an asynchronous task whose completion never arrives. That work runs out of the
-job's retries in the cluster, and Camunda raises an incident, which is what goal 2 asks for. Other
-work has no job behind it, for example a correlation from a REST endpoint. Nothing there could
-become an incident. There, the blocked outbox entry and the counter of blocked entries are the place
-where it shows.
-
-Goal 3 cannot be met without asking. Without a question, the only thing available is the adapter's
-last known health, and that is always stale. "Was reachable n seconds ago" is either a false alarm
-or a false calm. The probe itself is where unreachability shows up. It is one question per
-operation, the price entry 25 accepts. Health may add to the MESSAGE ("this adapter has been
-reporting itself unreachable since 12:04"). It does not replace the question.
-
-What this leaves open is the mirror image of the old problem. It is named, not closed. Take a
-workflow operation which carries a stale hint: the workflow ended long ago and is out of the read
-model. That operation is planned instead of refused at the call. Its entry is repeated and finally
-blocked. It used to be an exception after ten seconds of waiting. It is a blocked entry now. The
-more common case is an ended workflow which the BPMS still knows. It keeps answering `COMPLETED` and
-stays a warned no-op.
-
-*The fourth column of the table, "a report does", and the three paragraphs below were added on
-2026-10-11. They came out of a challenge of every place where VanillaBP still waits (story 960). The
-other columns and paragraphs did not change.*
-
-A report is a call which writes an outbox entry into the transaction of the application, for
-example when an extension tells the Business Cockpit that an aggregate changed. It never asks a BPMS
-and it never waits. It does not ask the probe at all, so the column says what it does instead. It
-takes the adapter from what VanillaBP wrote down: the row written when the workflow started, the row
-of an open task, or the one adapter the application has. Where none of them names the adapter, the
-entry is written without one, and the dispatch elects it. The dispatch may ask a BPMS, but it does
-not sleep. It gives the entry back with a due time, as decision 49 says.
-
-What is looked up does not depend on the extension. Whether the call may wait depends on its kind: a
-report never waits, a read may (third column). So an extension calls
-`WorkflowElection#adapterIdOfWorkflow` and `#locationOfWorkflow` only where it reads, never where it
-reports. For a report it uses `#workflowStartOf` and `#openUserTasksOf`, which read the
-application's database and nothing else.
-
-The application's code does not need to know whether it is the first or the tenth call in its model.
-That is the reason for this column. Measured on 2026-10-11 against Camunda 8.10.0 with a stopped
-exporter: a report about a workflow started a moment ago took 0 ms and sent no request to the
-cluster, and the start row was written 21 to 83 ms after the start, before the first task was
-delivered.
+*Merged into decision 5 on 2026-10-12, before the 2.0 release.* Decision 5 now holds the table of
+what phase one, the dispatch, a read and a report do with each answer of the probe.
 
 ### 28. An adapter is registered completely or it does not exist
 
@@ -3951,98 +3992,13 @@ Stephan decided it on 2026-10-04: into the gate, and always carried where the BP
 
 ### 111. The election of an extension reads the start row before it asks a BPMS
 
-`WorkflowElection#adapterIdOfWorkflow` and `#locationOfWorkflow` read the row written when the
-workflow started, before they elect. Where that row names an adapter which is still one of the
-workflow's adapters, its adapter id and its workflow id are the answer. No BPMS is asked, and nothing
-is waited for. Otherwise the election runs as it did before.
-
-The row may answer because the adapter of the start row is the adapter which started the workflow. A
-workflow does not change its BPMS. A new workflow starts in the first adapter of the list, and a
-running one stays where it is and is looked for there. So the adapter which started a workflow holds
-it until its end. The row says the same thing the election would find out, only without the round
-trip.
-
-What it saves: an extension asks this while the application's transaction is open, for example when
-it reports a changed aggregate. On Camunda 8 the election waits for the read model when the exporter
-is behind, up to ten seconds. The transaction, its database connection and its locks wait with it.
-With the row, that wait is gone.
-
-No signature changes for a caller. What changes is that the two methods do not throw after a
-workflow ended, for as long as its start row lives (`vanillabp.delivery.workflow-start-retention`).
-Before, a BPMS which had forgotten an ended workflow made them throw. So an extension could not name
-the adapter of a workflow whose aggregate changed after its end, although the start row outlives the
-workflow exactly for that case. The answer says who started the workflow, not whether it still runs.
-The javadoc of both methods says so.
-
-The election runs as before where there is no row. That is the case for a workflow started before
-the row existed, for a row past its period, for a start whose adapter reports no workflow id, and in
-the window after a first dispatch which crashed before the row was written. It also runs where the
-row names an adapter which is no longer configured for the workflow, because sending an extension to
-an adapter which is not there helps nobody. Only the start row counts here. An open task row is not
-read for this, so the rule stays the one stated above: who started the workflow.
-
-Stephan decided it on 2026-10-04: into the gate, built together with the version in the rows.
+*Merged into decision 5 on 2026-10-12, before the 2.0 release.* Decision 5 now says that the
+election of an extension reads the start row before it asks a BPMS.
 
 ### 112. An operation on a workflow reads the start row before it searches
 
-The election of an operation about a workflow (`Election.HOLDS_THE_WORKFLOW`: correlating a message,
-pushing a changed aggregate) reads the row written when the workflow started. It does so in phase one
-and in phase two. Where the election cache has no hint, and that row names an adapter which is still
-one of the workflow's adapters, the row is the hint. Its adapter is probed first, and an unknown
-answer means "not visible yet". Phase one plans the operation, and phase two gives the entry back
-instead of consuming it. The BPMS' own id of the workflow goes to the probe as well, through the
-four-argument `awarenessOfWorkflow`. So an adapter can ask its engine by key instead of searching.
-
-Phase two of such an operation hands the workflow id of the row to the adapter, as
-`PhaseTwoRequest#workflowId()`, where the row names the adapter which runs that phase two. An adapter
-which addresses a workflow by its key can then skip the search for it.
-
-The re-dispatch of a START reads the same row before it probes. The row may name the adapter the
-entry was written for, and may have been written at or after the moment the entry was planned. Then
-the earlier attempt created the workflow, and the entry is consumed without asking anybody. A row
-older than the entry belongs to an earlier workflow of the same aggregate (decision 116).
-
-Before this, only the hint in the election cache told "not visible yet" apart from "nobody knows this
-workflow". That hint lives in the memory of one node and expires after an hour. Measured against
-Camunda 8.10.0 with a stopped exporter on 2026-10-04: after a restart, all 480 waiting
-`aggregateChanged` entries were consumed as stale, and the values never arrived. The application got
-`WorkflowNotFoundException` for workflows which were running. The same happens on a second node
-which takes over an entry, and after the hint expired. The row is in the application's database. It
-names the adapter which started the workflow, and a workflow does not change its BPMS (decision 111
-states the same for an extension). So the row says what the cache said, and it says it after a
-restart too.
-
-For the re-dispatch it closes a quieter gap. The probe there is a search. While the read model is
-behind, it answers "unknown" for a workflow which the first attempt created. The start then runs
-again. A second instance has jobs of its own, so the delivery log sees no repetition. And the window
-was as long as the outage, instead of the usual second.
-
-The cache comes first, because it costs nothing to read, and an election wrote it more recently than
-the start. The row is read when the cache has nothing. Where the row proved right, its adapter and
-workflow id go into the cache, so the next operation does not read the row again.
-
-An operation about a task asks by the task's id, which is an exact question, and it reads no row. A
-row which names an adapter that is no longer configured for the workflow does not count, and its
-workflow id is not handed to other adapters either. Without a row, everything is as before.
-
-What it costs, and what is accepted:
-
-- A hint now lives as long as the row (`vanillabp.delivery.workflow-start-retention`, thirty days)
-  instead of an hour. A workflow which ended, and which its BPMS already forgot inside that period,
-  is no longer refused at the call. Its operation is planned, repeated and finally blocked, and that
-  is where it becomes visible. A cached hint always left this behind, only for a shorter time.
-- An earlier, ended workflow of the same aggregate is told apart from the one which a re-dispatched
-  START is about by the moment the entry was planned, for the row and for the probe (decision 116).
-  An entry planned before that moment was recorded has none. For such an entry, a second start whose
-  first attempt failed before it created anything is still skipped.
-- One read by primary key per operation on a workflow, and only where the cache has no hint.
-
-*Since 2026-10-11 a read of the viewer API reads the start row the same way, before it asks the
-adapters (story 961). Without it, a second node, a restarted node or a node whose cache forgot
-answered `WorkflowNotFoundException` at once for a running young workflow, measured against Camunda
-8.10.0 with a stopped exporter. The row counts as a hint for the read too, so the read waits for its
-adapter as decision 27 says for a read with a hint. Where there is no row, the read hands the probe
-the workflow id from the row of an open task, as an operation does.*
+*Merged into decision 5 on 2026-10-12, before the 2.0 release.* Decision 5 now says that an
+operation on a workflow, a read and the re-dispatch of a start read the start row before they search.
 
 ### 113. Waiting for a read model uses time, not attempts
 
