@@ -147,19 +147,20 @@ public class MongoDispatchOutlastingItsLeaseTest {
 
     final var id = UUID.randomUUID().toString();
     final var now = Instant.now();
-    store()
-        .writeWaitingEntry(
-            id,
-            "test-module",
-            "SampleWorkflowService",
-            "START_WORKFLOW",
-            aggregateId,
-            "test",
-            "START_WORKFLOW|test-module|SampleWorkflowService|%s".formatted(aggregateId),
-            now,
-            now);
-    if (leasedBy != null) {
-      store().leaseEntry(id, leasedBy, leasedUntil);
+    final var idempotencyKey = "START_WORKFLOW|test-module|SampleWorkflowService|%s".formatted(aggregateId);
+    if (leasedBy == null) {
+      store()
+          .writeWaitingEntry(
+              id, "test-module", "SampleWorkflowService", "START_WORKFLOW", aggregateId, "test", idempotencyKey, now,
+              now);
+    } else {
+      // the entry is due at once, so it has to arrive together with its lease. Written first
+      // and leased afterwards, it would be free for a moment, and the poller of this
+      // application could take it then
+      store()
+          .writeLeasedWaitingEntry(
+              id, "test-module", "SampleWorkflowService", "START_WORKFLOW", aggregateId, "test", idempotencyKey,
+              leasedBy, leasedUntil, now, now);
     }
     return id;
 
