@@ -371,29 +371,48 @@ public final class MongoPhaseTwoOutboxReader {
   }
 
   /**
-   * Puts a lease on an entry. A node which holds an entry leaves a lease in the document.
-   * A node which died leaves a lease which ran out.
+   * Writes a waiting entry which a node holds already. A node which holds an entry leaves a
+   * lease in the document. A node which died leaves a lease which ran out.
+   * <p>
+   * The entry and its lease go into the collection in one insert. Two writes would leave a
+   * moment in which the entry is due and nobody holds it. The poller of the application
+   * under test may come exactly then and take the entry. The second write then puts the
+   * test's lease over the lease of that poller. So an entry the test meant to be held by
+   * somebody else is dispatched, and an entry the test meant to be left behind is dispatched
+   * twice.
    *
    * @param id The entry's own id
+   * @param workflowModuleId The workflow module the call belongs to
+   * @param bpmnProcessId The BPMN process the call belongs to
+   * @param operation What the call does, as {@code PhaseOperation} names it
+   * @param aggregateId The workflow aggregate the call belongs to
+   * @param adapterId The adapter the call is meant for
+   * @param idempotencyKey The key the entry deduplicates by while it waits
    * @param leasedBy The node holding it
    * @param leasedUntil How long that hold lasts
+   * @param writtenAt The moment the entry counts as written
+   * @param dueAt The moment the entry asks to be dispatched at
    */
-  public void leaseEntry(
+  public void writeLeasedWaitingEntry(
       final String id,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String operation,
+      final String aggregateId,
+      final String adapterId,
+      final String idempotencyKey,
       final String leasedBy,
-      final Instant leasedUntil) {
+      final Instant leasedUntil,
+      final Instant writtenAt,
+      final Instant dueAt) {
 
     entryDocuments()
-        .updateOne(
-            Filters.eq("_id", id),
-            Updates
-                .combine(
-                    Updates.set("leasedBy", leasedBy),
-                    Updates
-                        .set(
-                            "leasedUntil", leasedUntil == null
-                                ? null
-                                : Date.from(leasedUntil))));
+        .insertOne(
+            waitingEntry(
+                id, workflowModuleId, bpmnProcessId, operation, aggregateId, adapterId, idempotencyKey, Map.of(),
+                writtenAt, dueAt)
+                .append("leasedBy", leasedBy)
+                .append("leasedUntil", Date.from(leasedUntil)));
 
   }
 
@@ -694,23 +713,41 @@ public final class MongoPhaseTwoOutboxReader {
       final Instant writtenAt,
       final Instant dueAt) {
 
-    final var arguments = new Document();
-    args.forEach(arguments::append);
     entryDocuments()
         .insertOne(
-            new Document("_id", id)
-                .append("workflowModuleId", workflowModuleId)
-                .append("bpmnProcessId", bpmnProcessId)
-                .append("operation", operation)
-                .append("aggregateId", aggregateId)
-                .append("adapterId", adapterId)
-                .append("args", arguments)
-                .append("idempotencyKey", idempotencyKey)
-                .append("dedupKey", idempotencyKey)
-                .append("status", waiting)
-                .append("createdAt", Date.from(writtenAt))
-                .append("attempts", 0)
-                .append("nextAttemptAt", Date.from(dueAt)));
+            waitingEntry(
+                id, workflowModuleId, bpmnProcessId, operation, aggregateId, adapterId, idempotencyKey, args,
+                writtenAt, dueAt));
+
+  }
+
+  private Document waitingEntry(
+      final String id,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String operation,
+      final String aggregateId,
+      final String adapterId,
+      final String idempotencyKey,
+      final Map<String, String> args,
+      final Instant writtenAt,
+      final Instant dueAt) {
+
+    final var arguments = new Document();
+    args.forEach(arguments::append);
+    return new Document("_id", id)
+        .append("workflowModuleId", workflowModuleId)
+        .append("bpmnProcessId", bpmnProcessId)
+        .append("operation", operation)
+        .append("aggregateId", aggregateId)
+        .append("adapterId", adapterId)
+        .append("args", arguments)
+        .append("idempotencyKey", idempotencyKey)
+        .append("dedupKey", idempotencyKey)
+        .append("status", waiting)
+        .append("createdAt", Date.from(writtenAt))
+        .append("attempts", 0)
+        .append("nextAttemptAt", Date.from(dueAt));
 
   }
 
