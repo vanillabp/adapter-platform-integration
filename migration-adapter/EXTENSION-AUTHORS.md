@@ -34,7 +34,7 @@ platform. The *platform integration* is the Spring Boot or Quarkus layer which r
 The word *extension* belongs to the contributors. A user of VanillaBP does not know it. Users know
 VanillaBP adapters, and if they run the Business Cockpit, they know Business Cockpit adapters. The
 configuration speaks their language: the section of your settings carries your own name, not the
-word `extensions` (decision 53). So when you write documentation for your users, use the name they
+word `extensions` (decision 7). So when you write documentation for your users, use the name they
 know you by where this document says "extension".
 
 ## 1. What an extension is, and what it is not
@@ -326,10 +326,10 @@ DECISIONS.md). Your settings keep the task definition until this general change 
 
 The adapter positions exist for the same reason as section 3. An application which migrates from one
 BPMS to another runs two adapters, and you hang on both of them. A value which has to differ between
-them needs a place where it can be written (decision 53).
+them needs a place where it can be written (decision 7).
 
 An adapter setting uses the same resolution. It is written once in the core (decision 7 and
-`#resolveForAdapter`). So a change to "most specific wins" reaches both or neither. Decision 48
+`#resolveForAdapter`). So a change to "most specific wins" reaches both or neither. Decision 7
 forbids you to write it a second time in your own code. It forbids this because it had already
 happened. The Business Cockpit read the flat keys, matched the suffixes by hand and decided on its
 own what "most specific" meant, once per platform. The two versions drifted apart before anybody
@@ -383,7 +383,7 @@ So bind your own typed tree, and still let the core walk over the levels. `Setti
 does both. The extractor form has the same shape as `resolveForAdapter`.
 
 The order of the eight positions lives in that one class and nowhere else, and that is the whole
-point (decision 53). What your keys MEAN is your business. So is binding and validating them as
+point (decision 7). What your keys MEAN is your business. So is binding and validating them as
 typed values, the way an adapter binds the keys below its adapter id.
 
 ### The Quarkus trap
@@ -685,7 +685,7 @@ place where the three rules live. A copy which drops one rule leaves the adapter
 bridge missing (decision 39).
 
 Do not write a second resolution for your settings. The eight positions and "most specific wins"
-belong to the core. Decision 48 was written about an extension which parsed the flat keys itself.
+belong to the core. Decision 7 was written about an extension which parsed the flat keys itself.
 
 Do not open a transaction or pick an outbox store of your own if the work belongs to a workflow
 aggregate. Use the two resolvers, for the reasons in section 5.
@@ -725,7 +725,7 @@ build item of its own.
 | You are stopped before the adapter is                                                                                     | `DeploymentServiceTest#extensionWiringServicesAreStoppedBeforeAdapters`, `ShutdownReverseOrderTest`                                                                      |
 | An extension whose types do not match is neither wired nor started                                                        | `DeploymentServiceTest#extensionWiringServicesAreFilteredAndCalled`, `#subtypeExtensionIsNeitherWiredNorStarted`, `DeploymentPipelineTest#nonMatchingExtensionUntouched` |
 | Extensions are sorted by `getOrder()`, and nothing beyond that is promised                                                | decision 52, `DeploymentServiceTest#wiringServicesAreSortedByOrder`                                                                                                      |
-| Eight positions, most specific wins, adapter section beats its own level                                                  | decisions 48 and 53, `SettingsResolutionTest`, `ExtensionSettingsResolutionTest`, `ExtensionSettingsPositionsTest` per platform                                          |
+| Eight positions, most specific wins, adapter section beats its own level                                                  | decision 7, `SettingsResolutionTest`, `ExtensionSettingsResolutionTest`, `ExtensionSettingsPositionsTest` per platform                                                   |
 | A value of one adapter never reaches another one                                                                          | `SettingsResolutionTest#anotherAdapterReadsTheGeneralSections`, `ExtensionSettingsPositionsTest#theSecondAdapterReadsItsOwnValues`                                       |
 | A key below `vanillabp` which no mapping declares ends a Quarkus start, naming the key                                    | `UnknownExtensionSettingsKeyTest`                                                                                                                                        |
 | Your annotation is run with the mechanics of `@WorkflowTask`                                                              | `ExtensionHandlerRegistryTest`, `ExtensionHandlerTest` (Spring Boot), `ExtensionEnablementTest` (Quarkus)                                                                |
@@ -774,8 +774,7 @@ For the settings, read `SettingsLevel` and `SettingsResolution`.
 sections around it explain why the SPI looks the way it does.
 
 [`DECISIONS.md`](../DECISIONS.md) of this repository holds the reasoning which several places rely
-on. This document points at entries 7, 9, 35, 36, 39, 48, 50, 51, 52, 53, 54, 56, 119, 120, 126 and
-127.
+on. This document points at entries 7, 9, 35, 36, 39, 50, 51, 52, 54, 56, 119, 120, 126 and 127.
 
 The wiki page
 [Extensions](https://github.com/vanillabp/adapter-platform-integration/wiki/Extensions) is the half

@@ -35,7 +35,7 @@ import io.vanillabp.integration.spi.TransactionRunner;
  * application does not have the application's values. For a workflow which nobody started
  * through VanillaBP, that would be the very first thing that ever happens to it.
  * <p>
- * Decision 98 in the repository's DECISIONS.md has the rule and what it replaced.
+ * Decision 69 in the repository's DECISIONS.md has the rule and what it replaced.
  */
 public final class BpmsInitiatedStartExecution {
 

@@ -17,7 +17,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * The eight positions where an extension setting may be written, in a booted
  * application which runs TWO adapters of the same BPMS type. Each position is written
  * once, so every assertion shows which one won. The second adapter shows that a value of
- * one adapter never reaches the other (decision 53 in the repository's DECISIONS.md).
+ * one adapter never reaches the other (decision 7 in the repository's DECISIONS.md).
  * <p>
  * This test measures Spring Boot. The test of the same name in Quarkus measures Quarkus.
  * The core resolves the positions, but that does not prove that a platform binds all of

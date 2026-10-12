@@ -70,7 +70,7 @@ workflow modules of one backend may carry the same aggregate ID. The core hands 
 
 `BPMS_UNAVAILABLE` never falls through to the next adapter. The unavailable BPMS is the one most
 likely to hold the workflow, so the walk fails and names it. Phase one fails at once. The dispatch
-and a read first retry for a short time (decision 27). There is no fallback in this walk at all.
+and a read first retry for a short time (decision 5). There is no fallback in this walk at all.
 A fallback would mean working on a workflow which belongs to somebody else.
 
 ### 5. What the election remembered is a hint, never an answer
@@ -529,7 +529,7 @@ dispatch of one of its entries (decision 47).
 
 *The first sentence said that every persisted record of a workflow carries the adapter id. The
 other outbox entries carry none, because their adapter is elected when they are dispatched
-(decision 25). The sentence was narrowed on 2026-10-10. What was decided did not change.*
+(decision 5). The sentence was narrowed on 2026-10-10. What was decided did not change.*
 
 ### 18. Reading a metric costs no more than reading a number
 
@@ -898,7 +898,7 @@ So `phaseOperations()` is abstract, and it is the only way an adapter describes 
 
 ### 30. A task operation is routed by the record the delivery of that task wrote
 
-Entry 25 buys the freedom to migrate a workflow between BPMS, at the price of one question per
+Entry 5 buys the freedom to migrate a workflow between BPMS, at the price of one question per
 operation: which adapter holds this? For a task, Camunda 8 asked that question twice. The election
 asked it once, as `newUpdateTimeoutCommand` against the job. A moment later the adapter's own phase
 one asked it again, because it sends the same command as its pre-commit check. That is two round
@@ -912,7 +912,7 @@ the answer for this one operation. The record could not say WHICH task it belong
 carries the task id, and the moment when the application's completion of that task reached the
 BPMS.
 
-This is not the registry which entry 25 rejected. The difference is the fallback, not the wording.
+This is not the registry which entry 5 rejected. The difference is the fallback, not the wording.
 Nothing is written for the sake of routing. The record exists anyway. The delivery itself writes it,
 in the delivery's transaction, and a retention which was there before deletes it. It answers only
 about a task, never about a workflow. So what decides whether it may answer is not how an operation
@@ -966,7 +966,7 @@ It would, as soon as a platform module depended on it. Third, a member of a Haze
 component with its own operations story, its own compatibility table and its own failure modes.
 Those belong next to the code which has them, not in the documentation of the platform.
 
-Entry 25 stays as it was. A shared cache is the answer where the election becomes a bottleneck, on
+Entry 5 stays as it was. A shared cache is the answer where the election becomes a bottleneck, on
 Redis, Hazelcast or whatever the application already runs. That reasoning does not change because
 one such cache now exists ready-made. No entry of this log ever promised that VanillaBP ships none.
 The sentences which said so lived in the javadoc of `WorkflowAdapterCache` and in the texts which
@@ -1866,7 +1866,7 @@ The same method writes the attributes of a workflow aggregate which the BPMS sta
 (`AggregatePropertyWriter`), so one rule serves both. A wrong number in an aggregate outlives the
 handler which received it. That makes the refusal worth more there, not less.
 
-*That class is gone since decision 92, because the platform builds no aggregate for a workflow the
+*That class is gone since decision 69, because the platform builds no aggregate for a workflow the
 BPMS starts. The paragraph above no longer applies.*
 
 ### 56. One version selection serves VanillaBP's own handlers and an extension's
@@ -3774,7 +3774,7 @@ carries the workflow aggregate and the BPMS' own id of its workflow, and nothing
 `RECORD_KIND` is what tells it apart from a delivery.
 
 The election of an operation about a workflow probed every configured adapter until one said it held
-the workflow. It remembered nothing but the hint of the cache. Decision 112 now has it read the start
+the workflow. It remembered nothing but the hint of the cache. Decision 5 now has it read the start
 row first. `PhaseOperation.AGGREGATE_CHANGED` is `electedBy(Election.HOLDS_THE_WORKFLOW)`, and its
 javadoc says it plainly: "No adapter ID is persisted - the executing adapter is elected at dispatch
 time by probing". Nothing in VanillaBP mapped an aggregate onto the workflow which runs it.
@@ -3937,7 +3937,7 @@ adapter of that row, which is the adapter that started the workflow. A workflow 
 BPMS. So that adapter holds the workflow until its end, and an extension learns it without an
 election. `adapterIdOfWorkflow` and `locationOfWorkflow` stay as they are and still elect.
 
-*Decision 111 changed that: both read the start row first now and elect only where it does not
+*Decision 5 changed that: both read the start row first now and elect only where it does not
 answer.*
 
 An extension may show details per version of a process: one implementation for version 3 of a model
@@ -4013,7 +4013,7 @@ Phase two of an operation on a workflow which names a task, today only
 `PhaseTwoRequest#taskRecord()`. The core reads it with `TaskDeliveryLog#recordOfTask`, under every
 BPMN process id the workflow service serves, the way the election of a task operation reads it
 (decision 30). It hands the row over only where the row names the adapter which runs that phase two.
-The reason is the one decision 112 gives for the workflow id: the ids which another BPMS gave its
+The reason is the one decision 5 gives for the workflow id: the ids which another BPMS gave its
 task mean nothing to this adapter.
 
 Measured on 2026-10-04 against `camunda/camunda:8.10.0`: the Camunda 8 adapter looked for the scope
@@ -4070,7 +4070,7 @@ it.
 
 What had to be repaired is a loss. Say the first attempt to dispatch the SECOND start fails before
 it creates anything. The dispatch which repeats the entry asks whether the workflow exists already
-(decision 112). The start row names the first workflow, Camunda 7 answers from its history, and
+(decision 5). The start row names the first workflow, Camunda 7 answers from its history, and
 Camunda 8 searches without a state filter. All three say "it is there". The entry is consumed, and
 the second workflow never starts.
 
@@ -4111,10 +4111,10 @@ which reports every change of an aggregate calls `ProcessService#aggregateChange
 extension such as the Business Cockpit reports the same change through the election
 (`WorkflowElection`).
 
-Neither report can work at that moment. The method runs before the start row is written (decision 111
-and 112 read that row first). On Camunda 8 the aggregate id is not even a variable of the instance
-yet: the start listener job writes it when it completes. So nothing finds the workflow. The cache
-holds no hint either, since VanillaBP did not start this workflow. This was measured against the core
+Neither report can work at that moment. The method runs before the start row is written, and both
+read that row first (decision 5). On Camunda 8 the aggregate id is not even a variable of the
+instance yet: the start listener job writes it when it completes. So nothing finds the workflow.
+The cache holds no hint either, since VanillaBP did not start this workflow. This was measured against the core
 on 2026-10-06, with an adapter which does not show the workflow, just as Camunda 8 does not.
 `ProcessService#aggregateChanged` saved the aggregate, asked each prioritized adapter once, and threw
 `WorkflowNotFoundException`. That ends the start and fails the listener job. The election of an
@@ -4226,7 +4226,7 @@ listener where no method serves it, and a served listener on a marked user task 
 Otherwise a user task without a form key, which only its element id can name, could never be marked
 while one of its listeners has a method.
 
-**The positions.** The key may be written at all eight positions of decision 53, and the most
+**The positions.** The key may be written at all eight positions of decision 7, and the most
 specific one wins: the task for one adapter, the task, the workflow for one adapter, the workflow,
 and so on up to `vanillabp.implemented-externally`. The adapter positions are the reason why the core
 reads the key with the adapter id. The two adapters of a migration may disagree about one task, since

@@ -132,7 +132,7 @@ of the viewer/history API waits for the same window, for the opposite reason. No
 stands behind it which could ask again later, so whatever it does not wait for becomes an error in
 the application. The **election an extension asks for** waits for that reason too. It is the one
 caller which may wait inside a transaction of the application, and the cost of that is measured
-below. Decision 27 says why the line is drawn there. Three tests hold the three patiences:
+below. Decision 5 says why the line is drawn there. Three tests hold the three patiences:
 `WorkflowLocatorTest#withoutPatienceAHintedAdapterIsAskedOnce`,
 `#withoutPatienceAnUnavailableBpmsFailsAtOnce` and
 `#retryingPatienceDoesNotWaitForVisibility`.
@@ -395,7 +395,7 @@ Four pieces solve it, and the split matters:
    where it becomes visible. Some work hangs on a JOB: a `@WorkflowTask`, or an asynchronous task
    whose completion does not arrive. There the cluster runs out of job retries and Camunda raises
    an incident of its own. Where no job is behind it (a correlation from a REST endpoint), the
-   blocked entry and its counter are the place where it shows. Decision 27 covers this, and what
+   blocked entry and its counter are the place where it shows. Decision 5 covers this, and what
    it costs.
 
    A read of the viewer/history API (`getProcessDefinitions`, `getWorkflowHistory`) is the first
@@ -403,7 +403,7 @@ Four pieces solve it, and the split matters:
    later. So it waits where a hint says which adapter holds the workflow. A viewer asks all day for
    the history of a workflow the application started seconds ago. The few seconds by which Camunda
    8's exporter lags must not answer that with `WorkflowNotFoundException`. The row written when
-   the workflow started counts as a hint, as it does for an operation (decision 112). So a second
+   the workflow started counts as a hint, as it does for an operation (decision 5). So a second
    node, or a node after a restart, waits for a young workflow too, although its cache never saw it.
    `TheViewerReadsTheStartRowTest` holds this. Without a hint the read still fails at once. A hint
    which never comes true costs the window. Then the failure names the adapter which was expected
@@ -1300,7 +1300,7 @@ refusal and not a rounding rule. It is [decision 55](../DECISIONS.md), and `UPGR
 it means for an application which comes from version 1. `WorkflowTaskScannerEdgeCasesTest`, nested
 class "Task-parameter conversion", holds the cases. There is no writing side any more. A workflow
 the BPMS starts builds its own aggregate, so the platform writes no value of the BPMS into an
-attribute ([decision 92](../DECISIONS.md)). `TextValueRoundTripTest` holds the way out and the way back against each other. It asserts
+attribute ([decision 69](../DECISIONS.md)). `TextValueRoundTripTest` holds the way out and the way back against each other. It asserts
 the text each of those types is shared as, and that the same text comes back as the same value.
 
 The message names the parameter as the developer wrote it, if the application was compiled with
@@ -1392,8 +1392,8 @@ in. The way in is a task handler. So without that warning the application learns
 when a model first maps the value into a handler. This one is a warning, and the application boots.
 `validateSyncModel` is not told the adapter's default, so it cannot know whether the attribute is
 shared at all, and a wrong warning costs only a log line. An attribute marked `@NoSyncWithBPMS` is
-left out. [Decision 58](../DECISIONS.md) says why the list asks about the type a value IS and not
-about the package its class sits in. The refused `Calendar` is [decision 59](../DECISIONS.md).
+left out. [Decision 57](../DECISIONS.md) says why the list asks about the type a value IS and not
+about the package its class sits in, and why a `Calendar` is refused.
 
 **An aggregate which shares EVERYTHING does not boot either, unless its workflow says so.** An
 aggregate without any `@NoSyncWithBPMS` hands every attribute it reaches to the BPMS, and nobody
@@ -1690,12 +1690,12 @@ holds the check which now reads columns and not only the table.
 
 #### The record answers which BPMS holds a task
 
-A workflow is located by asking the adapters (decision 25). On Camunda 8 that question was asked
+A workflow is located by asking the adapters (decision 5). On Camunda 8 that question was asked
 twice for a task. The election sends `newUpdateTimeoutCommand` against the job, and a moment later
 the adapter's phase one sends the same command again as its check before the commit. The record of
 that task's delivery knew the answer to the first one all along: it names the adapter which
 delivered. So every call which names a task reads the record before it walks the adapters.
-Decision 30 says why that is not the registry which decision 25 rejected.
+Decision 30 says why that is not the registry which decision 5 rejected.
 
 - The record carries `TASK_ID`, the BPMS' identity of the task, and `TASK_CLOSED_AT`, the moment
   the application's completion of it reached the BPMS. `DeliveryRecords.record` writes the first
@@ -2302,7 +2302,7 @@ Time is what ends a workflow which never becomes visible. Once
 answer blocks the entry. If it is not set, it is the time which the attempts of
 `vanillabp.outbox.block-after-attempts` take with the growing backoff, about four hours. Counting
 the answers had blocked entries after fifty windows. That was eight minutes of a stopped Camunda 8
-exporter, while a database which was away for hours blocked nothing (decision 113 in the
+exporter, while a database which was away for hours blocked nothing (decision 49 in the
 repository's DECISIONS.md). `PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough` is the one
 rule which all three stores of this repository ask. `WaitingForAReadModelUsesNoAttemptsTest` holds
 it for the relational store, and `MongoWaitingForAReadModelUsesNoAttemptsTest` for the MongoDB
@@ -2393,7 +2393,7 @@ built with the table its entries lie in and the column in which they name a payl
 (`JdbcPhaseTwoPayloadStore.EntriesNamingTheirPayload`). The outbox VanillaBP writes itself has a
 column for it, `PAYLOAD_REFERENCE`, with an index over it, so the condition there is an equality.
 gruelbox owns its table, so its reference lives inside a serialized invocation, and the condition
-is a `LIKE` which scans. Decisions 62 and 76 have the numbers.
+is a `LIKE` which scans. Decision 62 has the numbers.
 `JdbcPhaseTwoPayloadStoreTest#theSweepHoldsOneConnectionAtATime` hands the store a database which
 refuses a second connection. `#theSweepRemovesAtMostWhatItWasAllowedTo` holds the ceiling.
 `#aFullLaneDoesNotHoldTheConnectionItsDispatchNeeds` runs the real payload store, not one with its
@@ -3183,7 +3183,7 @@ included.
 The rule is one sentence: the id of a workflow is the id of its workflow aggregate, and the
 application assigns it. The BPMS holds that id afterwards. Camunda 7 holds it as the business key,
 Camunda 8 and the Process-Engine-API as a process variable named after the aggregate's id
-attribute. See [decision 98](../DECISIONS.md).
+attribute. See [decision 69](../DECISIONS.md).
 
 Adapters use the SPI (`io.vanillabp.integration.adapter.spi.workflowstart`) twice:
 
@@ -3215,7 +3215,7 @@ asks for them (`AggregateSyncMode`).
 
 The core builds no aggregate of its own. An object which comes into existence without the
 application does not carry the application's values, and here that would be the first thing which
-ever happens to the workflow (see decision 92 in the repository's DECISIONS.md). There is no
+ever happens to the workflow (see decision 69 in the repository's DECISIONS.md). There is no
 trigger time either. The moment a start event fired is a value which the application models as a
 process variable, fills by an expression and reads as a `@TaskParam`.
 
@@ -3849,7 +3849,7 @@ general positions. The two-argument `#extensionProperties(module, extension)` an
 An adapter setting uses the same rule and the same implementation (see `#resolveForAdapter` and
 decision 7). So a change to "most specific wins" reaches both or neither. What the keys MEAN stays
 the extension's business. The core keeps them as they were written. The extension binds and
-validates its own, typed, the way an adapter binds the keys below its adapter id. Decision 48 in
+validates its own, typed, the way an adapter binds the keys below its adapter id. Decision 7 in
 this repository's `DECISIONS.md` says why an extension does not parse these keys itself.
 
 `vanillabp.extensions.<extension>` is the section which VanillaBP binds itself, as flat text. An
@@ -3857,7 +3857,7 @@ extension may have a section of its own instead. The Business Cockpit is configu
 `vanillabp.cockpit`, where version 1 configured it. Then the extension binds its own typed tree and
 hands one `SettingsLevel` per level to `SettingsResolution` of the extension SPI. That is the same
 walk which `#resolveForExtension` uses. The order of the eight positions lives there and nowhere
-else. Decision 53 says who owns the name of the section.
+else. Decision 7 says who owns the name of the section.
 
 #### Operations of its own in the outbox
 

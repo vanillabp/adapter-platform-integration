@@ -504,7 +504,7 @@ on. So read such an expression as a date. Or share a `String` which your own cod
 the form under your control. A `java.util.TimeZone` travels as the id of its zone, `Europe/Berlin`,
 and a parameter declared as `TimeZone` reads it back. Every other attribute whose text nothing reads
 back is named while the application boots, for example a `java.util.Locale` or a `java.net.URI`.
-For those this is a warning. The reasoning is in decision 58 and decision 59 in
+For those this is a warning. The reasoning is in decision 57 in
 [`DECISIONS.md`](./DECISIONS.md), and
 [`migration-adapter/README.md`](./migration-adapter/README.md) lists the types which travel both
 ways.

@@ -32,7 +32,7 @@ import java.time.Duration;
  * Because the answer is not counted, the store does not remember it either. The next
  * dispatch of the entry looks like its first one. So throw this only before the operation
  * reached the BPMS. An operation which may have reached it and then failed is an ordinary
- * failure, and it is counted. See decision 113 in the repository's DECISIONS.md.
+ * failure, and it is counted. See decision 49 in the repository's DECISIONS.md.
  * <p>
  * <b>What this promises an adapter.</b> Every store VanillaBP ships makes the entry due
  * after the window, and none of them makes it shorter or longer. These stores are the
@@ -41,7 +41,7 @@ import java.time.Duration;
  * So a window longer than <code>vanillabp.outbox.attempt-frequency</code> is waited out,
  * and a window shorter than it is not waited past. An adapter which names thirty seconds
  * gets the same answer whichever store the application chose
- * (decision 93 of <code>adapter-platform-integration</code>). The stores VanillaBP ships add no
+ * (decision 49 of <code>adapter-platform-integration</code>). The stores VanillaBP ships add no
  * wait of their own on top. The poller of a store sleeps until its earliest entry is due,
  * and learns the new due time when the attempt ends. <code>vanillabp.outbox.poll-interval</code>
  * only limits that sleep, for a node which goes away while it holds work.

@@ -766,7 +766,7 @@ Report none, and invent none.
 
 Some processes have a start event which the BPMS fires by itself: a timer, a signal, a condition.
 Such a process without a `@WorkflowStartedByBpms` method never gets past the deployment (see decision
-92). A process with only plain or message start events needs no such method until somebody starts it
+69). A process with only plain or message start events needs no such method until somebody starts it
 without VanillaBP. That start then says so when it happens.
 
 A called process is not a workflow of its own. The application declares it in
@@ -973,7 +973,7 @@ read model answers "unknown" for a workflow which exists. That is what the read 
 defect to hide. `workflowVisibilityDelay()` is how you say so, and
 [4.2](#42-the-window-may-be-answered-per-workflow) is how you say it per workflow.
 
-Decision 27 says where the core waits and where it does not. It is worth knowing, because it
+Decision 5 says where the core waits and where it does not. It is worth knowing, because it
 explains what your answers cost:
 
 |                  Your answer                  |                 Phase one does                  |       The dispatch of an entry does       |                      A read does                       |
@@ -1174,7 +1174,7 @@ So the window you name is a due time. Every store which VanillaBP ships makes th
 
 None of them makes your window shorter, and none of them makes it longer. So a window longer than
 `vanillabp.outbox.attempt-frequency` is waited out, and a shorter one is not waited past. That is
-what lets your documentation name a number (decision 93). What a store adds on top is the poll it
+what lets your documentation name a number (decision 49). What a store adds on top is the poll it
 takes to pick a due entry up, `vanillabp.outbox.poll-interval`, ten seconds by default.
 
 Name a window which your BPMS really needs, because the entry sits for that long. A window of ten
@@ -1189,7 +1189,7 @@ entry is blocked.
 stores which VanillaBP writes itself leave the attempts as they are. They block the entry only once
 `vanillabp.outbox.wait-for-visibility-at-most` has passed since it was written. If that is not set,
 it is the time which the attempts take with the growing backoff, about four hours. That ends a
-workflow which never becomes searchable (decision 113 in the repository's DECISIONS.md). Because the
+workflow which never becomes searchable (decision 49 in the repository's DECISIONS.md). Because the
 answer is not counted, the store does not remember it either, and the next dispatch looks like a
 first one. So throw it only before your operation reached the BPMS.
 `WaitingForAReadModelUsesNoAttemptsTest` holds it for the relational store, and
@@ -1472,8 +1472,8 @@ what the election does with your answers, how the outbox dispatches, what the pl
 why. Read it when you want to know why the SPI looks the way it does.
 
 [`DECISIONS.md`](../DECISIONS.md) of this repository holds the reasons which several places rely on.
-This document points at entries 3, 4, 10, 17, 19, 26, 27, 28, 29, 30, 38, 54, 69, 73, 74, 81, 93, 97,
-113, 120 and 124.
+This document points at entries 3, 4, 5, 10, 17, 19, 26, 28, 29, 30, 38, 49, 54, 69, 73, 74, 81, 97,
+120 and 124.
 
 If something here is wrong, or if you need a promise which this SPI does not make, tell us. We
 finished the SPI before any adapter written outside this repository existed. We did that on purpose,

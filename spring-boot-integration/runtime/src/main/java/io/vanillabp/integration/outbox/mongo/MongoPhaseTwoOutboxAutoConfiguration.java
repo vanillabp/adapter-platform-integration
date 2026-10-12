@@ -129,7 +129,7 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
         .payloadCollectionName();
     // what each index is read by is described once, in the core, because the Quarkus
     // extension creates the same ones. For the one over the payload references, see
-    // decision 76 in the repository's DECISIONS.md
+    // decision 62 in the repository's DECISIONS.md
     if (vanillaBpProperties.getOutbox().isCreateSchema()) {
       MongoIndexes.createOn(mongoTemplate, collection, MongoSchema.OUTBOX_INDEXES);
       MongoIndexes.createOn(mongoTemplate, payloadCollection, MongoSchema.PAYLOAD_INDEXES);

@@ -9,7 +9,7 @@ package io.vanillabp.integration.extension.spi.settings;
  * <code>vanillabp.cockpit</code>, because that is where it was configured in version 1.
  * A plug-in without such a past is configured below
  * <code>vanillabp.extensions.&lt;id&gt;</code>. The walk over the levels does not see the
- * difference. It knows one section per level (see decision 53 in the repository's
+ * difference. It knows one section per level (see decision 7 in the repository's
  * DECISIONS.md).
  *
  * @param <S> What a section is for the plug-in which implements this. A plug-in which binds

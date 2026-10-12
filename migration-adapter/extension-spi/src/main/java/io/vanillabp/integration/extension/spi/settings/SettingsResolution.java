@@ -7,7 +7,7 @@ import java.util.function.Function;
 
 /**
  * The walk over the levels at which a plug-in may be configured. It is written once, for every
- * plug-in (see decision 53 in the repository's DECISIONS.md).
+ * plug-in (see decision 7 in the repository's DECISIONS.md).
  * <p>
  * There are four levels, and each of them has two positions: what the level says in
  * general, and what it says for one adapter. That makes eight positions, from the least
@@ -26,8 +26,8 @@ import java.util.function.Function;
  *
  * The most specific position which says something about a setting wins. What an adapter
  * is told wins over what the same level says in general. An adapter setting follows the
- * same rule (decision 7). That is the reason why a plug-in does not write this walk a
- * second time (decision 48).
+ * same rule, and that is the reason why a plug-in does not write this walk a second time
+ * (decision 7).
  * <p>
  * What the sections MEAN is up to the plug-in. This class only knows their order.
  */

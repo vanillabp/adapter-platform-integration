@@ -370,7 +370,7 @@
       2 ms against ten thousand dispatched entries beside them, 18 ms against a hundred thousand
       and 112 ms against a million; over this column with its index it took 1 ms at every one of
       those sizes. With ten thousand blocked entries the scan took 7.8 s and the lookup 20 ms. See
-      decision 62 of the repository, which the column changes, and decision 76, which carries the
+      decision 62 of the repository, which the column changes and which carries the
       numbers. Nullable, because an entry which carries no payload names none, and because an entry
       written before this changeset ran has it empty until the runtime fills it - which it does at
       startup, and only for the entries which are still waiting, because a dispatched entry gave

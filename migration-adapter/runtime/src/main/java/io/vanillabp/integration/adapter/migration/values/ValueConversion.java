@@ -44,7 +44,7 @@ import java.util.stream.Collectors;
  * {@link java.util.Locale} fail as well, although the platform writes them out as text.
  * That text does not carry the value back, and the message says which type to declare
  * instead. Decision 57 in the repository's DECISIONS.md has what was measured about those
- * two. Decision 58 says why a {@link java.util.Date} is no longer among them.</li>
+ * two. Decision 57 says why a {@link java.util.Date} is no longer among them.</li>
  * </ul>
  * Why does a value which does not fit fail, instead of being cut down to size? Otherwise
  * the handler would get a number which nobody wrote, without a word, and act on it. The

@@ -22,7 +22,7 @@ import jakarta.inject.Inject;
  * The eight positions where an extension setting may be written, in a booted application
  * which runs TWO adapters of the same BPMS type. Each position is written once, so every
  * assertion says which one won. The second adapter shows that a value of one adapter never
- * reaches the other (decision 53 in the repository's DECISIONS.md).
+ * reaches the other (decision 7 in the repository's DECISIONS.md).
  * <p>
  * The fact that this application starts at all is part of the measurement. SmallRye
  * refuses a key below <code>vanillabp</code> which no mapping knows. So a position which

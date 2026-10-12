@@ -976,7 +976,7 @@ public class BpmsInitiatedStartTest {
   }
 
 
-  // --- what a start means is read from the state of the workflow, see decision 98 in the
+  // --- what a start means is read from the state of the workflow, see decision 69 in the
   // repository's DECISIONS.md
 
   @Test

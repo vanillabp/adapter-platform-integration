@@ -120,7 +120,7 @@ public class MongoPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
    * enough. It looks up each of them among the entries, and keeps the ones for which
    * nothing was found. Only their ids come back, at most as many as asked for. They go
    * into one <code>deleteMany</code>. The lookup reads the sparse index over the reference
-   * inside an entry's arguments. That makes it a lookup and not a scan (see decision 76 in
+   * inside an entry's arguments. That makes it a lookup and not a scan (see decision 62 in
    * the repository's DECISIONS.md).
    */
   @Override

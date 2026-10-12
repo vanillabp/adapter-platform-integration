@@ -13,7 +13,7 @@ import io.vanillabp.spi.service.BpmsStartTrigger;
  * The context is neutral on purpose. It carries only values, no BPMS types.
  * <p>
  * What a start means, and why an adapter reports every start event of a process, is
- * decision 98 in the repository's DECISIONS.md.
+ * decision 69 in the repository's DECISIONS.md.
  */
 public interface BpmsInitiatedStartContext {
 

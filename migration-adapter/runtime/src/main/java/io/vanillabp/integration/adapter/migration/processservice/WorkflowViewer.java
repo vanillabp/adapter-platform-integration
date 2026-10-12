@@ -236,7 +236,7 @@ public final class WorkflowViewer<A> {
    * <p>
    * A read is the caller which has to do its own waiting. An operation which moves a workflow
    * forward is planned in phase one. It waits for an eventually consistent read model in the
-   * dispatch, where no transaction is open (decision 27 in the repository's DECISIONS.md). A
+   * dispatch, where no transaction is open (decision 5 in the repository's DECISIONS.md). A
    * read has no second place to wait. It answers the caller or it fails, and nobody repeats a
    * failure. So where a hint says which adapter holds the workflow, the read waits out that
    * adapter's {@code workflowVisibilityDelay}. Asking for the history of a workflow which the
@@ -249,7 +249,7 @@ public final class WorkflowViewer<A> {
    * ago. So the read first looks at what VanillaBP wrote down, the same way as an operation.
    * The row written when the workflow started names the adapter and the id. Where there is no
    * such row, the rows of open tasks may still give the id. A start row counts as a hint. So
-   * the read waits for that adapter, just like with a cached hint (decision 112 in the
+   * the read waits for that adapter, just like with a cached hint (decision 5 in the
    * repository's DECISIONS.md). Without a row and without a cached hint it fails at once, as
    * before.
    */

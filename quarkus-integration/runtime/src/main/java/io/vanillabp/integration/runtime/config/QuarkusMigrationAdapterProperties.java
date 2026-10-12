@@ -131,7 +131,7 @@ public interface QuarkusMigrationAdapterProperties {
    * ({@link WorkflowProperties#extensions()}) and per task
    * ({@link TaskProperties#extensions()}). Each of them may also be written for one adapter
    * ({@link AdapterConfiguration#extensions()} and {@link AdapterProperties#extensions()}).
-   * That makes the eight positions of decision 53 in the repository's DECISIONS.md.
+   * That makes the eight positions of decision 7 in the repository's DECISIONS.md.
    *
    * @return The settings per extension
    */
