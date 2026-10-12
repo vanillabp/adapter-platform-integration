@@ -3105,16 +3105,20 @@ Two decisions are worth knowing:
   them pushed. Which execution or element instance that is, is the adapter's business. The core
   only transports the id (in `ARG_TASK_ID`).
 
-There is no guarantee about the order of outbox entries. The dispatchers select by due time
-(`NEXT_ATTEMPT_AT <= now`) without an `ORDER BY`. So a push and a task completion scheduled in the
-same transaction may reach a remote BPMS in the other order. This is documented and not fixed.
-Inventing an order here would promise something the stores do not implement. An application which
-needs one can keep the calls in separate transactions.
+The order of outbox entries holds only in part. The dispatchers select the due entries
+(`NEXT_ATTEMPT_AT <= now`) oldest first: the relational store sorts by `CREATED_AT`, the MongoDB
+stores by `createdAt`. One lane per workflow aggregate keeps that order (decisions 75 and 77). Two
+gaps stay. Two entries written in the same moment, which can happen in one transaction, come in the
+order the database picks. And a failed entry waits for its backoff while the next entry of the same
+aggregate passes it. So a push and a task completion scheduled in the same transaction may still
+reach a remote BPMS in the other order. An application which needs a strict order can keep the calls
+in separate transactions.
 
 `AggregateChangedTest` holds the shape and both decisions (`theTaskIdDecidesTheScope`,
-`phaseTwoElectsByProbing`, `aCompletedWorkflowIsNoFailure`, `anUnknownWorkflowFailsGuiding`). The
-missing order has no test, because there is nothing to hold: the sentence says what the stores do
-not promise.
+`phaseTwoElectsByProbing`, `aCompletedWorkflowIsNoFailure`, `anUnknownWorkflowFailsGuiding`).
+`EntriesOfOneAggregateKeepTheirOrderTest` and `MongoEntriesOfOneAggregateKeepTheirOrderTest` hold
+the order of entries written one after the other. The two gaps have no test, because there is
+nothing to hold: they are what the stores do not promise.
 
 WHAT is pushed stays the business of the sync model. This operation adds no second way to choose
 values. That keeps the aggregate the single source of truth.
@@ -3473,7 +3477,7 @@ flowchart TB
 
   subgraph DISPATCH["Dispatch lane of the aggregate, after the commit"]
     direction TB
-    D0["store picks entry by due time<br/>(no ORDER BY)"] --> D1["PhaseTwoRouter.dispatch(call, previouslyAttempted)"]
+    D0["store picks due entries<br/>oldest first"] --> D1["PhaseTwoRouter.dispatch(call, previouslyAttempted)"]
     D1 --> D2{"which runner?"}
     D2 -->|"the aggregate's → requireTransaction<br/>(Quarkus additionally: request context)"| D3["MigrationProcessService.executePhaseTwo<br/>re-probe (the operations addressed to a running workflow) /<br/>redispatch probe (the operations which start one)"]
     D2 -->|"none registered → the platform's, or the store's own<br/>transaction where it brings one (gruelbox)"| D3
@@ -3748,9 +3752,9 @@ worse: it simply behaves as if the application had never written the method.
 answers the workflow-aggregate class a BPMN process works on, for primary and secondary processes
 alike. `bpmnProcessesOf(module)` names every process which a `@WorkflowService` declares in a
 workflow module. `bpmnTaskNameOf(module, process, activityId)` answers the `name` a modeller wrote
-on an element, kept from what the adapter handed to `validateTaskWiring`. Both are what the scan
-read from the annotations. That is why an extension asks, instead of scanning the beans again. A
-second scan has to unwrap the proxies of a platform which the extension should not have to know
+on an element, kept from what the adapter handed to `validateTaskWiring`. All three are what the
+scan read from the annotations. That is why an extension asks, instead of scanning the beans again.
+A second scan has to unwrap the proxies of a platform which the extension should not have to know
 about, and it reads a different set of methods than VanillaBP does.
 
 #### A service of the extension per workflow aggregate
@@ -4188,8 +4192,9 @@ only the fact that something was thrown.
 
 ## An expression in the model binds the data model
 
-`303` asks what the values which travel to the BPMS are worth. This one asks what the model DOES
-with them, and the expression decides the answer. `${order.shipping.express}` binds the model in
+The section [Only portable values reach the BPMS](#only-portable-values-reach-the-bpms) asks what
+the values which travel to the BPMS are worth. This one asks what the model DOES with them, and the
+expression decides the answer. `${order.shipping.express}` binds the model in
 two ways: to the shape of the objects behind the name, and to the expression language of that
 BPMS. Rename the attribute in Java, and a model nobody touched stops working. Move to another BPMS,
 and the expression stops working.

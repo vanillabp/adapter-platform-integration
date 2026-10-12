@@ -774,7 +774,8 @@ For the settings, read `SettingsLevel` and `SettingsResolution`.
 sections around it explain why the SPI looks the way it does.
 
 [`DECISIONS.md`](../DECISIONS.md) of this repository holds the reasoning which several places rely
-on. This document points at entries 7, 9, 35, 36, 39, 48, 50, 51, 52 and 53.
+on. This document points at entries 7, 9, 35, 36, 39, 48, 50, 51, 52, 53, 54, 56, 119, 120, 126 and
+127.
 
 The wiki page
 [Extensions](https://github.com/vanillabp/adapter-platform-integration/wiki/Extensions) is the half

@@ -7,9 +7,9 @@ Integration tests which make sure that things work as they should.
 ## Modules
 
 1. **[dummy-extension](./dummy-extension):**<br>
-   This adapter is a template for new extensions. The integration tests use it as an
-   extension. For adapter extensions which are ready to use, see
-   [https://www.vanillabp.io](https://www.vanillabp.io).
+   An extension which does almost nothing. It is a template for new extensions, and the
+   integration tests use it as an extension. For extensions and adapters which are ready to use,
+   see [https://www.vanillabp.io](https://www.vanillabp.io).
 2. **[sample-extension](./sample-extension):**<br>
    A small extension, built like the VanillaBP Business Cockpit. It has its own
    annotation, its own service for each aggregate, the election and its own section of the
