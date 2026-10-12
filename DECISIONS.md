@@ -125,6 +125,77 @@ Order between levels is a different question from order between sources. A workf
 configuration file supplies DEFAULTS, and the application always outranks them. But a more
 specific KEY still beats a less specific one, no matter which file either came from.
 
+**A plug-in is resolved by the same walk.** An extension is told things about a workflow module,
+about one BPMN process, and sometimes about one task. An extension which cannot reach those levels
+writes the resolution a second time. It reads the flat keys of the configuration, matches the
+suffixes by hand, and decides on its own what "most specific wins" means. The Business Cockpit had
+that, once per platform. The two versions were already drifting apart before anybody noticed. So
+the core owns the walk. What a key MEANS stays the extension's business. The extension binds and
+validates its own values, typed, the way an adapter binds the keys below its adapter id.
+
+A plug-in setting is written at four levels, and each level has two positions: what the level says,
+and what it says for one adapter. That makes eight, from the least specific one to the most
+specific:
+
+```yaml
+vanillabp:
+  cockpit: …                                     # 1. the application
+  adapters:
+    saas:
+      cockpit: …                                 # 2. the application, on this adapter
+  workflow-modules:
+    loan-approval:
+      cockpit: …                                 # 3. the workflow module
+      adapters:
+        saas:
+          cockpit: …                             # 4. the workflow module, on this adapter
+      workflows:
+        LoanApproval:
+          cockpit: …                             # 5. the workflow
+          adapters:
+            saas:
+              cockpit: …                         # 6. the workflow, on this adapter
+          tasks:
+            approve:
+              cockpit: …                         # 7. the task
+              adapters:
+                saas:
+                  cockpit: …                     # 8. the task, on this adapter
+```
+
+The most specific position which writes a setting wins. What one adapter is told beats what the same
+level says in general. The adapter positions exist because a plug-in hangs on every configured
+adapter separately. An application which migrates from `on-premise` to `saas` runs two adapters of
+one BPMS type, and it needs a place to tell them different things.
+
+**The section name belongs to the plug-in.** `extensions` is a word of the contributors. A user
+knows adapters: VanillaBP adapters and Business Cockpit adapters. The Business Cockpit is configured
+below `vanillabp.cockpit`, because that is where version 1 configured it. So an application which
+moves to version 2 swaps a dependency and nothing else (entry 14 of the Business Cockpit's own log,
+confirmed 2026-09-15). A plug-in without such a past is configured below `vanillabp.extensions.<id>`.
+VanillaBP binds that section itself, as flat text, so its values are strings. The mechanism does not
+know the difference. It knows one section per level. A plug-in which binds its own typed tree hands
+in one accessor per level, because lists and group hierarchies cannot be built from flat strings.
+
+**The walk lives once**, in `SettingsResolution` of the extension SPI.
+`MigrationAdapterProperties.resolveForExtension` is one of its callers, not a second version of it.
+Before, the walk existed twice: in the platform for `extensions.<id>`, and in the Business Cockpit
+for its own tree. Two versions of one rule drift apart. The extension id is a parameter of the call.
+It is not bound to a view of these properties scoped to the extension. The properties are one bean
+of the platform, and an extension is not a bean of the platform at all. An extension which asks with
+its own id has the same shape as an adapter which asks with its adapter id.
+
+**On Quarkus the mapping is a wall.** SmallRye refuses a key it does not know below the mapping root,
+and the application does not start. So every position the resolution offers has to be declared in
+the mapping. A position which the mapping does not declare would not be a position which nobody
+reads. It would be an application which does not start.
+
+The Business Cockpit needs positions 2 and 4 for nothing today. So the promise stands and falls with
+the platform's own tests. `ExtensionSettingsPositionsTest` boots an application with two adapters of
+one type, on Spring Boot and on Quarkus. It writes each of the eight positions once and reads which
+one won. On Quarkus the boot is half the measurement. `UnknownExtensionSettingsKeyTest` writes a key
+which no mapping knows, on purpose.
+
 ### 8. What a convention can derive is not configured, and what is wrong is said at startup
 
 An application configures only what differs from the convention. Some things are derived in
@@ -974,9 +1045,9 @@ aggregate. That bean can be injected with the aggregate as its type argument. Th
 election which BPMS holds a workflow, instead of assuming the one with first priority. Fourth, it
 configures itself below `vanillabp.extensions.<extension>`, with an override per workflow module.
 
-*Superseded in part by decisions 48 and 53: the fourth point. A plug-in setting has eight positions
-now, and the plug-in names its own section. `vanillabp.extensions.<id>` is the section of a plug-in
-which names none.*
+*Superseded in part by decision 7: the fourth point. A plug-in setting has eight positions now, and
+the plug-in names its own section. `vanillabp.extensions.<id>` is the section of a plug-in which
+names none.*
 
 What ties them together: each is parameterized BY the extension, not shaped after one. That is the
 annotation type, the service interface and the extension id. Nothing in the core knows what a
@@ -1480,32 +1551,8 @@ run. That is the state this entry replaces.
 
 ### 48. An extension is configured by the core's resolution, not by a parser of its own
 
-An extension is told things about a workflow module, about one BPMN process, and sometimes about one
-task. The core already resolves such a setting for an adapter: over four levels, most specific first,
-merged key by key (entry 7). An extension which cannot reach those levels writes the resolution a
-second time. It reads the flat keys of the configuration, matches the suffixes by hand, and decides
-on its own what "most specific wins" means. The Business Cockpit had that, once per platform. The
-two versions were already drifting apart before anybody noticed.
-
-So the `extensions` map sits at all four levels, not at two. And
-`MigrationAdapterProperties.resolveForExtension` is the same walk as `resolveForAdapter`. The core
-owns the LOCATION and the resolution. What a key MEANS stays the extension's business. That is why
-the values stay strings. The extension binds and validates its own values, typed, the way an adapter
-binds the keys below its adapter id.
-
-The extension id is a parameter of the call. It is not bound to a view of these properties scoped to
-the extension. The properties are one bean of the platform, and an extension is not a bean of the
-platform at all. An extension which asks with its own id has the same shape as an adapter which asks
-with its adapter id.
-
-The Quarkus half is not a duplicate. It is a wall. SmallRye refuses a key it does not know below the
-mapping root. Before the workflow and the task level were part of the mapping, an application which
-wrote `vanillabp.workflow-modules.<m>.workflows.<p>.extensions.<ext>.*` did not just go unread. It
-did not start.
-
-*Superseded in part by decision 53: the core does not own the location any more. The plug-in names
-its section, the walk has eight positions, and it lives once in `SettingsResolution` of the
-extension SPI.*
+*Merged into decision 7 on 2026-10-12, before the 2.0 release.* Decision 7 now says how an
+extension is configured through the core's resolution, and why it writes no parser of its own.
 
 ### 49. A dispatch which cannot run yet ends, and nothing waits inside a transaction
 
@@ -1636,64 +1683,9 @@ that extension.
 
 ### 53. The section name belongs to the plug-in, and the walk over its levels to the core
 
-A plug-in setting is written at four levels, and each level has two positions: what the level says,
-and what it says for one adapter. That makes eight, from the least specific one to the most
-specific:
-
-```yaml
-vanillabp:
-  cockpit: …                                     # 1. the application
-  adapters:
-    saas:
-      cockpit: …                                 # 2. the application, on this adapter
-  workflow-modules:
-    loan-approval:
-      cockpit: …                                 # 3. the workflow module
-      adapters:
-        saas:
-          cockpit: …                             # 4. the workflow module, on this adapter
-      workflows:
-        LoanApproval:
-          cockpit: …                             # 5. the workflow
-          adapters:
-            saas:
-              cockpit: …                         # 6. the workflow, on this adapter
-          tasks:
-            approve:
-              cockpit: …                         # 7. the task
-              adapters:
-                saas:
-                  cockpit: …                     # 8. the task, on this adapter
-```
-
-The most specific position which writes a setting wins. What one adapter is told beats what the same
-level says in general. The adapter positions exist because a plug-in hangs on every configured
-adapter separately. An application which migrates from `on-premise` to `saas` runs two adapters of
-one BPMS type, and until now there was no place to tell them different things. Entry 48 put the
-resolution into the core. This entry adds the adapter positions to it, and says who owns the name of
-the section.
-
-The name belongs to the plug-in. `extensions` is a word of the contributors. A user knows adapters:
-VanillaBP adapters and Business Cockpit adapters. The Business Cockpit is configured below
-`vanillabp.cockpit`, because that is where version 1 configured it. So an application which moves to
-version 2 swaps a dependency and nothing else (entry 14 of the Business Cockpit's own log, confirmed
-2026-09-15). A plug-in without such a past is configured below `vanillabp.extensions.<id>`, which
-VanillaBP binds itself as flat text. The mechanism does not know the difference. It knows one section
-per level. A plug-in which binds its own typed tree hands in one accessor per level, because lists
-and group hierarchies cannot be built from flat strings.
-
-So the walk lives once, in `SettingsResolution` of the extension SPI.
-`MigrationAdapterProperties.resolveForExtension` is one of its callers, not a second version of it.
-Before this, the walk existed twice: in the platform for `extensions.<id>`, and in the Business
-Cockpit for its own tree. Two versions of one rule drift apart.
-
-The Business Cockpit needs positions 2 and 4 for nothing today. So the promise stands and falls with
-the platform's own tests. `ExtensionSettingsPositionsTest` boots an application with two adapters of
-one type, on Spring Boot and on Quarkus. It writes each of the eight positions once and reads which
-one won. On Quarkus the boot is half the measurement, because SmallRye ends a startup over a key no
-mapping knows. `UnknownExtensionSettingsKeyTest` writes such a key on purpose. Say the resolution
-offers a position which the mapping does not declare. That would not be a position which nobody
-reads. It would be an application which does not start.
+*Merged into decision 7 on 2026-10-12, before the 2.0 release.* Decision 7 now holds the eight
+positions of a plug-in setting, the section name which belongs to the plug-in, and the one walk in
+`SettingsResolution`.
 
 ### 54. A task no method ran for leaves no row in the delivery log
 
