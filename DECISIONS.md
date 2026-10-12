@@ -2005,41 +2005,21 @@ hand over the state which the application saw at its sync point, and that is a p
 The obvious place was the `ARGS` column, and it is the wrong one. Decision 22, and the story behind
 it, settled what that column is for: a correlation id names something, it does not carry something.
 Widening it to a CLOB would put payloads into a column meant for keys. The same values would then
-travel through our own store and through MongoDB as well. The limit is ours, not gruelbox's: gruelbox
-writes its invocation into a `TEXT` column and has no such bound.
+travel through our own store and through MongoDB as well. The limit is ours, not gruelbox's:
+gruelbox writes its invocation into a `TEXT` column and has no such bound.
 
 So a payload lies in a store of its own. There is one row per call which carries one. It is written
 in the transaction which writes the entry, and read back at the dispatch. The entry names the row by
-`PhaseTwoCall.ARG_PAYLOAD_REFERENCE`. That is an identifier, so it belongs exactly where identifiers
-belong. The reference is added after the idempotency key was derived, so no derivation rule ever
-sees it. Otherwise a fresh reference per call would make every call unique and deduplicate nothing.
+`PhaseTwoCall.ARG_PAYLOAD_REFERENCE`. That is an identifier, so it travels among the arguments,
+where identifiers belong, and the dispatch reads it there. The reference is added after the
+idempotency key was derived, so no derivation rule ever sees it. Otherwise a fresh reference per call
+would make every call unique and deduplicate nothing.
 
 The payloads get a table of their own, whatever store an application runs. Decision 47 weighed a
 table of VanillaBP's own for a different question and refused it, because it would have added a
 table to the one setup which was chosen for bringing none. That argument does not hold here. A call
 without a payload writes no row. So an application which passes no payload keeps the setup it had,
 and one which passes payloads has asked for the table.
-
-*This entry used to go on with "one form for all four stores", and that sentence fell on
-2026-09-24. It said that the way a payload is found and removed has to be the same everywhere. That
-made the cheapest store pay what the most expensive one costs. Stephan decided the opposite: every
-store may optimize how it sweeps, and where sweeping is expensive, it should be expensive at that
-store alone. When that sweep runs, and how much of it fits, is decision 91. The rest of this entry
-stays: the payload lies beside the entry, and the entry names it.*
-
-*With the sentence went the refusal which decision 76 recorded. On the same day Stephan decided that
-the relational outbox gets a COLUMN for the reference, `PAYLOAD_REFERENCE`, with an index over it.
-The reference still travels among the arguments, because the dispatch reads it there and because it
-is an identifier. The column carries the same value in a shape an index can reach, which is what the
-housekeeping asks for. Measured on PostgreSQL 16.15 on 2026-09-25 with a hundred blocked entries:
-one pass over the arguments took 2 ms against ten thousand dispatched entries beside them, 18 ms
-against a hundred thousand and 112 ms against a million. The lookup over the column took 1 ms at
-every one of those sizes. With ten thousand blocked entries the scan took 7.8 s and the lookup
-20 ms. The column is written after the idempotency key was derived, exactly like the argument, so no
-derivation ever sees it. That promise stands unchanged. An entry written before the column existed
-has it empty, and the startup fills it for the entries which still wait. A dispatched entry is left
-alone, because its payload went with the dispatch, and the history is the part of the table which
-grows. gruelbox keeps the scan: its table is not ours.*
 
 The price is named, not hidden. A call which carries a payload costs one extra read by primary key
 per dispatch attempt. A call which carries none costs nothing extra.
@@ -2052,106 +2032,76 @@ aggregate written as JSON. It is far below what MongoDB holds in one document, a
 limited to the smallest limit of the stores. An application must not discover a narrower limit by
 moving from one store to another.
 
-A payload is removed where its entry is finished, which is the update which marks the entry
-dispatched. Removing it before that would leave an entry whose payload is gone. So the order is
-fixed, and if anything it keeps a payload too long. If a crash happens between the two writes, an
-age sweep in the housekeeping of each store removes what is left. Before it removes a payload, the
-sweep asks whether an entry still names it (decision 76). The retention counts at the entry, so a
-blocked entry keeps its payload for as long as its repair takes.
+**A report is built at the event.** Everything a report carries is there at the event which
+triggers it. So it is built there and travels as the payload. What the BPMS knows about a user task
+is a copy of what the application decided, and a copy taken at the event is the copy the event had.
+It was measured on 2026-09-17. The Process-Engine-API adapter builds the whole prefill when the task
+is delivered. The Camunda 7 cockpit listeners run inside the engine command, where every field is at
+hand. `ActivatedJob.getUserTask()` of the Camunda 8 client 8.9.6 carries assignee, candidates,
+`dueDate` and `followUpDate`. And a `UserTaskEvent` with every field filled is about 1078 bytes as
+JSON. So the platform never asks the application for an older state of an aggregate. A seam for that
+lived for one day in a snapshot and was taken out again, because nothing called it: an auditing id
+which the application answered, and a load of the aggregate by that id at the dispatch. Auditing
+stays a matter of the application. The blueprint `persistence-audited-aggregate` shows how an
+application keeps revisions of its aggregates. VanillaBP takes no part in it. `UPGRADE.md` says
+nothing about it, because the seam never reached a release.
 
-*This paragraph used to say that the sweep also removes "the payload of an entry blocked longer
-than the retention". That stopped being true when the sweep began to ask the entries first, and
-the half sentence was taken out on 2026-10-06.*
+**A payload is removed where its entry is finished**, which is the update which marks the entry
+dispatched. Removing it before that would leave an entry whose payload is gone. So the order is
+fixed, and if anything it keeps a payload too long. If a crash happens between the two writes, an age
+sweep in the housekeeping of each store removes what is left. When that sweep runs, and how much of
+it fits, is decision 91. The retention counts at the entry, so age alone does not say that a payload
+may go. Before the sweep removes a payload, it asks whether an entry still names it. A blocked entry
+keeps its payload for as long as its repair takes.
+
+**Every store answers that question its own way.** Stephan decided on 2026-09-24 that every store may
+optimize how it sweeps. Where sweeping is expensive, it should be expensive at that store alone, not
+at the cheapest one. On a healthy store the question is never asked, because a payload goes with the
+dispatch of its entry. One stuck entry, though, means the question is asked at every run of the
+housekeeping.
+
+- The relational outbox carries the reference twice: among the arguments, and in a column of its
+  own, `PAYLOAD_REFERENCE`, with an index over it. The column carries the same value in a shape an
+  index can reach. It is written after the idempotency key was derived, exactly like the argument,
+  so no derivation ever sees it. Measured on PostgreSQL 16.15 on 2026-09-25 with a hundred blocked
+  entries: one pass over the arguments took 2 ms against ten thousand dispatched entries beside them,
+  18 ms against a hundred thousand and 112 ms against a million. The lookup over the column took 1 ms
+  at every one of those sizes. With ten thousand blocked entries the pass took 7.8 s and the lookup
+  20 ms. An entry written before the column existed has it empty, and the startup fills it for the
+  entries which still wait. A dispatched entry is left alone, because its payload went with the
+  dispatch, and the history is the part of the table which grows.
+- On MongoDB the reference is a field inside the entry document, so an index reaches it. A sparse
+  index over `args.payloadReference` is created with the other indexes of the collection. Measured
+  against MongoDB 8.2 with a hundred stuck entries: the question without the index took 4 ms with ten
+  thousand dispatched entries beside them, 35 ms with a hundred thousand and 341 ms with a million.
+  The index answered in 0 to 2 ms at every size. It is sparse, because only an entry which carries a
+  payload has the field. In a collection of twenty thousand entries, of which two hundred carried one,
+  the index held 20 KB. The cost of the write could not be told apart from the normal spread of the
+  same write between runs: four indexes took 149 to 183 microseconds per insert and five took 162 to
+  202.
+- The gruelbox store, which lives in its own repository since decision 102, owns its table. So it
+  keeps the pass over the arguments.
+
+On the relational stores the question is one condition inside the delete which removes the orphans,
+not a query of its own. A question which grows with the table is a question decision 19 forbids,
+and the column and the index are what took it out.
+
+When the housekeeping did remove a payload, it says so at DEBUG with the count. Nothing is said when
+there was none. An orphan means that a payload was written and its entry never was. So the count is
+zero unless a process died between those two writes. A line which is always zero teaches a reader to
+stop reading it.
 
 ### 63. An entry which reports says which state it means, an entry which writes never does
 
-*Withdrawn on 2026-09-17, see decision 64: the report is built at the event and travels
-as the payload of decision 62, so nothing asked for an older state any more and the seam
-went out again.*
-
-An outbox entry is written in the transaction of an event and dispatched afterwards. The aggregate
-it reads at the dispatch is the aggregate of that moment, not of the event. That is milliseconds
-while everything works. It is days once a receiver is gone or a dispatch keeps failing, and then a
-report starts to carry values the event never had.
-
-Which of the two states is right depends on the single call, not on the application and not on a
-setting. An entry which syncs the aggregate INTO the BPMS, such as a task completion or a push of
-changed values, needs the state of now. The engine is where the case goes on, and writing a day-old
-value back there is wrong in a way nobody notices for a while. An entry which reports to somebody
-else wants the state of its event. The Business Cockpit is the case this comes from. The application
-sets the sync points, and the report is about what it saw there.
-
-So the choice sits on the call, `PhaseTwoCall#askingForTheStateOfTheEvent`, and VanillaBP's own
-operations cannot make it. For them, asking is refused where it is asked, with a message which says
-why. It is not ignored at a dispatch which nobody watches. An entry which asks for nothing reads what
-it always read and costs what it always cost. No history is read. That keeps this cheap in an
-application which has auditing and entries of both kinds.
-
-The state is named by an id which the application answers, through two defaults on
-`AggregatePersistenceAware`. `getAuditingId` names the state an aggregate is at, and
-`loadByIdAndAuditingId` reads it back. Both defaults keep today's behaviour: no id, and a load which
-ignores one. So an application without auditing behaves as before. An application with auditing
-writes the two answers its framework already has. What the id means is the application's business:
-an Envers revision, or a version the application keeps itself. VanillaBP carries it and reads nothing
-in it, the way it carries a payload.
-
-The id travels in the arguments of the entry, like the payload reference of decision 62 and for the
-same two reasons. It IS an identifier. And every store already persists the arguments, so no store
-learns anything new. It is added after the idempotency key was derived. Which state a call wants to
-read says nothing about whether it is the same operation as another one.
-
-The state may be gone, because the auditing cleaned it up while the entry waited. Then the current
-state is read, and a warning says so and names the aggregate and the id. A report with newer values
-is better than no report, and the log line is what tells the two apart afterwards. Where the
-aggregate itself is gone, nothing is said: there is nothing to fall back to.
-
-This covers the business data and nothing else. An adapter reads some things out of the BPMS while it
-dispatches: the assignee of a user task, its candidates, its due date. That is the state of the
-dispatch. It is the BPMS' data, and the BPMS has no history of it which VanillaBP could ask for.
-
-It is the second answer to the question which decision 62 answered first, and the two do not exclude
-each other. A payload is exact and needs no auditing, and it costs space. Loading the aggregate as it
-was costs no space and needs auditing, and it rebuilds the state instead of remembering it. An
-extension which can pass a payload passes one. This is for the case where the state is large or
-expensive to build.
+*Merged into decision 62 on 2026-10-12, before the 2.0 release.* The seam this entry built was
+withdrawn on 2026-09-17. Decision 62 now says why a report is built at the event and why the
+platform asks the application for no older state.
 
 ### 64. A report is built at the event, so the platform asks the application for no older state
 
-Decision 63 gave the platform a seam. An outbox entry could say that it means the state of its
-event. The application answered an id for that state and read it back at the dispatch. It was built
-for one reader: a report to the Business Cockpit which is written at an event and sent later.
-
-The premise fell on 2026-09-17. A report does not have to be built at the dispatch at all.
-Everything it carries is there at the event which triggers it. So it is built there and travels as
-the payload of decision 62. What the BPMS knows about a user task is a copy of what the application
-decided. The truth stays in the application, and a copy taken at the event is the copy the event had.
-
-What was measured that day:
-
-- The Process-Engine-API adapter already builds the whole prefill when the task is delivered. It
-  stores it and reads only from that store when it sends.
-- The Camunda 7 cockpit listeners are built-in task listeners which run inside the engine command.
-  There every field of the prefill is at hand and no query is needed.
-- `ActivatedJob.getUserTask()` of the Camunda 8 client 8.9.6 carries assignee, candidates,
-  `dueDate` and `followUpDate`.
-- A `UserTaskEvent` with every field filled is about 1078 bytes as JSON. The payload limit is a
-  mebibyte.
-
-That left the seam without a caller in any of the ten repositories of the workspace. An additive SPI
-which nobody calls still costs documentation and tests. And everyone who reads the interface has to
-be told what it is for. So it goes out, and does not stay as a switch nobody flips.
-
-Removed with this: `PhaseTwoCall#askingForTheStateOfTheEvent` and the auditing id it carried,
-`PhaseTwoRequest#auditingId`, the two defaults `getAuditingId` and `loadByIdAndAuditingId` on
-`AggregatePersistenceAware`, the two defaults on `AggregateServiceContext`, and the load by id
-plus the fallback warning in `MigrationProcessService` and `ExtensionAggregateServiceContext`.
-
-Decision 62 stays, and now carries this case alone. Auditing itself stays a matter of the
-application. The blueprint `persistence-audited-aggregate` shows how an application keeps revisions
-of its aggregates and reads an old state back. VanillaBP takes no part in it.
-
-Nothing is written in `UPGRADE.md`. The seam never reached a release. It lived one day in a
-snapshot, so there is no step from version 1 to describe.
+*Merged into decision 62 on 2026-10-12, before the 2.0 release.* Decision 62 now says that a
+report is built at the event and travels as a payload, and why the seam for an older state went
+out.
 
 ### 65. Four places for a module file, and the same file may lie in one of them
 
@@ -2622,56 +2572,9 @@ instead. That still holds for gruelbox.
 
 ### 76. The orphan question runs over an index where the store can index a field, and over a scan where it cannot
 
-Before the housekeeping removes a payload by age, it asks the entries whether one of them still names
-it. Decision 62 put that reference among the arguments, and the retention counts at the entry. So age
-alone does not say that a payload may go. On a healthy store the question is never asked, because a
-payload goes with the dispatch of its entry. An entry which is stuck keeps its payload. So one stuck
-entry means the question is asked at every run of the housekeeping. That used to be every poll,
-every ten seconds by default. Since decision 91 it is the night window.
-
-That was measured in September 2026, and the result is not the same on both kinds of store.
-
-On MongoDB the reference is a field inside the entry document, so an index reaches it. A sparse
-index over `args.payloadReference` is created with the other indexes of the collection, and the
-question is answered from it. Measured against MongoDB 8.2 with a hundred stuck entries: the question
-took 4 ms with ten thousand dispatched entries beside them, 35 ms with a hundred thousand and 341 ms
-with a million. The index answered in 0 to 2 ms at every size. It is sparse, because only an entry
-which carries a payload has the field. In a collection of twenty thousand entries, of which two
-hundred carried one, the index held 20 KB. The write pays for it. The measurement could not tell
-that cost apart from the normal spread of the same write between runs. Four indexes took 149 to 183
-microseconds per insert and five took 162 to 202. So the index costs well below what the round trip
-of one write costs.
-
-On a relational database the reference lies inside a text column, and no index reaches into it. The
-only index there would be an index over a column of its own. That column is what decision 62
-refused: the reference is an identifier and travels where identifiers travel, in one form for all
-four stores. And gruelbox owns its table, so a column there was never possible at all. So the JDBC
-stores keep the scan, and its cost is written down here instead of being left to be discovered. With
-a hundred stuck entries, the pass took 121 ms against ten thousand dispatched entries, 413 ms against
-a hundred thousand and 4.1 s against a million, on PostgreSQL 16.15. It gets worse than linear when
-the stuck entries themselves pile up. The payload store asks in chunks of a hundred, and every chunk
-is a scan of its own. A thousand stuck entries took 1.4 s, and ten thousand took 47 s.
-
-Those last numbers are the price of keeping one form. Nobody pays it while the outbox is healthy.
-Whether they are worth a column in `VANILLABP_PHASE_TWO_OUTBOX`, for the three stores which could
-carry one, is a question about decision 62. It belongs to whoever reopens that one. Until then, an
-application which finds its housekeeping slow has the same fix it always had: repair or remove the
-entries which are stuck.
-
-*Stephan reopened it on 2026-09-24 and the column was built: `VANILLABP_PHASE_TWO_OUTBOX` carries
-`PAYLOAD_REFERENCE` with an index over it, and decision 62 records what that changes and what it
-measured. Two things about the numbers above changed with it. The question is no longer asked in
-chunks of a hundred. It is one condition inside the delete which removes the orphans. So a thousand
-blocked entries now take 100 ms instead of 1.4 s, and ten thousand take 7.8 s instead of 47 s. And on
-the relational stores which own their table, the question is now a lookup: 1 ms wherever the scan
-was, 20 ms where it was 7.8 s. What stays of this entry is gruelbox, which owns its table and so
-keeps the scan. The shape of the argument stays as well: a question which grows with the table is a
-question decision 19 forbids, and the column is what took it out.*
-
-When the housekeeping did remove a payload, it says so at DEBUG with the count. Nothing is said when
-there was none. An orphan means that a payload was written and its entry never was. So the count is
-zero unless a process died between those two writes. A line which is always zero teaches a reader to
-stop reading it.
+*Merged into decision 62 on 2026-10-12, before the 2.0 release.* Decision 62 now says how each
+store answers whether an entry still names a payload: the column and its index on the relational
+stores, the sparse index on MongoDB, and the pass over the arguments which gruelbox keeps.
 
 ### 77. The MongoDB stores dispatch on lanes too, and their claim reads the oldest entry first
 
