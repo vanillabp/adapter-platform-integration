@@ -37,13 +37,12 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Acceptance test on Quarkus: an adapter reports the end of a workflow and names it, and
- * every task the core still believes is open in that workflow reaches the application as
- * canceled before <code>&#64;WorkflowEnded</code> runs.
+ * Acceptance test on Quarkus. An adapter reports the end of a workflow and names the
+ * workflow. Every task which the core still believes is open in that workflow reaches the
+ * application as canceled, before <code>&#64;WorkflowEnded</code> runs.
  * <p>
- * The cases which must NOT derive are here too, because they are what keeps this
- * additive: an end which names no workflow, and a record which belongs to another
- * adapter.
+ * The cases which must NOT derive anything are here too, because they keep this change
+ * additive: an end which names no workflow, and a record which belongs to another adapter.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DerivedCancelationTest {
@@ -176,8 +175,8 @@ public class DerivedCancelationTest {
 
       @Override
       public WorkflowEnd.Kind getKind() {
-        // COMPLETED on purpose: a terminate end event ends a Camunda 8 instance this way
-        // while taking open tasks with it, so the kind must not decide
+        // COMPLETED on purpose: a terminate end event ends a Camunda 8 instance this way,
+        // and it takes open tasks with it. So the kind must not decide
         return WorkflowEnd.Kind.COMPLETED;
       }
 
@@ -230,7 +229,7 @@ public class DerivedCancelationTest {
         "both tasks reach the application as canceled, oldest first, and the end runs after them");
     assertEquals(0, openRecordCount("4711"), "and both records are closed, so nothing derives them again");
 
-    // the same notification once more, which is what at-least-once means: the records
+    // the same notification once more, which is what at-least-once means. The records
     // are closed, so nothing is reported again
     dummyAdapter.notifyWorkflowEnded(MODULE, PROCESS, workflowEnded("4711", "workflow-of-4711"));
     assertEquals(
@@ -282,8 +281,8 @@ public class DerivedCancelationTest {
   }
 
   /**
-   * The other half of the same mechanism: nothing ended, the BPMS simply does not have a
-   * task any more, and a wake-up of that workflow is what finds out.
+   * The other half of the same mechanism. Nothing ended, the BPMS simply does not have a
+   * task any more. A wake-up of that workflow finds that out.
    */
   @Test
   @DisplayName("A wake-up reports the other tasks the BPMS does not have, and leaves the rest alone")
@@ -298,7 +297,7 @@ public class DerivedCancelationTest {
     dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitDelivery", "4715", "task-9"));
     assertEquals(3, openRecordCount("4715"));
 
-    // task-9 is the job being worked on. Of the other two the BPMS has one and not the
+    // task-9 is the job being worked on. Of the other two, the BPMS has one and not the
     // other
     final var probed = new java.util.ArrayList<String>();
     dummyAdapter
@@ -328,8 +327,8 @@ public class DerivedCancelationTest {
   }
 
   /**
-   * What an extension asks for, and what the election hands the adapter on the way: both
-   * come out of the same row the delivery record wrote.
+   * What an extension asks for, and what the election hands the adapter on the way. Both
+   * come out of the same row which the delivery record wrote.
    */
   @Test
   @DisplayName("The election carries the workflow id, and an extension gets it back")
@@ -357,8 +356,8 @@ public class DerivedCancelationTest {
     // the old call still answers its string
     assertEquals(ADAPTER, election.adapterIdOfWorkflow(MODULE, PROCESS, "4716"));
 
-    // a workflow nobody delivered anything for: the adapter id and no workflow id, which
-    // is a regular answer
+    // a workflow which nobody delivered anything for: the adapter id and no workflow id.
+    // That is a regular answer
     awarenessSource.forgetWhatWasAsked();
     persistence.store("4717");
     final var withoutAnId = election.locationOfWorkflow(MODULE, PROCESS, "4717");

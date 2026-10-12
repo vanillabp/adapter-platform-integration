@@ -30,8 +30,8 @@ import io.vanillabp.spi.process.ProcessService;
 public class AdapterConfigurationTest {
 
   /**
-   * What a probe is asked about. Any scope does here: the adapters of this
-   * test answer from what the test told them, not from a deployment.
+   * What a probe is asked about. Any scope will do here. The adapters of this test
+   * answer from what the test told them, not from a deployment.
    */
   private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
       .of("test-module", "TestProcess");
@@ -39,8 +39,8 @@ public class AdapterConfigurationTest {
   private final ApplicationContextRunner contextRunner = new ApplicationContextRunner();
 
   /**
-   * {@code ProcessService<Aggregate>} should be created using dummy adapter configured in
-   * application.yaml
+   * {@code ProcessService<Aggregate>} is created with the dummy adapter configured in
+   * application.yaml.
    */
   @Test
   @SuppressWarnings("unchecked")
@@ -105,8 +105,9 @@ public class AdapterConfigurationTest {
               WorkflowAwareness.UNKNOWN_TO_BPMS,
               migratableProcessService.awarenessOfWorkflow(SCOPE, null, "42"));
 
-          // the adapter-specific key 'vanillabp.adapters.test.test' (unknown to the
-          // core model) reaches the dummy adapter's overlay of the shared tree typed
+          // the adapter-specific key 'vanillabp.adapters.test.test' is unknown to the
+          // core model. It still reaches the dummy adapter's typed overlay of the shared
+          // tree
           final var overlay = context.getBean(DummyAdapterOverlayProperties.class);
           Assertions.assertEquals(1, overlay.getAdapters().get("test").getTest());
 

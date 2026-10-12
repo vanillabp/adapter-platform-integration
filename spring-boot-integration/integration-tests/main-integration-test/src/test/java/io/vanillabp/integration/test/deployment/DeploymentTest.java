@@ -47,11 +47,11 @@ public class DeploymentTest {
         final io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskWiring,
         final org.springframework.core.io.ResourceLoader resourceLoader) {
 
-      // the wiring interface goes in, like the platform's own auto-configuration does:
-      // what belongs to a workflow module as a whole is the core's duty, and a
-      // deployment service built without the interface skips all of it. The report about
-      // a process nothing claims gets its Spring half the same way, so what the tests
-      // boot here reads like what an application boots
+      // the wiring interface goes in, as in the platform's own auto-configuration.
+      // The core handles what belongs to a workflow module as a whole. A deployment
+      // service built without the interface skips all of that. The report about a
+      // process which nothing claims gets its Spring part the same way. So the tests
+      // boot the same as an application does
       final var deploymentService = new DeploymentService(
           properties, deploymentServices, wiringServices, workflowTaskWiring, new io.vanillabp.integration.processservice.WorkflowServicesWhichAreNoBeans(
               resourceLoader, allWorkflowModules));
@@ -162,9 +162,9 @@ public class DeploymentTest {
       Assertions.assertTrue(extensionWiringPos < deployResourcesPos,
           "Expected extension wiring before deploying resources. Captured output: "
               + capturedOutput);
-      // the decision a business rule task calls belongs to the module and is deployed
-      // with it - read after the processes, because the context it is added to is what
-      // reading a process produced
+      // the decision which a business rule task calls belongs to the module and is
+      // deployed with it. It is read after the processes, because it is added to the
+      // context which reading a process produced
       Assertions.assertTrue(extensionWiringPos < readDmnPos,
           "Expected the DMN of the module to be read after its processes were wired. Captured output: "
               + capturedOutput);
@@ -183,8 +183,8 @@ public class DeploymentTest {
 
     }
 
-    // after closing the context (graceful shutdown), workflow processing has to be
-    // stopped in reverse start order: extensions first, then adapters
+    // after the context is closed (graceful shutdown), workflow processing stops in
+    // reverse start order: extensions first, then adapters
     final var capturedOutput = output.getAll();
 
     final var extensionStopProcessing = "Dummy-Extension: Stopping workflow processing for test-module";

@@ -11,9 +11,9 @@ import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
 import io.vanillabp.integration.extension.spi.handler.HandlerContract;
 
 /**
- * A test extension whose contract asks for a method for the version a start deployed. In its
- * <code>wireBpmn</code> it registers the contract and reports two elements of the model: the
- * task and the process itself.
+ * A test extension whose contract asks for a method for the version which a start
+ * deployed. In its <code>wireBpmn</code> it registers the contract. It also reports two
+ * elements of the model: the task and the process itself.
  */
 @Configuration
 public class DeployedVersionNoteExtension {

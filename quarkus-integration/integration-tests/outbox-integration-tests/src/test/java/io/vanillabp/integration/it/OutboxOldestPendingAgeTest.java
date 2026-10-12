@@ -27,13 +27,13 @@ import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 
 /**
- * How old the oldest entry waiting in the JDBC outbox is. It is the number which tells
- * a backlog being worked off from one standing still, and the two entries of this test
- * have different ages on purpose: an answer which reported the youngest one would look
- * healthy while the oldest operation is the one nobody carried out.
+ * How old the oldest entry is which waits in the JDBC outbox. This number tells a backlog
+ * which is being worked off from one which stands still. The two entries of this test have
+ * different ages on purpose. An answer which reported the youngest one would look healthy,
+ * while nobody carried out the oldest operation.
  * <p>
- * The entries are written into the table directly and dated into the future, so the
- * dispatcher leaves them alone and they stay what the test needs them to be: entries
+ * The entries are written into the table directly, and their next attempt lies in the
+ * future. So the dispatcher leaves them alone, and they stay what the test needs: entries
  * which wait.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -98,8 +98,8 @@ public class OutboxOldestPendingAgeTest {
   }
 
   /**
-   * Writes an entry which stays where it is: its next attempt lies an hour ahead, so
-   * the dispatcher's poll does not pick it up.
+   * Writes an entry which stays where it is. Its next attempt lies an hour ahead, so the
+   * dispatcher's poll does not pick it up.
    *
    * @param id The id of the entry
    * @param writtenAt When it was written

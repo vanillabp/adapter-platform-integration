@@ -7,9 +7,10 @@ import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 
 /**
- * A workflow service which knows nothing about the extension: no method of its
- * annotation, and no injection of its service. Both are legal - the extension asks
- * whether a method exists and does its own thing when none does.
+ * A workflow service which knows nothing about the extension. It has no method with the
+ * annotation of the extension, and it does not inject the service of the extension. Both
+ * are allowed. The extension asks whether a method exists, and if none does, it uses its
+ * own default.
  */
 @Service
 @WorkflowService(

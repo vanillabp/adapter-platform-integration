@@ -26,17 +26,17 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * Whether a development environment offers every property an application may write.
  * <p>
  * Spring Boot builds that list from
- * <code>META-INF/additional-spring-configuration-metadata.json</code>, and VanillaBP writes
- * the file by hand, because the properties are bound from a class of the platform-neutral
- * core which no Spring annotation processor ever sees. A file written by hand is a file
- * somebody forgets: a property added without its entry is offered by nobody, is marked as
- * unknown in the editor, and is found only by whoever reads the documentation.
+ * <code>META-INF/additional-spring-configuration-metadata.json</code>. VanillaBP writes the
+ * file by hand. The properties are bound from a class of the platform-neutral core, and no
+ * Spring annotation processor ever sees that class. But people forget to update a file
+ * written by hand. A property added without its entry is offered by nobody. The editor marks
+ * it as unknown, and only people who read the documentation find it.
  * <p>
- * So the two sides are compared here. The left side is the property classes, walked the way
- * the binder walks them; the right side is the file. A property on one side and not on the
- * other fails this test, which is the only way the next one does not slip through as well.
+ * So this test compares the two sides. The left side is the property classes, walked the way
+ * the binder walks them. The right side is the file. A property on one side and not on the
+ * other fails this test. Only that stops the next missing entry from slipping through.
  * <p>
- * Quarkus needs none of this: it describes its properties from the config mapping itself.
+ * Quarkus needs none of this. It describes its properties from the config mapping itself.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class EveryPropertyIsOfferedByTheIdeTest {
@@ -104,8 +104,8 @@ public class EveryPropertyIsOfferedByTheIdeTest {
     final var bindable = new TreeSet<String>();
     collectInto(bindable, MigrationAdapterProperties.class, "vanillabp");
 
-    // one of each shape, so a walk which quietly stops early fails here rather than in a
-    // comparison which then looks like a file somebody kept up to date
+    // one key of each shape. A walk which quietly stops early fails here. Otherwise the
+    // comparison would pass, and the file would look as if somebody kept it up to date
     assertTrue(bindable.contains("vanillabp.resources-location"), bindable.toString());
     assertTrue(bindable.contains("vanillabp.outbox.mongo.delivery-collection"), bindable.toString());
     assertTrue(bindable.contains("vanillabp.outbox.housekeeping.zone"), bindable.toString());
@@ -129,9 +129,9 @@ public class EveryPropertyIsOfferedByTheIdeTest {
   }
 
   /**
-   * Walks one configuration class the way the binder walks it: a getter is a property, and
-   * a getter whose type is a configuration class of VanillaBP is a section to descend
-   * into.
+   * Walks one configuration class the way the binder walks it. A getter is a property. A
+   * getter whose type is a configuration class of VanillaBP is a section, and the walk goes
+   * down into it.
    */
   private static void collectInto(
       final Set<String> keys,
@@ -189,9 +189,9 @@ public class EveryPropertyIsOfferedByTheIdeTest {
   }
 
   /**
-   * Whether a getter answers something derived rather than something bound. The binder
-   * writes through a SETTER, so a read-only getter is an answer of the configuration and
-   * not a key of it.
+   * Whether a getter returns something derived, and not something bound. The binder writes
+   * through a SETTER. So a getter without a setter is something the configuration computes,
+   * not one of its keys.
    */
   private static boolean isDerived(
       final Method getter) {

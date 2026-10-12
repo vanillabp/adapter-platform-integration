@@ -13,14 +13,14 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An application which has a workflow module but no BPMS adapter hears it from
- * VanillaBP, and hears which artifacts would give it one.
+ * An application which has a workflow module but no BPMS adapter gets told so by
+ * VanillaBP. The message also says which artifacts would give it one.
  * <p>
- * The two facts the rule is made of cannot be varied inside a running JVM (a class either
- * is on the classpath or is not), so they are handed to {@link NoBpmsAdapterCheck#verify}
- * directly. What the JVM of this module DOES represent is the case the message was written
- * for - no VanillaBP integration on the classpath, a workflow-module marker in the test
- * resources - and the boot of that application is asserted as a whole.
+ * The rule is made of two facts. Neither can change inside a running JVM, because a class
+ * is either on the classpath or not. So the tests hand both facts to
+ * {@link NoBpmsAdapterCheck#verify} directly. The JVM of this module DOES show the case the
+ * message was written for: no VanillaBP integration on the classpath, and a workflow-module
+ * marker in the test resources. So one test boots that application as a whole.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class NoBpmsAdapterCheckTest {
@@ -39,8 +39,8 @@ public class NoBpmsAdapterCheckTest {
     assertTrue(
         failure.getMessage().contains("META-INF/workflow-module"),
         failure.getMessage());
-    // the adapters themselves are NOT listed in compiled code - the message points at the
-    // wiki page carrying the complete list with the Maven coordinates
+    // the adapters themselves are NOT listed in compiled code. The message points at the
+    // wiki page with the complete list and the Maven coordinates
     assertTrue(
         failure.getMessage().contains(BpmsAdapters.ADAPTERS_WIKI_URL),
         failure.getMessage());
@@ -53,12 +53,12 @@ public class NoBpmsAdapterCheckTest {
   @DisplayName("The neighbouring cases keep their own messages")
   public void theNeighbouringCasesAreLeftAlone() {
 
-    // an adapter brought the integration: the integration reports a missing adapter itself,
-    // and it knows the adapters actually loaded
+    // an adapter brought the integration. The integration reports a missing adapter itself,
+    // and it knows which adapters were really loaded
     assertDoesNotThrow(() -> NoBpmsAdapterCheck.verify(true, true));
     assertDoesNotThrow(() -> NoBpmsAdapterCheck.verify(true, false));
-    // no workflow module: nothing to run, so nothing to report (the smoke test of every
-    // blueprint boots exactly this application)
+    // no workflow module: nothing to run, so nothing to report. The smoke test of every
+    // blueprint boots exactly this application
     assertDoesNotThrow(() -> NoBpmsAdapterCheck.verify(false, false));
 
   }

@@ -21,27 +21,26 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * An adapter id which a waiting outbox entry names although the configuration does not,
- * on the store a Spring Boot application gets by default.
+ * A waiting outbox entry names an adapter id which the configuration no longer names. This
+ * test uses the store a Spring Boot application gets by default.
  * <p>
- * This store keeps the id in a column of its own, so the boot can ask for it with one
- * indexed query per BPMN process and says it while the application starts - hours before
- * the entry would have been read for a dispatch. That is what decision 47 in the
- * repository's DECISIONS.md asks of a store which can answer. A store which keeps a call as
- * one serialized text cannot answer it while booting, and says it at the first dispatch
- * instead.
+ * This store keeps the id in its own column. So the boot can ask for it with one indexed
+ * query per BPMN process, and it reports it while the application starts. That is hours
+ * before the entry would be read for a dispatch. Decision 47 in the repository's
+ * DECISIONS.md asks this of a store which can answer. A store which keeps a call as one
+ * serialized text cannot answer while booting. It reports at the first dispatch instead.
  * <p>
- * Two contexts on one database: the first runs with an adapter 'old-bpms' at first priority
- * and leaves an entry of it undispatched, the second does not configure that adapter at all.
- * Nothing is dispatched in the second one - the entry waits an hour for its next attempt -
- * so the report can only come from the start.
+ * Two contexts use one database. The first runs with an adapter 'old-bpms' at first
+ * priority and leaves an entry of it undispatched. The second does not configure that
+ * adapter at all. Nothing is dispatched in the second one, because the entry waits an
+ * hour for its next attempt. So the report can only come from the start.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
 public class AStaleAdapterIdIsNamedAtTheStartTest {
 
   /**
-   * A database of this test's own, kept alive between the two contexts - see
+   * The own database of this test, kept alive between the two contexts. See
    * {@link OutboxRecoveryTest} for why it is not shared with the other tests.
    */
   private static final String DATASOURCE_URL = "jdbc:h2:mem:outbox-stale-adapter-at-start;DB_CLOSE_DELAY=-1";
@@ -49,8 +48,8 @@ public class AStaleAdapterIdIsNamedAtTheStartTest {
   private static final String STALE_ADAPTER = "old-bpms";
 
   /**
-   * What the report names, which is the adapter id and the reading an application has to
-   * choose between.
+   * What the report names: the adapter id, and the readings an application has to choose
+   * between.
    */
   private static final String THE_REPORT_NAMING_IT = "The adapter id '%s' is NOT configured any more"
       .formatted(STALE_ADAPTER);
@@ -60,8 +59,8 @@ public class AStaleAdapterIdIsNamedAtTheStartTest {
   public void theStaleAdapterIdIsNamedAtTheStart(
       final CapturedOutput output) throws Exception {
 
-    // the first context leaves an entry of 'old-bpms' behind: its dispatch fails and the
-    // next attempt is an hour away, which is the shape of a crash
+    // the first context leaves an entry of 'old-bpms' behind. Its dispatch fails, and the
+    // next attempt is an hour away. This looks like a crash
     try (var context = run("--vanillabp.adapters.%s.type=dummy".formatted(STALE_ADAPTER),
         "--vanillabp.prioritized-adapters=%s,test".formatted(STALE_ADAPTER),
         "--vanillabp.workflow-modules.test-module.adapters.%s.resources-location=classpath*:test-module/processes/dummy"
@@ -80,7 +79,7 @@ public class AStaleAdapterIdIsNamedAtTheStartTest {
       });
       assertNotNull(attachedAggregate);
       listener.awaitInvocations(1, 10000);
-      // the failed attempt has to be written before the context goes away, otherwise the
+      // the failed attempt must be written before the context goes away. Otherwise the
       // second context meets an entry which was never dispatched
       FailedAttempts.awaitWrittenDown(context, 1);
       assertEquals(
@@ -111,9 +110,9 @@ public class AStaleAdapterIdIsNamedAtTheStartTest {
   }
 
   /**
-   * Runs the test application against the database both contexts share. Both the poll
-   * interval and the distance to the next attempt are an hour, so the entry the first
-   * context leaves behind is still waiting when the second one has booted.
+   * Runs the test application against the database both contexts share. The poll interval
+   * and the time to the next attempt are both an hour. So the entry the first context
+   * leaves behind still waits when the second one has booted.
    *
    * @param adapterConfiguration What this context configures beyond that
    * @return The running application context

@@ -17,17 +17,16 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * Which adapter ids an adapter registers beans for. The convention is documented in
- * {@code MigrationAdapterProperties#adapterTypes()} and on the wiki: an adapter section
- * carrying no {@code type} takes its ID as the type, and an id named in
- * {@code prioritized-adapters} which IS an adapter type needs no section at all.
+ * {@code MigrationAdapterProperties#adapterTypes()} and on the wiki. An adapter section
+ * without a {@code type} takes its ID as the type. An id in {@code prioritized-adapters}
+ * which IS an adapter type needs no section at all.
  * <p>
- * Both halves of that convention are what an application relies on, and the second one
- * was held by nothing here (found while a blueprint ran): the helper
- * bound the properties itself and applied the derivation only where NO adapter section
- * existed at all. A migration setup - one section for the new BPMS, the old one named in
- * {@code prioritized-adapters} - therefore got no beans for the old adapter, while the
- * core derived its section and expected them, and the election found nothing serving that
- * id.
+ * An application relies on both halves of that convention. Nothing here held the second
+ * half, and a blueprint run found that. The helper bound the properties itself. It applied
+ * the rule only where NO adapter section existed at all. Take a migration setup: one section
+ * for the new BPMS, and the old one named in {@code prioritized-adapters}. It got no beans for
+ * the old adapter. But the core derived the old adapter's section and expected those beans. So
+ * the election found nothing which served that id.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AdapterBeanRegistrarSupportTest {
@@ -52,8 +51,8 @@ public class AdapterBeanRegistrarSupportTest {
   @DisplayName("A section carrying nothing but the adapter's own keys takes its id as the type")
   public void aSectionWithoutATypeIsTheType() {
 
-    // 'webapps' belongs to the Camunda 7 adapter's own overlay, so the core model knows
-    // none of the keys of this section - which must not decide whether the id exists
+    // 'webapps' belongs to the Camunda 7 adapter's own overlay. So the core model knows none
+    // of the keys of this section, and that must not decide whether the id exists
     assertEquals(
         List.of(CAMUNDA7),
         idsOf(
@@ -68,8 +67,8 @@ public class AdapterBeanRegistrarSupportTest {
   @DisplayName("An id named in prioritized-adapters needs no section, even next to another adapter")
   public void aPrioritizedIdNeedsNoSection() {
 
-    // the migration setup: the new BPMS is configured, the old one is named in the order
-    // and derived from the classpath by the core - so its beans have to exist
+    // the migration setup: the new BPMS is configured. The old one is named in the order,
+    // and the core derives it from the classpath. So its beans have to exist
     assertEquals(
         List.of(CAMUNDA7),
         idsOf(
@@ -85,10 +84,10 @@ public class AdapterBeanRegistrarSupportTest {
   @DisplayName("The migration blueprint's configuration, which lost the old adapter")
   public void theMigrationSetupOfTheBlueprint() {
 
-    // exactly what 'module-bpms-migration' configures: the new BPMS with one key the CORE
-    // model knows (name-clash-avoidance) next to the old BPMS whose section holds nothing
-    // but the adapter's own keys. That one core key used to decide whether the old
-    // adapter got beans at all
+    // exactly what 'module-bpms-migration' configures. The new BPMS has one key which the
+    // CORE model knows (name-clash-avoidance). The section of the old BPMS holds only the
+    // adapter's own keys. That one core key used to decide whether the old adapter got
+    // beans at all
     final var properties = Map.<String, Object>of(
         "vanillabp.prioritized-adapters[0]", "camunda8",
         "vanillabp.prioritized-adapters[1]", CAMUNDA7,
@@ -105,11 +104,11 @@ public class AdapterBeanRegistrarSupportTest {
   @DisplayName("The wiki's own example of a migration serves both adapters")
   public void theExampleOfTheWiki() {
 
-    // 'Several BPMS: naming the order is the whole configuration' of the Spring Boot page:
-    // the id which IS a type carries only the adapter's own key, the custom id names its
-    // type. Both adapters have to get their beans - the example was broken before this
-    // test existed, because the custom id's 'type' made the core model bind and the other
-    // section had nothing the core knows
+    // 'Several BPMS: naming the order is the whole configuration' of the Spring Boot page.
+    // The id which IS a type has only the adapter's own key. The custom id names its type.
+    // Both adapters have to get their beans. The example was broken before this test
+    // existed. The custom id's 'type' made the core model bind, and the other section had
+    // nothing the core knows
     final var properties = Map.<String, Object>of(
         "vanillabp.prioritized-adapters[0]", "camunda8",
         "vanillabp.prioritized-adapters[1]", "legacy",

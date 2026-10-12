@@ -19,14 +19,14 @@ import io.vanillabp.integration.deployment.processservice.DefaultAggregatePersis
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Which of VanillaBP's persistence implementations serves an aggregate is
- * decided at build time on the Jandex index. A repository for the aggregate wins,
- * then the aggregate being an active record, then a Spring Data repository - and two
- * repositories for one aggregate fail the build instead of being picked by chance.
+ * Which of VanillaBP's persistence implementations serves an aggregate is decided at build
+ * time on the Jandex index. A repository for the aggregate wins. Next comes the aggregate
+ * as an active record, then a Spring Data repository. Two repositories for one aggregate
+ * fail the build. None of them is picked by chance.
  * <p>
- * The MongoDB flavours are not indexed here: their extension would activate the
- * MongoDB client for every test application of this module. They are covered
- * end-to-end by {@code default-persistence-mongo-tests}.
+ * The MongoDB variants are not indexed here. Their extension would turn on the MongoDB
+ * client for every test application of this module. {@code default-persistence-mongo-tests}
+ * covers them end to end.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DefaultAggregatePersistenceResolverTest {
@@ -92,7 +92,7 @@ public class DefaultAggregatePersistenceResolverTest {
         forPlain.implementationClass());
     assertEquals(dotName(PlainAggregateRepository.class), forPlain.repositoryClass());
 
-    // the repository interface of the application is not a bean - the class is
+    // the repository interface of the application is not a bean, the class is
     final var forLongId = resolve(index, LongIdAggregate.class);
     assertEquals(dotName(LongIdAggregateRepository.class), forLongId.repositoryClass());
 

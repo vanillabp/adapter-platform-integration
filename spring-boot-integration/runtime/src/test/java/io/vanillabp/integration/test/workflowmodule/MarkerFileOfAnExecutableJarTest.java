@@ -11,11 +11,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModule;
 
 /**
- * Spring Boot packs the classes of an executable JAR below <code>BOOT-INF/classes/</code>
- * but leaves <code>META-INF/workflow-module</code> at the top of the JAR. The URLs below
- * were read from a running application, one per way of starting it. The marker file has to
- * be found in the same artifact as the application's classes in each of them, or the
- * module's BPMN files are searched in the wrong place.
+ * Spring Boot packs the classes of an executable JAR below <code>BOOT-INF/classes/</code>.
+ * But it leaves <code>META-INF/workflow-module</code> at the top of the JAR. The URLs below
+ * come from a running application, one for each way of starting it. In each of them, the
+ * marker file has to be found in the same artifact as the application's classes. Otherwise
+ * the search for the module's BPMN files looks in the wrong place.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MarkerFileOfAnExecutableJarTest {
@@ -54,7 +54,7 @@ public class MarkerFileOfAnExecutableJarTest {
   @DisplayName("Both loaders spell the path of the JAR differently")
   public void aPathIsComparedAfterItsPercentSignsAreResolved() {
 
-    // what the JDK and the loader of Spring Boot made of the directory 'sp ace+ü'
+    // how the JDK and the loader of Spring Boot spell the directory 'sp ace+ü'
     final var module = moduleDeclaredIn("jar:file:/srv/sp%20ace+%c3%bc/loan-approval.jar!/");
 
     assertTrue(module.isDeclaredInTheArtifactOf("jar:nested:/srv/sp%20ace+ü/loan-approval.jar/!BOOT-INF/classes/!/"));

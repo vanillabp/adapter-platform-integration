@@ -5,8 +5,8 @@ import org.bson.codecs.pojo.annotations.BsonId;
 import io.quarkus.mongodb.panache.PanacheMongoEntityBase;
 
 /**
- * The aggregate of the MongoDB Panache active record idiom: no repository anywhere,
- * the entity itself carries the persistence.
+ * The aggregate of the MongoDB Panache active record idiom. There is no repository
+ * anywhere. The entity itself knows how to store itself.
  */
 public class MongoActiveRecordAggregate extends PanacheMongoEntityBase {
 

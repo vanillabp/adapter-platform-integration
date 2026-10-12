@@ -3,7 +3,7 @@ package io.vanillabp.integration.deployment.workflowmodule;
 import io.quarkus.builder.item.SimpleBuildItem;
 
 /**
- * A build item marking processing of workflow-module-specific config files as done.
+ * A build item which marks the config files of the workflow modules as processed.
  */
 public final class WorkflowModuleSpecificConfigBuilderBuildItem extends SimpleBuildItem {
 

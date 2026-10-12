@@ -38,15 +38,15 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.service.BpmnProcess;
 
 /**
- * Acceptance test of <code>&#64;BpmnProcess(version = ...)</code>: two workflow service
- * classes serve one BPMN task of one process, each bound to a generation of the model by
- * the range of the {@link BpmnProcess} it declares, and not one method repeats that
+ * Acceptance test of <code>&#64;BpmnProcess(version = ...)</code>. Two workflow service
+ * classes serve one BPMN task of one process. The range of the {@link BpmnProcess} each
+ * class declares binds it to one generation of the model, and no method repeats that
  * range. The version the adapter reports decides which of the two classes runs.
  * <p>
- * The delivery a BPMS reports no version for is part of the acceptance: a method which
- * INHERITS a range is as restricted as one naming it, so no method serves such a
- * delivery, and the message says where the range came from - the method it complains
- * about carries no attribute at all.
+ * A delivery for which the BPMS reports no version is part of the acceptance. A method
+ * which INHERITS a range is as restricted as one which names it. So no method serves such
+ * a delivery. The message says where the range came from, because the method it
+ * complains about has no attribute at all.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ClassLevelProcessVersionsTest {
@@ -243,9 +243,9 @@ public class ClassLevelProcessVersionsTest {
       dummyAdapter.invokeTask(MODULE, PROCESS, context("4711", "3"));
       Assertions.assertEquals("afterTwo", ClassVersionsConfiguration.AGGREGATES.get("4711").getServedBy());
 
-      // an inherited range restricts as much as one written on the method, so a BPMS
-      // reporting no version reaches neither class - and the message names the
-      // declaration the range came from, since neither method carries one
+      // an inherited range restricts as much as one written on the method. So a BPMS which
+      // reports no version reaches neither class. The message names the declaration the
+      // range came from, because neither method has one
       final var unreported = Assertions.assertThrows(
           IllegalStateException.class,
           () -> dummyAdapter.invokeTask(MODULE, PROCESS, context("4711", null)));

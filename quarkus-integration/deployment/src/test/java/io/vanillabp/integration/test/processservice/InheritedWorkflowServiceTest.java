@@ -18,15 +18,15 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * <code>&#64;WorkflowService</code> is <code>&#64;Inherited</code>, and what that promises is
- * the same on both platforms: the SUBCLASS is the workflow service. Jandex resolves no
- * <code>&#64;Inherited</code> and reports the class the annotation SITS on, so the build used
- * to register the superclass here - and with it the superclass' simple name as the BPMN
- * process ID, while Spring Boot registers the class of the bean and arrives at the subclass'
- * name. One source file, two BPMN processes.
+ * <code>&#64;WorkflowService</code> is <code>&#64;Inherited</code>. That promises the same on
+ * both platforms: the SUBCLASS is the workflow service. Jandex does not resolve
+ * <code>&#64;Inherited</code>. It reports the class the annotation SITS on. So the build used
+ * to register the superclass here, and with it the superclass' simple name as the BPMN
+ * process ID. But Spring Boot registers the class of the bean and gets the subclass' name.
+ * One source file gave two BPMN processes.
  * <p>
- * What the build records per workflow service is <code>module|class|BPMN process</code>, so
- * all three answers of this story can be read off one string.
+ * For each workflow service the build records <code>module|class|BPMN process</code>. So all
+ * three answers can be read from one string.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class InheritedWorkflowServiceTest {
@@ -71,8 +71,8 @@ public class InheritedWorkflowServiceTest {
   @DisplayName("The class carrying the declaration serves nothing of its own")
   public void theAnnotatedBaseIsNoWorkflowServiceOfItsOwn() {
 
-    // it is abstract, so CDI could not hand out an instance of it anyway - the point is
-    // that its name does not reach the registrations
+    // it is abstract, so CDI could not create an instance of it anyway. The point is that
+    // its name does not reach the registrations
     Assertions.assertFalse(
         ((ProcessServiceBaseCdiBean<?>) processService)
             .getWorkflowTaskRegistrations()

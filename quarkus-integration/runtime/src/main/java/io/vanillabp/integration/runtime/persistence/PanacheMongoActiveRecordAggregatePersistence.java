@@ -3,23 +3,23 @@ package io.vanillabp.integration.runtime.persistence;
 import io.quarkus.mongodb.panache.runtime.JavaMongoOperations;
 
 /**
- * Persistence of aggregates using the MongoDB Panache active record pattern (the
- * aggregate extends {@code PanacheMongoEntity} or {@code PanacheMongoEntityBase}),
+ * Persistence of aggregates which use the active record pattern of MongoDB Panache. There,
+ * the aggregate extends {@code PanacheMongoEntity} or {@code PanacheMongoEntityBase}. It is
  * used whenever the application has no MongoDB Panache repository and no
  * {@link io.vanillabp.integration.spi.AggregatePersistenceAware} of its own for the
  * aggregate.
  * <p>
- * Panache's own entity methods are generated as static members onto the entity and
- * would have to be called by reflection; the operations object behind them is public
- * API and is used directly instead.
+ * Panache generates its own entity methods as static members onto the entity. Those would
+ * have to be called by reflection. The operations object behind them is public API, so this
+ * class uses it directly.
  *
  * @param <A> The aggregate type
  */
 public class PanacheMongoActiveRecordAggregatePersistence<A> extends DefaultAggregatePersistence<A> {
 
   /**
-   * Called by the no-arg constructor of the subclass the build generates for one
-   * aggregate.
+   * The no-arg constructor of the subclass which the build generates for one aggregate calls
+   * it.
    *
    * @param aggregateClass The aggregate type, which is also the MongoDB Panache entity
    */

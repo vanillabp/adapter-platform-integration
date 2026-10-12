@@ -8,11 +8,15 @@ import io.vanillabp.spi.service.WorkflowTask;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Three handler methods a developer can read in their own source and VanillaBP cannot:
- * one which is not public, one which the subclass below overrides without repeating the
- * annotation, and one of an EXTENSION which is not public either - the scan of an
- * extension's contract reads the public methods of the class the same way, so the method
- * is lost for the same reason and is named the same way.
+ * Three handler methods which a developer can read in their own source, but VanillaBP
+ * cannot:
+ * <ul>
+ * <li>one which is not public,</li>
+ * <li>one which the subclass below overrides without repeating the annotation,</li>
+ * <li>one of an EXTENSION which is not public either. The scan of an extension's contract
+ * reads the public methods of the class in the same way. So the method is lost for the
+ * same reason, and it is named in the same way.</li>
+ * </ul>
  */
 @ApplicationScoped
 @WorkflowService(

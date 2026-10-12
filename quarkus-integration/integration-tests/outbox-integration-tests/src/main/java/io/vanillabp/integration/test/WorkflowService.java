@@ -21,8 +21,8 @@ public class WorkflowService {
   }
 
   /**
-   * Starts the workflow (again) for an already persisted aggregate - used to test
-   * the idempotency of scheduling phase two.
+   * Starts the workflow (again) for an aggregate which is already stored. Tests use it to
+   * check that scheduling phase two is idempotent.
    *
    * @param aggregate The aggregate to start the workflow for
    * @return The attached aggregate
@@ -136,8 +136,8 @@ public class WorkflowService {
 
 
   /**
-   * Broadcasts a signal - a broadcast is not addressed to a workflow, so no
-   * aggregate is involved.
+   * Broadcasts a signal. A broadcast is not addressed to a workflow, so no aggregate is
+   * involved.
    *
    * @param signalName The BPMN signal name
    */

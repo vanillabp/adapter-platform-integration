@@ -38,19 +38,19 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Acceptance test of the transaction-contract safeguards on Spring Boot: a
- * transaction annotation of the application in the call chain of a
- * <code>&#64;WorkflowTask</code> handler marks VanillaBP's transaction rollback-only,
- * and neither the aggregate changes nor the state of the BPMS can be committed
- * afterwards. Since the mark cannot be cleared, VanillaBP turns the silent data loss
- * into a failure whose message names the task and the remedy.
+ * Acceptance test of the guards of the transaction contract, on Spring Boot. An application
+ * may put a transaction annotation into the call chain of a <code>&#64;WorkflowTask</code>
+ * handler. This marks VanillaBP's transaction rollback-only. After that, neither the changes
+ * of the aggregate nor the state of the BPMS can be committed. The mark cannot be cleared. So
+ * VanillaBP turns the silent loss of data into a failure. Its message names the task and the
+ * fix.
  * <p>
- * The startup check covering an annotation ON the handler needs a workflow service
- * class that fails EVERY boot of its Maven module, so it lives in its own module
- * ({@code transaction-annotation-integration-test}); the annotation matrix itself is
- * covered by the core's unit tests. What is proven here is the accepted counterpart
- * ({@code noRollbackFor}, which has to boot and to work) and the runtime check, in
- * both transaction shapes.
+ * The startup check for an annotation ON the handler needs a workflow service class which
+ * fails EVERY boot of its Maven module. So it lives in its own module
+ * ({@code transaction-annotation-integration-test}). The unit tests of the core cover all
+ * combinations of annotations. This test proves the accepted counterpart
+ * ({@code noRollbackFor}, which has to boot and to work) and the check at runtime, in both
+ * kinds of transaction.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ApplicationTransactionTest {
@@ -263,8 +263,8 @@ public class ApplicationTransactionTest {
         failure.getMessage().contains(PROCESS) && failure.getMessage().contains(MODULE),
         "unexpected message: "
             + failure.getMessage());
-    // the rollback rules as they are written on THIS platform: Spring Boot honors its
-    // own annotation AND the JTA one, so both attributes are legitimate options here
+    // The rollback rules as they are written on THIS platform. Spring Boot honors its own
+    // annotation AND the JTA one, so both attributes are valid options here.
     Assertions.assertTrue(
         failure.getMessage().contains("noRollbackFor = TaskException.class") && failure.getMessage()
             .contains("dontRollbackOn = TaskException.class"),
@@ -282,17 +282,17 @@ public class ApplicationTransactionTest {
 
       final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
 
-      // (a) the shape of a remote BPMS: VanillaBP opens its own transaction, the
-      // nested bean joins it and takes it down with the TaskException
+      // (a) The case of a remote BPMS. VanillaBP opens its own transaction. The nested bean
+      // joins it and spoils it with the TaskException.
       storeAggregate("5001");
       final var ownTransaction = Assertions.assertThrows(
           IllegalStateException.class,
           () -> dummyAdapter.invokeTask(MODULE, PROCESS, context("nestedTaskException", "5001", false)));
       assertGuidingMessage(ownTransaction, "nestedTaskException");
 
-      // (b) the shape of an embedded engine: VanillaBP participates in the
-      // caller's transaction, where the mark is the silent case - the commit of a
-      // participating transaction returns normally although nothing is committed
+      // (b) The case of an embedded engine. VanillaBP takes part in the caller's
+      // transaction. Here the mark goes unnoticed: the commit of a transaction which only
+      // takes part returns normally, although nothing is committed.
       storeAggregate("5002");
       final var transactionTemplate = new TransactionTemplate(context.getBean(PlatformTransactionManager.class));
       final var joinedTransaction = Assertions.assertThrows(
@@ -301,17 +301,17 @@ public class ApplicationTransactionTest {
               status -> dummyAdapter.invokeTask(MODULE, PROCESS, context("nestedTaskException", "5002", true))));
       assertGuidingMessage(joinedTransaction, "nestedTaskException");
 
-      // (c) no TaskException involved at all: the handler swallowed the exception
-      // of the nested call and returned normally, which would report the task as
-      // completed while nothing can be persisted
+      // (c) No TaskException at all. The handler swallowed the exception of the nested
+      // call and returned normally. This would report the task as completed, although
+      // nothing can be persisted.
       storeAggregate("5003");
       final var swallowed = Assertions.assertThrows(
           IllegalStateException.class,
           () -> dummyAdapter.invokeTask(MODULE, PROCESS, context("swallowedNestedFailure", "5003", false)));
       assertGuidingMessage(swallowed, "swallowedNestedFailure");
 
-      // (d) the annotation a version-1 application carries: accepted by the
-      // startup check (this context booted with it) and working at runtime
+      // (d) The annotation a version-1 application carries. The startup check accepts it
+      // (this context booted with it), and it works at runtime.
       storeAggregate("5004");
       final var accepted = dummyAdapter.invokeTask(MODULE, PROCESS, context("acceptedAnnotation", "5004", false));
       Assertions.assertEquals(WorkflowTaskOutcome.Kind.COMPLETED, accepted.kind());

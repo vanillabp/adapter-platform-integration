@@ -38,18 +38,18 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * What a called process delivered is found under the id the application calls, on Quarkus:
- * this is the platform half of the change, and what it proves is that the ids a workflow
+ * What a called process delivered is found under the id which the application calls, on
+ * Quarkus. This is the platform half of the change. It proves that the ids which a workflow
  * service serves really reach the two readers of the core.
  * <p>
  * The scenario is the everyday one. A workflow service serves {@code Ordering} and
- * declares {@code Shipping} as a secondary process, the BPMS hands out a task of
- * {@code Shipping}, and the application completes that task through the only process
- * service it ever sees, the one of {@code Ordering}. The delivery wrote two things under
- * {@code Shipping}: the record naming the adapter which delivered, and the hint saying
- * which BPMS holds this workflow. Both used to be invisible to the primary service, so
- * every operation on such a task paid a probe, no visibility window was ever waited out,
- * and the row of the task stayed open forever.
+ * declares {@code Shipping} as a secondary process. The BPMS hands out a task of
+ * {@code Shipping}. The application completes that task through the only process service
+ * it ever sees, the one of {@code Ordering}. The delivery wrote two things under
+ * {@code Shipping}: the record which names the adapter that delivered, and the hint which
+ * says which BPMS holds this workflow. The primary service could not see either of them.
+ * So every operation on such a task paid for a probe, no visibility window was ever waited
+ * out, and the row of the task stayed open forever.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SecondaryProcessDeliveryTest {
@@ -61,21 +61,21 @@ public class SecondaryProcessDeliveryTest {
   private static final String ADAPTER = "demo1";
 
   /**
-   * The workflow of the test which completes a task. Every test brings an aggregate of
-   * its own: the tests of this class share one application, and an election which walked
-   * the adapters leaves a hint under the PRIMARY id behind - which would answer the next
-   * test without anybody reading the called process' one.
+   * The workflow of the test which completes a task. Every test brings an aggregate of its
+   * own. The tests of this class share one application. An election which walked the
+   * adapters leaves a hint under the PRIMARY id behind. That hint would answer the next test,
+   * and nobody would read the hint of the called process.
    */
   private static final String COMPLETING_AGGREGATE = "4711";
 
   /**
-   * The workflow of the test which correlates a message, and which nothing but the
-   * delivery of the called process ever reported.
+   * The workflow of the test which correlates a message. Only the delivery of the called
+   * process ever reported it.
    */
   private static final String CORRELATING_AGGREGATE = "4712";
 
   /**
-   * An aggregate nobody ever delivered a task for - the id which really is wrong.
+   * An aggregate which nobody ever delivered a task for. This id really is wrong.
    */
   private static final String AGGREGATE_OF_NO_WORKFLOW = "4713";
 
@@ -230,8 +230,8 @@ public class SecondaryProcessDeliveryTest {
         awareness.probes(),
         "the record of the called process answered the election, so no BPMS was asked");
 
-    // and the moment the completion reaches the BPMS the row is closed - under the id the
-    // delivery wrote it, which is the called process
+    // and the moment the completion reaches the BPMS, the row is closed. It is closed under
+    // the id which the delivery wrote it under, and that is the called process
     router.dispatch(outbox.planned().getLast());
 
     assertNotNull(
@@ -249,7 +249,7 @@ public class SecondaryProcessDeliveryTest {
     // the read model of the BPMS has not caught up: nobody reports this workflow
     awareness.answerWith(WorkflowAwareness.UNKNOWN_TO_BPMS);
 
-    // an aggregate nobody ever delivered a task for: the id is simply wrong, and the
+    // an aggregate which nobody ever delivered a task for: the id is simply wrong, and the
     // caller hears it at once
     persistence.store(AGGREGATE_OF_NO_WORKFLOW);
     assertThrows(
@@ -257,8 +257,8 @@ public class SecondaryProcessDeliveryTest {
         () -> inATransaction(() -> processService
             .correlateMessage(persistence.get(AGGREGATE_OF_NO_WORKFLOW), "ShipmentArrived")));
 
-    // the same answer from the BPMS, but this workflow was reported by a delivery of the
-    // called process - so it exists, and the operation is planned
+    // the same answer from the BPMS, but a delivery of the called process reported this
+    // workflow. So it exists, and the operation is planned
     dummyAdapter()
         .invokeTask(MODULE, SECONDARY_PROCESS, deliveryOfTheCalledProcess(CORRELATING_AGGREGATE, "shipment-2"));
 

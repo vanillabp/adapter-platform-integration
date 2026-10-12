@@ -22,11 +22,10 @@ import io.vanillabp.integration.test.deployment.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Proves the REAL {@code ShutdownEvent} path: on graceful shutdown (the test
- * application being undeployed) workflow processing is stopped in reverse start
- * order - extensions first, then the adapter. The stop events are recorded into a
- * file because the assertions run after the application was undeployed (no bean
- * access anymore).
+ * Proves the REAL {@code ShutdownEvent} path. On a graceful shutdown, here the undeploy of
+ * the test application, workflow processing stops in the reverse start order: extensions
+ * first, then the adapter. The stop events are written to a file, because the assertions
+ * run after the application was undeployed. Then no bean can be reached anymore.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ShutdownEventTest {
@@ -81,8 +80,8 @@ public class ShutdownEventTest {
   @Test
   @DisplayName("On shutdown workflow processing is stopped in reverse order (asserted after undeploy)")
   public void shutdownStopsProcessing() {
-    // the assertions run in the afterUndeployListener above, after the
-    // application was gracefully shut down
+    // the assertions run in the afterUndeployListener above, after the application was
+    // shut down gracefully
   }
 
 }

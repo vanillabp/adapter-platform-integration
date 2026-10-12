@@ -6,8 +6,8 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 import io.vanillabp.integration.test.sample.NoPersistenceForTheSampleAggregate;
 
 @SpringBootApplication
-// the sample aggregate is a plain class nothing here persists, and VanillaBP asks an
-// application to say who owns it
+// nothing here persists the sample aggregate, it is a plain class. VanillaBP asks an
+// application who owns it
 @org.springframework.context.annotation.Import(NoPersistenceForTheSampleAggregate.class)
 public class TestApplication {
 

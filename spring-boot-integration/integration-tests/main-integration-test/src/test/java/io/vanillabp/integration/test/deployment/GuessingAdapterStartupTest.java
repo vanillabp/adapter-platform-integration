@@ -25,15 +25,15 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * An adapter which cannot ask its BPMS whether it holds a workflow answers the election
- * optimistically. That is right while it is the only BPMS configured, and a guess as soon
- * as it is not: the walk stops at the first adapter saying yes, so a guessing adapter
- * takes the operations of every adapter behind it in the list.
+ * Some adapters cannot ask their BPMS whether it holds a workflow. Such an adapter answers
+ * the election with yes. That is right while it is the only BPMS configured. With a second
+ * one it is a guess. The election stops at the first adapter which says yes. So a guessing
+ * adapter takes the operations of every adapter behind it in the list.
  * <p>
- * VanillaBP refuses to boot that combination, and an application which wants it anyway
- * says so. Both halves are pinned here; the dummy adapter of id 'test' plays the adapter
- * which has to guess (a Camunda 8 cluster without secondary storage, or the
- * Process-Engine-API).
+ * VanillaBP refuses to boot that combination. An application which wants it anyway has to
+ * say so in its configuration. This test checks both cases. The dummy adapter with the id
+ * 'test' plays the adapter which has to guess (like a Camunda 8 cluster without secondary
+ * storage, or the Process-Engine-API).
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class GuessingAdapterStartupTest {
@@ -126,8 +126,8 @@ public class GuessingAdapterStartupTest {
             SampleWorkflowService.class,
             WorkflowModuleConfiguration.class,
             GuessingAdapterConfiguration.class,
-            // brings the deployment service: the check runs once the adapters deployed,
-            // and the end of the start right behind it
+            // brings the deployment service. The check runs after the adapters deployed,
+            // and the start ends right after it
             DeploymentTest.TestConfig.class)
         .properties(io.vanillabp.integration.test.ThePlaceholderModel.BELONGS_TO_SOMEBODY_ELSE);
 
@@ -139,8 +139,8 @@ public class GuessingAdapterStartupTest {
 
     try (var testApp = testApplication(APPLICATION_YAML)) {
 
-      // the refusal is thrown at the end of the start, which is inside the lifecycle, and
-      // Spring wraps what a lifecycle bean throws while the context is refreshed
+      // the refusal is thrown at the end of the start, inside the lifecycle. Spring wraps
+      // what a lifecycle bean throws while the context is refreshed
       final var failure = Assertions.assertThrows(
           org.springframework.context.ApplicationContextException.class,
           () -> applicationOf(testApp)
@@ -203,7 +203,7 @@ public class GuessingAdapterStartupTest {
 
     try (var testApp = testApplication(oneAdapter); var context = applicationOf(testApp).run()) {
 
-      // there is nothing to guess between: whatever this adapter answers, it is the
+      // there is nothing to choose from. Whatever this adapter answers, it is the
       // only BPMS which could hold the workflow
       Assertions.assertNotNull(context);
 

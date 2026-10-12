@@ -24,9 +24,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * Where a QUARKUS application may write <code>implemented-externally</code>. The rule and the
- * order of the eight positions are the core's ({@code ImplementedExternallyTest}); what this asks
- * is whether every position survives the config mapping and the mapper onto the core model, and
- * whether the line a message prints for a job type with a colon binds as it is printed.
+ * order of the eight positions belong to the core ({@code ImplementedExternallyTest}). This
+ * test asks whether every position survives the config mapping and the mapper onto the core
+ * model. It also asks whether the line which a message prints for a job type with a colon
+ * binds as it is printed.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class QuarkusImplementedExternallyLevelsTest {

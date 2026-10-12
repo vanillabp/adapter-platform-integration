@@ -48,18 +48,18 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test on Spring Boot: an application which brings ALL THREE stores
- * itself - the workflow aggregate, the phase-two outbox and the log of processed task
- * deliveries - with no data source and no MongoDB anywhere, and therefore no
- * {@link PlatformTransactionManager} at all.
+ * Acceptance test on Spring Boot. The application brings ALL THREE stores itself: the
+ * workflow aggregate, the phase-two outbox and the log of processed task deliveries. There is
+ * no data source and no MongoDB anywhere. So there is no {@link PlatformTransactionManager}
+ * at all.
  * <p>
- * Such an application used to boot and then refuse every workflow: a start
- * failed with "No transaction is active!" and every task delivery with "No (unique)
- * PlatformTransactionManager is available", a message which recommended adding a relational
- * database. Now the application contributes its unit of work through a
- * {@link TransactionRunnerAware} bean naming the INTERFACE its aggregates implement, and the
- * counters of that runner are the assertion: VanillaBP opens it, commits it and rolls it
- * back around everything it does.
+ * Such an application used to boot and then refuse every workflow. A start failed with "No
+ * transaction is active!". Every task delivery failed with "No (unique)
+ * PlatformTransactionManager is available", and this message recommended adding a relational
+ * database. Now the application brings its unit of work through a
+ * {@link TransactionRunnerAware} bean. This bean names the INTERFACE its aggregates
+ * implement. The counters of this runner are what the test checks: VanillaBP opens it,
+ * commits it and rolls it back around everything it does.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ApplicationOwnedStoresTest {
@@ -71,8 +71,8 @@ public class ApplicationOwnedStoresTest {
   private static final String ADAPTER = "test";
 
   /**
-   * The application's unit of work: it counts what VanillaBP does with it and runs
-   * after-commit work, which is what an outbox needs to dispatch phase two.
+   * The application's unit of work. It counts what VanillaBP does with it. It also runs work
+   * after the commit, which an outbox needs to dispatch phase two.
    */
   static class CountingTransactionRunner implements TransactionRunner {
 
@@ -192,7 +192,7 @@ public class ApplicationOwnedStoresTest {
     static final List<String> PHASE_TWO = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     /**
-     * Records what the dummy adapter did in phase two - the proof that the outbox of the
+     * Records what the dummy adapter did in phase two. This proves that the outbox of the
      * application dispatched after ITS commit.
      */
     @Bean
@@ -203,9 +203,9 @@ public class ApplicationOwnedStoresTest {
     }
 
     /**
-     * The runner of the application for every aggregate no aware bean covers - the second
-     * of the four resolution steps. The test classpath brings the aggregates of other
-     * tests along, and this is what a real application would do for all of them.
+     * The runner of the application for every aggregate which no aware bean covers. This is
+     * the second of the four resolution steps. The test classpath brings the aggregates of
+     * other tests along. A real application would do this for all of them.
      */
     @Bean
     TransactionRunner appTxFallbackTransactions() {
@@ -215,7 +215,7 @@ public class ApplicationOwnedStoresTest {
     }
 
     /**
-     * One aware bean for every aggregate of the workflow module, attributed through the
+     * One aware bean for every aggregate of the workflow module. It finds them through the
      * interface they share.
      */
     @Bean
@@ -282,18 +282,18 @@ public class ApplicationOwnedStoresTest {
     }
 
     /**
-     * The application's outbox: the entry becomes visible with the commit of the
-     * application's unit of work, and the dispatch happens right after it - the contract
-     * of {@link PhaseTwoOutbox} without a database.
+     * The application's outbox. The entry becomes visible with the commit of the
+     * application's unit of work, and the dispatch happens right after it. This is the
+     * contract of {@link PhaseTwoOutbox} without a database.
      */
     @Bean
     PhaseTwoOutbox appTxOutbox(
         final PhaseTwoRouter router) {
 
       return call -> {
-        // deliberately simpler than a real store: nothing here is ever marked done, so
-        // a key deduplicates for as long as this context lives, while a real store
-        // deduplicates the entries still waiting for their dispatch
+        // Simpler than a real store, on purpose. Nothing here is ever marked done. So a key
+        // blocks duplicates for as long as this context lives. A real store blocks
+        // duplicates only of the entries still waiting for their dispatch.
         final var idempotencyKey = call
             .idempotencyKey()
             .orElse(null);
@@ -473,7 +473,7 @@ public class ApplicationOwnedStoresTest {
 
     try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
 
-      // no relational database, no MongoDB, hence nothing Spring would manage
+      // no relational database and no MongoDB, so Spring has no transactions to manage
       assertEquals(
           0,
           context.getBeanNamesForType(PlatformTransactionManager.class).length,
@@ -493,8 +493,8 @@ public class ApplicationOwnedStoresTest {
           List.of(started.getId()),
           ApplicationOwnedStoresConfiguration.PHASE_TWO,
           "phase two was not dispatched after the commit of the application's transaction");
-      // twice: the start itself, and phase two - which asks for a transaction as well and
-      // gets the application's
+      // Twice: the start itself, and phase two. Phase two asks for a transaction as well
+      // and gets the application's.
       assertEquals(2, runner.opened.get());
       assertEquals(2, runner.committed.get());
       assertEquals(0, runner.rolledBack.get());
@@ -504,8 +504,9 @@ public class ApplicationOwnedStoresTest {
           ApplicationOwnedStoresConfiguration.FALLBACK_RUNNER.opened.get(),
           "the fallback runner was used although an aware bean covers this aggregate");
 
-      // (b) a task delivery: the handler runs in a transaction of the application, the
-      // aggregate is saved and the delivery is recorded - all through its own stores
+      // (b) A task delivery. The handler runs in a transaction of the application. The
+      // aggregate is saved and the delivery is recorded, all through the application's
+      // own stores.
       runner.reset();
       final var outcome = dummyAdapter(context)
           .invokeTask(MODULE, PROCESS, delivery("handleTask", started.getId(), "job-1"));

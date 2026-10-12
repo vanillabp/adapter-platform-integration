@@ -8,9 +8,9 @@ import io.vanillabp.spi.service.MultiInstanceElementResolver;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * A resolver named by <code>&#64;MultiInstanceElement(resolverBean = ...)</code> and
- * injected NOWHERE - which is the point of the test: Quarkus used to remove
- * it while building the application, and the lookup at task time found nothing.
+ * A resolver which <code>&#64;MultiInstanceElement(resolverBean = ...)</code> names and
+ * which is injected NOWHERE. That is the point of the test. Quarkus used to remove it
+ * while it built the application, and then the lookup at task time found nothing.
  */
 @ApplicationScoped
 public class IterationResolver implements MultiInstanceElementResolver<ResolverAggregate, String> {

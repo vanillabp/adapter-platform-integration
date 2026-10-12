@@ -7,8 +7,8 @@ import org.springframework.data.annotation.Id;
 /**
  * The record of one processed task delivery in the MongoDB-based
  * {@link io.vanillabp.integration.spi.TaskDeliveryLog}. The delivery key IS the
- * document's ID, so MongoDB enforces the uniqueness the deduplication needs without an
- * index of its own.
+ * document's ID. So MongoDB enforces the uniqueness which the deduplication needs, and
+ * no extra index is needed.
  */
 public class TaskDeliveryDocument {
 
@@ -20,9 +20,9 @@ public class TaskDeliveryDocument {
   private String id;
 
   /**
-   * The adapter which delivered the task. Part of the delivery key as well,
-   * but only as text and hashed once the key grows too long, so a query needs it as a
-   * field of its own. Absent in a document written before it existed.
+   * The adapter which delivered the task. It is also part of the delivery key, but only
+   * as text, and hashed once the key grows too long. So a query needs it as a field of
+   * its own. Absent in a document written before the field existed.
    */
   private String adapterId;
 
@@ -42,9 +42,9 @@ public class TaskDeliveryDocument {
   private String aggregateId;
 
   /**
-   * The BPMS' own id of the workflow this task belongs to, for whoever follows a task into
-   * the tooling of that engine. Absent where the adapter names no workflow and in a document
-   * written before this existed.
+   * The BPMS' own id of the workflow this task belongs to. It helps whoever follows a task
+   * into the tooling of that engine. Absent where the adapter names no workflow, and in a
+   * document written before the field existed.
    */
   private String workflowId;
 
@@ -54,16 +54,16 @@ public class TaskDeliveryDocument {
   private String taskDefinition;
 
   /**
-   * The id a modeller wrote on the BPMN element which was delivered - what an extension
-   * addresses a task in the model by. Absent where the adapter names no element and in a
-   * document written before this existed.
+   * The id a modeller wrote on the BPMN element which was delivered. An extension uses it
+   * to address a task in the model. Absent where the adapter names no element, and in a
+   * document written before the field existed.
    */
   private String bpmnElementId;
 
   /**
-   * The BPMS' identity of the task this delivery was about - what the application passes
-   * back to complete or cancel it, and what lets the election answer from this document
-   * which adapter holds that task. Absent in a document written before it existed.
+   * The BPMS' identity of the task this delivery was about. The application passes it back
+   * to complete or cancel the task. With it, the election can tell from this document
+   * which adapter holds that task. Absent in a document written before the field existed.
    */
   private String taskId;
 
@@ -91,9 +91,9 @@ public class TaskDeliveryDocument {
   private Instant recordedAt;
 
   /**
-   * When the BPMS last redelivered the task this record answers, which is what the
-   * retention cleanup deletes by. Written together with
-   * {@link #recordedAt} and moved forward while an open task keeps being redelivered.
+   * When the BPMS last redelivered the task this record answers. The retention cleanup
+   * deletes by it. It is written together with {@link #recordedAt}, and moved forward
+   * while an open task keeps being redelivered.
    */
   private Instant lastSeenAt;
 
@@ -105,19 +105,20 @@ public class TaskDeliveryDocument {
 
   /**
    * Which kind of task {@link #taskId} is the id of, as the delivering adapter named it:
-   * <code>TASK</code> for a task the application works off, <code>USER_TASK</code> for a user
-   * task a person works off. The two ids live in namespaces of their own, so this is what lets
-   * VanillaBP say which method asks for the kind of key a caller named. Absent where the
-   * adapter does not say and in a document written before this existed.
+   * <code>TASK</code> for a task the application works off, <code>USER_TASK</code> for a
+   * user task a person works off. The two ids live in namespaces of their own. With this
+   * field, VanillaBP can say which method asks for the kind of key a caller named. Absent
+   * where the adapter does not say, and in a document written before the field existed.
    */
   private String taskKind;
 
   /**
    * What this document is about: a task delivery, or the start of a workflow (the names of
    * {@link io.vanillabp.integration.spi.DeliveryRecordKind}). Every question about open work
-   * demands that it is not a start, because a document without a task would be a phantom task in
-   * each of those answers. Absent in a document written before this existed, which is a task
-   * delivery - which is why those questions ask for "not a start" rather than for "a delivery".
+   * demands that it is not a start. A document without a task would be a phantom task in
+   * each of those answers. The field is absent in a document written before it existed, and
+   * such a document is a task delivery. That is why those questions ask for "not a start"
+   * and not for "a delivery".
    */
   private String recordKind;
 
@@ -129,15 +130,15 @@ public class TaskDeliveryDocument {
   private String processVersion;
 
   /**
-   * What Spring Data starts from when it reads a document of the collection: it builds the
-   * empty record and fills the fields afterwards. A log writing a record uses the
-   * constructor taking every field.
+   * What Spring Data starts from when it reads a document of the collection. It builds the
+   * empty record and fills the fields afterwards. A log which writes a record uses the
+   * constructor which takes every field.
    */
   public TaskDeliveryDocument() {
   }
 
   /**
-   * What a log writing a record uses: every field is known at that moment.
+   * What a log uses to write a record. Every field is known at that moment.
    *
    * @param id The delivery key
    * @param adapterId The adapter id

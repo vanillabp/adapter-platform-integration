@@ -31,11 +31,11 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * The outbox is open to extensions: an operation registered by
- * {@link SampleExtension} is scheduled inside the business transaction, dispatched
- * to the extension's own handler after the commit, deduplicated by the extension's
- * own idempotency key and retried when the handler fails - the same guarantees the
- * core operations get, without any core code knowing the operation.
+ * The outbox is open to extensions. An operation which {@link SampleExtension} registers is
+ * scheduled inside the business transaction. After the commit it is dispatched to the
+ * extension's own handler. It is deduplicated by the extension's own idempotency key, and
+ * it is retried when the handler fails. These are the same guarantees the core operations
+ * get, and no core code knows the operation.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ExtensionOperationDispatchTest {
@@ -43,19 +43,18 @@ public class ExtensionOperationDispatchTest {
   /**
    * How long a test waits before it says that nothing more happened. The application
    * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * set to half a second. So this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A machine which gives this JVM no turn only
+   * makes the wait longer. Afterwards the test asserts a count which did not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .withApplicationRoot(jar -> jar
-          // an own database: the sibling tests of this module count rows of the
-          // outbox store they share within the JVM
+          // a database of its own: the sibling tests of this module count rows of the
+          // outbox store which they share within the JVM
           .addAsResource("extension-operation.yaml", "application.yaml")
           .addClass(Aggregate.class)
           .addClass(AggregatePersistence.class)
@@ -90,8 +89,8 @@ public class ExtensionOperationDispatchTest {
 
   /**
    * What the outbox table holds. The data source of a Quarkus application hands out a
-   * connection of the running JTA transaction, so an entry is read while the transaction
-   * which wrote it is still open.
+   * connection of the running JTA transaction. So an entry can be read while the
+   * transaction which wrote it is still open.
    *
    * @return The reader of the table
    */
@@ -115,8 +114,8 @@ public class ExtensionOperationDispatchTest {
   }
 
   /**
-   * An entry deduplicates as long as it was not dispatched, and the dispatcher marks it
-   * one write after the extension's handler returned.
+   * An entry deduplicates as long as it was not dispatched. The dispatcher marks it one
+   * write after the extension's handler returned.
    *
    * @param aggregateId The aggregate asked about
    * @return How many entries of that aggregate still deduplicate
@@ -134,8 +133,7 @@ public class ExtensionOperationDispatchTest {
 
   /**
    * @param idempotencyKey The key asked about
-   * @return How many entries still carry it, which is what a second schedule of that key
-   *         meets
+   * @return How many entries still carry it. A second schedule of that key meets these
    */
   private long entriesOfKey(
       final String idempotencyKey) {
@@ -155,7 +153,7 @@ public class ExtensionOperationDispatchTest {
    * Starting the workflow writes an entry of its own for the same aggregate. That entry
    * names another BPMN process than the calls of these tests, so it travels in another
    * dispatch lane. The extension's dispatch does not wait for it, and the start entry may
-   * still be waiting while a test counts. Counting it made the count 3 now and then
+   * still wait while a test counts. When it was counted, the count was now and then 3
    * instead of 2.
    *
    * @param aggregateId The aggregate asked about
@@ -191,10 +189,10 @@ public class ExtensionOperationDispatchTest {
   /**
    * Waits until no entry of the extension's operation deduplicates any more.
    * <p>
-   * {@link SampleExtension#awaitDispatched} reports that the handler was called, and
-   * the handler is called INSIDE the dispatch - the entry still carries its key until
-   * the dispatcher marks it DONE. Scheduling the same key in that window is discarded,
-   * so a test which asserts that a repetition IS planned has to wait for the entry.
+   * {@link SampleExtension#awaitDispatched} reports that the handler was called. The
+   * handler is called INSIDE the dispatch, and the entry still carries its key until the
+   * dispatcher marks it DONE. Scheduling the same key in that window is dropped. So a test
+   * which asserts that a repetition IS planned has to wait for the entry.
    */
   private void awaitDeduplicationWindowClosed(
       final Aggregate aggregate) throws Exception {
@@ -240,8 +238,8 @@ public class ExtensionOperationDispatchTest {
   @DisplayName("The younger report replaces the waiting one, and only it is dispatched")
   public void theYoungerReportReplacesTheWaitingOne() throws Exception {
 
-    // both ride ONE transaction on purpose: nothing is dispatched before it commits,
-    // so the second call meets an entry which is certainly still waiting
+    // both are written in ONE transaction on purpose. Nothing is dispatched before it
+    // commits, so the second call meets an entry which surely still waits
     userTransaction.begin();
     final var aggregate = workflowService.startWorkflow("replace-jdbc");
     final var first = SampleExtension
@@ -251,8 +249,8 @@ public class ExtensionOperationDispatchTest {
         .call("test-module", "dummy", aggregate.getId().toString(), "replaced", payloadOf("{\"amount\":2}"));
     assertTrue(outbox.scheduleReplacingWhatIsStillWaiting(second));
 
-    // one entry under that key, and the bytes of the replaced call are gone before
-    // this transaction commits
+    // one entry under that key. The bytes of the replaced call are gone before this
+    // transaction commits
     assertEquals(1L, entriesOfKey(first.idempotencyKey().orElseThrow()));
     assertEquals(0L, payloadsOf(first.payloadReference()));
     assertEquals(1L, payloadsOf(second.payloadReference()));
@@ -326,8 +324,8 @@ public class ExtensionOperationDispatchTest {
                           payloadOf("{\"amount\":2}"))));
       userTransaction.commit();
 
-      // two entries of the operation wait now: the one which is on its way and the one
-      // this call became. The entry which started the workflow is not counted, because it
+      // two entries of the operation wait now: the one which is on its way, and the one
+      // which this call became. The entry which started the workflow is not counted. It
       // may still be on its way in a lane of its own
       assertEquals(
           2L,
@@ -343,7 +341,7 @@ public class ExtensionOperationDispatchTest {
       extension.releaseHeldDispatch();
     }
 
-    // both reach the handler - which of them first is the dispatcher's business
+    // both reach the handler. Which of them comes first is the dispatcher's business
     final var payloads = extension
         .awaitDispatched(2, 10000)
         .stream()
@@ -358,11 +356,11 @@ public class ExtensionOperationDispatchTest {
   @DisplayName("A rolled-back replacement leaves neither entry nor payload behind")
   public void aRolledBackReplacementLeavesNothing() throws Exception {
 
-    // the replaced entry has to be committed for this to be a replacement at all, and
-    // the only moment it is certainly still waiting is before the transaction commits
-    // which wrote it - so both calls ride the transaction which rolls back. What it
-    // proves is that all three writes of a replacement enlist: the entry, the younger
-    // payload, and the removal of the payload which was replaced
+    // strictly, the replaced entry has to be committed for this to be a replacement at all.
+    // But it surely still waits only before the transaction which wrote it commits. So both
+    // calls are part of the transaction which rolls back. The test proves that all three
+    // writes of a replacement join the transaction: the entry, the younger payload, and
+    // the removal of the payload which was replaced
     userTransaction.begin();
     final var aggregate = workflowService.startWorkflow("rollback-jdbc");
     final var first = SampleExtension
@@ -394,8 +392,8 @@ public class ExtensionOperationDispatchTest {
     final var scheduled = SampleExtension
         .call("test-module", "dummy", aggregate.getId().toString(), "created", state);
     outbox.schedule(scheduled);
-    // the bytes ride the very transaction the aggregate rides: they are there already,
-    // and a rollback would take them with it
+    // the bytes are part of the same transaction as the aggregate. They are there
+    // already, and a rollback would take them with it
     assertEquals(1L, payloadsOf(scheduled.payloadReference()));
     userTransaction.commit();
 
@@ -442,12 +440,12 @@ public class ExtensionOperationDispatchTest {
     final var call = dispatched.getFirst();
     assertEquals(SampleExtension.OPERATION_NAME, call.operation());
     assertEquals(aggregate.getId().toString(), call.workflowAggregateId());
-    // the arguments travel with the entry - the store persists them without ever
+    // the arguments travel with the entry. The store saves them without ever
     // interpreting them
     assertEquals("created", call.args().get(SampleExtension.ARG_EVENT));
 
-    // the entry is stored under the extension's operation NAME (the store knows
-    // nothing else about it)
+    // the entry is stored under the NAME of the extension's operation. The store knows
+    // nothing else about it
     assertTrue(entriesOfTheOperation().size() > 0);
 
   }
@@ -456,9 +454,9 @@ public class ExtensionOperationDispatchTest {
   @DisplayName("The extension's own idempotency key deduplicates its planned entries")
   public void extensionOperationIsDeduplicatedByItsOwnKey() throws Exception {
 
-    // same aggregate, same event, and the first entry still waiting for its dispatch:
-    // the key repeats, so scheduling is a no-op. Both ride ONE transaction on purpose -
-    // this half of the test plans AGAINST a pending entry
+    // same aggregate, same event, and the first entry still waits for its dispatch. The
+    // key repeats, so scheduling is a no-op. Both are written in ONE transaction on
+    // purpose, because this half of the test plans AGAINST a pending entry
     userTransaction.begin();
     final var aggregate = workflowService.startWorkflow("extension-dedup");
     outbox
@@ -484,8 +482,8 @@ public class ExtensionOperationDispatchTest {
     assertEquals("completed", dispatched.get(1).args().get(SampleExtension.ARG_EVENT));
 
     // and the very same event again, now that the first one reached the extension AND
-    // its entry was marked DONE: a new operation, because the key deduplicates what is
-    // planned
+    // its entry was marked DONE. It is a new operation, because the key deduplicates only
+    // what is still planned
     awaitDeduplicationWindowClosed(aggregate);
     userTransaction.begin();
     final var scheduledAfterDispatch = outbox
@@ -524,7 +522,7 @@ public class ExtensionOperationDispatchTest {
             SampleExtension.call("test-module", "dummy", attached.getId().toString(), "rolled-back"));
     userTransaction.rollback();
 
-    // the entry rode the rolled-back transaction
+    // the entry was part of the rolled-back transaction
     assertEquals(entriesBefore, entriesOfTheOperation().size());
 
     // wait longer than the poll interval: nothing may ever be dispatched

@@ -24,13 +24,13 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * An application hands the BPMS a decimal and asks for a parameter of no type at all,
- * and it says nothing about either. The boot ends, and the message names the value, its
- * type, the direction it travels and the property line declaring it.
+ * An application hands the BPMS a decimal and asks for a parameter of no type at all, and
+ * it says nothing about either. The boot ends. The message names the value, its type, the
+ * direction it travels and the property line which declares it.
  * <p>
  * {@code DeclaredValuesTest} is the other half: the same application starts once it says
- * that it looked at both. The same behaviour is held for Spring Boot by
- * {@code PortableValuesTest} of the main integration test.
+ * that it looked at both. {@code PortableValuesTest} of the main integration test holds
+ * the same behaviour for Spring Boot.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class UndeclaredValuesTest {
@@ -86,8 +86,8 @@ public class UndeclaredValuesTest {
   }
 
   /**
-   * An aggregate which keeps one attribute back, so the full-sync check is happy and this
-   * test is about the types of the values alone.
+   * An aggregate which keeps one attribute back. So the full-sync check is happy, and this
+   * test is only about the types of the values.
    */
   @Getter
   @Setter

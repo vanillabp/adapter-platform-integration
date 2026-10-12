@@ -19,10 +19,10 @@ import lombok.Setter;
 public class WorkflowModule {
 
   /**
-   * The empty instance the bytecode of the boot starts from. A workflow module is found while
-   * the application is built and reaches the runtime as a recorded object, which is rebuilt
-   * with this constructor and the package-visible setters. The {@link URI} of such an object
-   * travels as a {@link io.vanillabp.integration.runtime.util.UriSubstitute}.
+   * Creates the empty instance which the bytecode of the boot starts from. A workflow module is
+   * found while the application is built. It reaches the runtime as a recorded object. The boot
+   * rebuilds it with this constructor and the package-visible setters. Its {@link URI} travels
+   * as a {@link io.vanillabp.integration.runtime.util.UriSubstitute}.
    */
   WorkflowModule() {
   }
@@ -43,8 +43,8 @@ public class WorkflowModule {
   private URI sourceUri;
 
   /**
-   * Whether it is a global workflow module. Global means one workflow module for the entire application.
-   * Non-global means one Maven/Gradle module for each workflow module.
+   * Whether it is a global workflow module. Global means one workflow module for the whole
+   * application. Non-global means one Maven or Gradle module for each workflow module.
    */
   private boolean global;
 

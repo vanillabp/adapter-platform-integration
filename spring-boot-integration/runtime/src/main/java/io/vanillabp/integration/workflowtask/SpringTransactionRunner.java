@@ -15,12 +15,13 @@ import io.vanillabp.integration.adapter.migration.transaction.AggregateWrite;
 import io.vanillabp.integration.spi.TransactionRunner;
 
 /**
- * The Spring implementation of the core's {@link TransactionRunner} used to run
- * <code>&#64;WorkflowTask</code> handlers: a {@link TransactionTemplate} per form the
- * core asks for, with propagation REQUIRES_NEW, MANDATORY respectively REQUIRED. The
- * {@link PlatformTransactionManager} is resolved lazily - an application without
- * transactional persistence can still boot and gets a guiding message when the
- * first task is processed.
+ * The Spring implementation of the core's {@link TransactionRunner}, which runs
+ * <code>&#64;WorkflowTask</code> handlers. For each form the core asks for, it uses a
+ * {@link TransactionTemplate}: with propagation REQUIRES_NEW for {@code requireNew},
+ * MANDATORY for {@code inCurrent} and REQUIRED for {@code requireTransaction}. The
+ * {@link PlatformTransactionManager} is looked up lazily. So an application without
+ * transactional persistence can still boot. It gets a guiding message when the first
+ * task is processed.
  */
 public class SpringTransactionRunner implements TransactionRunner {
 
@@ -30,8 +31,8 @@ public class SpringTransactionRunner implements TransactionRunner {
 
   /**
    * The platform's own runner, built once by the autoconfiguration. The manager arrives as
-   * a provider because it is asked for at the first task and not while the application
-   * boots: an application with no transactional persistence yet still starts, and the
+   * a provider because it is asked for at the first task, not while the application
+   * boots. An application without transactional persistence still starts, and the
    * startup check tells it what to add.
    *
    * @param transactionManager Asked for the unique <code>PlatformTransactionManager</code>
@@ -45,11 +46,10 @@ public class SpringTransactionRunner implements TransactionRunner {
   }
 
   /**
-   * A runner bound to ONE transaction manager - the shape a mixed-persistence application
-   * needs: with a JPA and a MongoDB manager in the same application no manager
-   * is unique, so the application attributes its aggregates to runners built from the
-   * matching manager through
-   * {@link io.vanillabp.integration.spi.TransactionRunnerAware} beans.
+   * A runner bound to ONE transaction manager. An application with mixed persistence needs
+   * this shape. With a JPA and a MongoDB manager in the same application, no manager is
+   * unique. So the application assigns its aggregates to runners built from the matching
+   * manager, with {@link io.vanillabp.integration.spi.TransactionRunnerAware} beans.
    *
    * @param transactionManager The manager covering the aggregates this runner serves
    */
@@ -85,9 +85,9 @@ public class SpringTransactionRunner implements TransactionRunner {
 
   /**
    * Registers a {@link org.springframework.transaction.support.TransactionSynchronization}
-   * whose <code>beforeCommit</code> runs the check, so a phase-one check of a BPMS
-   * adapter runs as late as this platform allows - a throwing check aborts the commit.
-   * Without transaction synchronization active the check runs immediately.
+   * whose <code>beforeCommit</code> runs the check. So a phase-one check of a BPMS adapter
+   * runs as late as this platform allows. A check which throws aborts the commit. If
+   * transaction synchronization is not active, the check runs at once.
    */
   @Override
   public void beforeCommit(
@@ -116,11 +116,11 @@ public class SpringTransactionRunner implements TransactionRunner {
 
 
   /**
-   * Whether this runner can work at all, which on Spring Boot means a unique
-   * {@link PlatformTransactionManager} exists. Asked by
-   * {@link io.vanillabp.integration.processservice.SpringTransactionRunnerResolver}: a
-   * runner which cannot open a transaction must not be handed out as the platform's
-   * default, the startup check reports the situation with every remedy instead.
+   * Whether this runner can work at all. On Spring Boot, that means a unique
+   * {@link PlatformTransactionManager} exists.
+   * {@link io.vanillabp.integration.processservice.SpringTransactionRunnerResolver} asks
+   * it. A runner which cannot open a transaction must not be handed out as the platform's
+   * default. Instead, the startup check reports the situation with every remedy.
    *
    * @return Whether a unique transaction manager is available
    */
@@ -131,8 +131,8 @@ public class SpringTransactionRunner implements TransactionRunner {
   }
 
   /**
-   * The transaction manager this runner uses, for the startup check naming what it
-   * covers.
+   * The transaction manager this runner uses. The startup check uses it to name what the
+   * runner covers.
    *
    * @return The manager or <code>null</code> if there is none (or several)
    */
@@ -159,13 +159,13 @@ public class SpringTransactionRunner implements TransactionRunner {
   }
 
   /**
-   * Joins the transaction open on this thread and opens one where none is.
+   * Joins the transaction open on this thread, and opens one if there is none.
    * <p>
-   * The outbox of this platform dispatches inside a transaction of its own where it is
-   * gruelbox-based, and the entry is ticked off in that transaction. A second one around
-   * the call would commit what the application wrote while the entry is still open, so a
-   * dispatch failing afterwards would repeat a call whose changes are already in the
-   * database.
+   * Where the outbox of this platform is based on gruelbox, it dispatches inside a
+   * transaction of its own. The entry is ticked off in that transaction. A second
+   * transaction around the call would commit what the application wrote while the entry is
+   * still open. If the dispatch failed after that, it would repeat a call whose changes
+   * are already in the database.
    */
   @Override
   public <T> T requireTransaction(
@@ -187,9 +187,9 @@ public class SpringTransactionRunner implements TransactionRunner {
   public boolean isRollbackOnly() {
 
     final var status = currentStatus.get();
-    // Spring reports the mark for a PARTICIPATING transaction as well, which is the
-    // silent case: the commit of the participating transaction returns normally
-    // while nothing can be committed
+    // Spring also reports the mark for a PARTICIPATING transaction. That is the silent
+    // case: the commit of the participating transaction returns normally, but nothing
+    // can be committed
     return (status != null) && status.isRollbackOnly();
 
   }
@@ -198,11 +198,11 @@ public class SpringTransactionRunner implements TransactionRunner {
   public boolean isConcurrentModification(
       final Throwable failure) {
 
-    // OptimisticLockingFailureException is Spring's translation for every
-    // persistence technology it integrates - JPA (ObjectOptimisticLockingFailure-
-    // Exception) as well as MongoDB. The causes are walked because the conflict
-    // arrives wrapped as often as not: the commit of the transaction template wraps
-    // what the persistence provider threw while flushing.
+    // OptimisticLockingFailureException is Spring's translation for every persistence
+    // technology it integrates: JPA (ObjectOptimisticLockingFailureException) as well as
+    // MongoDB. The causes are walked because the conflict often arrives wrapped. The
+    // commit of the transaction template wraps what the persistence provider threw
+    // while flushing.
     var candidate = failure;
     while (candidate != null) {
       if (candidate instanceof OptimisticLockingFailureException) {
@@ -212,8 +212,8 @@ public class SpringTransactionRunner implements TransactionRunner {
           ? null
           : candidate.getCause();
     }
-    // a provider exception which never passed Spring's translation (e.g. thrown by
-    // an application's own repository code) means the same thing
+    // a provider exception which never passed Spring's translation means the same thing,
+    // e.g. one thrown by an application's own repository code
     return AggregateWrite
         .causedByOptimisticLocking(failure);
 
@@ -245,9 +245,9 @@ public class SpringTransactionRunner implements TransactionRunner {
     final var transactionTemplate = new TransactionTemplate(manager);
     transactionTemplate.setPropagationBehavior(propagation);
     return transactionTemplate.execute(status -> {
-      // the status is the only way to read the rollback-only mark, and it is
-      // available inside the callback only - handlers run on adapter threads, so a
-      // thread local is enough to reach it from the core's check
+      // the status is the only way to read the rollback-only mark, and it is only
+      // available inside the callback. Handlers run on adapter threads, so a thread
+      // local is enough to reach it from the core's check
       final var previous = currentStatus.get();
       currentStatus.set(status);
       try {

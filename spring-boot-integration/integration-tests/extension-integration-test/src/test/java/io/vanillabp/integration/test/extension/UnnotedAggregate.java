@@ -9,8 +9,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * A second workflow aggregate whose workflow service has no method of the extension and
- * whose extension service nobody injects - the proof that both are optional.
+ * A second workflow aggregate. Its workflow service has no method of the extension, and
+ * nobody injects its extension service. It proves that both are optional.
  */
 @Entity
 @Table(name = "UNNOTED_AGGREGATE")

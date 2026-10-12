@@ -8,8 +8,8 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * A store of the application's own which never dispatches, so the test decides when phase
- * two runs and what the BPMS was asked before it.
+ * A store of the application's own which never dispatches. So the test decides when phase
+ * two runs, and what the BPMS was asked before.
  */
 @ApplicationScoped
 public class OrderOutbox implements PhaseTwoOutbox {

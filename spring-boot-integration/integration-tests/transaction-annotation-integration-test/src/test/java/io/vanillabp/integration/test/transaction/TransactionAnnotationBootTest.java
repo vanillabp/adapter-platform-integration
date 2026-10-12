@@ -35,16 +35,16 @@ import io.vanillabp.integration.workflowmodule.WorkflowModules;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test of the startup check: an application whose
- * <code>&#64;WorkflowTask</code> handler carries a transaction annotation must not boot,
- * and the message has to name the class, the method and both remedies without sending
- * the developer to the documentation.
+ * Acceptance test of the startup check. An application must not boot if a
+ * <code>&#64;WorkflowTask</code> handler carries a transaction annotation. The message
+ * names the class, the method and both remedies, so the developer does not need the
+ * documentation.
  * <p>
- * This is a module of its own because the platform scans the whole classpath for
- * {@code @WorkflowService} classes, so {@link TransactionalWorkflowService} fails every
- * boot next to it. The matrix of annotations, propagations and rollback rules is covered
- * by the core's unit tests; the accepted counterpart boots in
- * {@code main-integration-test}.
+ * This is a module of its own. The platform scans the whole classpath for
+ * {@code @WorkflowService} classes, so {@link TransactionalWorkflowService} would fail
+ * every other boot in the same module. The unit tests of the core cover all
+ * combinations of annotations, propagations and rollback rules. The accepted
+ * counterpart boots in {@code main-integration-test}.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TransactionAnnotationBootTest {
@@ -178,8 +178,8 @@ public class TransactionAnnotationBootTest {
           reported.contains("org.springframework.transaction.annotation.Transactional"),
           "the offending annotation is not named: "
               + reported);
-      // the remedy of the OFFENDING annotation: Spring's, not the one of every
-      // annotation Spring Boot happens to honor
+      // the remedy for the OFFENDING annotation, which is Spring's. Not the remedy for
+      // every other annotation Spring Boot also accepts
       Assertions.assertTrue(
           reported.contains("noRollbackFor = TaskException.class"),
           "the remedy is missing: "

@@ -27,24 +27,24 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * An application whose VanillaBP parts were never built together does not start, and the
- * message it stops with is what this test pins: the versions of both sides and the
- * dependency to change. A message which only says that something does not fit leaves the
- * developer with the same search as the <code>NoSuchMethodError</code> the check is there
- * to prevent.
+ * An application whose VanillaBP parts were never built together does not start. This test
+ * pins the message it stops with: the versions of both sides and the dependency to change.
+ * A message which only says that something does not fit is not enough. The developer would
+ * have to search just as long as for the <code>NoSuchMethodError</code> which the check
+ * prevents.
  * <p>
  * The adapter of this test ships
- * <code>src/test/resources/META-INF/vanillabp/adapter-from-the-future.properties</code>,
- * which claims a platform integration nobody has. The other tests of this module are
- * unaffected: a version descriptor says nothing about an adapter which is not there, and
- * this adapter is only a bean in this test.
+ * <code>src/test/resources/META-INF/vanillabp/adapter-from-the-future.properties</code>.
+ * It claims a platform integration which nobody has. The other tests of this module do not
+ * notice. A version descriptor says nothing about an adapter which is not there, and this
+ * adapter is a bean only in this test.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PartsWhichDoNotBelongTogetherTest {
 
   /**
    * An adapter built against a platform integration which does not exist yet. Nothing is
-   * ever asked of it: the boot ends while the parts are counted, which is before the
+   * ever asked of it. The boot ends while the parts are counted, and that is before the
    * deployment pipeline reaches any adapter.
    */
   static class AdapterFromTheFuture implements AdapterDeploymentService<String, String> {

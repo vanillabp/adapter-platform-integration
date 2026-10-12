@@ -19,16 +19,16 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Proves that a Spring Boot repackaged (fat) JAR works: since Spring Boot 3.2 the
- * loader uses the {@code jar:nested:} protocol for classes of nested JARs, so
- * workflow-module matching must not rely on {@code file:}/{@code jar:file:} URLs of
- * the class' protection domain. The test launches the repackaged JAR (built by the
- * spring-boot-maven-plugin during the package phase) as a separate process and
- * asserts:
+ * Proves that a Spring Boot repackaged (fat) JAR works. Since Spring Boot 3.2, the
+ * loader uses the {@code jar:nested:} protocol for classes of nested JARs. So the
+ * matching of workflow modules must not rely on the {@code file:} or {@code jar:file:}
+ * URL of the class' protection domain. The spring-boot-maven-plugin builds the
+ * repackaged JAR in the package phase. The test starts it as a separate process and
+ * checks:
  * <ul>
- *   <li>the application starts (with Spring Boot 3.2+ nested JARs this failed with
- *       a NullPointerException before workflow-module matching was made
- *       loader-agnostic),</li>
+ *   <li>the application starts (with nested JARs of Spring Boot 3.2 and later, this
+ *       failed with a NullPointerException until the matching stopped depending on
+ *       the class loader),</li>
  *   <li>each process service reports the workflow module of the nested JAR its
  *       workflow service was loaded from,</li>
  *   <li>BPMN resources are deployed and workflow processing is started, and</li>
@@ -56,7 +56,7 @@ public class FatJarIT {
 
     final var command = new LinkedList<String>();
     command.add(javaExecutable);
-    // JVM arg needed for tracking coverage. Check pom.xml for <systemPropertyVariables> tag
+    // the JVM argument which records coverage, see <systemPropertyVariables> in pom.xml
     final var jacocoAgent = System.getProperty("jacoco.agent");
     if ((jacocoAgent != null) && !jacocoAgent.isBlank() && !jacocoAgent.startsWith("$")) {
       command.add(jacocoAgent);
@@ -85,7 +85,7 @@ public class FatJarIT {
       });
       outputReader.start();
 
-      // the application shuts down on its own once started (see FatJarTestApplication)
+      // the application shuts down by itself after the start (see FatJarTestApplication)
       final var exited = process.waitFor(3, TimeUnit.MINUTES);
       assertTrue(exited, () -> "Repackaged application did not exit within 3 minutes! Captured output: "
           + capturedOutput(output));

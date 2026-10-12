@@ -22,12 +22,12 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Deployment-failure policy on Quarkus, <code>warn</code> case (identical to Spring
- * Boot): a NON-first-priority adapter configured with
- * <code>vanillabp.adapters.&lt;id&gt;.deployment-failure: warn</code> whose
- * deployment fails does not prevent the boot - the failure is logged as a guiding
- * WARN and the adapter's workflow processing is not started, while the
- * first-priority adapter deploys and starts normally.
+ * Deployment-failure policy on Quarkus, case <code>warn</code>, the same as on Spring Boot.
+ * An adapter which is NOT first priority is configured with
+ * <code>vanillabp.adapters.&lt;id&gt;.deployment-failure: warn</code>. If its deployment
+ * fails, the boot goes on. The failure is logged as a guiding WARN, and the adapter's
+ * workflow processing does not start. The first-priority adapter deploys and starts
+ * normally.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DeploymentFailureWarnTest {
@@ -74,11 +74,11 @@ public class DeploymentFailureWarnTest {
     assertTrue(recorded.contains("adapter:demo1:deployResources:test-module"), recorded.toString());
     assertTrue(recorded.contains("adapter:demo1:startWorkflowProcessing:test-module"), recorded.toString());
 
-    // the failing adapter's pipeline ran (deployResources itself may be missing
-    // from the recording: the CDI listener order between the recording and the
-    // failure-injecting listener is undefined, so the failure may strike before
-    // the call was recorded - the WARN assertion above proves the deployment
-    // attempt) but its processing never started
+    // the failing adapter's pipeline ran, but its processing never started.
+    // deployResources itself may be missing from the recording. The CDI order of the
+    // recording listener and the listener which injects the failure is undefined. So
+    // the failure may strike before the call was recorded. The WARN assertion above
+    // proves that the deployment was attempted
     assertTrue(recorded.contains("adapter:demo2:readBpmn:test-module:first.bpmn"), recorded.toString());
     assertEquals(
         List.of(),

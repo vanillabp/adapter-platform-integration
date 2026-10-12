@@ -18,9 +18,9 @@ import io.vanillabp.integration.test.deployment.VersionedWorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The model a start deploys gets a version from the BPMS, and the start ends where no
+ * The model which a start deploys gets a version from the BPMS. The start ends if no
  * <code>&#64;WorkflowTask</code> method covers that version for a task of the model. The
- * "BPMS" here gave the model version 5, which none of the three methods serves.
+ * "BPMS" here gave the model version 5, and none of the three methods serves it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheDeployedVersionNeedsAMethodTest {

@@ -17,14 +17,14 @@ import io.vanillabp.integration.extension.spi.service.AggregateServiceFactory;
 import io.vanillabp.integration.runtime.processservice.ExtensionServiceRecorder;
 
 /**
- * Gives an extension the same per-aggregate bean VanillaBP gives itself: an application
- * injecting <code>TheService&lt;TheAggregate&gt;</code> gets what the extension's
- * {@link AggregateServiceFactory} builds for that aggregate.
+ * Gives an extension a bean for each aggregate, the same way VanillaBP gives one to itself.
+ * An application which injects <code>TheService&lt;TheAggregate&gt;</code> gets what the
+ * extension's {@link AggregateServiceFactory} builds for that aggregate.
  * <p>
- * One synthetic bean per (service interface, workflow aggregate) is registered, typed
- * with the aggregate as its type argument so the injection point resolves. The beans are
- * created on first use, which is what makes injecting them optional - unlike
- * {@code ProcessService}, nothing here demands the injection point.
+ * One synthetic bean is registered for each pair of service interface and workflow
+ * aggregate. Its type argument is the aggregate, so the injection point resolves. The beans
+ * are created on first use. So injecting them is optional. Unlike {@code ProcessService},
+ * nothing here requires the injection point.
  */
 public class ExtensionServiceBuildStepProcessor {
 
@@ -36,9 +36,9 @@ public class ExtensionServiceBuildStepProcessor {
   }
 
   /**
-   * Keeps the extensions' factories alive. Nothing of the application injects them - the
-   * platform looks them up while it builds a service - and ArC removes beans nobody
-   * injects, the same shape as the wiring services of the deployment pipeline.
+   * Keeps the extensions' factories alive. The application does not inject them. The
+   * platform looks them up while it builds a service. ArC removes beans nobody injects. The
+   * wiring services of the deployment pipeline are the same case.
    *
    * @return What must not be removed
    */
@@ -50,10 +50,10 @@ public class ExtensionServiceBuildStepProcessor {
   }
 
   /**
-   * Registers one bean per service interface and workflow aggregate. Which pairs there are
-   * is decided here because Quarkus fixes the set of beans while it builds the application:
-   * an injection point asking for the extension's service with an aggregate as its type
-   * argument finds a bean only where this step wrote one (see decision 35 in the
+   * Registers one bean for each service interface and workflow aggregate. The pairs are
+   * decided here, because Quarkus fixes the set of beans while it builds the application.
+   * An injection point may ask for the extension's service with an aggregate as its type
+   * argument. It only finds a bean where this step wrote one (see decision 35 in the
    * repository's DECISIONS.md).
    *
    * @param combinedIndex The index, asked which classes implement
@@ -99,8 +99,8 @@ public class ExtensionServiceBuildStepProcessor {
   }
 
   /**
-   * The service interfaces the extensions of this application offer, read off the
-   * {@link AggregateServiceFactory} implementations in the index.
+   * The service interfaces which the extensions of this application offer. They are read
+   * from the {@link AggregateServiceFactory} implementations in the index.
    *
    * @param combinedIndex The index
    * @return The interfaces, each of them once

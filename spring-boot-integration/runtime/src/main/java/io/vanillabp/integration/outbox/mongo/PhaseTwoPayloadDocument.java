@@ -6,10 +6,10 @@ import org.springframework.data.annotation.Id;
 
 /**
  * The payload of one phase-two call in the MongoDB-based outbox. The reference IS the
- * document's id, so the lookup at dispatch time is a read by primary key.
+ * document's id. So the lookup at dispatch time is a read by primary key.
  * <p>
- * The bytes are a field of this document and not a file in GridFS, which bounds a
- * payload at what MongoDB holds in one document, 16 MB. VanillaBP bounds it far below
+ * The bytes are a field of this document and not a file in GridFS. So a payload is
+ * bounded by what MongoDB holds in one document, 16 MB. VanillaBP bounds it far below
  * that ({@link io.vanillabp.integration.spi.PhaseTwoCall#MAX_PAYLOAD_SIZE}).
  */
 public class PhaseTwoPayloadDocument {
@@ -31,7 +31,7 @@ public class PhaseTwoPayloadDocument {
   private String bpmnProcessId;
 
   /**
-   * The name of the operation the payload belongs to - for whoever reads the
+   * The name of the operation the payload belongs to. It helps whoever reads the
    * collection during support.
    */
   private String operation;
@@ -42,21 +42,21 @@ public class PhaseTwoPayloadDocument {
   private byte[] payload;
 
   /**
-   * When the payload was written. The housekeeping deletes by it, which is how a
-   * document whose entry never came into being disappears again.
+   * When the payload was written. The housekeeping deletes by it. That way a document
+   * whose entry never came into being disappears again.
    */
   private Instant createdAt;
 
   /**
-   * What Spring Data starts from when it reads a payload document: it builds the empty
-   * document and fills the fields afterwards. The store writing a payload uses the
-   * constructor taking every field.
+   * What Spring Data starts from when it reads a payload document. It builds the empty
+   * document and fills the fields afterwards. The store which writes a payload uses the
+   * constructor which takes every field.
    */
   public PhaseTwoPayloadDocument() {
   }
 
   /**
-   * What the store writing a payload uses: every field is known at that moment.
+   * What the store uses to write a payload. Every field is known at that moment.
    *
    * @param id The reference the outbox entry names this payload by
    * @param workflowModuleId The workflow module the call belongs to

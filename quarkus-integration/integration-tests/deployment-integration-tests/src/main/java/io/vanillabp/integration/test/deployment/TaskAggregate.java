@@ -26,7 +26,7 @@ public class TaskAggregate {
 
   private int total;
 
-  // the test reads this, no BPMN model does - so it stays out of the BPMS
+  // the test reads this field, but no BPMN model does, so it stays out of the BPMS
 
   @NoSyncWithBPMS
 

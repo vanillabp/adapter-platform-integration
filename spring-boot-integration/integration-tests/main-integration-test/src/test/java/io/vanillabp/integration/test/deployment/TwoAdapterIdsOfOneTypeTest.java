@@ -30,12 +30,15 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test of the per-adapter-id bean convention (the adapter config model) - the
- * structural foundation of the migration scenario: TWO adapter ids of ONE
- * type boot together, the adapter registers one {@code MigratableProcessService} and
- * one {@code AdapterDeploymentService} element bean PER configured id, BOTH
- * deployment services receive {@code deployResources}, and a workflow module
- * prioritizing one id starts its workflows there only.
+ * Acceptance test of the rule "one bean per adapter id" from the adapter configuration
+ * model. The migration scenario is built on it. The test checks four things:
+ * <ul>
+ * <li>TWO adapter ids of ONE type boot together.</li>
+ * <li>The adapter registers one {@code MigratableProcessService} and one
+ * {@code AdapterDeploymentService} element bean PER configured id.</li>
+ * <li>BOTH deployment services receive {@code deployResources}.</li>
+ * <li>A workflow module which prioritizes one id starts its workflows there only.</li>
+ * </ul>
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TwoAdapterIdsOfOneTypeTest {
@@ -142,10 +145,10 @@ public class TwoAdapterIdsOfOneTypeTest {
 
       // BOTH deployment services received deployResources
       //
-      // Everything read below is the output of the running test alone. The absent
-      // sentence is one any boot of this module could print, this class holds a single
-      // test today, and the narrow view is what keeps the assertion true on the day a
-      // second test boots here.
+      // Everything read below is the output of the running test alone. The sentence
+      // which must be absent could come from any boot of this module. This class has a
+      // single test today. The narrow view keeps the assertion true on the day a second
+      // test boots here.
       final var capturedOutput = output.getAllOfThisTest();
       Assertions.assertTrue(
           capturedOutput.contains("Dummy-Adapter[test]: Deploying resources for test-module"),
@@ -156,8 +159,8 @@ public class TwoAdapterIdsOfOneTypeTest {
           "expected deployment of id 'test2' but got: "
               + capturedOutput);
 
-      // the module prioritizes id 'test2' - a started workflow runs phase one
-      // there and NEVER touches id 'test'
+      // the module prioritizes id 'test2'. A started workflow runs phase one there
+      // and NEVER touches id 'test'
       @SuppressWarnings("unchecked")
       final ProcessService<Aggregate> processService = (ProcessService<Aggregate>) context
           .getBeanProvider(ResolvableType

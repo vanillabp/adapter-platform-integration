@@ -8,50 +8,49 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 
 /**
  * The dummy adapter's OVERLAY of the shared <code>vanillabp.*</code> configuration
- * tree - the reference implementation of the pattern every VanillaBP adapter uses on
- * Spring Boot to contribute its own keys (e.g. connection settings) to the canonical
- * per-adapter location <code>vanillabp.adapters.&lt;id&gt;.*</code>: a second
- * {@code @ConfigurationProperties("vanillabp")} class coexists with the platform's
- * binding of the core model (same-prefix classes bind side by side; keys unknown to
- * either view are ignored by the JavaBean binding).
+ * tree. It is the reference for the pattern every VanillaBP adapter uses on Spring Boot
+ * to add its own keys (for example connection settings) at the usual place of each
+ * adapter, <code>vanillabp.adapters.&lt;id&gt;.*</code>. A second
+ * {@code @ConfigurationProperties("vanillabp")} class lives next to the platform's
+ * binding of the core model. Classes with the same prefix bind side by side. The
+ * JavaBean binding ignores keys which one of the two views does not know.
  * <p>
- * The adapter-id set is NEVER derived from this overlay map - it always comes from
- * the platform's core properties ({@code MigrationAdapterProperties.adapterTypes()});
- * the overlay is a per-known-id lookup only (environment-variable overrides can
- * materialize phantom map entries in the overlay).
+ * The set of adapter ids NEVER comes from this overlay map. It always comes from the
+ * platform's core properties ({@code MigrationAdapterProperties.adapterTypes()}). The
+ * overlay is only looked up by ids already known. The reason: environment variables can
+ * create map entries in the overlay which belong to no adapter.
  */
 @ConfigurationProperties(MigrationAdapterProperties.PREFIX)
 public class DummyAdapterOverlayProperties {
 
   /**
-   * The adapter sections of the shared tree, keyed by adapter ID - only the dummy
+   * The adapter sections of the shared tree, keyed by adapter ID. Only the dummy
    * adapter's own keys are modeled here.
    */
   private Map<String, DummyAdapterConfig> adapters = Map.of();
 
   /**
-   * The workflow-module sections of the shared tree, keyed by workflow module ID -
-   * the overlay mirrors the levels of the most-specific-wins resolution of
-   * adapter-scoped properties (task &gt; workflow &gt; workflow-module &gt;
-   * adapter), so scope-specific adapter keys (like a per-task job timeout of a real
-   * BPMS) resolve from real application configuration.
+   * The workflow-module sections of the shared tree, keyed by workflow module ID. The
+   * overlay has the same levels as the core, where the most specific value of an adapter
+   * property wins (task &gt; workflow &gt; workflow-module &gt; adapter). So adapter keys
+   * set for one level, like the job timeout of one task in a real BPMS, are read from
+   * real application configuration.
    */
   private Map<String, ModuleOverlay> workflowModules = Map.of();
 
   /**
-   * Spring's configuration binder creates the empty overlay and fills the two maps
-   * above through their setters. A test never builds one: it writes the keys into the
+   * Spring's configuration binder creates the empty overlay and fills the two maps above
+   * through their setters. A test never builds one. It writes the keys into the
    * application configuration and asks the container for this bean.
    */
   public DummyAdapterOverlayProperties() {
   }
 
   /**
-   * Resolves the dummy adapter's <code>test</code> key with most-specific-wins
-   * semantics across the four levels - the reference implementation of how a real
-   * adapter resolves its scope-specific keys from its overlay (the core's
-   * <code>resolveForAdapter</code> covers the core-owned keys; overlay keys are
-   * walked by the adapter itself, same order).
+   * Resolves the dummy adapter's <code>test</code> key over the four levels. The most
+   * specific value wins. This is the reference for how a real adapter resolves its own
+   * keys per level from its overlay. The core's <code>resolveForAdapter</code> covers the
+   * keys the core owns. The adapter walks its overlay keys itself, in the same order.
    *
    * @param workflowModuleId The workflow module ID or <code>null</code>
    * @param bpmnProcessId The BPMN process ID or <code>null</code>
@@ -150,9 +149,9 @@ public class DummyAdapterOverlayProperties {
   public static class DummyAdapterConfig {
 
     /**
-     * A test value used by the platform integration's tests to prove that
-     * adapter-specific keys inside the shared tree are tolerated and reach the
-     * adapter's overlay typed.
+     * A test value. The platform integration's tests use it to prove two things: keys of
+     * an adapter inside the shared tree are accepted, and they reach the adapter's
+     * overlay with their type.
      */
     private Integer test;
 
@@ -331,7 +330,7 @@ public class DummyAdapterOverlayProperties {
   }
 
   /**
-   * The dummy adapter's view of one task section - the MOST specific level.
+   * The dummy adapter's view of one task section. This is the MOST specific level.
    */
   public static class TaskOverlay {
 

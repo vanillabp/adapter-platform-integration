@@ -20,8 +20,8 @@ public class AppTxWorkflowService {
   AppTxTransactionRunner runner;
 
   /**
-   * Starts a workflow inside the unit of work of the application, which is what an
-   * application without JTA-managed persistence does instead of &#64;Transactional.
+   * Starts a workflow inside the unit of work of the application. An application whose
+   * persistence is not managed by JTA does this instead of &#64;Transactional.
    *
    * @param id The aggregate's ID
    * @return The attached aggregate
@@ -39,7 +39,7 @@ public class AppTxWorkflowService {
   }
 
   /**
-   * Starts a workflow WITHOUT opening the application's unit of work - VanillaBP has to
+   * Starts a workflow WITHOUT opening the application's unit of work. VanillaBP has to
    * refuse that, because the aggregate would be written outside of it.
    *
    * @param id The aggregate's ID

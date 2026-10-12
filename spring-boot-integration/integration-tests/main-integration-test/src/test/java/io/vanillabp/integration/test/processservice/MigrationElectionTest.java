@@ -35,19 +35,21 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * THE migration scenario: instances were started while adapter
- * 'old-bpms' was first priority; the configuration was then flipped ('new-bpms'
- * promoted, 'old-bpms' demoted). Operations on OLD instances still route to
- * 'old-bpms' (the probing election finds the workflow there), NEW workflows start
- * in 'new-bpms' - and the second operation on the same workflow skips the walk via
- * the election cache. Also proves the cache-override SPI: an application-provided
- * {@link WorkflowAdapterCache} bean replaces the in-memory default.
+ * THE migration scenario. Instances were started while adapter 'old-bpms' had the first
+ * priority. Then the configuration was flipped: 'new-bpms' moved up, 'old-bpms' moved down.
+ * Operations on OLD instances still go to 'old-bpms', because the election asks each adapter
+ * and finds the workflow there. NEW workflows start in 'new-bpms'. The second operation on the
+ * same workflow does not ask the adapters again, because the election cache remembers the
+ * answer.
+ * <p>
+ * The test also proves the SPI for replacing the cache: a {@link WorkflowAdapterCache} bean of
+ * the application replaces the in-memory default.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MigrationElectionTest {
 
-  // test-specific task IDs: the captured output may contain lines of sibling
-  // tests emitted by background threads - counting must not cross tests
+  // Each test uses its own task IDs. Background threads may write lines of other tests into
+  // the captured output, and the counts must not include them.
   private static final String OLD_INSTANCE_TASK_PHASE_ONE = "Dummy-Adapter[old-bpms]: Completing task 'task-mig' (phase one)";
 
   private static final String NEW_START_PHASE_ONE = "Dummy-Adapter[new-bpms]: Starting workflow (phase one)";
@@ -89,8 +91,8 @@ public class MigrationElectionTest {
   }
 
   /**
-   * The BPMS double's awareness: the workflow of aggregate '4711' lives in
-   * 'old-bpms' (started before the priority flip); 'new-bpms' does not know it.
+   * What the BPMS double knows: the workflow of aggregate '4711' lives in 'old-bpms'. It was
+   * started before the priorities were flipped. 'new-bpms' does not know it.
    */
   @Configuration
   static class OldInstanceAwarenessConfiguration {
@@ -110,8 +112,8 @@ public class MigrationElectionTest {
   }
 
   /**
-   * An application-provided election cache (the cluster-shared-cache SPI): records
-   * every access so the test can assert it replaced the in-memory default.
+   * An election cache which the application provides, as a cache shared in a cluster would.
+   * It records every access. So the test can check that it replaced the in-memory default.
    */
   static class RecordingWorkflowAdapterCache implements WorkflowAdapterCache {
 
@@ -174,8 +176,8 @@ public class MigrationElectionTest {
   }
 
   /**
-   * The flipped configuration: 'new-bpms' is first priority NOW; instances of
-   * '4711' were started while 'old-bpms' was first.
+   * The flipped configuration: 'new-bpms' has the first priority NOW. The instances of '4711'
+   * were started while 'old-bpms' was first.
    */
   private static final String APPLICATION_YAML = """
       vanillabp:
@@ -224,8 +226,8 @@ public class MigrationElectionTest {
   private static void inFakeTransaction(
       final Runnable operation) {
 
-    // the dummy adapter completes tasks entirely in phase one (no two-phase
-    // commit) - the process-service bean only requires an ACTIVE transaction
+    // The dummy adapter completes a task completely in phase one, without a two-phase commit.
+    // The process-service bean only needs an ACTIVE transaction.
     TransactionSynchronizationManager.setActualTransactionActive(true);
     try {
       operation.run();
@@ -254,15 +256,15 @@ public class MigrationElectionTest {
 
       final var processService = processServiceOf(context);
 
-      // operation on the OLD instance: the probing election routes it to
-      // 'old-bpms' although 'new-bpms' is first priority now
+      // An operation on the OLD instance. The election asks the adapters and sends it to
+      // 'old-bpms', although 'new-bpms' has the first priority now.
       final var oldAggregate = new Aggregate();
       inFakeTransaction(() -> processService.completeTask(oldAggregate, "task-mig"));
 
-      // Everything read below is the output of the running test alone. Both absent
-      // sentences name an adapter id which the neighbour test configures as well, so a
-      // sentence sharp enough to rule the neighbour out would have to spell out the
-      // whole line. The counts read the same view, for the same reason.
+      // Everything read below is the output of this test alone. The sentences which must be
+      // absent name an adapter id which the neighbour test configures as well. A sentence
+      // which rules out the neighbour would have to spell out the whole line. The counts read
+      // the same view, for the same reason.
       final var afterOldOperation = output.getAllOfThisTest();
       Assertions.assertTrue(
           afterOldOperation.contains(OLD_INSTANCE_TASK_PHASE_ONE),
@@ -273,8 +275,8 @@ public class MigrationElectionTest {
           "the task must never be completed on 'new-bpms' but got: "
               + afterOldOperation);
 
-      // the election probed 'new-bpms' first (it is first priority) - count the
-      // probes to prove the SECOND operation skips the walk via the cache
+      // The election asked 'new-bpms' first, because it has the first priority. Count these
+      // questions to prove that the SECOND operation takes the answer from the cache.
       final var newBpmsProbes = countOccurrences(
           output.getAllOfThisTest(), "Dummy-Adapter[new-bpms]: Checking awareness of task 'task-mig'");
 
@@ -294,7 +296,7 @@ public class MigrationElectionTest {
                   .filter(line -> line.contains("Dummy-Adapter"))
                   .collect(java.util.stream.Collectors.joining("\n")));
 
-      // NEW workflows start in the CURRENT first-priority adapter
+      // NEW workflows start in the adapter which has the first priority NOW
       processService.startWorkflow(new Aggregate());
 
       final var afterStart = output.getAllOfThisTest();
@@ -334,7 +336,7 @@ public class MigrationElectionTest {
 
       inFakeTransaction(() -> processService.completeTask(new Aggregate(), "task-cache"));
 
-      // the election consulted AND populated the application's cache
+      // the election read the application's cache AND wrote to it
       Assertions.assertFalse(cache.gets.isEmpty(), "the election must consult the application's cache");
       Assertions.assertEquals(1, cache.puts.size(), "one successful election, one put");
       Assertions.assertTrue(

@@ -27,14 +27,14 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * The class inheriting <code>&#64;WorkflowService</code> serves the BPMN process named after
- * ITSELF, and the handlers of that process are the ones it writes plus the ones it inherits.
- * The BPMN file is named after the subclass, which is what the developer would draw after
- * reading their own class, and both tasks of it run through the core.
+ * The class which inherits <code>&#64;WorkflowService</code> serves the BPMN process named
+ * after ITSELF. The handlers of that process are the ones it writes plus the ones it
+ * inherits. The BPMN file is named after the subclass. A developer who reads their own class
+ * would draw exactly that. Both tasks of the file run through the core.
  * <p>
- * Quarkus used to register the superclass here: the file would have belonged to no workflow
- * service, and the handler written in the subclass would have been invisible, because the core
- * scans the class it was handed.
+ * Quarkus used to register the superclass here. Then the file would have belonged to no
+ * workflow service. And the handler written in the subclass would have been invisible,
+ * because the core scans the class it was handed.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class InheritedWorkflowServiceHandlersTest {

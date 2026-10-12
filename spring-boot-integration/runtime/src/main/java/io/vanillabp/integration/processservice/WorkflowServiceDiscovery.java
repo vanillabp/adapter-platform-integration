@@ -34,21 +34,21 @@ import lombok.extern.slf4j.Slf4j;
  * {@link io.vanillabp.spi.process.ProcessService} bean per workflow aggregate.
  * <p>
  * A workflow service is found because it is a Spring bean, not because of where its
- * class sits on the classpath: the handler object of a task delivery is resolved through
- * the bean factory anyway (see
- * {@link io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry}),
- * so a class annotated by {@link WorkflowService} which is no bean could not serve a
- * task even if it was found - and only the bean definitions know which services the
- * active profile brought into THIS run. The alternatives which were measured and
- * rejected are in decision 21 in the repository's DECISIONS.md.
+ * class sits on the classpath. The handler object of a task delivery is looked up in the
+ * bean factory anyway (see
+ * {@link io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry}).
+ * So a class annotated by {@link WorkflowService} which is no bean could not serve a task,
+ * even if it was found. And only the bean definitions know which services the active
+ * profile brought into THIS run. The alternatives which were measured and rejected are in
+ * decision 21 in the repository's DECISIONS.md.
  * <p>
- * This runs as a {@link BeanDefinitionRegistryPostProcessor} rather than as an imported
- * {@link org.springframework.beans.factory.BeanRegistrar}, because an imported registrar
- * runs WHILE the configuration classes are processed: it would see the definitions of the
- * configuration classes read so far and miss everything a later one contributes - a
- * library's auto-configuration registering its workflow services, for instance. Ordered
- * last, so every {@code ConfigurationClassPostProcessor} and every other ordered
- * post-processor has registered what it brings.
+ * This runs as a {@link BeanDefinitionRegistryPostProcessor}, not as an imported
+ * {@link org.springframework.beans.factory.BeanRegistrar}. An imported registrar runs
+ * WHILE the configuration classes are processed. It would see the definitions of the
+ * configuration classes read so far. It would miss everything a later one contributes,
+ * for instance a library's auto-configuration which registers its workflow services. It
+ * is ordered last, so every {@code ConfigurationClassPostProcessor} and every other
+ * ordered post-processor has registered what it brings.
  */
 @Slf4j
 public class WorkflowServiceDiscovery implements BeanDefinitionRegistryPostProcessor, BeanFactoryAware, EnvironmentAware, Ordered {
@@ -58,10 +58,10 @@ public class WorkflowServiceDiscovery implements BeanDefinitionRegistryPostProce
   private Environment environment;
 
   /**
-   * Built by a bean method of {@link SpringBootMigrationAdapterAutoConfiguration}, which
-   * is static so this post-processor can be created without creating that configuration
-   * class first. Nothing is handed in: the bean factory and the environment arrive through
-   * the two setters Spring calls afterwards.
+   * Built by a bean method of {@link SpringBootMigrationAdapterAutoConfiguration}. That
+   * method is static, so this post-processor can be created without creating that
+   * configuration class first. Nothing is handed in. The bean factory and the environment
+   * arrive through the two setters Spring calls afterwards.
    */
   public WorkflowServiceDiscovery() {
 
@@ -103,9 +103,9 @@ public class WorkflowServiceDiscovery implements BeanDefinitionRegistryPostProce
 
     final var aggregateServiceInterfaces = aggregateServiceInterfacesOf(registry);
 
-    // the adapter turns the BeanRegistry API - the generics-aware bean type and the
-    // lazy supplier the registrar builds its definitions with - into definitions of
-    // this registry
+    // the adapter turns the BeanRegistry API into definitions of this registry. The
+    // registrar builds its definitions with that API: the bean type which knows generics,
+    // and the lazy supplier
     new BeanRegistryAdapter(
         registry, beanFactory, environment, ProcessServiceBeanRegistrar.class)
         .register(new ProcessServiceBeanRegistrar(workflowServiceClasses, aggregateServiceInterfaces));
@@ -113,10 +113,10 @@ public class WorkflowServiceDiscovery implements BeanDefinitionRegistryPostProce
   }
 
   /**
-   * The service interfaces the extensions of this application offer per workflow
-   * aggregate, read off their {@code AggregateServiceFactory} beans. Like the workflow
-   * services they are found because they are beans, and their classes are read without
-   * creating anything.
+   * The service interfaces which the extensions of this application offer per workflow
+   * aggregate. They are read from their {@code AggregateServiceFactory} beans. Like the
+   * workflow services, they are found because they are beans. Their classes are read
+   * without creating anything.
    *
    * @param registry The bean definitions of the application
    * @return The service interfaces, each of them once
@@ -167,42 +167,42 @@ public class WorkflowServiceDiscovery implements BeanDefinitionRegistryPostProce
   }
 
   /**
-   * All classes annotated by {@link WorkflowService} the application registered a bean
-   * of.
+   * All classes annotated by {@link WorkflowService} of which the application registered a
+   * bean.
    *
    * @param registry The bean definitions of the application
-   * @return The workflow service classes, each of them once no matter how many beans of
-   *     it exist (which bean serves a task is decided when the task is delivered, by
-   *     asking the bean factory for the one bean of that class)
+   * @return The workflow service classes, each of them once, no matter how many beans of
+   *     it exist. Which bean serves a task is decided when the task is delivered: the bean
+   *     factory is asked for the one bean of that class
    * @throws IllegalStateException If the annotation was found on a type which cannot
-   *     serve tasks - an interface the bean's class implements, or an annotation of the
-   *     application's own. This is the only place which knows both that the annotation
-   *     was found and that the class itself does not carry it; everything downstream
-   *     reads it off the class alone.
+   *     serve tasks: an interface the bean's class implements, or an annotation of the
+   *     application's own. Only this place knows both that the annotation was found and
+   *     that the class itself does not carry it. Everything later reads it from the class
+   *     alone.
    */
   private List<Class<?>> workflowServiceClassesOf(
       final BeanDefinitionRegistry registry) {
 
     final var workflowServiceClasses = new LinkedHashSet<Class<?>>();
     // the types which declared an annotation the bean's class does not carry, each with
-    // the classes which brought it in: all of them are reported in one message, so a
-    // developer does not learn about the second one on the next start
+    // the classes which brought it in. All of them are reported in one message. So a
+    // developer does not learn about the second one only on the next start
     final var declaredElsewhere = new LinkedHashMap<Class<?>, List<Class<?>>>();
     for (final var beanName : registry.getBeanDefinitionNames()) {
       final var beanClass = beanClassOf(beanName);
       if (beanClass == null) {
         continue;
       }
-      // findAnnotation walks the superclass chain, so a subclass of an annotated class
-      // is a workflow service as well - which is what @Inherited promises the developer,
-      // and the class registered is the SUBCLASS (see decision 32 in the repository's
+      // findAnnotation walks the superclass chain. So a subclass of an annotated class is
+      // a workflow service as well. That is what @Inherited promises the developer, and
+      // the class registered is the SUBCLASS (see decision 32 in the repository's
       // DECISIONS.md)
       if (AnnotationUtils.findAnnotation(beanClass, WorkflowService.class) == null) {
         continue;
       }
-      // it walks further than @Inherited does, though: into implemented interfaces and
-      // into annotations of the application's own. Such a class passes as a workflow
-      // service here and carries nothing the registry and the task scanner can read
+      // but it walks further than @Inherited does: into implemented interfaces, and into
+      // annotations of the application's own. Such a class passes as a workflow service
+      // here, but it carries nothing the registry and the task scanner can read
       if (beanClass.getAnnotation(WorkflowService.class) == null) {
         final var declaringType = typeDeclaringTheAnnotation(beanClass);
         if (declaringType != null) {
@@ -211,8 +211,8 @@ public class WorkflowServiceDiscovery implements BeanDefinitionRegistryPostProce
               .add(beanClass);
           continue;
         }
-        // found somewhere this search does not reach: less than the refusal says, but
-        // the registrar names the class it fails on
+        // found somewhere this search does not reach. That says less than the refusal
+        // would, but the registrar names the class it fails on
       }
       workflowServiceClasses.add(beanClass);
     }
@@ -224,11 +224,11 @@ public class WorkflowServiceDiscovery implements BeanDefinitionRegistryPostProce
   }
 
   /**
-   * The service interface one factory offers, read where the generic type actually is: a
-   * factory class implementing {@code AggregateServiceFactory<TheService>} carries it,
-   * while a {@code @Bean} method declaring the raw interface as its return type carries
-   * it only in the method's signature - which the bean DEFINITION knows and the bean's
-   * class does not.
+   * The service interface one factory offers, read where the generic type really is. A
+   * factory class which implements {@code AggregateServiceFactory<TheService>} carries it.
+   * A {@code @Bean} method which declares the raw interface as its return type carries it
+   * only in the method's signature. The bean DEFINITION knows that signature, and the
+   * bean's class does not.
    *
    * @param beanName The name of the factory's bean definition
    * @param beanClass The class of that bean
@@ -255,11 +255,12 @@ public class WorkflowServiceDiscovery implements BeanDefinitionRegistryPostProce
   }
 
   /**
-   * The type which carries the annotation a bean's class does not carry itself, searched
-   * the way {@link AnnotationUtils#findAnnotation} searches: breadth first over the
-   * implemented interfaces, the annotations present (an annotation of the application
-   * composing {@link WorkflowService} among them) and the superclass, stopping at the
-   * first type which DECLARES the annotation.
+   * The type which carries the annotation that a bean's class does not carry itself. It is
+   * searched the way {@link AnnotationUtils#findAnnotation} searches: breadth first over
+   * the implemented interfaces, the annotations present and the superclass. The
+   * annotations present include an annotation of the application which composes
+   * {@link WorkflowService}. The search stops at the first type which DECLARES the
+   * annotation.
    *
    * @param beanClass The class of the bean
    * @return The interface or annotation to name in the message, or <code>null</code>
@@ -296,8 +297,8 @@ public class WorkflowServiceDiscovery implements BeanDefinitionRegistryPostProce
    * The message ending the start, one paragraph per type which declared the annotation.
    *
    * @param declaredElsewhere The declaring types with the classes which brought them in
-   * @return The message, whose wording is the core's - Quarkus refuses the same two
-   *     shapes while an application is built and says the same thing
+   * @return The message. Its wording is the core's. Quarkus refuses the same two shapes
+   *     while an application is built, and it says the same thing
    */
   private static String refusalOf(
       final Map<Class<?>, List<Class<?>>> declaredElsewhere) {
@@ -323,15 +324,15 @@ public class WorkflowServiceDiscovery implements BeanDefinitionRegistryPostProce
   }
 
   /**
-   * The class of a bean, determined without creating it: the declared class of an
-   * annotated component, the return type of an {@code @Bean} method, and for a bean
-   * behind a proxy the class the application wrote.
+   * The class of a bean, found without creating it: the declared class of an annotated
+   * component, the return type of an {@code @Bean} method, and for a bean behind a proxy
+   * the class the application wrote.
    *
    * @param beanName The name of the bean definition
-   * @return The class or {@code null} where it cannot be determined - a factory bean
-   *     which would have to be created to answer, or a class an optional dependency
-   *     left behind. Neither can be the workflow service of this run: a class which
-   *     cannot be loaded cannot handle a task either.
+   * @return The class, or {@code null} where it cannot be found: a factory bean which
+   *     would have to be created to answer, or a class which an optional dependency left
+   *     behind. Neither can be the workflow service of this run. A class which cannot be
+   *     loaded cannot handle a task either.
    */
   private Class<?> beanClassOf(
       final String beanName) {

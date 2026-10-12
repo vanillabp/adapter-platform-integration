@@ -40,11 +40,11 @@ import io.vanillabp.spi.process.WorkflowHistory;
 import io.vanillabp.spi.process.WorkflowNotFoundException;
 
 /**
- * Acceptance test of the viewer/history API on Spring Boot: the
- * application calls {@code ProcessService#getProcessDefinitions/getBpmnXml/
- * getWorkflowHistory}, the BPMS holding the workflow answers, and the process
- * definition ids handed to the application are namespaced per adapter id so
- * {@code getBpmnXml} stays resolvable in a multi-BPMS (migration) setup.
+ * Acceptance test of the viewer and history API on Spring Boot. The application calls
+ * {@code ProcessService#getProcessDefinitions/getBpmnXml/
+ * getWorkflowHistory}, and the BPMS which holds the workflow answers. The process definition
+ * ids the application gets carry the adapter id as a prefix. So {@code getBpmnXml} still finds
+ * the right BPMS when several BPMS run side by side, as in a migration.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ViewerApiTest {
@@ -52,8 +52,8 @@ public class ViewerApiTest {
   private static final String BPMN_XML = "<bpmn:definitions>viewed</bpmn:definitions>";
 
   /**
-   * The aggregate IDs of this test - the workflow of '4711' lives in 'old-bpms',
-   * every other aggregate is unknown to both BPMS.
+   * The aggregate IDs of this test. The workflow of '4711' lives in 'old-bpms'. Both BPMS do
+   * not know any other aggregate.
    */
   private static final Map<Object, String> AGGREGATE_IDS = Collections.synchronizedMap(new IdentityHashMap<>());
 
@@ -89,8 +89,8 @@ public class ViewerApiTest {
   }
 
   /**
-   * The BPMS doubles: 'old-bpms' runs the workflow of '4711' and serves the
-   * viewer data for it; 'new-bpms' knows nothing.
+   * The BPMS doubles. 'old-bpms' runs the workflow of '4711' and serves its viewer data.
+   * 'new-bpms' knows nothing.
    */
   @Configuration
   static class ViewedWorkflowConfiguration {
@@ -229,8 +229,8 @@ public class ViewerApiTest {
       final var viewedAggregate = new Aggregate();
       AGGREGATE_IDS.put(viewedAggregate, "4711");
 
-      // 1. the definitions of the workflow - answered by 'old-bpms' although
-      // 'new-bpms' is first priority, with ids namespaced per adapter id
+      // 1. The definitions of the workflow. 'old-bpms' answers, although 'new-bpms' has the
+      // first priority. Each id starts with the adapter id.
       final var definitions = processService.getProcessDefinitions(viewedAggregate, null);
 
       Assertions.assertEquals(2, definitions.size());
@@ -240,12 +240,12 @@ public class ViewerApiTest {
       Assertions.assertEquals("old-bpms#SubProcess:2:bbb", definitions.get(1).id());
       Assertions.assertEquals(List.of("theCallActivity"), definitions.get(1).usedByElements());
 
-      // 2. the BPMN XML of a definition - routed to 'old-bpms' by the composite id
+      // 2. the BPMN XML of a definition: the adapter id in the definition id leads to 'old-bpms'
       try (var xml = processService.getBpmnXml(definitions.get(0).id())) {
         Assertions.assertEquals(BPMN_XML, new String(xml.readAllBytes(), StandardCharsets.UTF_8));
       }
 
-      // 3. the workflow history - the definition id inside is namespaced, too
+      // 3. the workflow history: the definition id in it starts with the adapter id, too
       final var history = processService.getWorkflowHistory(viewedAggregate, null);
 
       Assertions.assertEquals("old-bpms#DummyProcess:1:aaa", history.processDefinitionId());
@@ -262,7 +262,7 @@ public class ViewerApiTest {
               .get(1)
               .secondaryWorkflowHistoryContext());
 
-      // 4. a workflow no BPMS knows raises the SPI's guiding exception
+      // 4. a workflow which no BPMS knows raises the exception of the SPI, with a helpful message
       final var unknownAggregate = new Aggregate();
       final var workflowNotFound = Assertions.assertThrows(
           WorkflowNotFoundException.class,

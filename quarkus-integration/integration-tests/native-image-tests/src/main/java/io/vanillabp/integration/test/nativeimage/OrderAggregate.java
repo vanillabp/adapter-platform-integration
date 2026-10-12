@@ -4,8 +4,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 
 /**
- * The workflow aggregate of the application built natively by this module: a plain JPA
- * entity with an application-assigned ID, stored in a relational database.
+ * The workflow aggregate of the application which this module builds natively. It is a
+ * plain JPA entity whose ID the application assigns, stored in a relational database.
  */
 @Entity
 public class OrderAggregate {

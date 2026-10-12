@@ -21,21 +21,20 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Poison-entry path of the MongoDB-based phase-two outbox: after
- * <code>vanillabp.outbox.block-after-attempts</code> (here: 2) failed dispatches
- * the entry is marked BLOCKED, left as a monitorable trail and never retried again.
+ * The path of a poison entry in the phase-two outbox on MongoDB. After
+ * <code>vanillabp.outbox.block-after-attempts</code> (here: 2) failed dispatches, the entry
+ * is marked BLOCKED. It stays as a trail which monitoring can see, and it is never retried.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoOutboxBlockedTest {
 
   /**
    * How long a test waits before it says that nothing more happened. The application
-   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>. These tests configure
+   * it as half a second, so this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard and does not measure speed. A machine which gives this JVM no turn for a
+   * while only makes the wait longer. Afterwards the test asserts a count which did not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -64,8 +63,8 @@ public class MongoOutboxBlockedTest {
   MongoClient mongoClient;
 
   /**
-   * The outbox of the application, asked through the reader so that neither a collection
-   * nor a field is named here.
+   * The outbox of the application. It is asked through the reader, so this test names
+   * neither a collection nor a field.
    */
   private MongoPhaseTwoOutboxReader outbox() {
 
@@ -89,7 +88,6 @@ public class MongoOutboxBlockedTest {
       workflowService.startWorkflow("blocked-test");
       userTransaction.commit();
 
-      // wait until the entry is marked BLOCKED
       final var deadline = System.currentTimeMillis() + 10000;
       while (outbox().entriesBlocked() == 0) {
         assertTrue(System.currentTimeMillis() < deadline, "entry was not blocked");
@@ -104,8 +102,8 @@ public class MongoOutboxBlockedTest {
       dispatcherLog.removeHandler(errorWatcher);
     }
 
-    // the ERROR is where an operator starts, so it names the entry and the page which says
-    // how to find it, open it again or delete it
+    // an operator starts at the ERROR. So it names the entry and the page which says how to
+    // find the entry, open it again or delete it
     final var blockedEntry = outbox()
         .entries()
         .stream()
@@ -124,8 +122,8 @@ public class MongoOutboxBlockedTest {
   }
 
   /**
-   * Collects what is logged at ERROR, the message together with its parameters, because
-   * the log manager of Quarkus hands the parameters over unformatted.
+   * Collects what is logged at ERROR, the message together with its parameters. The log
+   * manager of Quarkus hands the parameters over unformatted.
    *
    * @param errors Where the lines go
    * @return The handler to add to a logger

@@ -30,8 +30,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 public class ProcessServiceSpringBeanTest {
 
   /**
-   * What a probe is asked about. Any scope does here: the adapters of this
-   * test answer from what the test told them, not from a deployment.
+   * What a probe is asked about. Any scope works here. The adapters of this test answer from
+   * what the test told them, not from a deployment.
    */
   private static final io.vanillabp.integration.adapter.spi.WorkflowScope SCOPE = io.vanillabp.integration.adapter.spi.WorkflowScope
       .of("test-module", "TestProcess");
@@ -105,8 +105,8 @@ public class ProcessServiceSpringBeanTest {
     when(migratableProcessService.awarenessOfWorkflow(SCOPE, aggregatePersistenceAware, "4711", null))
         .thenReturn(io.vanillabp.integration.adapter.spi.WorkflowAwareness.UNKNOWN_TO_BPMS);
 
-    // no transaction is active (see cleanupTransactionState) - reads must not
-    // require one; the workflow being unknown is what raises the SPI's exception
+    // no transaction is active (see cleanupTransactionState). Reads must not require one.
+    // The SPI's exception comes from the unknown workflow
     final var workflowOperations = java.util.List.<org.junit.jupiter.api.function.Executable>of(
         () -> testee.getProcessDefinitions(aggregate, null),
         () -> testee.getWorkflowHistory(aggregate, null));
@@ -117,7 +117,7 @@ public class ProcessServiceSpringBeanTest {
       assertTrue(exception.getMessage().contains("4711"));
     }
 
-    // a definition id not following '<adapter id>#<BPMS specific id>'
+    // a definition id which does not follow '<adapter id>#<BPMS specific id>'
     final var definitionException = assertThrowsExactly(
         io.vanillabp.spi.process.ProcessDefinitionNotFoundException.class,
         () -> testee.getBpmnXml("definition-1"));

@@ -10,9 +10,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * A test extension whose contract asks for a method for the version a start deployed. In its
- * <code>wireBpmn</code> it registers the contract and reports two elements of the model: the
- * task and the process itself.
+ * A test extension whose contract asks for a method for the version that a start deployed.
+ * In its <code>wireBpmn</code> it registers the contract. Then it reports two elements of
+ * the model: the task and the process itself.
  */
 @ApplicationScoped
 public class DeployedVersionNoteWiringService implements ExtensionWiringService<Object, Object> {

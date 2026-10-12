@@ -27,15 +27,15 @@ public class WorkflowModuleAutoConfiguration {
 
   /**
    * Built by Spring Boot. Every method here is static, because the workflow modules have
-   * to be known very early and a static bean method runs without this class being created
-   * first. Spring builds the instance all the same, so it is written down.
+   * to be known very early. A static bean method runs without creating this class first.
+   * Spring builds the instance anyway, so the constructor is written down.
    */
   public WorkflowModuleAutoConfiguration() {
 
   }
 
   /**
-   * Build a bean holding all workflow modules found.
+   * Builds a bean which holds all workflow modules found.
    *
    * @param resourceLoader The resource loader used to find META-INF/workflow-module files
    * @return The workflow modules found
@@ -49,10 +49,10 @@ public class WorkflowModuleAutoConfiguration {
   }
 
   /**
-   * Searches for all workflow module descriptors found in classpath to build
-   * {@link WorkflowModule} objects. This method is static because it has to be processed
-   * by Spring Boot during the very beginning of booting the application.
-   * The bean returned is used for loading workflow module-specific config files.
+   * Searches the classpath for all workflow module descriptors and builds a
+   * {@link WorkflowModule} for each. This method is static because Spring Boot has to run
+   * it at the very beginning of the boot. The result is also used to load the config
+   * files of each workflow module.
    *
    * @param resourceLoader The resource loader used to find META-INF/workflow-module files
    * @return The workflow modules found
@@ -78,8 +78,8 @@ public class WorkflowModuleAutoConfiguration {
                         + resource.getURI()
                         + "'");
               }
-              // determine the classpath-root prefix of the JAR/directory the descriptor
-              // was found in: the descriptor URL minus 'META-INF/workflow-module'
+              // the classpath-root prefix of the JAR or directory the descriptor was found
+              // in: the descriptor URL minus 'META-INF/workflow-module'
               final var descriptorUrl = resource
                   .getURL()
                   .toString();
@@ -108,14 +108,13 @@ public class WorkflowModuleAutoConfiguration {
   }
 
   /**
-   * Determines the classpath-root prefix (external URL form) of the JAR or directory
-   * the given class was loaded from. This is done based on
-   * {@link Class#getResource(String)} instead of the class' protection domain since
-   * the URL of the class resource uses the very same protocol as resources resolved
-   * by Spring's resource loader: plain classpath ({@code file:}), JARs
-   * ({@code jar:file:}) and Spring Boot executable JARs ({@code jar:nested:}). Which
-   * workflow module such a root belongs to is answered by
-   * {@link WorkflowModule#isDeclaredInTheArtifactOf(String)}.
+   * Determines the classpath-root prefix, as an external URL, of the JAR or directory the
+   * given class was loaded from. It uses {@link Class#getResource(String)} and not the
+   * protection domain of the class. The URL of the class resource uses the same protocol
+   * as the resources which Spring's resource loader finds: plain classpath
+   * ({@code file:}), JARs ({@code jar:file:}) and Spring Boot executable JARs
+   * ({@code jar:nested:}). {@link WorkflowModule#isDeclaredInTheArtifactOf(String)} answers
+   * which workflow module such a root belongs to.
    *
    * @param clazz The class
    * @return The classpath-root prefix or {@code null} if it cannot be determined
@@ -139,7 +138,7 @@ public class WorkflowModuleAutoConfiguration {
   }
 
   /**
-   * Associates workflow services with workflow modules for later usage.
+   * Associates workflow services with workflow modules, for later use.
    *
    * @param allWorkflowModules All workflow modules found in the classpath
    * @param allWorkflowServiceClasses All classes of workflow services found
@@ -151,13 +150,12 @@ public class WorkflowModuleAutoConfiguration {
     final var globalWorkflowModuleWorkflowServiceClasses = new LinkedList<Class<?>>();
     final var globalClasspathWorkflowModuleDescriptors = new LinkedList<>(allWorkflowModules);
 
-    // apply all service classes to their workflow modules
     allWorkflowServiceClasses
         .forEach(serviceClass -> {
 
           try {
-            // register a service class in the workflow module identified by META-INF/workflow-module
-            // found in the same JAR/directory
+            // register a service class in the workflow module whose META-INF/workflow-module
+            // lies in the same JAR or directory
             final var serviceClassRootPrefix = determineClasspathRootPrefix(serviceClass);
             final var workflowModuleInServiceClassJar = allWorkflowModules
                 .stream()
@@ -173,7 +171,7 @@ public class WorkflowModuleAutoConfiguration {
             // the workflow service class belongs to
             // TODO: NOT YET SUPPORTED
 
-            // collect service class for later registration in global workflow module
+            // keep the service class, to register it in the global workflow module later
             globalWorkflowModuleWorkflowServiceClasses.add(serviceClass);
           } catch (Exception e) {
             throw new IllegalStateException(
@@ -197,9 +195,9 @@ public class WorkflowModuleAutoConfiguration {
 
     }
 
-    // no global workflow module descriptor file
     if (globalClasspathWorkflowModuleDescriptors.isEmpty()) {
-      // if no workflow services left, then it is OK
+      // no global workflow module descriptor file. That is fine if no workflow service is
+      // left
       if (globalWorkflowModuleWorkflowServiceClasses.isEmpty()) {
         return;
       }
@@ -217,7 +215,7 @@ public class WorkflowModuleAutoConfiguration {
           ));
     }
 
-    // associate workflow services to global workflow module if not yet associated to another workflow module
+    // the workflow services which no other workflow module took go to the global one
     final var globalClasspathWorkflowModuleDescriptor = globalClasspathWorkflowModuleDescriptors
         .getFirst();
     globalClasspathWorkflowModuleDescriptor.addWorkflowServices(globalWorkflowModuleWorkflowServiceClasses);

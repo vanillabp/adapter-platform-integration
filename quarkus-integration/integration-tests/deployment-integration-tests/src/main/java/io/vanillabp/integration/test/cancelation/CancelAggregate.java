@@ -6,7 +6,7 @@ import lombok.Setter;
 
 /**
  * The workflow aggregate of the derived-cancellation tests. It writes down what reached
- * the application and in which order, which is what those tests read instead of a log.
+ * the application and in which order. Those tests read this instead of a log.
  */
 @Getter
 @Setter
@@ -16,7 +16,7 @@ public class CancelAggregate {
 
   /**
    * What the application was told about this workflow, in the order it arrived and
-   * separated by a comma: one entry per task reported as canceled, and
+   * separated by a comma. There is one entry for each task reported as canceled, and
    * <code>ended</code> where the <code>&#64;WorkflowEnded</code> method ran.
    */
   @NoSyncWithBPMS

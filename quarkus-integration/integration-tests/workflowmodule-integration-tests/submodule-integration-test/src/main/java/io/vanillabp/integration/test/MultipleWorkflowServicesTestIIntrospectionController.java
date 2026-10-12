@@ -117,10 +117,10 @@ public class MultipleWorkflowServicesTestIIntrospectionController {
   }
 
   /**
-   * The precedence of a workflow module's files against the
-   * application's, read once through an injected {@link ConfigProperty} and
-   * once through the {@link org.eclipse.microprofile.config.Config} itself, so
-   * that both ways of reading are covered.
+   * The precedence of a workflow module's files against the application's files. Each
+   * value is read once through an injected {@link ConfigProperty} and once through the
+   * {@link org.eclipse.microprofile.config.Config} itself, so both ways of reading are
+   * covered.
    *
    * @return The values the configuration resolved to
    */

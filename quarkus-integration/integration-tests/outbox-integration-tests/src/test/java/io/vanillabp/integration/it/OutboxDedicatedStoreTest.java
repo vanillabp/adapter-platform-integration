@@ -23,10 +23,10 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Per-aggregate outbox attribution: a {@code PhaseTwoOutboxAware} bean
- * routes the aggregate's phase-two calls to an application-defined outbox - the JDBC
- * default (also present in the container) stays untouched. With TWO outbox beans in
- * the container this attribution is also what resolves the ambiguity at startup.
+ * Assigning an outbox per aggregate. A {@code PhaseTwoOutboxAware} bean routes the
+ * aggregate's phase-two calls to an outbox which the application defines. The JDBC
+ * default, which is also in the container, stays untouched. With TWO outbox beans in the
+ * container, this assignment also resolves the ambiguity at startup.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OutboxDedicatedStoreTest {

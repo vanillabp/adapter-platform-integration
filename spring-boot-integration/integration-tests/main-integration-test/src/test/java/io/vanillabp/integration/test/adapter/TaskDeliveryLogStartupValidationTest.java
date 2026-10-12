@@ -22,25 +22,24 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Startup report of the inbound idempotency: an adapter which may hand the
- * same task out again needs a store to remember processed deliveries in. Unlike the
- * outbox a missing store does NOT fail the boot - without it VanillaBP behaves as it did
- * before the feature existed - so what is pinned here is the WARNING naming both ways
- * out, and that switching the feature off silences it.
+ * Startup report of the inbound idempotency. An adapter which may hand out the same task
+ * again needs a store which remembers the processed deliveries. Unlike a missing outbox, a
+ * missing store does NOT fail the boot. Without it, VanillaBP behaves as it did before the
+ * feature existed. So this test pins the WARNING which names both ways out. It also pins
+ * that switching the feature off silences the warning.
  * <p>
- * The warning is read where a developer reads it: in the block the start writes at its
- * end. Writing that block takes the lifecycle bean which ends the start, so the
- * platform's deployment auto-configuration is part of every context here.
+ * The test reads the warning where a developer reads it: in the block which the start
+ * writes at its end. Only the lifecycle bean which ends the start writes that block. So
+ * the platform's deployment auto-configuration is part of every context here.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TaskDeliveryLogStartupValidationTest {
 
   /**
-   * The stores and the transaction of the application's own, so the boot gets past the
-   * outbox and transaction validations: this context has no data source a platform
-   * default could use. Nothing is
-   * dispatched in these tests, and the runner is a pass-through - what is pinned here is a
-   * log message, not a transaction.
+   * The application's own store and transaction runner. They get the boot past the outbox
+   * and transaction validations, because this context has no data source which a platform
+   * default could use. Nothing is dispatched in these tests, and the runner just runs the
+   * work. This test pins a log message, not a transaction.
    */
   @org.springframework.context.annotation.Configuration
   static class OwnOutboxConfiguration {
@@ -81,8 +80,8 @@ public class TaskDeliveryLogStartupValidationTest {
   }
 
   /**
-   * An application's own store, written before the release check existed: it
-   * inherits the SPI's default which deletes nothing.
+   * An application's own store, written before the release check existed. It inherits
+   * the SPI's default, which deletes nothing.
    */
   @org.springframework.context.annotation.Configuration
   static class LegacyDeliveryLogConfiguration {
@@ -152,7 +151,7 @@ public class TaskDeliveryLogStartupValidationTest {
             "a missing delivery log must never fail the boot"));
 
     final var printed = output.getAllOfThisTest();
-    // an assertion about something the block does NOT say is worth nothing where no block
+    // an assertion about something the block does NOT say is worth nothing if no block
     // was written at all
     Assertions.assertTrue(
         printed.contains("looked at this application and found"),
@@ -193,8 +192,8 @@ public class TaskDeliveryLogStartupValidationTest {
   public void aStoreWithoutTheReleaseIsReportedWhereTheReleaseIsSwitchedOn(
       final CapturedOutput output) {
 
-    // The application asked for records to disappear when a workflow ends, and
-    // its own store cannot do it - which is a misconfiguration, not a missing feature
+    // The application asked for records to disappear when a workflow ends, and its own
+    // store cannot do that. This is a misconfiguration, not a missing feature
     final var block = theBlockOf(
         output,
         new Class<?>[]{

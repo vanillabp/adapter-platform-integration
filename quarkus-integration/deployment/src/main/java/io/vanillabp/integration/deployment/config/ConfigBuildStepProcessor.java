@@ -23,7 +23,8 @@ import io.vanillabp.integration.runtime.config.MigrationAdapterPropertiesRecorde
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * VanillaBP extension build step processor, responsible for building {@link MigrationAdapterProperties} beans.
+ * Build step processor of the VanillaBP extension. It builds the
+ * {@link MigrationAdapterProperties} bean.
  */
 public class ConfigBuildStepProcessor {
 
@@ -36,11 +37,11 @@ public class ConfigBuildStepProcessor {
 
   /**
    * Records the work which builds and validates the {@link MigrationAdapterProperties}
-   * object when the application starts, and publishes it as a bean the generated process
-   * services inject. The properties are runtime configuration, so a build can prepare the
-   * check but not run it.
+   * object when the application starts. It publishes the object as a bean, and the generated
+   * process services inject it. The properties are runtime configuration. So the build can
+   * prepare the check, but it cannot run it.
    *
-   * @param capabilities Capabilities of the projects all extensions available
+   * @param capabilities The capabilities of all extensions available in the project
    * @param processServicesProvidedByAdapters All {@link MigratableProcessService} beans provided by VanillaBP adapter extensions
    * @param configsBuilt The build item for workflow module configurations as a dependency for this build step
    * @param substitutionsProvided All object substitutions as a dependency for this build step
@@ -89,20 +90,20 @@ public class ConfigBuildStepProcessor {
   }
 
   /**
-   * The section of the gruelbox store, which runs on Spring Boot and not on Quarkus. The
-   * name is written out here because the class holding it lives in another repository;
-   * {@code GruelboxKeyIsRefusedOnQuarkusTest} names the key as well and fails if the two
-   * ever say something different.
+   * The section of the gruelbox store. This store runs on Spring Boot, not on Quarkus. The
+   * name is written out here because the class which holds it lives in another repository.
+   * {@code GruelboxKeyIsRefusedOnQuarkusTest} names the key as well. It fails if the two
+   * ever differ.
    */
   private static final String GRUELBOX_SECTION = "vanillabp.outbox.gruelbox.";
 
   /**
    * Ends the build of an application which configures something Quarkus does not have.
    * <p>
-   * Without this, SmallRye answers such a key with <code>SRCFG00050</code> and the name of
-   * the key, which is true and tells nobody what to do: the key is not a typo, it is a
-   * setting which exists and belongs to the other platform. The check runs while the
-   * application is augmented, so it speaks before that validation does.
+   * Without this check, SmallRye answers such a key with <code>SRCFG00050</code> and the name
+   * of the key. That is true, but it tells nobody what to do. The key is not a typo. It is a
+   * real setting, and it belongs to the other platform. The check runs while the application
+   * is augmented. So it reports before the SmallRye validation does.
    *
    * @throws IllegalStateException Naming every key found and what to write instead
    */

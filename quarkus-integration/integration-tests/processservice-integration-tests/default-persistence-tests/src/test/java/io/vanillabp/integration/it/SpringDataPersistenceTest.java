@@ -27,11 +27,11 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * An application using Spring Data repositories on Quarkus (extension
- * quarkus-spring-data-jpa) writes no {@code AggregatePersistenceAware} at all -
- * VanillaBP uses the repository, the same API the Spring Boot integration uses. Both directions are exercised: starting a workflow stores the
- * aggregate, and a task delivered by the BPMS loads it, runs the handler and stores
- * the change.
+ * An application uses Spring Data repositories on Quarkus (extension
+ * quarkus-spring-data-jpa). It writes no {@code AggregatePersistenceAware} at all, because
+ * VanillaBP uses the repository. That is the same API the Spring Boot integration uses. The
+ * test covers both directions. Starting a workflow stores the aggregate. A task delivered by
+ * the BPMS loads it, runs the handler and stores the change.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SpringDataPersistenceTest {

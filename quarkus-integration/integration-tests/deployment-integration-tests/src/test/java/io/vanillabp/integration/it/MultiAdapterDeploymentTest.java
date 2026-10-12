@@ -18,10 +18,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Deployment pipeline with TWO configured adapter ids of the same type (the
- * migration scenario): each prioritized adapter deploys and starts processing, in
- * prioritized order - for BPMS migration all deployed adapters keep processing
- * workflows.
+ * Deployment pipeline with TWO configured adapter ids of the same type, as in a
+ * migration. Each prioritized adapter deploys and starts processing, in the order of
+ * priority. During a BPMS migration, all deployed adapters keep processing workflows.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MultiAdapterDeploymentTest {

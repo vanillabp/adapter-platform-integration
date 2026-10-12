@@ -16,10 +16,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * What an adapter gets when it asks this platform where to report what it found at
  * startup.
  * <p>
- * It has to be the collection the checks of the core report into, or the application
- * would write two blocks: the promise of one block per start is what this holds. The
- * Spring Boot integration answers the same question in its own test of the same name, and
- * the two answers have to be the same object either way.
+ * It has to be the collection which the checks of the core report into. Otherwise the
+ * application would write two blocks. This test holds the promise of one block per start.
+ * The Spring Boot integration answers the same question in its own test of the same name.
+ * On both platforms, the answer has to be the same object.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheStartupReportOfAnAdapterTest {

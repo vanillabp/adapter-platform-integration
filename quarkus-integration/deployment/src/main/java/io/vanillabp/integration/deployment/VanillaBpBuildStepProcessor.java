@@ -30,15 +30,15 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.runtime.workflowtask.WorkflowTaskRegistryProducer;
 
 /**
- * Registers the beans VanillaBP itself brings to an application: the router and the
- * resolvers the generated process services use, the phase-two outbox and the log of task
- * deliveries, and the beans an adapter announced through a build item of its own.
+ * Registers the beans which VanillaBP itself brings to an application. These are the router
+ * and the resolvers which the generated process services use, the phase-two outbox, the log
+ * of task deliveries, and the beans an adapter announced through its own build item.
  * <p>
- * Which of them an application gets is decided while it is built, because Quarkus fixes the
- * set of beans there and not at startup. A bean nobody injects is dropped, which is why
- * nearly every registration below marks its bean as unremovable, and a bean whose class
- * needs an extension the application does not have is not registered at all - a native
- * image resolves every class it was told about while it is built.
+ * Which of them an application gets is decided while it is built. Quarkus fixes the set of
+ * beans there, not at startup. A bean nobody injects is dropped. So nearly every
+ * registration below marks its bean as unremovable. A bean whose class needs an extension
+ * which the application does not have is not registered at all. A native image resolves
+ * every class it was told about while it is built.
  */
 public class VanillaBpBuildStepProcessor {
 
@@ -55,7 +55,7 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Build extension feature used as a dependency in VanillaBP adapter extensions.
+   * Builds the extension feature. VanillaBP adapter extensions use it as a dependency.
    *
    * @return The feature build item
    */
@@ -67,12 +67,12 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers the workflow-module descriptor as an application-archive marker. This way
-   * workflow-module JARs are treated as application archives even if they do not
-   * provide a Jandex index (e.g. Gradle modules or JARs containing only the descriptor
-   * and BPMS resources). A Jandex index remains necessary only for discovery of
-   * {@link io.vanillabp.spi.service.WorkflowService} annotated classes inside
-   * sub-modules, not for workflow-module detection itself.
+   * Registers the workflow-module descriptor as an application-archive marker. So
+   * workflow-module JARs count as application archives, even if they have no Jandex index.
+   * Examples are Gradle modules, or JARs with only the descriptor and BPMS resources. A
+   * Jandex index is still needed to find classes annotated with
+   * {@link io.vanillabp.spi.service.WorkflowService} inside sub-modules. It is not needed to
+   * detect the workflow module itself.
    *
    * @return The additional application-archive marker build item
    */
@@ -84,8 +84,9 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * If any serialization of Quarkus needs to serialize an object straight forward to serialize,
-   * an ObjectSubstitutionBuildItem needs to be provided for proper serialization and deserialization.
+   * Quarkus cannot serialize every object as it is. For such an object, it needs an
+   * ObjectSubstitutionBuildItem to serialize and deserialize it. {@link URI} is such an
+   * object.
    *
    * @see io.vanillabp.integration.deployment.workflowmodule.WorkflowModuleBuildStepProcessor#findAllWorkflowModules(ApplicationArchivesBuildItem)
    * @return An object substitution build item for {@link URI}
@@ -98,10 +99,10 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers the adapters' process-service beans announced via
-   * {@link VanillaBpMigratableProcessServiceBuildItem}: adapters only produce the
-   * build item (adapter type + bean class), the VanillaBP extension registers the
-   * bean - no separate self-registration needed.
+   * Registers the adapters' process-service beans announced by
+   * {@link VanillaBpMigratableProcessServiceBuildItem}. An adapter only produces the build
+   * item (adapter type and bean class). The VanillaBP extension registers the bean, so the
+   * adapter does not need to register it itself.
    *
    * @param processServicesProvidedByAdapters The build items produced by the adapters
    * @param additionalBeans Producer used to register the announced beans
@@ -124,18 +125,18 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Keeps the adapters' per-adapter-id List beans from being removed: adapters
-   * produce ONE bean of type <code>List&lt;MigratableProcessService&gt;</code> /
-   * <code>List&lt;AdapterDeploymentService&gt;</code> with one instance per
-   * configured adapter id (a CDI producer cannot yield N element beans for N
-   * runtime-configured ids). The platform collects them via
-   * <code>Instance&lt;List&lt;...&gt;&gt;</code> lookups only - without this build
-   * item ArC treats the producers as unused and removes them.
+   * Stops ArC from removing the adapters' <code>List</code> beans. An adapter produces ONE
+   * bean of type <code>List&lt;MigratableProcessService&gt;</code> or
+   * <code>List&lt;AdapterDeploymentService&gt;</code>, with one instance for each configured
+   * adapter id. A CDI producer cannot return N element beans for N ids which are only known
+   * at runtime. The platform collects these lists only by
+   * <code>Instance&lt;List&lt;...&gt;&gt;</code> lookups. Without this build item, ArC
+   * treats the producers as unused and removes them.
    * <p>
-   * Convention (part of the per-adapter-id contract): the List's element type is
-   * the SPI interface itself (e.g.
+   * Convention (part of the contract for one instance per adapter id): the element type of
+   * the List is the SPI interface itself (e.g.
    * <code>List&lt;MigratableProcessService&lt;Object&gt;&gt;</code>), not an
-   * adapter-specific subclass - the type is matched literally here.
+   * adapter-specific subclass. This method matches the type literally.
    *
    * @return The unremovable-bean build item
    */
@@ -160,11 +161,11 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers the core-owned phase-two router (via {@link PhaseTwoRouterProducer}):
-   * the generated process-service beans register themselves with it at bean
-   * creation, and the phase-two outbox dispatches committed entries through it. It
-   * is registered independently of any outbox implementation, so custom
-   * <code>PhaseTwoOutbox</code> beans can rely on it, too.
+   * Registers the phase-two router which the core owns (through
+   * {@link PhaseTwoRouterProducer}). The generated process-service beans register
+   * themselves with it when they are created. The phase-two outbox dispatches committed
+   * entries through it. It is registered no matter which outbox implementation is used. So
+   * custom <code>PhaseTwoOutbox</code> beans can rely on it, too.
    *
    * @return The additional {@link PhaseTwoRouterProducer} bean
    */
@@ -180,10 +181,10 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers the resolver telling which phase-two outbox an aggregate's transaction
-   * reaches (via {@link PhaseTwoOutboxResolverProducer}): the process services resolve
-   * their own outbox through it, and an extension writing entries of its own injects it
-   * instead of picking an outbox bean, which it cannot judge.
+   * Registers the resolver which says which phase-two outbox an aggregate's transaction
+   * reaches (through {@link PhaseTwoOutboxResolverProducer}). The process services find
+   * their own outbox through it. An extension which writes its own entries injects it. It
+   * does not pick an outbox bean itself, because it cannot tell which one is right.
    *
    * @return The additional {@link PhaseTwoOutboxResolverProducer} bean
    */
@@ -199,10 +200,11 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers the resolver telling which log of processed task deliveries an aggregate's
-   * transaction reaches (via {@link TaskDeliveryLogResolverProducer}): the process services
-   * resolve their own log through it, and an extension reading what a workflow is waiting
-   * for injects it instead of picking a log bean, which it cannot judge.
+   * Registers the resolver which says which log of processed task deliveries an aggregate's
+   * transaction reaches (through {@link TaskDeliveryLogResolverProducer}). The process
+   * services find their own log through it. An extension which reads what a workflow is
+   * waiting for injects it. It does not pick a log bean itself, because it cannot tell which
+   * one is right.
    *
    * @return The additional {@link TaskDeliveryLogResolverProducer} bean
    */
@@ -218,12 +220,12 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers the transaction of VanillaBP as beans (via
-   * {@link TransactionRunnerProducer}): the platform's own runner and the resolver
-   * saying which runner a workflow aggregate is written through. The process services,
-   * the pre-commit registrar and the phase-two router use them, and an extension writing
-   * something of its own into the transaction of an aggregate injects the resolver
-   * instead of opening a transaction of its own.
+   * Registers the transaction of VanillaBP as beans (through
+   * {@link TransactionRunnerProducer}). These are the platform's own runner and the resolver
+   * which says through which runner a workflow aggregate is written. The process services,
+   * the pre-commit registrar and the phase-two router use them. An extension may write
+   * something of its own into the transaction of an aggregate. It injects the resolver and
+   * does not open a transaction of its own.
    *
    * @return The additional {@link TransactionRunnerProducer} bean
    */
@@ -239,11 +241,10 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers the default in-memory election cache (workflow&rarr;adapter
-   * associations of the BPMS election, see the core's
-   * <code>WorkflowLocator</code>). An application-provided
-   * <code>WorkflowAdapterCache</code> bean replaces the default (it is a
-   * <code>&#64;DefaultBean</code>).
+   * Registers the default in-memory election cache. It keeps which adapter the BPMS election
+   * chose for each workflow (see the core's <code>WorkflowLocator</code>). A
+   * <code>WorkflowAdapterCache</code> bean of the application replaces the default, because
+   * the default is a <code>&#64;DefaultBean</code>.
    *
    * @return The additional {@link WorkflowAdapterCacheProducer} bean
    */
@@ -259,12 +260,12 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers the core-owned registry of <code>&#64;WorkflowTask</code> handlers
-   * (the adapter-facing
-   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker}):
-   * the generated process-service beans register every workflow service class under
-   * all BPMN process IDs it declares; adapters validate the wiring during
-   * <code>wireBpmn</code> and dispatch task invocations at runtime.
+   * Registers the registry of <code>&#64;WorkflowTask</code> handlers which the core owns.
+   * Adapters see it as
+   * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker}. The
+   * generated process-service beans register every workflow service class under all BPMN
+   * process IDs it declares. Adapters check the wiring during <code>wireBpmn</code> and call
+   * the task handlers at runtime.
    *
    * @return The additional {@link WorkflowTaskRegistryProducer} bean
    */
@@ -281,17 +282,16 @@ public class VanillaBpBuildStepProcessor {
 
   /**
    * Registers the default implementations of the phase-two outbox (see
-   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}) used for two-phase
-   * workflow starts: the JDBC/Agroal-based one if a JDBC datasource applies AND the
-   * MongoDB-based one if the <code>quarkus-mongodb-client</code> extension is
-   * present - both may coexist, each workflow aggregate is served by the outbox
-   * matching its persistence (attribution via
-   * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware} beans, see
-   * {@link io.vanillabp.integration.runtime.processservice.QuarkusPhaseTwoOutboxResolver}).
-   * Unwanted defaults can be deactivated via
-   * <code>vanillabp.outbox.jdbc.enabled</code> /
-   * <code>vanillabp.outbox.mongo.enabled</code>. Applications may always provide
-   * their own <code>PhaseTwoOutbox</code> beans in addition.
+   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox}), which two-phase workflow starts
+   * use. The one based on JDBC and Agroal is registered if a JDBC datasource applies. The one
+   * based on MongoDB is registered if the <code>quarkus-mongodb-client</code> extension is
+   * present. Both may exist side by side. Each workflow aggregate uses the outbox which
+   * matches its persistence. {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware} beans
+   * say which one that is, see
+   * {@link io.vanillabp.integration.runtime.processservice.QuarkusPhaseTwoOutboxResolver}.
+   * To turn off a default you do not want, use <code>vanillabp.outbox.jdbc.enabled</code> or
+   * <code>vanillabp.outbox.mongo.enabled</code>. Applications may always add their own
+   * <code>PhaseTwoOutbox</code> beans.
    *
    * @param capabilities Capabilities of the project's extensions
    * @param additionalBeans Producer used to register the outbox beans
@@ -323,15 +323,16 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers the probe telling whether the MongoDB deployment is a replica set (see
-   * {@link io.vanillabp.integration.runtime.processservice.MongoDeploymentProbe}), which
-   * the transaction-runner startup check needs for an aggregate MongoDB Panache manages.
+   * Registers the probe which says whether the MongoDB deployment is a replica set (see
+   * {@link io.vanillabp.integration.runtime.processservice.MongoDeploymentProbe}). The
+   * startup check of the transaction runner needs it for an aggregate which MongoDB Panache
+   * manages.
    * <p>
-   * Guarded by the MongoDB client capability like the outbox and the delivery log, and for
-   * one more reason than they have: the implementation is the only class on the way to the
-   * coverage verdict which names a MongoDB type. A native image resolves every referenced
-   * method while it is built, so an application with a relational database and no MongoDB
-   * must not reach it at all.
+   * The MongoDB client capability guards it, like the outbox and the delivery log. There is
+   * one more reason here. The implementation is the only class on the way to the coverage
+   * result which names a MongoDB type. A native image resolves every referenced method while
+   * it is built. So an application with a relational database and no MongoDB must not reach
+   * it at all.
    *
    * @param capabilities Capabilities of the project's extensions
    * @param additionalBeans Producer used to register the probe
@@ -354,16 +355,15 @@ public class VanillaBpBuildStepProcessor {
 
   /**
    * Registers the default implementations of the log of processed task deliveries (see
-   * {@link io.vanillabp.integration.spi.TaskDeliveryLog}): the JDBC/Agroal-based one if a
-   * JDBC datasource applies AND the MongoDB-based one if the
-   * <code>quarkus-mongodb-client</code> extension is present - both may coexist, each
-   * workflow aggregate is served by the log matching its persistence (attribution via
-   * {@link io.vanillabp.integration.spi.TaskDeliveryLogAware} beans, see
-   * {@link io.vanillabp.integration.runtime.processservice.QuarkusTaskDeliveryLogResolver}).
-   * Unwanted defaults can be deactivated via
-   * <code>vanillabp.outbox.jdbc.enabled</code> /
-   * <code>vanillabp.outbox.mongo.enabled</code> - the log shares the outbox' store
-   * settings.
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog}). The one based on JDBC and Agroal
+   * is registered if a JDBC datasource applies. The one based on MongoDB is registered if the
+   * <code>quarkus-mongodb-client</code> extension is present. Both may exist side by side.
+   * Each workflow aggregate uses the log which matches its persistence.
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLogAware} beans say which one that is,
+   * see {@link io.vanillabp.integration.runtime.processservice.QuarkusTaskDeliveryLogResolver}.
+   * To turn off a default you do not want, use <code>vanillabp.outbox.jdbc.enabled</code> or
+   * <code>vanillabp.outbox.mongo.enabled</code>. The log shares the store settings of the
+   * outbox.
    *
    * @param capabilities Capabilities of the project's extensions
    * @param additionalBeans Producer used to register the delivery-log beans
@@ -392,10 +392,10 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Beans implementing {@link io.vanillabp.integration.spi.TaskDeliveryLog} or
-   * {@link io.vanillabp.integration.spi.TaskDeliveryLogAware} are looked up dynamically
-   * at runtime (per-aggregate log resolution), not injected by application code - ArC
-   * must not remove them as unused.
+   * Beans which implement {@link io.vanillabp.integration.spi.TaskDeliveryLog} or
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLogAware} are looked up at runtime, to
+   * find the log of each aggregate. Application code does not inject them. So ArC must not
+   * remove them as unused.
    *
    * @return The unremovable-bean build item covering delivery logs and their attributions
    */
@@ -409,11 +409,11 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Beans implementing {@link io.vanillabp.integration.spi.PhaseTwoOutbox}
-   * or {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware} are not
-   * necessarily injected by application code but looked up dynamically at runtime
-   * (per-aggregate outbox resolution). This build step prevents ArC from removing
-   * them as unused beans.
+   * Application code does not always inject beans which implement
+   * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} or
+   * {@link io.vanillabp.integration.spi.PhaseTwoOutboxAware}. They are looked up at runtime,
+   * to find the outbox of each aggregate. This build step stops ArC from removing them as
+   * unused beans.
    *
    * @return The unremovable-bean build item covering outboxes and their attributions
    */
@@ -427,11 +427,11 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers {@link VanillaBpShutdownObserver} as a CDI bean: it stops workflow
-   * processing of adapters and extensions on graceful shutdown (the Quarkus
-   * counterpart of the Spring Boot integration's <code>SmartLifecycle.stop()</code>).
-   * It is marked unremovable because it is not injected by application code but
-   * driven by the {@link io.quarkus.runtime.ShutdownEvent}.
+   * Registers {@link VanillaBpShutdownObserver} as a CDI bean. On a graceful shutdown, it
+   * stops the workflow processing of adapters and extensions. It is the Quarkus counterpart
+   * of <code>SmartLifecycle.stop()</code> in the Spring Boot integration. It is marked
+   * unremovable, because application code does not inject it. The
+   * {@link io.quarkus.runtime.ShutdownEvent} drives it.
    *
    * @return The additional {@link VanillaBpShutdownObserver} bean
    */
@@ -447,9 +447,9 @@ public class VanillaBpBuildStepProcessor {
   }
 
   /**
-   * Registers {@link QuarkusPreCommitRegistrar} as a CDI bean: BPMS adapters
-   * hand their phase-one checks to it, so the check runs right before the transaction of
-   * the workflow aggregate commits. Unremovable, because no application code injects it.
+   * Registers {@link QuarkusPreCommitRegistrar} as a CDI bean. BPMS adapters hand their
+   * phase-one checks to it. So the check runs right before the transaction of the workflow
+   * aggregate commits. It is unremovable, because no application code injects it.
    *
    * @return The additional {@link QuarkusPreCommitRegistrar} bean
    */

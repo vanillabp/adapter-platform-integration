@@ -7,8 +7,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import io.vanillabp.bpmsdouble.DummyPhaseTwoListener;
 
 /**
- * Records phase-two invocations of the dummy adapter and optionally fails a
- * configurable number of dispatches (to test retry behavior of the outbox).
+ * Records the phase-two calls of the dummy adapter. It can also fail a given number of
+ * dispatches, to test how the outbox retries.
  */
 public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
@@ -48,14 +48,14 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   }
 
   /**
-   * Waits until at least the given number of phase-two invocations were recorded.
+   * Waits until at least the given number of phase-two calls were recorded.
    * <p>
-   * This says that the ADAPTER was called, not that the operation is over: the listener
-   * runs inside the dispatch, and the dispatcher marks the outbox entry DONE - which is
-   * what frees its idempotency key - only after the dispatch returned. On return the
-   * entry may still be waiting to be marked, so a repetition of the same operation
-   * planned right here can be discarded as a duplicate. A test which needs the key to
-   * be free has to wait for the ENTRY, in the store.
+   * This says that the ADAPTER was called, not that the operation is over. The listener
+   * runs inside the dispatch. The dispatcher marks the outbox entry DONE only after the
+   * dispatch returned, and only that frees its idempotency key. When this method returns,
+   * the entry may not be marked yet. So the same operation, planned again right here, may
+   * be thrown away as a duplicate. A test which needs a free key must wait for the ENTRY in
+   * the store.
    *
    * @param numberOfInvocations The number of invocations to wait for
    * @param timeoutMillis How long to wait at most

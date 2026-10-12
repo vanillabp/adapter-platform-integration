@@ -21,12 +21,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Stopping the deployment pipeline reverses the start order (like Spring Boot's
- * <code>SmartLifecycle.stop()</code>): extensions are stopped first - in reverse
- * wiring order - then the adapters; a second stop is a no-op (the runner is
- * idempotent, so the real {@code ShutdownEvent} after this test causes no second
- * round). The {@code ShutdownEvent} wiring itself is proven by
- * {@link ShutdownEventTest}.
+ * Stopping the deployment pipeline reverses the start order, like Spring Boot's
+ * <code>SmartLifecycle.stop()</code>. Extensions stop first, in reverse wiring order, and
+ * then the adapters. A second stop does nothing. The runner is idempotent, so the real
+ * {@code ShutdownEvent} after this test causes no second round. {@link ShutdownEventTest}
+ * proves the {@code ShutdownEvent} wiring itself.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ShutdownReverseOrderTest {

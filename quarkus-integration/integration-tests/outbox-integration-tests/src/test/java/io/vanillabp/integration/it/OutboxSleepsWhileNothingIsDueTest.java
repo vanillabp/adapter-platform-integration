@@ -28,14 +28,14 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * What a quiet application costs on the JDBC store, counted in connections rather than
- * measured in seconds. A poll is a select plus a delete whether or not anything is waiting,
- * and an application sitting in a timer used to pay for them every ten seconds.
+ * What a quiet application costs on the JDBC store, counted in connections and not
+ * measured in seconds. A poll is a select plus a delete, whether or not anything waits. An
+ * application which sits in a timer used to pay for them every ten seconds.
  * <p>
- * Connections and not statements, because a connection is the claim from below: none taken is
- * none used, whatever the code would have sent over it.
+ * It counts connections and not statements, because a connection makes the claim from
+ * below. None taken means none used, whatever the code would have sent over it.
  * <p>
- * The cap is an hour here, so anything which happens sooner can only come from the store
+ * The cap is an hour here. So anything which happens sooner can only come from the store
  * itself saying when it is due, or from the notification after a commit.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -90,10 +90,10 @@ public class OutboxSleepsWhileNothingIsDueTest {
   }
 
   /**
-   * Waits until the whole table holds nothing which is still owed. The whole table and not
-   * only this test's aggregate: an entry of an earlier test method which is still open would
-   * be work the poller legitimately wakes up for, and the count below would then measure that
-   * instead of the sleep.
+   * Waits until the whole table holds nothing which is still owed. It checks the whole
+   * table, not only this test's aggregate. An entry of an earlier test method which is still
+   * open would be real work for the poller to wake up for. The count below would then
+   * measure that work instead of the sleep.
    */
   private void awaitNothingLeftUndone() throws Exception {
 
@@ -106,37 +106,36 @@ public class OutboxSleepsWhileNothingIsDueTest {
   }
 
   /**
-   * How long the store is watched after it went quiet. Three seconds, which is long enough
-   * for a poller sleeping on a rhythm of its own to come back at least once: the shortest
+   * How long the store is watched after it went quiet. Three seconds are long enough for a
+   * poller which sleeps on a rhythm of its own to come back at least once. The shortest
    * rhythm anything here has is the half second of
    * <code>vanillabp.outbox.attempt-frequency</code>.
    * <p>
-   * The number is not a budget anybody has to be faster than: what is asserted afterwards
-   * is that nothing was asked at all, and a machine which leaves this JVM without a turn
-   * only makes the silence longer.
+   * The number is not a budget which anybody has to beat. Afterwards the test asserts that
+   * nothing was asked at all. A machine which gives this JVM no turn only makes the silence
+   * longer.
    */
   private static final long SILENCE_MEASURED_OVER_MS = 3000;
 
   /**
-   * How long the pool has to stay untouched before the dispatch counts as over. Below
-   * {@link #SILENCE_MEASURED_OVER_MS}, so a poller asking on a rhythm shorter than that is
-   * caught by the wait rather than passing through it.
+   * How long the pool has to stay untouched before the dispatch counts as over. It is below
+   * {@link #SILENCE_MEASURED_OVER_MS}. So a poller which asks on a shorter rhythm is caught
+   * by the measurement and does not hide in this wait.
    */
   private static final long QUIET_FOR_MS = 500;
 
   /**
    * Waits until the dispatch which emptied the store has stopped taking connections.
    * <p>
-   * Nothing left OPEN is not the end of that dispatch. The poll which marked the entry
-   * looks for the next due one, deletes what the retention lets go and reads when to
-   * wake up again, and those statements run AFTER the wait above has returned.
-   * Forgetting what was taken in between is what turns a test of this shape red once in
-   * a while on a run where nothing was wrong.
+   * Nothing left OPEN does not mean that dispatch is over. The poll which marked the entry
+   * then looks for the next due one, deletes what the retention lets go, and reads when to
+   * wake up again. Those statements run AFTER the wait above has returned. A test of this
+   * shape which forgets what was taken in between turns red now and then, on a run where
+   * nothing was wrong.
    * <p>
-   * The wait reads the counter and asks the database nothing itself, because a question
-   * of its own would be the traffic it is waiting out. A store which never goes quiet is
-   * the very thing this test is about, so the deadline says that instead of timing out
-   * without a word.
+   * The wait reads the counter and asks the database nothing itself. A question of its own
+   * would be the very traffic it waits out. This test is about a store which never goes
+   * quiet. So the deadline says that, and the test does not time out without a word.
    */
   private void awaitTheDispatchWentQuiet() throws Exception {
 
@@ -174,8 +173,8 @@ public class OutboxSleepsWhileNothingIsDueTest {
 
     startAWorkflow("quiet-store");
     awaitNothingLeftUndone();
-    // the reads above prove that the counter sees a connection at all, which is what makes
-    // the zero below a measurement rather than a silence
+    // the reads above prove that the counter sees a connection at all. That makes the zero
+    // below a measurement and not just silence
     assertTrue(CountingPoolInterceptor.acquired() > 0);
 
     awaitTheDispatchWentQuiet();
@@ -194,10 +193,11 @@ public class OutboxSleepsWhileNothingIsDueTest {
   @DisplayName("The questions the poller asks are answered from an index")
   public void theQuestionsOfThePollerAreIndexed() throws Exception {
 
-    // without these the aggregate asking when the next entry is due reads the whole table, and
-    // that cost grows with everything the table ever held while the wake-ups stay as rare. Which
-    // indexes those are is the store's word, not this test's: it asks the database for the ones
-    // the store declares, so a renamed or dropped index shows up here and not much later
+    // without these indexes, the aggregate query which asks when the next entry is due reads
+    // the whole table. That cost grows with everything the table ever held, while the
+    // wake-ups stay as rare. The store decides which indexes these are, not this test. The
+    // test asks the database for the ones the store declares. So a renamed or dropped index
+    // shows up here and not much later
     final var indexed = new LinkedHashMap<String, List<String>>();
     try (var connection = dataSource.getConnection(); var resultSet = connection
         .getMetaData()
@@ -241,8 +241,8 @@ public class OutboxSleepsWhileNothingIsDueTest {
   @DisplayName("An entry which is due again in half a second does not wait out the cap")
   public void anEntryDueSoonShortensALongSleep() throws Exception {
 
-    // the first dispatch fails, so the store writes the next attempt one
-    // 'attempt-frequency' away - half a second here, against an hour of cap
+    // the first dispatch fails, so the store plans the next attempt one
+    // 'attempt-frequency' later. That is half a second here, against a cap of an hour
     listener.failNextDispatches(1);
 
     startAWorkflow("retry-soon");

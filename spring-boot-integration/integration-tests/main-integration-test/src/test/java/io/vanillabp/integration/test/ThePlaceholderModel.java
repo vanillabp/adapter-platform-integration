@@ -3,9 +3,9 @@ package io.vanillabp.integration.test;
 /**
  * The model most tests of this module deploy without caring about it:
  * {@code test-module/processes/dummy/DummyProcess.bpmn}. The BPMS double names its process after
- * the file, {@code DummyProcess}, and in most of these tests no workflow service claims it. A
- * process nobody claims ends the start unless the application says that it belongs to somebody
- * else, so a test which only needs the file to be there says that.
+ * the file, {@code DummyProcess}. In most of these tests no workflow service claims it. A
+ * process which nobody claims stops the start, unless the application says that it belongs to
+ * somebody else. So a test which only needs the file to be there says that.
  */
 public final class ThePlaceholderModel {
 

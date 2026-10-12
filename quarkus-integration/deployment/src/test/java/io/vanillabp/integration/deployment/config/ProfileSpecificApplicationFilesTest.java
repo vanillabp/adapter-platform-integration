@@ -10,8 +10,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * What a native build says about the profile-specific configuration files of the application.
- * The build step needs a native build to run at all, so what it says is tested here, where the
- * files and the profiles are handed in.
+ * The build step only runs in a native build. So its message is tested here, where the test
+ * passes in the files and the profiles.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ProfileSpecificApplicationFilesTest {

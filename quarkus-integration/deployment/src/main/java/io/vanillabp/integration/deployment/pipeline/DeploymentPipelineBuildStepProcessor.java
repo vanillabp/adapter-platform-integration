@@ -27,13 +27,18 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * VanillaBP extension build step processor wiring the runtime deployment pipeline:
- * the startup runner executing
+ * Build step processor of the VanillaBP extension. It wires the runtime deployment
+ * pipeline from three things:
+ * <ul>
+ * <li>the startup runner, which runs
  * <code>readBpmn &rarr; prepareBpmn &rarr; wireBpmn &rarr; deployResources &rarr;
- * startWorkflowProcessing</code> per workflow module, the adapters' deployment
- * services announced via {@link VanillaBpAdapterDeploymentServiceBuildItem} and the
- * build-time index of all BPMN resources (RUN_TIME <code>resources-location</code>
- * cannot be pattern-scanned in a fast-jar at runtime).
+ * startWorkflowProcessing</code> for each workflow module,</li>
+ * <li>the adapters' deployment services, announced by
+ * {@link VanillaBpAdapterDeploymentServiceBuildItem},</li>
+ * <li>the index of all BPMN resources, built at build time. A fast-jar cannot be scanned
+ * by a pattern at runtime, and <code>resources-location</code> is RUN_TIME
+ * configuration.</li>
+ * </ul>
  */
 public class DeploymentPipelineBuildStepProcessor {
 
@@ -45,10 +50,10 @@ public class DeploymentPipelineBuildStepProcessor {
   }
 
   /**
-   * Registers the adapters' deployment-service beans announced via
-   * {@link VanillaBpAdapterDeploymentServiceBuildItem}: adapters only produce the
-   * build item (adapter type + bean class), the VanillaBP extension registers the
-   * bean - no separate self-registration needed.
+   * Registers the adapters' deployment-service beans announced by
+   * {@link VanillaBpAdapterDeploymentServiceBuildItem}. An adapter only produces the build
+   * item (adapter type and bean class). The VanillaBP extension registers the bean, so the
+   * adapter does not need to register it itself.
    *
    * @param deploymentServicesProvidedByAdapters The build items produced by the adapters
    * @param additionalBeans Producer used to register the announced beans
@@ -71,12 +76,12 @@ public class DeploymentPipelineBuildStepProcessor {
   }
 
   /**
-   * Keeps deployment-pipeline beans from ArC's unused-bean removal: adapters'
-   * {@link AdapterDeploymentService} and extensions' {@link ExtensionWiringService}
-   * <i>element</i> beans are not injected by application code but collected via
-   * <code>Instance</code> lookups by the {@link VanillaBpDeploymentRunner}. (The
-   * per-adapter-id <code>List</code> shape is kept by the platform's
-   * <code>keepPerAdapterIdListBeans</code> build step.)
+   * Stops ArC from removing the deployment-pipeline beans as unused. Application code does
+   * not inject the <i>element</i> beans of the adapters' {@link AdapterDeploymentService}
+   * and of the extensions' {@link ExtensionWiringService}. The
+   * {@link VanillaBpDeploymentRunner} collects them by <code>Instance</code> lookups. (The
+   * platform's <code>keepPerAdapterIdListBeans</code> build step keeps the
+   * <code>List</code> beans, one for each adapter id.)
    *
    * @return The unremovable-bean build item
    */
@@ -90,9 +95,9 @@ public class DeploymentPipelineBuildStepProcessor {
   }
 
   /**
-   * Registers the {@link VanillaBpDeploymentRunner} driving the deployment pipeline
-   * on {@link io.quarkus.runtime.StartupEvent}. It is marked unremovable because it
-   * is not injected by application code but driven by lifecycle events.
+   * Registers the {@link VanillaBpDeploymentRunner}. It runs the deployment pipeline on
+   * {@link io.quarkus.runtime.StartupEvent}. It is marked unremovable, because application
+   * code does not inject it. Lifecycle events drive it.
    *
    * @return The additional {@link VanillaBpDeploymentRunner} bean
    */
@@ -109,28 +114,28 @@ public class DeploymentPipelineBuildStepProcessor {
 
   /**
    * Indexes the <code>.bpmn</code> and <code>.dmn</code> resources of all application
-   * archives at build time and records them (as plain classpath-root-relative strings) together with
-   * the detected workflow module IDs as the synthetic {@link BpmsResourceIndex}
-   * bean. The runtime deployment runner filters the index by the configured
-   * <code>resources-location</code> - RUN_TIME configuration cannot be
-   * pattern-scanned in a Quarkus fast-jar at runtime.
+   * archives at build time. It records them, together with the workflow module IDs found, as
+   * the synthetic {@link BpmsResourceIndex} bean. Each resource is a plain string, relative
+   * to the classpath root. The runtime deployment runner filters the index by the configured
+   * <code>resources-location</code>. A Quarkus fast-jar cannot be scanned by a pattern at
+   * runtime, and that setting is RUN_TIME configuration.
    * <p>
    * Dev mode watches the same kind of files, but by extension and not by name. A build
-   * writes the index once, so a file which arrives afterwards is in none of the lists a
-   * build produced. Watching the names of that build would leave such a file out of the
-   * restart as well, and the application would go on running against an index which no
-   * longer says what the directory holds. Watching the extension covers both: the files
-   * of the last build, and the one a developer adds while the application runs.
+   * writes the index once. So a file which arrives later is in none of the lists a build
+   * produced. If dev mode watched the names of that build, such a file would not trigger a
+   * restart either. The application would keep running against an index which no longer
+   * matches the directory. Watching the extension covers both cases: the files of the last
+   * build, and a file a developer adds while the application runs.
    * <p>
-   * The indexed files are registered for the native image as well. A native image only
-   * carries the resources it was told about, so without that registration the index would
-   * name files the running application cannot open, and the deployment pipeline would end
-   * the startup saying exactly that.
+   * The indexed files are also registered for the native image. A native image only carries
+   * the resources it was told about. Without that registration, the index would name files
+   * which the running application cannot open. The deployment pipeline would then stop the
+   * startup and say exactly that.
    *
    * @param applicationArchives The archives of this Quarkus build
    * @param workflowModulesFound Information about all workflow modules found
-   * @param partsChecked Waited for, so a build whose VanillaBP parts do not belong together ends
-   *     before anything is indexed
+   * @param partsChecked Waited for. So a build whose VanillaBP parts do not belong together
+   *     ends before anything is indexed
    * @param watchedFiles Producer registering the file extensions for dev-mode hot deployment
    * @param nativeImageResources Producer putting the files into the native image
    * @param syntheticBeans Producer used to register the recorded index as a bean

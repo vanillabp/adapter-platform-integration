@@ -35,15 +35,15 @@ import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import jakarta.inject.Inject;
 
 /**
- * An application with two persistences. One aggregate is a Hibernate ORM Panache
- * active record, the other a MongoDB Panache active record, so both platform defaults of the
- * phase-two outbox and of the delivery log are active and none of them can serve both.
+ * An application with two persistences. One aggregate is a Hibernate ORM Panache active
+ * record, the other one is a MongoDB Panache active record. So both platform defaults of the
+ * phase-two outbox and of the delivery log are active, and none of them can serve both.
  * <p>
- * Such an application used not to boot at all: the startup validation resolved the
- * outbox, found two candidates and ended with a message telling the application to attribute
- * them itself. Now the store is read off the persistence VanillaBP resolved for each
- * aggregate, so this test starting at all is half of the assertion. The other half is where
- * the outbox entries went.
+ * Such an application once did not boot at all. The startup validation resolved the outbox
+ * and found two candidates. It ended with a message which told the application to assign
+ * them itself. Now the store follows from the persistence which VanillaBP resolved for each
+ * aggregate. So the fact that this test starts at all is half of the assertion. The other
+ * half is where the outbox entries went.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MixedPersistenceStoreAttributionTest {

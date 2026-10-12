@@ -6,22 +6,22 @@ import io.quarkus.runtime.annotations.QuarkusMain;
 import jakarta.inject.Inject;
 
 /**
- * The assertion of this module, written as the application's main: booting is what has to
+ * The assertion of this module, written as the application's main. Booting is what has to
  * work, and an exit code says whether it did.
  * <p>
- * Building the native image is the harder half, but a binary
- * which cannot start is no proof of anything - the BPMN resources of the workflow module were
- * missing from the image until the deployment pipeline started registering them. So the
- * application boots, runs the deployment pipeline, starts a workflow through the generated
- * process service and reads the aggregate back out of the relational database. Anything going
- * wrong on that way either throws or leaves the aggregate unwritten, and the exit code is
- * what the pipeline of the platform looks at.
+ * Building the native image is the harder half. But a binary which cannot start proves
+ * nothing. The BPMN resources of the workflow module were missing from the image until the
+ * deployment pipeline started to register them. So the application boots, runs the
+ * deployment pipeline, starts a workflow through the generated process service and reads
+ * the aggregate back out of the relational database. Anything which goes wrong on that way
+ * either throws or leaves the aggregate unwritten. The pipeline of the platform looks at
+ * the exit code.
  * <p>
- * The second thing it asserts is the configuration its workflow modules ship, see
- * {@link WorkflowModuleConfigurationCheck}: those files are read from the classpath, which a
- * binary has none of, so they reach it only as registered resources. Started with
- * <code>-Dquarkus.profile=tenant</code> the same binary has to answer with the values of the
- * profile-specific files.
+ * The second thing it asserts is the configuration which its workflow modules ship, see
+ * {@link WorkflowModuleConfigurationCheck}. Those files are read from the classpath, and a
+ * binary has no classpath. So they reach it only as registered resources. Started with
+ * <code>-Dquarkus.profile=tenant</code>, the same binary has to answer with the values of
+ * the profile-specific files.
  */
 @QuarkusMain
 public class NativeImageApplication implements QuarkusApplication {

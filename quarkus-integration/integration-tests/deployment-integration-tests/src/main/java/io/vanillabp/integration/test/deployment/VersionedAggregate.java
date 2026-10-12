@@ -14,9 +14,9 @@ public class VersionedAggregate {
   private String id;
 
   /**
-   * Which method served the task - the version of the deployed process decides it.
+   * Which method served the task. The version of the deployed process decides it.
    */
-  // the test reads this, no BPMN model does - so it stays out of the BPMS
+  // the test reads this field, but no BPMN model does, so it stays out of the BPMS
   @NoSyncWithBPMS
   private String servedBy;
 

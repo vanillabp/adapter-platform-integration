@@ -10,13 +10,13 @@ import jakarta.transaction.Synchronization;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 
 /**
- * The Quarkus implementation of the core's {@link TransactionRunner} used to run
- * <code>&#64;WorkflowTask</code> handlers: JTA via {@link QuarkusTransaction}.
- * Additionally the CDI request context is activated around the work - handlers are
- * invoked on adapter threads (e.g. job-executor or polling-worker threads) where no
- * request context is active, and Panache/Hibernate session access requires one. The
- * same runner provides both to phase-two dispatch, which calls the application's
- * persistence from the outbox dispatcher's thread (see
+ * The Quarkus implementation of the core's {@link TransactionRunner}. It runs
+ * <code>&#64;WorkflowTask</code> handlers in JTA transactions through
+ * {@link QuarkusTransaction}. It also activates the CDI request context around the work.
+ * Handlers run on adapter threads, for example job-executor or polling-worker threads. No
+ * request context is active there, but Panache and Hibernate need one to use a session. The
+ * same runner gives both to the phase-two dispatch. That dispatch calls the application's
+ * persistence from the thread of the outbox dispatcher (see
  * {@link #requireTransaction(Supplier)}).
  */
 public class QuarkusTransactionRunner implements TransactionRunner {
@@ -24,13 +24,13 @@ public class QuarkusTransactionRunner implements TransactionRunner {
   private final TransactionSynchronizationRegistry transactionRegistry;
 
   /**
-   * Built once per application, by
-   * {@link io.vanillabp.integration.runtime.processservice.TransactionRunnerProducer}, and
-   * handed out as the platform's runner bean. That one instance matters: the resolver tells
-   * the platform's runner from an application's by identity.
+   * {@link io.vanillabp.integration.runtime.processservice.TransactionRunnerProducer} creates
+   * it once per application and hands it out as the platform's runner bean. That there is only
+   * one instance matters. The resolver tells the platform's runner from an application's runner
+   * by identity.
    *
-   * @param transactionRegistry What the state of the transaction of the CURRENT THREAD is read
-   *          from - JTA answers per thread, so this object carries no state of its own
+   * @param transactionRegistry Where the state of the transaction of the CURRENT THREAD is
+   *          read from. JTA answers per thread, so this object has no state of its own
    */
   public QuarkusTransactionRunner(
       final TransactionSynchronizationRegistry transactionRegistry) {
@@ -50,10 +50,10 @@ public class QuarkusTransactionRunner implements TransactionRunner {
   }
 
   /**
-   * Registers an interposed JTA {@link Synchronization} whose
-   * {@link Synchronization#beforeCompletion()} runs the check, so a phase-one
-   * check of an adapter runs as late as the platform allows. Without an active transaction
-   * the check runs immediately.
+   * Registers an interposed JTA {@link Synchronization}. Its
+   * {@link Synchronization#beforeCompletion()} runs the check. So a phase-one check of an
+   * adapter runs as late as the platform allows. Without an active transaction, the check runs
+   * at once.
    */
   @Override
   public void beforeCommit(
@@ -85,9 +85,9 @@ public class QuarkusTransactionRunner implements TransactionRunner {
   public <T> T inCurrent(
       final Supplier<T> work) {
 
-    // STATUS_NO_TRANSACTION is the only status reported for a thread without a
-    // transaction; every other status means one is associated with this thread, no
-    // matter whether it was already marked for rollback
+    // STATUS_NO_TRANSACTION is the only status for a thread without a transaction.
+    // Every other status means that the thread has one, even if it is already marked
+    // for rollback.
     if (transactionRegistry.getTransactionStatus() == Status.STATUS_NO_TRANSACTION) {
       throw new IllegalStateException(
           """
@@ -104,8 +104,8 @@ public class QuarkusTransactionRunner implements TransactionRunner {
   public <T> T requireTransaction(
       final Supplier<T> work) {
 
-    // joining instead of suspending: an outbox of the application may well dispatch
-    // inside a transaction of its own, and phase two belongs into it then
+    // Join instead of suspend. An outbox of the application may dispatch inside a
+    // transaction of its own, and then phase two belongs in that transaction.
     return withRequestContext(() -> QuarkusTransaction
         .joiningExisting()
         .call(work::get));
@@ -122,8 +122,8 @@ public class QuarkusTransactionRunner implements TransactionRunner {
   @Override
   public boolean isRollbackOnly() {
 
-    // getRollbackOnly() is only defined while a transaction is associated with the
-    // thread, so the status is asked first
+    // getRollbackOnly() works only while the thread has a transaction. So we ask for
+    // the status first.
     return (transactionRegistry.getTransactionStatus() != Status.STATUS_NO_TRANSACTION) && transactionRegistry
         .getRollbackOnly();
 
@@ -133,10 +133,10 @@ public class QuarkusTransactionRunner implements TransactionRunner {
   public boolean isConcurrentModification(
       final Throwable failure) {
 
-    // under JTA the conflict never arrives as itself: Hibernate raises it while
-    // flushing at commit, the transaction manager reports a RollbackException and
-    // QuarkusTransaction wraps that again - so the chain of causes is what is asked,
-    // which the core does by name (it must not depend on JPA)
+    // Under JTA, the conflict never arrives as itself. Hibernate raises it while it
+    // flushes at commit. The transaction manager reports a RollbackException, and
+    // QuarkusTransaction wraps that again. So we look at the chain of causes. The core
+    // does this by class name, because it must not depend on JPA.
     return io.vanillabp.integration.adapter.migration.transaction.AggregateWrite
         .causedByOptimisticLocking(failure);
 

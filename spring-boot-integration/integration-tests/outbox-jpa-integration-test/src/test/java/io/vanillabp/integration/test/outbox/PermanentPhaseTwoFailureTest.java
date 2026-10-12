@@ -32,13 +32,13 @@ import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * The outbox repeats a failed dispatch, which is what makes losing a concurrency conflict
- * survivable. A failure the BPMS answers the same way every time gains nothing from that,
- * so an adapter may say ({@code MigratableProcessService#isPhaseTwoFailureRepeatable})
- * that repeating cannot help, and the entry is then blocked after the first attempt.
+ * The outbox repeats a failed dispatch. That is why losing a concurrency conflict does no
+ * harm. But if the BPMS answers the same way every time, repeating does not help. So an
+ * adapter may say that ({@code MigratableProcessService#isPhaseTwoFailureRepeatable}).
+ * Then the entry is blocked after the first attempt.
  * <p>
- * The store here is the JDBC one, which is the default of a Spring Boot application on
- * JPA. The Quarkus side has the same test, against the same store.
+ * The store here is the JDBC store, the default of a Spring Boot application on JPA. The
+ * Quarkus side has the same test, against the same store.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -47,12 +47,12 @@ public class PermanentPhaseTwoFailureTest {
 
   /**
    * How long a test waits before it says that nothing more happened. The application
-   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>. These tests set that
+   * to half a second, so this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A machine which leaves this JVM without a
+   * turn only makes the wait longer. Afterwards the test asserts a count which did not
+   * grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -79,8 +79,8 @@ public class PermanentPhaseTwoFailureTest {
   }
 
   /**
-   * The entries of ONE aggregate. A count over the whole table would already be
-   * satisfied by a sibling test's entry.
+   * The entries of ONE aggregate. A count over the whole table would already be satisfied
+   * by an entry of another test.
    *
    * @param aggregateId The aggregate asked about
    * @return Its entries
@@ -158,8 +158,8 @@ public class PermanentPhaseTwoFailureTest {
       errors.stop();
     }
 
-    // the ERROR is where an operator starts, so it names the entry and the page which says
-    // how to find it, open it again or delete it
+    // an operator starts at the ERROR. So it names the entry, and the page which says how
+    // to find it, open it again or delete it
     final var blockedEntry = entriesOf(attachedAggregate.getId()).get(0).id();
     assertTrue(
         errors.list
@@ -216,8 +216,8 @@ public class PermanentPhaseTwoFailureTest {
   }
 
   /**
-   * The counter-check: a failure the adapter reports as repeatable is still repeated, so
-   * the blocking above is the adapter's answer and not a change of the store's behaviour.
+   * The counter-check: a failure the adapter reports as repeatable is still repeated. So
+   * the blocking above comes from the answer of the adapter, not from a changed store.
    */
   @Test
   @DisplayName("A repeatable failure is still retried instead of being blocked")

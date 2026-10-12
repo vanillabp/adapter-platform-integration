@@ -11,10 +11,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What the build says about a workflow module which ships a file for a profile and not the
- * file the profile belongs to. The rule it reports is SmallRye's and is measured in
- * {@code WorkflowModuleProfileFileNeedsItsPlainFileTest} of the runtime module; what is
- * asked here is which files the report picks and what it offers the developer.
+ * What the build says about a workflow module which ships a file for a profile, but not the
+ * file which the profile belongs to. The rule it reports comes from SmallRye.
+ * {@code WorkflowModuleProfileFileNeedsItsPlainFileTest} of the runtime module checks that
+ * rule. This test checks which files the report picks, and what it offers the developer.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ProfileFilesWithoutTheirPlainFileTest {

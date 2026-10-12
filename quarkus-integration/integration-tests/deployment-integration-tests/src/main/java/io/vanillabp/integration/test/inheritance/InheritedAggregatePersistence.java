@@ -7,7 +7,7 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * In-memory persistence for the inheritance acceptance test's aggregate.
+ * In-memory persistence for the aggregate of the inheritance acceptance test.
  */
 @ApplicationScoped
 public class InheritedAggregatePersistence implements AggregatePersistenceAware<InheritedAggregate> {
@@ -57,7 +57,7 @@ public class InheritedAggregatePersistence implements AggregatePersistenceAware<
   }
 
   /**
-   * Direct store access for test assertions (only saved state is visible).
+   * Reads the store directly for the checks of a test. Only saved state is visible.
    *
    * @param id The aggregate's ID
    * @return The stored aggregate or <code>null</code>

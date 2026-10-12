@@ -12,16 +12,16 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An adapter written before the election carried the BPMS' own id of a workflow keeps
- * compiling and keeps answering exactly as it did. That is what makes the fourth argument
- * additive, and it is worth a test because the whole point of the default is that nobody
- * has to notice it.
+ * Older adapters were written before the election passed on the BPMS' own id of a
+ * workflow. Such an adapter still compiles and answers exactly as before. This is why the
+ * fourth argument breaks nothing. It gets a test because the default is only useful if
+ * nobody has to notice it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ElectionWithAWorkflowIdDefaultTest {
 
   /**
-   * An adapter as they were written before: it implements the three-argument question and
+   * An adapter written the old way. It implements the question with three arguments and
    * knows nothing about a workflow id.
    */
   private static class AnAdapterWrittenBefore implements MigratableProcessService<Object> {

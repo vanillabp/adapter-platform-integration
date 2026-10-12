@@ -8,18 +8,19 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.utils.SpringDataUtil;
 
 /**
- * Persistence for tests not concerned with it, in two parts.
+ * Persistence for tests which do not care about it. It has two parts.
  * <p>
- * A {@link SpringDataUtil} stub, so no database is needed, and every method of it fails
- * loudly. And a catch-all {@link AggregatePersistenceAware} double which stands in for any
- * aggregate no test brought its own double for: it fails just as loudly, but it makes the
- * application say what it is - one WITH a persistence implementation of its own, rather
- * than one whose aggregates have no repository. The platform reports the
- * latter while it starts, and these applications were never that.
+ * The first is a {@link SpringDataUtil} stub. So no database is needed, and every method of
+ * the stub fails loudly. The second is a catch-all {@link AggregatePersistenceAware} double.
+ * It stands in for every aggregate which has no double from its test. It fails just as
+ * loudly. But it tells the platform that the application HAS a persistence implementation
+ * of its own. Otherwise the application would look like one whose aggregates have no
+ * repository. The platform reports such an application while it starts, and these
+ * applications were never that.
  * <p>
- * A test needing its aggregate saved or read declares its own double for that aggregate
- * class. The most specific candidate wins, and {@code Object} is the greatest possible
- * inheritance distance, so any such double beats this one.
+ * A test which needs its aggregate saved or read declares its own double for that
+ * aggregate class. The most specific candidate wins. {@code Object} has the greatest
+ * possible inheritance distance, so any such double beats this one.
  */
 @Configuration
 public class TestPersistenceConfiguration {
@@ -83,9 +84,9 @@ public class TestPersistenceConfiguration {
 
       @Override
       public Class<Object> getAggregateClass() {
-        // every aggregate is an Object, so this covers the ones no test cares about -
-        // and at the greatest inheritance distance there is, which is why a test's own
-        // double always wins
+        // Every aggregate is an Object, so this covers the ones no test cares about.
+        // Object has the greatest inheritance distance there is. So a test's own
+        // double always wins.
         return Object.class;
       }
 
@@ -109,8 +110,8 @@ public class TestPersistenceConfiguration {
 
       @Override
       public Class<?> getAggregateIdType() {
-        // the contract's "not determinable": this double owns the serialized form, as
-        // far as it owns anything at all
+        // null means "not determinable" in the contract. So this double owns the
+        // serialized form, as far as it owns anything at all.
         return null;
       }
 

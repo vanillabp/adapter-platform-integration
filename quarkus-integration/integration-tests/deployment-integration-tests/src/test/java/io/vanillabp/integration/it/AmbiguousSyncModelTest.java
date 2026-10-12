@@ -22,11 +22,11 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * An aggregate whose attributes are annotated BOTH ways while the class
- * itself states no mode cannot be interpreted - is the rest shared with the BPMS or
- * not? The boot is aborted with a message naming the class, the conflicting
- * attributes and the fix, and it happens at STARTUP (when the workflow aggregate is
- * registered) instead of at the first sync point.
+ * The attributes of this aggregate are annotated BOTH ways, and the class itself states no
+ * mode. Nobody can tell whether the rest is shared with the BPMS or not. The boot is
+ * aborted with a message which names the class, the conflicting attributes and the fix.
+ * This happens at STARTUP, when the workflow aggregate is registered, and not at the first
+ * sync point.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AmbiguousSyncModelTest {

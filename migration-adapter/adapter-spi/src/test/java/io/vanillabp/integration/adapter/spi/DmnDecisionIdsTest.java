@@ -74,8 +74,8 @@ public class DmnDecisionIdsTest {
         DmnDecisionIds.rewrite(TWO_DECISIONS.getBytes(StandardCharsets.UTF_8), id -> "my-module__"
             + id), StandardCharsets.UTF_8);
 
-    // the input data is not deployed under a name of its own, and a decision table id is
-    // local to its decision - renaming either would change a file for no reason
+    // Input data is not deployed under a name of its own. A decision table id is local to
+    // its decision. Renaming either would change the file for no reason.
     assertTrue(rewritten.contains("id=\"score\""), rewritten);
     assertTrue(rewritten.contains("href=\"#score\""), rewritten);
     assertTrue(rewritten.contains("id=\"ratingTable\""), rewritten);
@@ -149,8 +149,8 @@ public class DmnDecisionIdsTest {
   }
 
   /**
-   * An adapter which was written before decision tables were deployed, or whose BPMS has
-   * no decisions at all: it implements neither {@code readDmn} nor anything of it.
+   * An adapter written before decision tables were deployed, or one whose BPMS has no
+   * decisions at all. It does not implement {@code readDmn}.
    */
   private static class AdapterWithoutDmnSupport implements AdapterDeploymentService<Object, Object> {
 

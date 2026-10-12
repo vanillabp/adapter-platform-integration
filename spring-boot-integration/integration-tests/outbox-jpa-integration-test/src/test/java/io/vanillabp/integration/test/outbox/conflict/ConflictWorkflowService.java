@@ -7,9 +7,9 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The workflow service of the version-conflict acceptance test. Both
- * handlers change the aggregate; only {@link #conflictingTask} lets the other branch
- * commit in between, which makes VanillaBP's own commit fail.
+ * The workflow service of the version-conflict acceptance test. Both handlers change the
+ * aggregate. Only {@link #conflictingTask} lets the other branch commit in between, and
+ * that makes the commit of VanillaBP fail.
  */
 @Service
 @WorkflowService(

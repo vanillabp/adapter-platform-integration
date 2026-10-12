@@ -25,17 +25,17 @@ import jakarta.inject.Inject;
 /**
  * What happens when the dispatch got through and the write which says so did not.
  * <p>
- * That write runs after the renewal of the lease was let go, so it stands outside the attempt
- * and outside the lane's own error handling. An exception there used to leave the thread of
- * the lane without a word, and the entry lay claimed until its lease ran out: the operation
- * had reached the BPMS and nothing said what had become of it. It is reported and planned
- * again instead, the way any attempt which did not get through is, and the entry being planned
- * again is what this test reads.
+ * That write runs after the renewal of the lease was stopped. So it stands outside the
+ * attempt and outside the lane's own error handling. An exception there used to end the
+ * thread of the lane without a word. The entry then stayed claimed until its lease ran out.
+ * The operation had reached the BPMS, and nothing said what had become of it. Now it is
+ * reported and planned again, like any attempt which did not get through. This test reads
+ * that the entry is planned again.
  * <p>
- * The failing write is a real one, not a double: the unique index over <code>dedupKey</code>
- * is what a dispatched entry writes its own id into, so an entry whose id another document
- * already holds there cannot be marked. That is the same error a store hands back when two
- * nodes race, and it needs nothing mocked.
+ * The failing write is a real one, not a double. A dispatched entry writes its own id into
+ * the field <code>dedupKey</code>, which has a unique index. So an entry cannot be marked if
+ * another document already holds its id there. A store hands back the same error when two
+ * nodes race, and nothing has to be mocked.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoAMarkWhichDidNotGetThroughIsPlannedAgainTest {
@@ -68,8 +68,8 @@ public class MongoAMarkWhichDidNotGetThroughIsPlannedAgainTest {
   MongoClient mongoClient;
 
   /**
-   * The outbox of the application, asked through the reader so that neither a collection
-   * nor a field is named here.
+   * The outbox of the application. It is asked through the reader, so this test names
+   * neither a collection nor a field.
    */
   private MongoPhaseTwoOutboxReader outbox() {
 
@@ -86,9 +86,9 @@ public class MongoAMarkWhichDidNotGetThroughIsPlannedAgainTest {
   }
 
   /**
-   * Writes the entry to be dispatched, and next to it a dispatched entry which already holds
-   * that entry's id as its <code>dedupKey</code>. The mark of the first one therefore cannot
-   * be written.
+   * Writes the entry to be dispatched. Next to it, it writes a dispatched entry which already
+   * holds that entry's id as its <code>dedupKey</code>. So the mark of the first one cannot be
+   * written.
    *
    * @return The id of the entry to be dispatched
    */

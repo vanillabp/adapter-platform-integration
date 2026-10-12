@@ -42,13 +42,12 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import lombok.Getter;
 
 /**
- * Acceptance test of <code>&#64;WorkflowTask</code> processing with the
- * dummy adapter standing in for a BPMS: the adapter triggers task invocations
- * through the core's {@code WorkflowTaskInvoker}, which loads the aggregate, runs
- * the handler within a transaction, saves the aggregate and maps the three
- * outcomes of the restored V1 contract (completed / BPMN error via
- * {@code TaskException} with COMMITTED aggregate changes / failure with rolled-back
- * changes). Also covered: parameter binding (aggregate, {@code @TaskParam},
+ * Acceptance test of <code>&#64;WorkflowTask</code> processing. The dummy adapter stands
+ * in for a BPMS. It triggers task calls through the core's {@code WorkflowTaskInvoker}.
+ * The invoker loads the aggregate, runs the handler in a transaction and saves the
+ * aggregate. It maps the three outcomes of the restored V1 contract: completed; BPMN
+ * error by {@code TaskException}, with COMMITTED aggregate changes; failure, with the
+ * changes rolled back. Also covered: parameter binding (aggregate, {@code @TaskParam},
  * multi-instance), asynchronous tasks ({@code @TaskId} stays open), the
  * two-directional wiring validation with guiding messages and the task-level
  * adapter-configuration resolution from real application config.
@@ -61,11 +60,11 @@ public class WorkflowTaskProcessingTest {
   private static final String PROCESS = "TaskProcess";
 
   /**
-   * In-memory persistence for the test aggregate (with {@code loadById}, so tasks
-   * can be processed) plus the transaction infrastructure required to run handlers
-   * (H2-backed {@link DataSourceTransactionManager} - the dummy E2E observes the
-   * save/no-save contract; real DB rollback semantics are pinned by the BPMS
-   * adapters' tests).
+   * In-memory persistence for the test aggregate, with {@code loadById}, so tasks can be
+   * processed. Plus the transaction setup which handlers need: a
+   * {@link DataSourceTransactionManager} on H2. This end-to-end test with the dummy only
+   * sees whether the aggregate was saved or not. The tests of the BPMS adapters pin down
+   * how a real database rolls back.
    */
   @Configuration
   static class TaskProcessingConfiguration {
@@ -114,8 +113,8 @@ public class WorkflowTaskProcessingTest {
     }
 
     /**
-     * Copies aggregates on save/load so un-saved mutations never leak into the
-     * store - mimicking a real persistence where only saved state survives.
+     * Copies aggregates on save and load, so changes which were not saved never reach the
+     * store. This works like a real persistence, where only saved state survives.
      */
     private static TaskProcessingAggregate copyOf(
         final TaskProcessingAggregate aggregate) {
@@ -151,9 +150,9 @@ public class WorkflowTaskProcessingTest {
     }
 
     /**
-     * Stands in for the BPMN model: supplies the tasks of 'TaskProcess' matching
-     * the handlers (so the wiring validation passes); other processes of the
-     * module have no tasks.
+     * Stands in for the BPMN model. It supplies the tasks of 'TaskProcess' which match the
+     * handlers, so the wiring validation passes. The other processes of the module have no
+     * tasks.
      */
     @Bean
     DummyTaskWiringSource taskWiringSource() {
@@ -266,8 +265,8 @@ public class WorkflowTaskProcessingTest {
 
     try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
 
-      // the adapter-facing trigger: per-adapter-id deployment-service bean, like
-      // a real BPMS adapter dispatching a delivered task through the core
+      // the trigger on the adapter side: the deployment-service bean of the adapter id.
+      // A real BPMS adapter also hands a delivered task to the core this way
       final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
 
       // (a) normal return: task completed, aggregate changes saved
@@ -288,8 +287,8 @@ public class WorkflowTaskProcessingTest {
           "bpmn-error-raised",
           TaskProcessingConfiguration.AGGREGATES.get("4712").getStatus());
 
-      // (c) any other exception: propagates, task NOT completed, aggregate
-      // changes NOT saved (transaction rolled back)
+      // (c) any other exception: it is passed on, the task is NOT completed, and the
+      // aggregate changes are NOT saved (the transaction is rolled back)
       storeAggregate("4713");
       final var failure = Assertions.assertThrows(
           IllegalStateException.class,
@@ -299,7 +298,7 @@ public class WorkflowTaskProcessingTest {
           "new",
           TaskProcessingConfiguration.AGGREGATES.get("4713").getStatus());
 
-      // asynchronous task (@TaskId): stays open, receives the BPMS task id
+      // asynchronous task (@TaskId): it stays open and receives the task id of the BPMS
       storeAggregate("4714");
       final var pending = dummyAdapter.invokeTask(MODULE, PROCESS, new TaskInvocationContext() {
 
@@ -360,8 +359,8 @@ public class WorkflowTaskProcessingTest {
       Assertions.assertEquals(7, bound.getTotal());
       Assertions.assertEquals("item-3", bound.getElement());
 
-      // task-level adapter configuration from REAL application config resolves
-      // most-specific-wins (task level 42 beats adapter level 1)
+      // adapter configuration at task level, from a REAL application config: the most
+      // specific value wins (42 at the task beats 1 at the adapter)
       final var overlay = context.getBean(DummyAdapterOverlayProperties.class);
       Assertions.assertEquals(42, overlay.testFor(MODULE, PROCESS, "processTask", "test"));
       Assertions.assertEquals(1, overlay.testFor(MODULE, PROCESS, "someOtherTask", "test"));
@@ -372,9 +371,9 @@ public class WorkflowTaskProcessingTest {
   }
 
   /**
-   * Supplies a task the workflow service does not implement - the boot has to fail
-   * with the guiding wiring message (the reverse direction - methods matching no
-   * task - is validated per module at the end of deployResources).
+   * Supplies a task the workflow service does not implement. The boot must fail with the
+   * guiding wiring message. The reverse direction, methods which match no task, is
+   * validated per module at the end of deployResources.
    */
   @Configuration
   static class BrokenWiringConfiguration {
@@ -394,8 +393,8 @@ public class WorkflowTaskProcessingTest {
   }
 
   /**
-   * An aggregate whose sync model is ambiguous: attributes annotated
-   * both ways while the class states no mode of its own.
+   * An aggregate whose sync model is ambiguous. Its attributes are annotated both ways,
+   * and the class states no mode of its own.
    */
   @Getter
   public static class AmbiguousSyncAggregate {
@@ -419,9 +418,9 @@ public class WorkflowTaskProcessingTest {
       final var invoker = context.getBean(
           io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry.class);
 
-      // the @WorkflowTask method changed the aggregate; an adapter completing the
-      // task afterwards asks the core for the values shared with its BPMS - the
-      // aggregate is loaded in its OWN transaction (the task's one is committed)
+      // the @WorkflowTask method changed the aggregate. An adapter which completes the
+      // task afterwards asks the core for the values shared with its BPMS. The aggregate
+      // is loaded in its OWN transaction, because the transaction of the task is committed
       storeAggregate("4720");
       dummyAdapter.invokeTask(MODULE, PROCESS, context("processTask", "4720"));
 
@@ -442,7 +441,7 @@ public class WorkflowTaskProcessingTest {
           invoker.syncedWorkflowAggregateValues(
               MODULE, "UnknownProcess", "4720", io.vanillabp.integration.adapter.spi.AggregateSyncMode.FULL));
 
-      // the platform provides the model as a bean and validates aggregates with it
+      // the platform offers the model as a bean and validates aggregates with it
       final var syncModel = context.getBean(io.vanillabp.integration.adapter.spi.WorkflowAggregateSync.class);
       final var ambiguous = Assertions.assertThrows(
           IllegalStateException.class,
@@ -485,8 +484,7 @@ public class WorkflowTaskProcessingTest {
                 WorkflowModuleConfiguration.class,
                 BrokenWiringConfiguration.class,
                 DeploymentTest.TestConfig.class));
-            // persistence + transaction infrastructure without the correct
-            // wiring source
+            // persistence and transaction setup, but without the correct wiring source
             classes.add(TaskProcessingConfigurationWithoutWiringSource.class);
             testApp.applicationBuilder(classes.toArray(Class[]::new)).run().close();
           });
@@ -511,9 +509,8 @@ public class WorkflowTaskProcessingTest {
   }
 
   /**
-   * Same persistence/transaction beans as {@link TaskProcessingConfiguration} but
-   * WITHOUT the wiring source (the broken one is provided by
-   * {@link BrokenWiringConfiguration}).
+   * The same persistence and transaction beans as {@link TaskProcessingConfiguration}, but
+   * WITHOUT the wiring source. {@link BrokenWiringConfiguration} provides the broken one.
    */
   @Configuration
   static class TaskProcessingConfigurationWithoutWiringSource {

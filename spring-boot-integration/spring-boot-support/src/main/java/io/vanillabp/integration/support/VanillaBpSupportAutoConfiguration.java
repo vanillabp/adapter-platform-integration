@@ -4,21 +4,21 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
 
 /**
- * The only autoconfiguration of this module: it reports an application which has a
+ * The only autoconfiguration of this module. It reports an application which has a
  * workflow module but no BPMS adapter.
  * <p>
- * Everything else VanillaBP does on Spring Boot is configured by
- * <code>vanillabp-spring-boot-integration</code>, which a BPMS adapter brings along. This
- * module is on the classpath of every workflow module, so it is the only place which can
- * speak when the adapter - and with it the integration - is missing.
+ * <code>vanillabp-spring-boot-integration</code> configures everything else VanillaBP does
+ * on Spring Boot, and a BPMS adapter brings it along. This module is on the classpath of
+ * every workflow module. So it is the only place which can speak up when the adapter is
+ * missing, and with it the integration.
  */
 @AutoConfiguration
 public class VanillaBpSupportAutoConfiguration {
 
   /**
-   * Built by Spring Boot, in every application which has
+   * Built by Spring Boot in every application which has
    * <code>vanillabp-spring-boot-support</code> on its classpath. A workflow module
-   * compiles against that module alone, so this runs wherever a workflow module is, with
+   * compiles against that module alone. So this runs wherever a workflow module is, with
    * or without a BPMS adapter.
    */
   public VanillaBpSupportAutoConfiguration() {

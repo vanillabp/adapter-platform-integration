@@ -34,20 +34,20 @@ import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test of the per-aggregate outbox selection in a
- * MIXED-PERSISTENCE application (JPA/H2 + MongoDB/TestContainers replica set) with a
- * dedicated outbox for one "hot" process:
+ * Acceptance test of how the outbox is chosen per aggregate. The application has MIXED
+ * persistence (JPA/H2 and a MongoDB replica set from Testcontainers) and its own outbox
+ * for one "hot" process:
  * <ul>
- * <li>the JPA aggregate's outbox entry lands in the JDBC outbox and rides
- * the JPA transaction (gone on rollback),</li>
- * <li>the MongoDB aggregate's outbox entry lands in the MongoDB outbox and rides the
- * MongoDB transaction (gone on rollback),</li>
- * <li>the "hot" aggregate's entry lands in ITS dedicated table only
- * ({@code HOT_OUTBOX}, assigned via a {@code PhaseTwoOutboxAware} bean),</li>
- * <li>each aggregate maps to exactly ONE outbox - entries never split across stores
- * (per-aggregate ordering is preserved by construction) - and</li>
- * <li>phase two is dispatched from every store with the aggregate ID converted back
- * to its original type.</li>
+ * <li>the outbox entry of the JPA aggregate lands in the JDBC outbox, inside the JPA
+ * transaction (a rollback removes it),</li>
+ * <li>the outbox entry of the MongoDB aggregate lands in the MongoDB outbox, inside the
+ * MongoDB transaction (a rollback removes it),</li>
+ * <li>the entry of the "hot" aggregate lands only in ITS own table
+ * ({@code HOT_OUTBOX}, assigned by a {@code PhaseTwoOutboxAware} bean),</li>
+ * <li>each aggregate belongs to exactly ONE outbox. Its entries are never split across
+ * stores, so the order per aggregate holds by design, and</li>
+ * <li>phase two is dispatched from every store, with the aggregate ID converted back to
+ * its original type.</li>
  * </ul>
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -60,12 +60,12 @@ public class MixedPersistenceOutboxTest {
 
   /**
    * How long a test waits before it says that nothing more happened. The application
-   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>. These tests set it
+   * to half a second, so this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A busy machine which leaves this JVM
+   * without a turn only makes the wait longer. And the test then asserts a count which did
+   * not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -162,12 +162,12 @@ public class MixedPersistenceOutboxTest {
     assertNotNull(attachedAggregate);
     assertNotNull(attachedAggregate.getId());
 
-    // phase two dispatched with the ID converted back to Long
+    // phase two is dispatched with the ID converted back to Long
     final var invocations = listener.awaitInvocations(1, 10000);
     assertEquals(attachedAggregate.getId(), invocations.getFirst());
 
-    // the entry went to the JDBC store only - never to the MongoDB collection or
-    // the dedicated hot store (each aggregate maps to exactly one outbox)
+    // the entry went only to the JDBC store. It never went to the MongoDB collection or
+    // the own store of the hot process (each aggregate belongs to exactly one outbox)
     assertEquals(jdbcBefore + 1, countJdbcEntries());
     assertEquals(mongoBefore, countMongoEntries());
     assertEquals(hotBefore, countHotEntries());
@@ -190,7 +190,7 @@ public class MixedPersistenceOutboxTest {
     assertNotNull(attachedAggregate);
     assertNotNull(attachedAggregate.getId());
 
-    // phase two dispatched with the MongoDB aggregate's String ID
+    // phase two is dispatched with the String ID of the MongoDB aggregate
     final var invocations = listener.awaitInvocations(1, 10000);
     assertEquals(attachedAggregate.getId(), invocations.getFirst());
 
@@ -219,8 +219,8 @@ public class MixedPersistenceOutboxTest {
     final var invocations = listener.awaitInvocations(1, 10000);
     assertEquals(attachedAggregate.getId(), invocations.getFirst());
 
-    // the PhaseTwoOutboxAware bean routed the entry to the dedicated store - the
-    // default stores stay untouched (load isolation for the hot process)
+    // the PhaseTwoOutboxAware bean sent the entry to the own store of the hot process.
+    // The default stores stay untouched, so the hot process carries its load alone
     assertEquals(hotBefore + 1, countHotEntries());
     assertEquals(jdbcBefore, countJdbcEntries());
     assertEquals(mongoBefore, countMongoEntries());
@@ -243,7 +243,7 @@ public class MixedPersistenceOutboxTest {
         }));
     assertEquals("test rollback", exception.getMessage());
 
-    // the entry was enlisted in the rolled-back JPA transaction
+    // the entry was part of the JPA transaction which was rolled back
     assertEquals(jdbcBefore, countJdbcEntries());
 
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
@@ -267,7 +267,7 @@ public class MixedPersistenceOutboxTest {
         }));
     assertEquals("test rollback", exception.getMessage());
 
-    // the entry was enlisted in the rolled-back MongoDB transaction
+    // the entry was part of the MongoDB transaction which was rolled back
     assertEquals(mongoBefore, countMongoEntries());
 
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);

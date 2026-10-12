@@ -13,23 +13,22 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An application which brings a Spring Boot setting to Quarkus. The gruelbox store runs on
- * Spring Boot alone, so the key is right in itself and wrong here, and SmallRye would answer
- * it with <code>SRCFG00050</code> and the name of the key - true, and no help at all to
- * somebody who just moved their configuration over. The message therefore also says where
- * that store lives now, because a reader who set the key asked for something VanillaBP does
+ * An application which brings a Spring Boot setting to Quarkus. The gruelbox store only
+ * runs on Spring Boot. So the key is right in itself, but wrong here. SmallRye would answer
+ * it with <code>SRCFG00050</code> and the name of the key. That is true, but it does not
+ * help somebody who just moved their configuration over. So the message also says where
+ * that store lives now. A reader who set the key asked for something which VanillaBP does
  * not carry any more.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class GruelboxKeyIsRefusedOnQuarkusTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
-          // a valid configuration plus the switch of the store Spring Boot alone builds
+          // a valid configuration, plus the switch of the store which only Spring Boot builds
           .addAsResource("gruelbox-on-quarkus/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class)                              // necessary due to anonymous class in DummyAdapters

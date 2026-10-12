@@ -8,14 +8,14 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * Publishes what VanillaBP counts about its deliveries and its outbox as Micrometer
- * meters - but only for an application which uses Micrometer. VanillaBP does not
- * bring it: metrics are the application's decision, and an application without them
- * has to boot unchanged.
+ * meters, but only for an application which uses Micrometer. VanillaBP does not bring
+ * Micrometer. Metrics are the application's decision, and an application without them has
+ * to boot unchanged.
  * <p>
- * The signal is the Micrometer extension's build-step class on the DEPLOYMENT
- * classpath, exactly as the election cache's meters do it (see
- * {@code WorkflowAdapterCacheMetricsBuildStepProcessor} for why the presence of
- * Micrometer's own classes would not be enough).
+ * The signal is the Micrometer extension's build-step class on the DEPLOYMENT classpath.
+ * The meters of the election cache use the same signal.
+ * {@code WorkflowAdapterCacheMetricsBuildStepProcessor} says why Micrometer's own classes
+ * would not be enough.
  */
 @Slf4j
 public class VanillaBpMetricsBuildStepProcessor {

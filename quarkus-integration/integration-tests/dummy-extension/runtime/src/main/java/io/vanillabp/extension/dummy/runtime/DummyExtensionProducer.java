@@ -8,15 +8,15 @@ import jakarta.enterprise.inject.Produces;
 import jakarta.inject.Singleton;
 
 /**
- * Provides the dummy extension's {@link DummyWiringService} - the reference
- * implementation of the extension convention on Quarkus: extensions contribute
- * plain {@link ExtensionWiringService} <i>element</i> beans (they are not
- * per-adapter-id, so no List shape is involved). The platform keeps such beans from
- * ArC's unused-bean removal - they are only collected via <code>Instance</code>
- * lookups by the deployment runner.
+ * Provides the dummy extension's {@link DummyWiringService}. It is the reference
+ * implementation of the extension convention on Quarkus. Extensions contribute plain
+ * {@link ExtensionWiringService} <i>element</i> beans. They do not exist per adapter id,
+ * so no List shape is involved. The platform keeps such beans from being removed by ArC as
+ * unused, because only the deployment runner collects them, through <code>Instance</code>
+ * lookups.
  * <p>
- * The producer method is {@code @Singleton}: wiring-service implementations usually
- * have no no-arg constructor and are therefore not client-proxyable.
+ * The producer method is {@code @Singleton}. Wiring-service implementations usually have
+ * no constructor without arguments, so the container cannot wrap them in a client proxy.
  */
 @ApplicationScoped
 public class DummyExtensionProducer {

@@ -28,15 +28,16 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Concurrent tokens on Quarkus, with a real JPA aggregate carrying <code>@Version</code>: while
- * the <code>&#64;WorkflowTask</code> handler runs, a second writer changes the same row
- * in a transaction of its own and commits - two branches of one workflow, made
- * sequential so nothing here depends on a race.
+ * Concurrent tokens on Quarkus, with a real JPA aggregate which carries
+ * <code>@Version</code>. While the <code>&#64;WorkflowTask</code> handler runs, a second
+ * writer changes the same row in a transaction of its own and commits. These are two
+ * branches of one workflow. They run one after the other, so nothing here depends on a
+ * race.
  * <p>
- * Under JTA the conflict never arrives as itself: Hibernate raises it while flushing at
- * the commit, Narayana reports a <code>RollbackException</code> and
- * <code>QuarkusTransaction</code> wraps that again. So this test proves the unwrapping
- * as much as the message.
+ * Under JTA the conflict never arrives as itself. Hibernate raises it while it flushes at
+ * the commit. Narayana reports a <code>RollbackException</code>, and
+ * <code>QuarkusTransaction</code> wraps that again. So this test proves the unwrapping as
+ * much as the message.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AggregateWriteConflictTest {
@@ -78,8 +79,8 @@ public class AggregateWriteConflictTest {
             messages,
             () -> dummyAdapter.invokeTask(MODULE, PROCESS, context("conflictingTask", "6001"))));
 
-    // the exception the platform recognized: an optimistic locking failure somewhere
-    // in the chain of causes, which is how JTA delivers it
+    // the exception the platform recognized: an optimistic locking failure somewhere in
+    // the chain of causes. That is how JTA delivers it
     assertTrue(AggregateWrite.causedByOptimisticLocking(thrown), thrown.toString());
     assertEquals(1, messages.size(), messages.toString());
     final var message = messages.getFirst();
@@ -89,7 +90,7 @@ public class AggregateWriteConflictTest {
     assertTrue(message.contains("conflictingTask"), message);
     assertTrue(message.contains("does not retry"), message);
 
-    // what the other branch wrote survived, what this run changed did not
+    // what the other branch wrote survived. What this run changed did not
     assertEquals("changed by the other branch", persistence.storedContent("6001"));
 
   }

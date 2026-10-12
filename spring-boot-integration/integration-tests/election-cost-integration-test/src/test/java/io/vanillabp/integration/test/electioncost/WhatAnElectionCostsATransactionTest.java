@@ -26,25 +26,25 @@ import io.vanillabp.integration.extension.spi.election.WorkflowElection;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What the election costs a caller which holds a transaction, measured rather than
- * argued.
+ * Measures what the election costs a caller which holds a transaction. We measure it
+ * instead of arguing about it.
  * <p>
  * An extension asks {@code WorkflowElection#adapterIdOfWorkflow} before it talks to a
- * BPMS about a workflow, and the Business Cockpit asks it on every report a service task
- * makes. That report needs an open transaction, because the entry it writes belongs to
- * the transaction which wrote the change. The election it goes through asks with the
- * patience of a read, so where the read model of the BPMS is behind and a hint says this
- * adapter should hold the workflow, the question is repeated until the adapter's window
- * is used up. The thread carrying the transaction is the thread which waits.
+ * BPMS about a workflow. The Business Cockpit asks it for every report of a service
+ * task. That report needs an open transaction, because its entry belongs to the
+ * transaction which wrote the change. The election asks with the patience of a read.
+ * Say the read model of the BPMS is behind, and a hint names this adapter for the
+ * workflow. Then the election asks again and again until the window of the adapter is
+ * used up. The thread which holds the transaction is the thread which waits.
  * <p>
- * Two things are measured here. How long the transaction is open, which is the window of
- * the adapter plus the probes, and what a handful of such callers leaves for everybody
- * else, which is nothing: each of them holds a connection while it sleeps, and the pool
- * is the pool of the whole application.
+ * The tests measure two things. First, how long the transaction is open: the window of
+ * the adapter plus the probes. Second, what a few such callers leave for everybody
+ * else: nothing. Each of them holds a connection while it sleeps, and the pool belongs
+ * to the whole application.
  * <p>
- * The tests use a short window so that a build does not pay for the measurement. The
- * numbers for the window a Camunda 8 adapter really reports are in
- * {@code migration-adapter/README.md}, from a run with ten seconds.
+ * The tests use a short window, so a build does not pay for the measurement.
+ * {@code migration-adapter/README.md} has the numbers for the window a Camunda 8
+ * adapter really reports, from a run with ten seconds.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SpringBootTest(classes = TestApplication.class)
@@ -55,8 +55,8 @@ public class WhatAnElectionCostsATransactionTest {
   private static final String PROCESS = "CostProcess";
 
   /**
-   * The window the double reports while a test runs. Short enough for a build, long
-   * enough that the measurement is not the clock's rounding.
+   * The window the double reports while a test runs. It is short enough for a build. And
+   * it is long enough that the measurement is more than the rounding of the clock.
    */
   private static final Duration WINDOW = Duration.ofMillis(1500);
 
@@ -86,8 +86,8 @@ public class WhatAnElectionCostsATransactionTest {
   private DataSource dataSource;
 
   /**
-   * A workflow the election has seen once, which is what leaves the hint behind. Without
-   * a hint nothing waits at all, so every measurement here starts with one.
+   * A workflow the election has seen once. That leaves the hint behind. Without a hint
+   * nothing waits at all, so every measurement here starts with one.
    *
    * @return The id of its aggregate
    */
@@ -105,8 +105,8 @@ public class WhatAnElectionCostsATransactionTest {
   }
 
   /**
-   * The shape of a report out of a service task: a transaction is open, the aggregate
-   * was read through it, and the election is asked while it is still open.
+   * A report out of a service task, in its usual shape. A transaction is open, the
+   * aggregate was read in it, and the election is asked while it is still open.
    *
    * @param workflowAggregateId The workflow to ask about
    * @return How long the transaction was open
@@ -122,8 +122,8 @@ public class WhatAnElectionCostsATransactionTest {
         return election.adapterIdOfWorkflow(MODULE, PROCESS, workflowAggregateId);
       });
     } catch (final IllegalStateException e) {
-      // what the election answers once the window is used up and nobody knows the
-      // workflow: the wait happened, and the caller pays for it either way
+      // the election throws this when the window is used up and no adapter knows the
+      // workflow. The wait happened anyway, and the caller pays for it
     }
     return Duration.ofNanos(System.nanoTime() - startedAt);
 
@@ -142,8 +142,8 @@ public class WhatAnElectionCostsATransactionTest {
         held.compareTo(WINDOW) >= 0,
         "the transaction was open for %s, which is less than the window of %s the adapter reported"
             .formatted(held, WINDOW));
-    // the first probe, then one per interval until the window is used up, and the walk
-    // afterwards skips the adapter it already asked
+    // the first probe, then one per interval until the window is used up. The walk
+    // after that skips the adapter it already asked
     final var expectedProbes = 1 + (WINDOW.toMillis() / ALaggingReadModel.PROBE_INTERVAL.toMillis());
     assertTrue(
         readModel.probes() >= expectedProbes,
@@ -176,8 +176,8 @@ public class WhatAnElectionCostsATransactionTest {
       assertTrue(
           reportsAreWaiting.await(10, TimeUnit.SECONDS),
           "the reports never started");
-      // the reports take their connections one JDBC call after the latch, so the pool is
-      // read until it says what the latch cannot
+      // the reports take their connections one JDBC call after the latch. So the test
+      // reads the pool until it shows what the latch cannot show
       final var poolIsEmptyBy = System.nanoTime() + Duration.ofSeconds(10).toNanos();
       while ((pool.getActiveConnections() < POOL_SIZE) && (System.nanoTime() < poolIsEmptyBy)) {
         Thread.sleep(10);

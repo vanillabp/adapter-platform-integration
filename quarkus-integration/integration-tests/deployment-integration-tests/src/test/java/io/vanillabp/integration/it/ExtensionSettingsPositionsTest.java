@@ -19,18 +19,19 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * The eight positions an extension setting may be written at, in a booted application
+ * The eight positions where an extension setting may be written, in a booted application
  * which runs TWO adapters of the same BPMS type. Each position is written once, so every
- * assertion says which one won, and the second adapter says that a value of one adapter
- * never reaches the other (decision 53 in the repository's DECISIONS.md).
+ * assertion says which one won. The second adapter shows that a value of one adapter never
+ * reaches the other (decision 53 in the repository's DECISIONS.md).
  * <p>
- * This application starting at all is part of the measurement: SmallRye refuses a key no
- * mapping knows below <code>vanillabp</code>, so a position the resolver offers and the
- * mapping does not declare would not go unread here, it would end the startup. What such
- * a key looks like is {@code UnknownExtensionSettingsKeyTest} in the deployment module.
+ * The fact that this application starts at all is part of the measurement. SmallRye
+ * refuses a key below <code>vanillabp</code> which no mapping knows. So a position which
+ * the resolver offers but the mapping does not declare would not just go unread here. It
+ * would end the startup. {@code UnknownExtensionSettingsKeyTest} in the deployment module
+ * shows what such a key looks like.
  * <p>
- * Measured on Quarkus here and on Spring Boot by the test of the same name there: that
- * the core resolves the positions says nothing about a platform binding all of them.
+ * This is measured on Quarkus here, and on Spring Boot by the test of the same name there.
+ * That the core resolves the positions does not prove that a platform binds all of them.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ExtensionSettingsPositionsTest {
@@ -48,7 +49,8 @@ public class ExtensionSettingsPositionsTest {
   private static final String EXTENSION = "sample";
 
   /**
-   * The key every one of the eight positions writes, each with the name of its position.
+   * The key which every one of the eight positions writes, each with the name of its
+   * position.
    */
   private static final String POSITION = "position";
 

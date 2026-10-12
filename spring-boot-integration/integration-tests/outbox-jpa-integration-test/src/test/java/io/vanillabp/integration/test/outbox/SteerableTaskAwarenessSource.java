@@ -4,24 +4,24 @@ import io.vanillabp.bpmsdouble.DummyTaskAwarenessSource;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 
 /**
- * Steers the dummy adapter's task awareness per test: the answer set here is
- * returned for every probe (default {@link WorkflowAwareness#UNKNOWN_TO_BPMS}).
+ * Steers the task awareness of the dummy adapter per test. Every probe gets the answer
+ * set here (default {@link WorkflowAwareness#UNKNOWN_TO_BPMS}).
  */
 public class SteerableTaskAwarenessSource implements DummyTaskAwarenessSource {
 
   /**
-   * The answer a NEW context starts with - the recovery test needs the freshly
-   * restarted context to answer ACTIVE before its outbox dispatcher polls.
+   * The answer a NEW context starts with. The recovery test needs the restarted context
+   * to answer ACTIVE before its outbox dispatcher polls.
    */
   public static volatile WorkflowAwareness initialAnswer = WorkflowAwareness.UNKNOWN_TO_BPMS;
 
   /**
-   * The answer for WORKFLOW-level probes (message correlation, and the START
-   * re-dispatch mitigation) if it has to differ from the task-level
-   * one - <code>null</code> means "same as {@link #initialAnswer}". Needed by the
-   * recovery test: it wants the recovered START entry to be dispatched again
-   * (workflow unknown) while the recovered COMPLETE_TASK entry elects an adapter
-   * knowing the task.
+   * The answer for probes on WORKFLOW level (message correlation, and the mitigation for a
+   * START dispatched again), if it must differ from the answer on task level.
+   * <code>null</code> means "same as {@link #initialAnswer}". The recovery test needs
+   * this. It wants the recovered START entry dispatched again (workflow unknown). At the
+   * same time the recovered COMPLETE_TASK entry must elect an adapter which knows the
+   * task.
    */
   public static volatile WorkflowAwareness initialWorkflowAnswer = null;
 
@@ -54,9 +54,9 @@ public class SteerableTaskAwarenessSource implements DummyTaskAwarenessSource {
   }
 
   /**
-   * How many WORKFLOW probes still answer UNKNOWN_TO_BPMS before the configured
-   * answer applies - an eventually consistent BPMS: the workflow
-   * exists, its BPMS just cannot find it yet.
+   * How many WORKFLOW probes still answer UNKNOWN_TO_BPMS before the configured answer
+   * applies. This plays an eventually consistent BPMS: the workflow exists, but its BPMS
+   * cannot find it yet.
    */
   private final java.util.concurrent.atomic.AtomicInteger invisibleProbes = new java.util.concurrent.atomic.AtomicInteger();
 
@@ -67,8 +67,8 @@ public class SteerableTaskAwarenessSource implements DummyTaskAwarenessSource {
   private volatile io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay visibilityDelay;
 
   /**
-   * Lets the next <code>probes</code> workflow probes answer "not visible yet" and
-   * makes this adapter report the given window while doing so.
+   * Lets the next <code>probes</code> workflow probes answer "not visible yet". Meanwhile
+   * this adapter reports the given window.
    *
    * @param probes How many probes report the workflow as unknown
    * @param window The window the adapter asks the core to wait
@@ -91,8 +91,8 @@ public class SteerableTaskAwarenessSource implements DummyTaskAwarenessSource {
   }
 
   /**
-   * How many probes the current test has left over - a test asserting that waiting
-   * happened wants this at zero.
+   * How many probes the current test has left over. A test which asserts that the core
+   * waited wants this at zero.
    *
    * @return The remaining invisible probes
    */

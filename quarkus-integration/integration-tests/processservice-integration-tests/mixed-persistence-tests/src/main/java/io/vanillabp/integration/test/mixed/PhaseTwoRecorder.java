@@ -7,8 +7,8 @@ import io.vanillabp.bpmsdouble.DummyPhaseTwoListener;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Records what the dummy adapter did in phase two, so a test can wait for the outbox
- * dispatcher's thread to have arrived.
+ * Records what the dummy adapter did in phase two. So a test can wait until the thread of
+ * the outbox dispatcher got there.
  */
 @ApplicationScoped
 public class PhaseTwoRecorder implements DummyPhaseTwoListener {

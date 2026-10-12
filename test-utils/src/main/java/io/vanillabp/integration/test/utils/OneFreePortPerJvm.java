@@ -4,16 +4,16 @@ import java.io.IOException;
 import java.net.ServerSocket;
 
 /**
- * One free TCP port per JVM, for a test which has to tell something it starts which port
- * to use - a Quarkus prod-mode application, for instance - and then has to talk to it.
+ * One free TCP port per JVM. It is for a test which starts something, for example a
+ * Quarkus prod-mode application, tells it which port to use, and then talks to it.
  * <p>
- * The port is asked for once, when this class is loaded, and answered again and again
- * afterwards. Asking the operating system a second time would hand out a second port, and
- * a test which configures one port and connects to the other fails for a reason nobody
- * sees in its code. The name says so. A test which needs two different ports has to
+ * The port is looked up once, when this class is loaded. After that, every call returns
+ * the same port. Asking the operating system a second time would hand out a second port.
+ * A test which configures one port and connects to the other fails, and nobody sees the
+ * reason in its code. The name says so. A test which needs two different ports has to
  * look elsewhere.
  * <p>
- * The port was free when it was looked up and nothing holds it until the test binds it.
+ * The port was free when it was looked up, and nothing holds it until the test binds it.
  * That is enough here, because each forked test JVM asks for its own.
  */
 public class OneFreePortPerJvm {
@@ -21,7 +21,7 @@ public class OneFreePortPerJvm {
   private final static int port = findFreePort();
 
   /**
-   * Nobody builds this class, it only answers a static question.
+   * Nobody builds this class. It only answers a static question.
    */
   private OneFreePortPerJvm() {
   }

@@ -7,13 +7,13 @@ import io.vanillabp.integration.runtime.health.VanillaBpReadinessCheck;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Publishes the adapters' health as a readiness check - but only for an application
- * which uses the SmallRye Health extension. VanillaBP does not bring it: a health
+ * Publishes the adapters' health as a readiness check, but only for an application which
+ * uses the SmallRye Health extension. VanillaBP does not bring that extension. A health
  * endpoint is the application's decision, and an application without one has to boot
  * unchanged.
  * <p>
- * The signal is the extension's build-step class on the DEPLOYMENT classpath, the
- * same way the Micrometer extension is detected for the meters.
+ * The signal is the extension's build-step class on the DEPLOYMENT classpath. The Micrometer
+ * extension is detected the same way for the meters.
  */
 @Slf4j
 public class VanillaBpHealthBuildStepProcessor {
@@ -28,10 +28,10 @@ public class VanillaBpHealthBuildStepProcessor {
   }
 
   /**
-   * Registers the readiness check, and only where SmallRye Health is part of the
-   * application. The question is answered here and not at startup because Quarkus fixes the
-   * set of beans while it builds: a check registered in an application without the health
-   * extension would be a bean referring to classes which are not there.
+   * Registers the readiness check, but only where SmallRye Health is part of the
+   * application. This is decided here and not at startup, because Quarkus fixes the set of
+   * beans while it builds. In an application without the health extension, the check would
+   * be a bean which refers to classes that are not there.
    *
    * @param additionalBeans Producer used to register the readiness check
    */

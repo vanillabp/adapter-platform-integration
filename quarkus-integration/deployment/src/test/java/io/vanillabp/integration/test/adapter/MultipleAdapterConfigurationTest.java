@@ -12,20 +12,18 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * A prioritized adapter id nobody serves ends the boot. Two ids of ONE type are
- * configured here and the mocked adapter provides a process service for 'test' alone,
- * while 'test2' is prioritized first.
+ * A prioritized adapter id which nobody serves ends the boot. Two ids of ONE type are
+ * configured here. The mocked adapter only provides a process service for 'test', but
+ * 'test2' is prioritized first.
  * <p>
- * The check fires AT STARTUP, where the process services are validated by an observer of
- * the startup event, and its message names the unserved id: a workflow must never
- * silently start in the BPMS which happened to answer instead. An adapter which does
- * serve both ids boots green, which
- * {@link Test2ListProcessServiceProducer} is the other half of.
+ * The check runs AT STARTUP. There an observer of the startup event validates the process
+ * services. Its message names the id which nobody serves. A workflow must never silently
+ * start in some other BPMS which happened to answer. An adapter which serves both ids boots
+ * green. {@link Test2ListProcessServiceProducer} is the other half of this.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MultipleAdapterConfigurationTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
@@ -53,9 +51,9 @@ public class MultipleAdapterConfigurationTest {
       });
 
   /**
-   * The startup has to fail fast since the prioritized adapter id 'test2' has no
-   * matching {@code MigratableProcessService} - the assertion happens on the boot
-   * failure above.
+   * The startup has to fail fast, because the prioritized adapter id 'test2' has no
+   * matching {@code MigratableProcessService}. The assertions check the boot failure
+   * above.
    */
   @Test
   public void testFailFastOnUnservedPrioritizedAdapterId() {

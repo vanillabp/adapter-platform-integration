@@ -22,10 +22,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The case which stays allowed: several classes may declare the same
- * aggregate as long as they name the SAME process - handlers of one process split
- * across classes are not ambiguous, so nothing has to be decided and the application
- * boots.
+ * The case which stays allowed: several classes may declare the same aggregate, as long as
+ * they name the SAME process. Handlers of one process, split across classes, are not
+ * ambiguous. So nothing has to be decided, and the application boots.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SharedPrimaryProcessTest {

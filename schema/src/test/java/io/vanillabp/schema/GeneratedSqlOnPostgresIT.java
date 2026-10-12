@@ -22,16 +22,16 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.schema.ChangelogDescription;
 
 /**
- * The SQL generated for PostgreSQL, applied to a real PostgreSQL the way a Flyway migration would
- * apply it: statement by statement, without Liquibase anywhere. This is the second of the two
- * databases this module promises, and the test which proves that a generated file is not only
- * syntactically plausible but accepted by the server.
+ * Applies the SQL generated for PostgreSQL to a real PostgreSQL, the way Flyway would: statement
+ * by statement, without Liquibase. PostgreSQL is the second of the two databases this module
+ * promises. This test proves that the server accepts a generated file, and not only that the file
+ * looks right.
  */
-// the extension comes FIRST on purpose: JUnit registers declarative extensions in the
-// order they are written, and the Testcontainers extension starts the container in its
-// own beforeAll. Written the other way round, the Docker client had already logged 2208
-// debug lines through an appender holding the real stdout before anything could capture
-// them - a green build carrying the whole conversation with the Docker daemon.
+// This extension comes FIRST on purpose. JUnit registers declarative extensions in the
+// order they are written. The Testcontainers extension starts the container in its own
+// beforeAll. In the other order, the Docker client had already logged 2208 debug lines to
+// the real stdout before anything could capture them. A green build then carried the
+// whole conversation with the Docker daemon.
 @ExtendWith(SuppressOutputExtension.class)
 @Testcontainers
 public class GeneratedSqlOnPostgresIT {
@@ -41,8 +41,8 @@ public class GeneratedSqlOnPostgresIT {
   static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
   /**
-   * The generated file as it lands in the artifact: what an application gets is the copy inside the
-   * JAR, so that is what this test reads.
+   * The generated file as it is in the artifact. An application gets the copy inside the JAR, so
+   * this test reads that copy.
    */
   private static String generatedSql() throws Exception {
 
@@ -80,9 +80,9 @@ public class GeneratedSqlOnPostgresIT {
     try (var connection = DriverManager
         .getConnection(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())) {
 
-      // the way Flyway runs a migration: the statements of the file, in order. Comment lines are
-      // dropped first - they carry apostrophes of prose, which a naive split would take for string
-      // literals (Flyway's own parser knows the difference)
+      // Run it the way Flyway runs a migration: the statements of the file, in order. Comment
+      // lines are dropped first. Their prose has apostrophes, and a naive split would take them
+      // for string literals. Flyway's own parser knows the difference.
       final var withoutComments = generatedSql()
           .lines()
           .filter(line -> !line.stripLeading().startsWith("--"))
@@ -97,8 +97,8 @@ public class GeneratedSqlOnPostgresIT {
         }
       }
 
-      // which tables have to be there is read from the changelog the SQL was generated from,
-      // not listed here: a list would have stayed at two tables when the third one arrived
+      // The tables which have to be there come from the changelog the SQL was generated from.
+      // A list here would have stayed at two tables when the third one arrived.
       final var tables = tablesOf(connection);
       assertTrue(
           tables.containsAll(ChangelogDescription.of(Map.of()).tableNames()),
@@ -109,7 +109,7 @@ public class GeneratedSqlOnPostgresIT {
               ended up with: %s"""
               .formatted(tables));
 
-      // and the constraint the outbox relies on is really there
+      // The constraint the outbox relies on is really there.
       try (var jdbcStatement = connection.createStatement()) {
         jdbcStatement
             .executeUpdate(

@@ -37,13 +37,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackgroundOutput;
 
 /**
- * What <code>vanillabp.outbox.create-schema</code> does on MongoDB, against a database
- * rather than against a double: with the default the startup creates the indexes the
- * stores read by, and where the application manages its own schema it creates none and
- * names every one of them instead.
+ * What <code>vanillabp.outbox.create-schema</code> does on MongoDB. The test runs against a
+ * real database, not against a test double. With the default, the startup creates the indexes
+ * which the stores read by. Where the application manages its own schema, the startup creates
+ * none of them. Instead it names every one of them.
  * <p>
- * The delivery log is built here too, because its collection is the third one and it reads
- * the same property.
+ * The test builds the delivery log too. Its collection is the third one, and it reads the same
+ * property.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressBackgroundOutput
@@ -52,8 +52,8 @@ public class MongoIndexesAreCreatedOrReportedTest {
 
   private static final String DATABASE = "mongo-indexes-test";
 
-  // no wait strategy of its own: the one the container brings waits until the MAPPED port
-  // accepts a connection, while a log line only says that mongod listens inside the container
+  // no wait strategy of its own: the container's own strategy waits until the MAPPED port
+  // accepts a connection. A log line only says that mongod listens inside the container
   @Container
   static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB));
 
@@ -66,8 +66,8 @@ public class MongoIndexesAreCreatedOrReportedTest {
   private Logger rootLog;
 
   /**
-   * Kept because its startup starts a cleanup of its own, which has to be stopped again
-   * when the test is over.
+   * Kept because its startup starts its own cleanup. The test has to stop that cleanup again
+   * when it is over.
    */
   private MongoTaskDeliveryLog deliveryLog;
 
@@ -165,8 +165,8 @@ public class MongoIndexesAreCreatedOrReportedTest {
 
     buildTheStoresWith(propertiesCreatingTheSchema(false));
 
-    // the name of the payload collection starts with the name of the outbox one, so the
-    // quotes are part of what is looked for here
+    // the name of the payload collection starts with the name of the outbox collection. So
+    // the test looks for the name together with its quotes
     assertTrue(
         whatWasLogged.list
             .stream()
@@ -179,14 +179,14 @@ public class MongoIndexesAreCreatedOrReportedTest {
 
   /**
    * Builds what a Spring Boot application builds at startup: the outbox and the delivery
-   * log, both of which look after the indexes of their collections.
+   * log. Both look after the indexes of their collections.
    *
    * @param vanillaBpProperties The configuration they read
    */
   private void buildTheStoresWith(
       final VanillaBpConfigurationProperties vanillaBpProperties) {
 
-    // without a dispatcher: the outbox only keeps the one it is handed, and nothing here
+    // without a dispatcher: the outbox only keeps the dispatcher it gets, and nothing here
     // schedules an entry
     new MongoPhaseTwoOutboxAutoConfiguration()
         .vanillaBpMongoPhaseTwoOutbox(mongoTemplate, null, vanillaBpProperties);
@@ -259,8 +259,8 @@ public class MongoIndexesAreCreatedOrReportedTest {
   }
 
   /**
-   * No router: the sieve of the workflow-start rows is off unless an application asks for it, so
-   * nothing here ever looks for one.
+   * No router. The sieve of the workflow-start rows is off unless an application asks for it.
+   * So nothing here ever looks for a router.
    *
    * @return A provider which has nothing
    */

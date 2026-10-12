@@ -9,9 +9,9 @@ import io.vanillabp.extension.sample.SampleExtensionProducer;
 import io.vanillabp.extension.sample.SampleNoteServiceFactory;
 
 /**
- * The sample extension as a Quarkus extension: it announces no build item of its own -
- * registering the producer of its factory and of its handler contract is all an extension
- * has to do.
+ * The sample extension as a Quarkus extension. It announces no build item of its own. All
+ * an extension has to do is register the producer of its factory and of its handler
+ * contract.
  */
 class SampleExtensionProcessor {
 
@@ -36,9 +36,9 @@ class SampleExtensionProcessor {
   }
 
   /**
-   * Puts the factory into the index VanillaBP reads to find out which service interface
-   * this extension offers. A runtime module carrying a Jandex index needs none of this;
-   * this one does not build one, so it says which class matters.
+   * Puts the factory into the index which VanillaBP reads to find out which service
+   * interface this extension offers. A runtime module with a Jandex index needs none of
+   * this. This one does not build an index, so it says which class matters.
    *
    * @return The class to index
    */

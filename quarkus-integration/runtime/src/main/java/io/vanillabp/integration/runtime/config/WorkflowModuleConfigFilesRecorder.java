@@ -7,34 +7,33 @@ import io.quarkus.runtime.annotations.Recorder;
 /**
  * Says at startup what the build found out about the configuration files of the workflow
  * modules. Which files a workflow module ships can only be seen while the application is
- * built, and a developer reads the log of a start far more often than the log of a build,
- * so the sentence is written there.
+ * built. But a developer reads the log of a start far more often than the log of a build. So
+ * the sentence goes into the log of the start.
  * <p>
- * A recorder runs before the beans of the application exist, so it cannot reach the
- * collection the whole start reports into. It keeps the report instead, and the
- * deployment runner hands it over once it has that collection - see
- * {@link #takeReport()}.
+ * A recorder runs before the beans of the application exist. So it cannot reach the
+ * collection which the whole start reports into. Instead, it keeps the report. The
+ * deployment runner hands it over once it has that collection. See {@link #takeReport()}.
  */
 @Recorder
 public class WorkflowModuleConfigFilesRecorder {
 
   /**
-   * Built by Quarkus while it records the build steps. A recorder keeps no state: it
-   * carries what the build found out into the starting application, and Quarkus decides
-   * when its methods run.
+   * Quarkus creates it while it records the build steps. A recorder keeps no state. It
+   * carries what the build found out into the starting application. Quarkus decides when its
+   * methods run.
    */
   public WorkflowModuleConfigFilesRecorder() {
   }
 
   /**
-   * What the build found out and nobody has picked up yet. Static because a recorder is
-   * built by Quarkus and read by a bean, and the two never meet.
+   * What the build found out and nobody has picked up yet. It is static, because Quarkus
+   * creates the recorder and a bean reads the report. The two never meet.
    */
   private static final AtomicReference<String> WAITING_REPORT = new AtomicReference<>();
 
   /**
-   * Keeps the report until the start has somewhere to put it. Every line of it names a
-   * file whose settings nobody reads.
+   * Keeps the report until the start has a place to put it. Every line of it names a file
+   * whose settings nobody reads.
    *
    * @param report What the build has to say about those files
    */
@@ -46,7 +45,7 @@ public class WorkflowModuleConfigFilesRecorder {
   }
 
   /**
-   * Hands the report over, once, to whoever can report it into the box of the start.
+   * Hands the report over, once, to the one who can put it into the block of the start.
    *
    * @return What the build found out, or <code>null</code> where it found nothing or
    *         where the report was taken already
@@ -58,8 +57,8 @@ public class WorkflowModuleConfigFilesRecorder {
   }
 
   /**
-   * Ends the boot. A workflow module which ships the same file in two places has no answer
-   * to which of the two applies, so the application says so instead of picking one.
+   * Ends the boot. A workflow module may ship the same file in two places. Then there is no
+   * answer to which of the two applies. So the application says so and does not pick one.
    *
    * @param reason What the build found out about those files
    */

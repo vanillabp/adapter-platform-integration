@@ -23,13 +23,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * Which transaction the three forms of {@link TransactionRunner} really run in on Spring
- * Boot, measured on a database rather than on the propagation constant.
+ * Boot. The test measures it on a database, not on the propagation constant.
  * <p>
- * The form the outbox dispatch asks for is the one worth a test of its own. An outbox
- * which dispatches inside a transaction of its own - gruelbox on this platform - ticks the
- * entry off in that transaction, so a dispatch which throws afterwards is repeated. What
- * the application wrote while VanillaBP called it has to go back with it, and that only
- * holds if the runner joined instead of opening a second transaction.
+ * The form which the outbox dispatch asks for needs a test of its own. Some outboxes dispatch
+ * inside their own transaction, like gruelbox on this platform. Such an outbox ticks the entry
+ * off in that transaction. So a dispatch which throws afterwards is repeated. What the
+ * application wrote while VanillaBP called it has to be rolled back with it. That only works
+ * if the runner joined the transaction and did not open a second one.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheRunnerJoinsARunningTransactionTest {
@@ -115,8 +115,8 @@ public class TheRunnerJoinsARunningTransactionTest {
   @DisplayName("requireNew commits for itself, whatever the caller's transaction does")
   public void theNewFormSurvivesTheCallersRollback() {
 
-    // the counterpart of the first test, and the reason the two forms are told apart:
-    // a handler VanillaBP runs in a transaction of its own keeps what it wrote even
+    // the counterpart of the first test, and the reason why the two forms differ. VanillaBP
+    // may run a handler in a transaction of its own. That handler keeps what it wrote, even
     // where everything around it is rolled back
     assertThrows(
         IllegalStateException.class,

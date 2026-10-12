@@ -29,19 +29,20 @@ import jakarta.transaction.TransactionSynchronizationRegistry;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The default {@link TaskDeliveryLog} for Quarkus applications persisting their workflow
- * aggregates in a relational database: the records are written through a JDBC connection
- * of the Agroal data source. Since the connection is acquired within the still-running
- * JTA transaction it is enlisted automatically, so a record and the aggregate changes of
- * the same delivery commit together - the recording contract of {@link TaskDeliveryLog}.
+ * The default {@link TaskDeliveryLog} for Quarkus applications which persist their workflow
+ * aggregates in a relational database. The records are written through a JDBC connection of
+ * the Agroal data source. The connection is taken inside the JTA transaction which is still
+ * running. So it joins that transaction by itself, and a record and the aggregate changes of
+ * the same delivery commit together. This is the recording contract of
+ * {@link TaskDeliveryLog}.
  * <p>
  * The table (<code>vanillabp.outbox.jdbc.delivery-table</code>, by default
- * {@link JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME}) is created at startup
- * unless <code>vanillabp.outbox.create-schema</code> is disabled, and records are
- * deleted once <code>vanillabp.delivery.retention</code> passed - the delivery log shares
- * the outbox' STORE settings and not its retention, because the two numbers mean different
- * things: for a record the retention decides whether a late redelivery runs the business
- * code again, for a dispatched outbox entry only how long support can read it.
+ * {@link JdbcTaskDeliveryStore#DEFAULT_TABLE_NAME}) is created at startup, unless
+ * <code>vanillabp.outbox.create-schema</code> is switched off. Records are deleted once
+ * <code>vanillabp.delivery.retention</code> has passed. The delivery log shares the STORE
+ * settings of the outbox, but not its retention. The two numbers mean different things. For
+ * a record, the retention decides whether a late repeated delivery runs the business code
+ * again. For a dispatched outbox entry, it only decides how long support can read it.
  */
 @ApplicationScoped
 @Slf4j
@@ -54,10 +55,10 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   TransactionSynchronizationRegistry txRegistry;
 
   /**
-   * Where the process services are collected, asked by the sieve of the workflow-start rows and
-   * only where the application switched that sieve on. An {@link Instance} and not the bean
-   * itself, because the router is built from the process-service beans and this log must not pull
-   * them in while it is created.
+   * Where the process services are collected. The sieve of the workflow-start rows asks it, and
+   * only where the application switched that sieve on. It is an {@link Instance} and not the
+   * bean itself. The router is built from the process-service beans, and this log must not
+   * pull them in while it is created.
    */
   @Inject
   Instance<io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter> phaseTwoRouter;
@@ -75,8 +76,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   private volatile TaskDeliveryRetentionCleanup retentionCleanup;
 
   /**
-   * Built by the CDI container. The extension registers this bean whether or not the
-   * application has a datasource, so nothing may be read or opened here -
+   * The CDI container creates it. The extension registers this bean whether or not the
+   * application has a datasource. So nothing may be read or opened here.
    * {@link #isAvailable()} decides later whether the bean is used at all.
    */
   public JdbcTaskDeliveryLog() {
@@ -90,10 +91,10 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * Whether this default log is usable: the extension registers the bean at build time,
-   * but without a configured datasource it cannot store anything - an unusable default
-   * must not be selected for an aggregate (the startup validation then reports that
-   * deliveries are not deduplicated, naming the remedies).
+   * Whether this default log can be used. The extension registers the bean at build time.
+   * But without a configured datasource, it cannot store anything. A default which cannot be
+   * used must not be chosen for an aggregate. The startup check then reports that deliveries
+   * are not deduplicated, and it names the fixes.
    *
    * @return Whether a datasource is available
    */
@@ -105,8 +106,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * The outbox configuration (<code>vanillabp.outbox.*</code>), loaded lazily - the log
-   * may be asked for a record before the startup event was observed.
+   * The outbox configuration (<code>vanillabp.outbox.*</code>), loaded lazily. The log may be
+   * asked for a record before the startup event was observed.
    *
    * @return The configuration
    */
@@ -125,13 +126,13 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * How long a record is kept: <code>vanillabp.delivery.retention</code> where the
-   * application sets it, and <code>vanillabp.outbox.retention</code> otherwise, which is
-   * where the number lived before the two windows were told apart. Loaded lazily like the
-   * outbox configuration next to it.
+   * How long a record is kept. It is <code>vanillabp.delivery.retention</code> where the
+   * application sets it, and <code>vanillabp.outbox.retention</code> otherwise. The number
+   * lived there before the two windows were told apart. It is loaded lazily, like the outbox
+   * configuration next to it.
    *
-   * Public because it answers the first question a support case about a handler running
-   * twice asks, and because it is what the tests of this wiring assert.
+   * Public, because it answers the first question of a support case about a handler which
+   * ran twice. And the tests of this wiring assert it.
    *
    * @return The retention of delivery records
    */
@@ -154,12 +155,12 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * How long the row about a started workflow is kept, counted from the start:
-   * <code>vanillabp.delivery.workflow-start-retention</code>, thirty days where nobody says
-   * anything. A period of its own, because that row is read for as long as somebody may ask which
-   * workflow an aggregate belongs to, which outlasts the workflow.
+   * How long the row about a started workflow is kept, counted from the start. It is
+   * <code>vanillabp.delivery.workflow-start-retention</code>, or thirty days where nobody says
+   * anything. It is a period of its own. That row is read as long as somebody may ask which
+   * workflow an aggregate belongs to, and that is longer than the workflow lives.
    *
-   * Public because it is what the tests of this wiring assert.
+   * Public, because the tests of this wiring assert it.
    *
    * @return The period a workflow-start row is kept
    */
@@ -174,7 +175,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * What decides per row whether it may really go once that period passed, and
+   * What decides per row whether it may really go once that period has passed. It is
    * <code>null</code> where the application did not ask for the second sieve
    * (<code>vanillabp.delivery.keep-workflow-start-while-aggregate-exists</code>).
    *
@@ -194,11 +195,11 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * The <code>vanillabp.delivery</code> section of the whole application, as the core reads it.
-   * The two settings about the rows of started workflows are read there and nowhere else, like
-   * the retention beside them.
+   * The <code>vanillabp.delivery</code> section of the whole application, as the core reads
+   * it. The two settings about the rows of started workflows are read there and nowhere else,
+   * like the retention next to them.
    *
-   * @return The bound section, carrying only what this log asks of it
+   * @return The bound section. This log asks it only for these settings
    */
   private io.vanillabp.integration.adapter.migration.config.DeliveryProperties deliverySection() {
 
@@ -240,8 +241,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
     if (getProperties().isCreateSchema()) {
       getStore().createSchemaIfNotExists();
     } else {
-      // the application creates its schema itself - then a missing table is a
-      // deployment which forgot to apply the migration, and it is said at startup
+      // The application creates its schema itself. Then a missing table means that a
+      // deployment forgot to apply the migration, and the startup says so.
       getStore().validateSchemaExists();
     }
     retentionCleanup = new TaskDeliveryRetentionCleanup(
@@ -251,9 +252,10 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * Refreshes the records of the open tasks redelivered since the last run and deletes the
-   * records whose retention period passed - run by the background cleanup and usable on
-   * demand (e.g. by tests). Both are the store's business and happen in that order.
+   * Refreshes the records of the open tasks which were delivered again since the last run.
+   * Then it deletes the records whose retention period has passed. The cleanup in the
+   * background runs it, and others (e.g. tests) may call it when they need it. Both steps are
+   * the store's business and happen in that order.
    *
    * @return The number of records deleted
    */
@@ -262,7 +264,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
     final var expiredDeliveries = getStore().deleteExpired(getDeliveryRetention());
     final var startRetention = getWorkflowStartRetention();
     if (startRetention.isZero()) {
-      // a zero period says the rows about started workflows are kept for good
+      // A zero period says that the rows about started workflows are kept forever.
       return expiredDeliveries;
     }
     return expiredDeliveries + getStore().deleteExpiredWorkflowStarts(startRetention, getWorkflowStartSieve());
@@ -271,8 +273,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
 
   /**
-   * Tells the retention cleanup that this store was written to, so its next hourly run has
-   * something to delete. Null-safe, because the cleanup is built when the store starts and
+   * Tells the retention cleanup that this store was written to. So its next hourly run has
+   * something to delete. It is null-safe. The cleanup is created when the store starts, and
    * a store which never started was never written to either.
    */
   private void aDeliveryWasRecorded() {
@@ -331,16 +333,16 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
               transaction persisting the workflow aggregate - a record committed on its own would \
               skip the @WorkflowTask method of a redelivery although nothing was persisted.""");
     }
-    // what gives the hourly cleanup something to do: a store nobody wrote to has nothing
-    // left to delete which an earlier run did not already delete
+    // This gives the hourly cleanup something to do. If nobody wrote to a store, an
+    // earlier run already deleted everything there is to delete.
     aDeliveryWasRecorded();
     return getStore().record(delivery);
 
   }
 
   /**
-   * The adapter ids the OPEN records of one BPMN process belong to - the
-   * shared store answers it with one query over the columns it indexes anyway.
+   * The adapter ids which the OPEN records of one BPMN process belong to. The shared store
+   * answers with one query over the columns it indexes anyway.
    */
   @Override
   public java.util.Set<String> adapterIdsOfOpenTasks(
@@ -365,8 +367,9 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * The record which left one task open - read within the caller's JTA transaction, through
-   * a connection Agroal enlists there, so it sees what that transaction has written itself.
+   * The record which left one task open. It is read inside the caller's JTA transaction,
+   * through a connection which Agroal enlists there. So it sees what that transaction has
+   * written itself.
    */
   @Override
   public Optional<TaskDelivery> recordOfTask(
@@ -382,8 +385,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * The open tasks of one workflow aggregate - read within the caller's JTA transaction,
-   * through a connection Agroal enlists there.
+   * The open tasks of one workflow aggregate. They are read inside the caller's JTA
+   * transaction, through a connection which Agroal enlists there.
    */
   @Override
   public java.util.List<TaskDelivery> openTasksOfAggregate(
@@ -398,8 +401,8 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * The open tasks of one workflow of the BPMS - read within the caller's JTA transaction,
-   * through a connection Agroal enlists there.
+   * The open tasks of one workflow of the BPMS. They are read inside the caller's JTA
+   * transaction, through a connection which Agroal enlists there.
    */
   @Override
   public java.util.List<TaskDelivery> openTasksOfWorkflow(
@@ -446,7 +449,7 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
               No datasource available! The JDBC-based task delivery log requires a configured default \
               datasource (quarkus-agroal).""");
     }
-    // acquired within the running JTA transaction, so Agroal enlists it there
+    // Taken inside the running JTA transaction, so Agroal enlists it there.
     return dataSource.get().getConnection();
 
   }

@@ -15,8 +15,8 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 /**
  * A workflow module may put its configuration file at the classpath root, in a
  * <i>config</i> directory, in a directory named after the module, or in a <i>config</i>
- * directory of that one. Quarkus reads the same four, so a module keeps its style
- * whichever platform it runs on (see decision 65 in the repository's DECISIONS.md).
+ * directory of that one. Quarkus reads the same four places. So a module keeps its style
+ * on both platforms (see decision 65 in the repository's DECISIONS.md).
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ModuleFileInEachOfTheFourPlacesTest {

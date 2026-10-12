@@ -14,24 +14,24 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 /**
  * A configuration key is described once, and this test says where.
  * <p>
- * The field owns the key it declares: the annotation processor turns its javadoc into the
- * description, so the text a developer reads in their editor is the text the next developer
- * reads in the source. The hand-written
+ * The field owns the key it declares. The annotation processor turns its javadoc into the
+ * description. So a developer reads the same text in their editor as the next developer reads
+ * in the source. The hand-written
  * <code>META-INF/additional-spring-configuration-metadata.json</code> describes what the
- * processor cannot reach, which is everything below a type arriving as a dependency - the
- * whole core model.
+ * processor cannot reach. That is everything below a type which arrives as a dependency, so
+ * the whole core model.
  * <p>
- * Where both describe a key, Spring merges them and the hand-written text wins. Nothing
- * says the two texts agree, so they drift apart and the source stops being the answer. This
- * test looks for that: a key the hand-written file describes must not be a field of a class
- * this module compiles.
+ * Where both describe a key, Spring merges them and the hand-written text wins. Nothing makes
+ * the two texts agree. So they drift apart, and the source no longer gives the answer. This
+ * test looks for that. A key which the hand-written file describes must not be a field of a
+ * class this module compiles.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AKeyIsDescribedInOnePlaceTest {
 
   /**
-   * Reads every key of the hand-written file and asks the generated metadata which class a
-   * field of that name was found in.
+   * Reads every key of the hand-written file. For each key, it asks the generated metadata in
+   * which class the processor found a field of that name.
    *
    * @throws IOException If the classpath cannot be read
    */
@@ -78,10 +78,9 @@ public class AKeyIsDescribedInOnePlaceTest {
    * The class which DECLARES the field behind a key, or <code>null</code> where no class of
    * this module does.
    * <p>
-   * The processor names the class it started from, which for the core model is the thin
-   * subclass carrying the annotation. That class inherits those fields rather than
-   * declaring them, and an inherited field is exactly the case the hand-written file exists
-   * for.
+   * The processor names the class it started from. For the core model, that is the thin
+   * subclass which carries the annotation. That class inherits those fields and does not
+   * declare them. The hand-written file exists for exactly this case: an inherited field.
    *
    * @param sourceType What the generated metadata says, or <code>null</code> where it says
    *          nothing
@@ -99,7 +98,7 @@ public class AKeyIsDescribedInOnePlaceTest {
     try {
       boundClass = Class.forName(sourceType, false, AKeyIsDescribedInOnePlaceTest.class.getClassLoader());
     } catch (final ClassNotFoundException e) {
-      // a key of another artifact of ours, whose class this module does not see
+      // a key of another artifact of ours. This module does not see its class
       return null;
     }
     final var fieldName = camelCase(key.substring(key.lastIndexOf('.') + 1));

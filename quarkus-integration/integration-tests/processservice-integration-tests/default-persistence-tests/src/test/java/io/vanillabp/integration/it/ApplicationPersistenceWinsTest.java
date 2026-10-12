@@ -29,9 +29,9 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * The defaults are a fallback, never a takeover. This application has a
- * Panache repository for its aggregate AND an {@code AggregatePersistenceAware} of
- * its own - the latter has to be the one VanillaBP calls, in both directions.
+ * The defaults are a fallback, never a takeover. This application has a Panache repository
+ * for its aggregate AND an {@code AggregatePersistenceAware} of its own. VanillaBP has to
+ * call its own one, for saving and for loading.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ApplicationPersistenceWinsTest {

@@ -25,26 +25,26 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * What a platform integration owes the core when it starts an application: deploy the
- * resources, run the checks which need a deployed adapter, then close the start.
+ * What a platform integration owes the core when it starts an application. It deploys the
+ * resources, runs the checks which need a deployed adapter, and then closes the start.
  * <p>
- * The last step is the one nothing else would notice. An integration which never calls
- * {@link DeploymentService#endOfStartup()} boots an application which looks healthy: no
- * block of what the start found, and the reasons not to start sit collected in memory
- * instead of ending the boot. This test is what says so for Quarkus, and
+ * Nothing else would notice if the last step were missing. An integration which never calls
+ * {@link DeploymentService#endOfStartup()} boots an application which looks healthy. There
+ * is no block of what the start found. The reasons not to start are collected in memory,
+ * but they do not end the boot. This test says so for Quarkus.
  * <code>TheOrderOfAStartTest</code> of the Spring Boot integration says it there.
  * <p>
- * Quarkus deploys and starts the workflow processing in one observer of the startup
- * event, so it closes the start after both and its block holds what either of them
- * noticed. Spring Boot has to close earlier, and that is why the two platforms do not
- * write the same block.
+ * Quarkus deploys and starts the workflow processing in one observer of the startup event.
+ * So it closes the start after both, and its block holds what either of them noticed.
+ * Spring Boot has to close earlier. That is why the two platforms do not write the same
+ * block.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheOrderOfAStartTest {
 
   /**
-   * A runner whose pipeline is a mock, so the order of the calls a start makes on the
-   * core can be read off it.
+   * A runner whose pipeline is a mock. So the test can read from it the order of the calls
+   * which a start makes on the core.
    */
   private static class RunnerWithAWatchedPipeline extends VanillaBpDeploymentRunner {
 

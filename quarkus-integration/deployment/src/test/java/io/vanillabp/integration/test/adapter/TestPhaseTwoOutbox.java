@@ -9,12 +9,12 @@ import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The store for tests not concerned with it. Everything an application sends to its
- * BPMS is planned in the caller's transaction and dispatched after it committed, so an
- * application without a store cannot start a workflow and the platform says so while it
+ * The store for tests which are not about the store. Everything an application sends to
+ * its BPMS is planned in the caller's transaction and dispatched after it committed. So an
+ * application without a store cannot start a workflow, and the platform says so while it
  * boots. A test whose archive brings neither a datasource nor a MongoDB client adds this
- * one: it remembers what was planned and dispatches nothing, which is what a test about
- * configuration, discovery or wiring wants to happen to a phase two.
+ * one. It remembers what was planned and dispatches nothing. That is what a test about
+ * configuration, discovery or wiring wants for a phase two.
  */
 @ApplicationScoped
 @Unremovable

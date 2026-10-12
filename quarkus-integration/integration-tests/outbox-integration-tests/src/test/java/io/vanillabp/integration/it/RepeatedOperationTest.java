@@ -27,13 +27,13 @@ import jakarta.transaction.UserTransaction;
 
 /**
  * The second round of a loop is a new operation, not a redelivery. An idempotency key
- * deduplicates what is still waiting for its dispatch, so correlating the same message
- * with the same correlation id again - after the first one reached the BPMS - reaches it
- * as well, while a duplicate scheduled while the first one is still pending stays a
- * no-op (decision 22 in the repository's DECISIONS.md).
+ * deduplicates only what still waits for its dispatch. So the same message with the same
+ * correlation id, correlated again after the first one reached the BPMS, reaches it as
+ * well. A duplicate scheduled while the first one is still pending stays a no-op
+ * (decision 22 in the repository's DECISIONS.md).
  * <p>
- * This is the Quarkus JDBC store, where the window is the column <code>DEDUP_KEY</code>
- * the dispatcher frees when it marks an entry DONE.
+ * This is the Quarkus JDBC store. Here the window is the column <code>DEDUP_KEY</code>,
+ * which the dispatcher frees when it marks an entry DONE.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class RepeatedOperationTest {
@@ -41,11 +41,10 @@ public class RepeatedOperationTest {
   /**
    * How long a test waits before it says that nothing more happened. The application
    * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * set to half a second. So this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A machine which gives this JVM no turn only
+   * makes the wait longer. Afterwards the test asserts a count which did not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -102,8 +101,8 @@ public class RepeatedOperationTest {
   }
 
   /**
-   * An entry deduplicates as long as it was not dispatched - that is the state these
-   * tests plan against, and the dispatcher reaches it one write after the listener ran.
+   * An entry deduplicates as long as it was not dispatched. These tests plan against that
+   * state, and the dispatcher leaves it one write after the listener ran.
    *
    * @param aggregate The aggregate asked about
    * @return How many of its entries still deduplicate
@@ -124,11 +123,10 @@ public class RepeatedOperationTest {
   /**
    * Waits until no entry of this aggregate deduplicates any more.
    * <p>
-   * The listener runs INSIDE the dispatch, one write before the dispatcher marks the
-   * entry as dispatched and frees its key. A repetition planned
-   * in that window meets an entry which is still waiting and is discarded - correct
-   * behaviour, and the reason a test may not take the listener as the signal that the
-   * first operation is over.
+   * The listener runs INSIDE the dispatch, one write before the dispatcher marks the entry
+   * as dispatched and frees its key. A repetition planned in that window meets an entry
+   * which still waits, and it is dropped. That is correct behaviour. It is also the reason
+   * why a test may not take the listener as the signal that the first operation is over.
    */
   private void awaitDeduplicationWindowClosed(
       final Aggregate aggregate) throws Exception {
@@ -169,8 +167,8 @@ public class RepeatedOperationTest {
     awaitCorrelations(1);
     awaitDeduplicationWindowClosed(aggregate);
 
-    // second round: the same partner is asked again, with the same correlation id,
-    // which used to be swallowed for the whole retention period
+    // second round: the same partner is asked again, with the same correlation id. This
+    // used to be swallowed for the whole retention period
     inTransaction(() -> workflowService.correlateMessage(aggregate, "OfferRequested", "partner-42"));
     awaitCorrelations(2);
 
@@ -195,10 +193,10 @@ public class RepeatedOperationTest {
     listener.awaitInvocations(1, 30_000);
     awareness.answerWith(WorkflowAwareness.ACTIVE);
 
-    // both are planned in ONE transaction, so nothing was dispatched in between: the
-    // second one is discarded, and VanillaBP warns about it. This test WANTS to plan
-    // against a pending entry, so it must NOT wait for the window to close - the
-    // opposite of what its siblings do, and the two look alike from here
+    // both are planned in ONE transaction, so nothing was dispatched in between. The
+    // second one is dropped, and VanillaBP warns about it. This test WANTS to plan against
+    // a pending entry, so it must NOT wait for the window to close. Its siblings do the
+    // opposite, and from here the two look alike
     inTransaction(() -> {
       workflowService.correlateMessage(aggregate, "ItemShipped", "item-1");
       return workflowService.correlateMessage(aggregate, "ItemShipped", "item-1");
@@ -222,8 +220,8 @@ public class RepeatedOperationTest {
     listener.awaitInvocations(1, 30_000);
     awareness.answerWith(WorkflowAwareness.ACTIVE);
 
-    // one task id, two operations: they used to derive the same key, so the second one
-    // was dropped although only one of the two can happen per task anyway
+    // one task id, two operations. They used to derive the same key, so the second one
+    // was dropped, although only one of the two can happen per task anyway
     inTransaction(() -> {
       workflowService.completeTask(aggregate, "task-1");
       return workflowService.cancelTask(aggregate, "task-1", "PAYMENT_FAILED");
@@ -250,9 +248,9 @@ public class RepeatedOperationTest {
     listener.awaitInvocations(1, 30_000);
     awaitDeduplicationWindowClosed(aggregate);
 
-    // an aggregate outliving its workflow and starting a second one of the same
-    // process: while the first start was still pending this was a no-op, and it stays
-    // one - after the dispatch it is a new operation
+    // an aggregate outlives its workflow and starts a second one of the same process.
+    // While the first start was still pending, this was a no-op, and it stays one. After
+    // the dispatch it is a new operation
     inTransaction(() -> workflowService.startWorkflowAgain(aggregate));
     listener.awaitInvocations(2, 30_000);
 

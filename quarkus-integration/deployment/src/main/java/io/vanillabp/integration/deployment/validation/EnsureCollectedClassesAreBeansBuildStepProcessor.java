@@ -11,8 +11,8 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 
 /**
- * Validates that classes collected by other build steps (e.g. workflow services or
- * aggregate persistence implementations) are actual CDI beans at runtime.
+ * Checks that the classes which other build steps collected are real CDI beans at runtime.
+ * Examples are workflow services and aggregate persistence implementations.
  */
 public class EnsureCollectedClassesAreBeansBuildStepProcessor {
 
@@ -24,11 +24,11 @@ public class EnsureCollectedClassesAreBeansBuildStepProcessor {
   }
 
   /**
-   * The classes collected are not necessarily injected by application code but looked up
-   * dynamically at runtime. This build step prevents ArC from removing them as unused
-   * beans (which would also cause false positives in
+   * Application code does not always inject the collected classes. They are often looked up
+   * at runtime. This build step stops ArC from removing them as unused beans. A removed bean
+   * is no longer part of the validation context. So
    * {@link #ensureCollectedClassesAreBeans(ValidationPhaseBuildItem, List, BuildProducer)}
-   * since removed beans are not part of the validation context any more).
+   * would report it by mistake.
    *
    * @param classIsBeanValidationBuildItems The classes collected by other build steps
    * @param unremovableBeans Producer for unremovable-bean build items
@@ -50,15 +50,15 @@ public class EnsureCollectedClassesAreBeansBuildStepProcessor {
   }
 
   /**
-   * Checks each collected class during ArC's validation phase, the documented hook for
-   * custom bean validations (in contrast to the bean-registration phase, synthetic beans
-   * are visible here as well). A class passes the check if any bean's set of bean types
-   * contains the class. ArC's computed bean types are used on purpose: they respect
+   * Checks each collected class during ArC's validation phase. This phase is the documented
+   * hook for custom bean validations. Unlike the bean-registration phase, it also sees
+   * synthetic beans. A class passes the check if the bean types of any bean contain the
+   * class. We use the bean types which ArC computed on purpose, because they respect
    * restrictions like {@link jakarta.enterprise.inject.Typed}.
    * <p>
-   * A class which VanillaBP registers by its own name asks for more than that: there the
-   * bean has to BE that class, because a bean of a subclass is a different workflow
-   * service serving a BPMN process of its own.
+   * A class which VanillaBP registers by its own name needs more. There the bean has to BE
+   * that class. A bean of a subclass is a different workflow service, and it serves a BPMN
+   * process of its own.
    *
    * @param validationPhase The ArC validation phase
    * @param classIsBeanValidationBuildItems The classes collected by other build steps
@@ -112,8 +112,8 @@ public class EnsureCollectedClassesAreBeansBuildStepProcessor {
   }
 
   /**
-   * Whether a bean stands for exactly the class asked about: the class ArC builds the bean
-   * from, which is the class itself for a class bean and the returned type for a producer.
+   * Whether a bean stands for exactly the given class. This is the class ArC builds the bean
+   * from. For a class bean it is the class itself, for a producer it is the returned type.
    */
   private static boolean isBeanOfExactly(
       final BeanInfo bean,

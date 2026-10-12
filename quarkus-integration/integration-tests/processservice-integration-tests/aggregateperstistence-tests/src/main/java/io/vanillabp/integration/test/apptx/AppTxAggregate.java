@@ -1,8 +1,8 @@
 package io.vanillabp.integration.test.apptx;
 
 /**
- * A workflow aggregate stored in a system neither JTA nor Panache knows: no entity, no
- * document, just an object the application persists itself.
+ * A workflow aggregate which neither JTA (the Java Transaction API) nor Panache knows. It is
+ * no entity and no document, just an object which the application stores itself.
  */
 public class AppTxAggregate implements AppTxStored {
 

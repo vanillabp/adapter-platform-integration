@@ -14,8 +14,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
  * An application whose VanillaBP parts were never built together is stopped while Quarkus
- * builds it, which is earlier than any startup can be. What the test pins is the text the
- * build ends with: both versions and the dependency to change.
+ * builds it. That is earlier than any startup. The test checks the text the build ends
+ * with: both versions and the dependency to change.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PartsWhichDoNotBelongTogetherTest {

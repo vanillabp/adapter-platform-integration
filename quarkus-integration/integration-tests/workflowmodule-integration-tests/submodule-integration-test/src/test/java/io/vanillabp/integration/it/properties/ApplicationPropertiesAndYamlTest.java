@@ -16,8 +16,8 @@ import io.vanillabp.integration.test.utils.OneFreePortPerJvm;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Validate properties read from application and workflow module properties
- * with no additional profiles.
+ * Checks properties read from the files of the application and of the workflow modules,
+ * with no additional profile.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ApplicationPropertiesAndYamlTest {

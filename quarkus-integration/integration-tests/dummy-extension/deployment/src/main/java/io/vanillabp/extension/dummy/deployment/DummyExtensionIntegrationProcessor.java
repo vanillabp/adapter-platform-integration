@@ -7,12 +7,12 @@ import io.quarkus.deployment.builditem.FeatureBuildItem;
 import io.vanillabp.extension.dummy.runtime.DummyExtensionProducer;
 
 /**
- * A dummy VanillaBP extension (an {@code ExtensionWiringService} contributor, e.g.
- * like the VanillaBP Business Cockpit) packaged as a Quarkus extension - used by the
- * VanillaBP integration's Quarkus tests. Unlike adapters, extensions announce no
- * build item: they simply register the bean producing their
- * {@code ExtensionWiringService} element bean(s) - the platform keeps beans of that
- * type from ArC's unused-bean removal.
+ * A dummy VanillaBP extension, packaged as a Quarkus extension. It contributes an
+ * {@code ExtensionWiringService}, like the VanillaBP Business Cockpit does. The Quarkus
+ * tests of the VanillaBP integration use it. Unlike adapters, extensions announce no build
+ * item. They simply register the bean which produces their {@code ExtensionWiringService}
+ * element bean(s). The platform keeps beans of that type from being removed by ArC as
+ * unused.
  */
 class DummyExtensionIntegrationProcessor {
 

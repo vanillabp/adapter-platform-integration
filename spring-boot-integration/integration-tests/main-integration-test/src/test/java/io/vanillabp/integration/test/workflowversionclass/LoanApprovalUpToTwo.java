@@ -5,8 +5,8 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The handlers of the older generation of the model: the whole class serves versions 1
- * and 2, which its {@code @BpmnProcess} says once instead of every method saying it.
+ * The handlers of the older generation of the model. The whole class serves versions 1
+ * and 2. Its {@code @BpmnProcess} says this once, so no method needs to say it.
  */
 @WorkflowService(
     workflowAggregateClass = ClassVersionedAggregate.class,

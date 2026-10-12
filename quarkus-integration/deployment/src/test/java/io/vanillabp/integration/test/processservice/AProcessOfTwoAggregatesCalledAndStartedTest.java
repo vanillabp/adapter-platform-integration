@@ -17,7 +17,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * The same as {@link AProcessOfTwoAggregatesStartedAndCalledTest}, with the class which calls the
  * process added first. The message is the same.
  * <p>
- * The text is the one Spring Boot says while it starts, see {@link TwoAggregates}.
+ * The text is the same which Spring Boot reports while it starts, see {@link TwoAggregates}.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AProcessOfTwoAggregatesCalledAndStartedTest {

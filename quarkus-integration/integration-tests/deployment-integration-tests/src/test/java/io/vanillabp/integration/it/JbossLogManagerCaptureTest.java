@@ -21,19 +21,18 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * What a test logs through JBoss LogManager is captured like everything else.
  * <p>
  * Redirecting <code>System.out</code> alone never reached it. The Quarkus test modules
- * install that log manager (Surefire property
- * <code>java.util.logging.manager</code>), and a handler of it holds the
- * <code>System.out</code> which existed when the handler was created. That is why the
- * augmentation line of a prod-mode test and every Testcontainers line of the Camunda 8
- * Quarkus tests appeared in the log of a GREEN build.
+ * install that log manager (Surefire property <code>java.util.logging.manager</code>). A
+ * handler of it holds the <code>System.out</code> which existed when the handler was
+ * created. That is why the augmentation line of a prod-mode test, and every Testcontainers
+ * line of the Camunda 8 Quarkus tests, appeared in the log of a GREEN build.
  * <p>
- * The handler below is created in a static initializer, so it holds the real
- * <code>System.out</code> before any extension callback runs, which is exactly the
- * situation the defect needs. Remove the redirection from the extension and this test
- * fails, with the marker printed to the console instead.
+ * The handler below is created in a static initializer. So it holds the real
+ * <code>System.out</code> before any extension callback runs. That is exactly the
+ * situation the defect needs. Remove the redirection from the extension, and this test
+ * fails, and the marker is printed to the console instead.
  * <p>
- * It asserts the capture and not the silence on purpose: that is the half which a
- * switched off console handler would break, and a failing class has to replay what the
+ * On purpose it asserts the capture and not the silence. A console handler which is
+ * switched off would break the capture. And a failing class has to replay what the
  * application logged.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -59,8 +58,8 @@ public class JbossLogManagerCaptureTest {
   public void aLineLoggedThroughJbossLogManagerIsCaptured(
       final CapturedOutput captured) {
 
-    // without this the test would pass for the wrong reason: under the JDK's own log
-    // manager the capture works through System.out and proves nothing about this
+    // without this, the test would pass for the wrong reason. Under the JDK's own log
+    // manager, the capture works through System.out and proves nothing about this
     assertTrue(
         LogManager.getLogManager().getClass().getName().startsWith("org.jboss.logmanager."),
         () -> "This module has to run under JBoss LogManager, but the installed manager is "

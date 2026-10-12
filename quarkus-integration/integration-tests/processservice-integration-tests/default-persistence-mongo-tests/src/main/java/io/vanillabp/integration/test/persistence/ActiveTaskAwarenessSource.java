@@ -5,8 +5,8 @@ import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Lets the dummy adapter know every task probed, so operations on a running workflow
- * reach phase two instead of being rejected as unknown.
+ * Tells the dummy adapter that it knows every task it is asked about. So operations on a
+ * running workflow reach phase two and are not rejected as unknown.
  */
 @ApplicationScoped
 public class ActiveTaskAwarenessSource implements DummyTaskAwarenessSource {

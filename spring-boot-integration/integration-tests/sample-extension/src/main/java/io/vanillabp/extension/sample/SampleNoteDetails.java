@@ -1,11 +1,11 @@
 package io.vanillabp.extension.sample;
 
 /**
- * The note the extension prefills from what it knows and the application's method
- * enriches or replaces - the shape of the Business Cockpit's prefilled details.
+ * The note which the extension prefills from what it knows. The method of the application
+ * adds to it or replaces it. It has the shape of the Business Cockpit's prefilled details.
  * <p>
- * It reaches the method as the payload of the invocation, bound by a parameter binder
- * this extension contributes.
+ * It reaches the method as the payload of the call. A parameter binder of this extension
+ * binds it.
  */
 public class SampleNoteDetails {
 

@@ -19,10 +19,10 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * The other half of {@link GuessingAdapterStartupTest}: an application which knowingly
+ * The other half of {@link GuessingAdapterStartupTest}. An application which knowingly
  * wants its operations routed by list order says so
- * (<code>vanillabp.election.guessing-adapters: ACCEPTED</code>) and boots. What it gets
- * instead of the refusal is a WARN, so the decision stays visible in the log.
+ * (<code>vanillabp.election.guessing-adapters: ACCEPTED</code>), and it boots. Instead of
+ * the refusal it gets a WARN, so the decision stays visible in the log.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AcceptedGuessingAdapterStartupTest {

@@ -39,19 +39,19 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Acceptance test on Spring Boot of what the identity of an activation buys: the dummy
+ * Acceptance test on Spring Boot for what the identity of an activation gives us. The dummy
  * adapter delivers the same task of the same workflow aggregate three times, once per
- * element of a multi-instance activity, and the handler correlates the same message name
- * with the same correlation id every time. All three correlations have to be planned.
+ * element of a multi-instance activity. The handler correlates the same message name with
+ * the same correlation id every time. All three correlations have to be planned.
  * <p>
- * Before this they shared one idempotency key - a called process is a secondary workflow
- * of the SAME aggregate, so module, process, aggregate id, message name and correlation
- * id were equal - and two of the three were discarded while the first one was still
- * waiting for its dispatch (see decision 23 in the repository's DECISIONS.md).
+ * Before this, the three shared one idempotency key. A called process is a secondary
+ * workflow of the SAME aggregate. So module, process, aggregate id, message name and
+ * correlation id were equal. Two of the three were discarded while the first one still
+ * waited for its dispatch (see decision 23 in the repository's DECISIONS.md).
  * <p>
- * Pinned next to it: the guarantee this must not cost (a redelivery of ONE element is
- * still one correlation) and the case it deliberately does not fix (the same correlation
- * planned twice outside any activation).
+ * The test also pins two more things. The first is the guarantee this must keep: a
+ * redelivery of ONE element is still one correlation. The second is the case it does not
+ * fix on purpose: the same correlation planned twice outside any activation.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ActivationIdentityTest {
@@ -126,9 +126,9 @@ public class ActivationIdentityTest {
     }
 
     /**
-     * A store of the application's own, deduplicating the calls which are still waiting
-     * - nothing here dispatches, so every planned call keeps waiting and its key keeps
-     * deduplicating. That is exactly the window the siblings used to collide in.
+     * A store of the application's own. It drops a call whose key is already waiting.
+     * Nothing here dispatches, so every planned call keeps waiting and its key keeps
+     * dropping duplicates. The siblings used to collide in exactly this window.
      */
     @Bean
     PhaseTwoOutbox activationOutbox() {
@@ -258,8 +258,8 @@ public class ActivationIdentityTest {
 
   /**
    * One delivery, as an adapter of a remote BPMS builds it. The delivery identity stays
-   * the same while the BPMS repeats itself; the activation identity names the element
-   * instance the BPMS is running.
+   * the same while the BPMS repeats itself. The activation identity names the element
+   * instance which the BPMS is running.
    */
   private TaskInvocationContext delivery(
       final String deliveryId,
@@ -353,7 +353,7 @@ public class ActivationIdentityTest {
                               ActivationWorkflowService.CORRELATION_ID)),
                   key));
 
-      // the guarantee this must not cost: the BPMS handing element 2 out again is not a
+      // the guarantee this must keep: the BPMS hands out element 2 again. That is not a
       // fourth element, so its correlation is the one already waiting
       dummyAdapter.invokeTask(MODULE, PROCESS, delivery("job-2", "element-2"));
       Assertions
@@ -382,9 +382,9 @@ public class ActivationIdentityTest {
       final var transactions = new org.springframework.transaction.support.TransactionTemplate(
           context.getBean(PlatformTransactionManager.class));
 
-      // what a REST endpoint does: no activation, so no component naming one, and the
-      // repetition is indistinguishable from a repeat of itself - which this story does
-      // not fix and does not claim to
+      // what a REST endpoint does: there is no activation, so no part of the key names
+      // one. So the second call looks exactly like a repeat of the first. This test does
+      // not fix that and does not claim to.
       transactions
           .executeWithoutResult(status -> processService
               .correlateMessage(

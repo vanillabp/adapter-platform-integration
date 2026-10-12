@@ -16,11 +16,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * A workflow module tested inside its own Maven module IS the root
- * application archive, so the convention used to drop the module ID and look at
- * 'classpath*:processes/&lt;adapter&gt;' - while the files sit where the packaged
- * application needs them, below the module ID. The module found nothing in its own
- * test, and the failure arrived later from the BPMS.
+ * A workflow module which is tested inside its own Maven module IS the root application
+ * archive. So the convention used to drop the module ID and look at
+ * 'classpath*:processes/&lt;adapter&gt;'. But the files sit where the packaged application
+ * needs them, below the module ID. The module found nothing in its own test, and the
+ * failure arrived later from the BPMS.
  * <p>
  * Both locations are searched now, the module's own one first. No property is
  * configured here on purpose: this is the convention doing it.

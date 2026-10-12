@@ -40,12 +40,12 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Acceptance test of <code>&#64;WorkflowTask(version = ...)</code> with the
- * dummy adapter standing in for a BPMS: the version the adapter reports decides which
- * method serves a delivered task, ranges made of numbers are compared without asking
- * the BPMS, and a range naming a version TAG is resolved through the catalog the
- * adapter registered - including the query for a version this application never
- * deployed itself (another cluster node did, during a rolling deployment).
+ * Acceptance test of <code>&#64;WorkflowTask(version = ...)</code>. The dummy adapter
+ * stands in for a BPMS. The version the adapter reports decides which method serves a
+ * delivered task. Ranges made of numbers are compared without asking the BPMS. A range
+ * which names a version TAG is resolved through the catalog the adapter registered. That
+ * includes the query for a version this application never deployed itself, because
+ * another cluster node deployed it during a rolling deployment.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ProcessVersionsTest {
@@ -60,18 +60,18 @@ public class ProcessVersionsTest {
     static final Map<String, VersionedAggregate> AGGREGATES = new ConcurrentHashMap<>();
 
     /**
-     * The versions the "BPMS" has - a test may add one while the application runs.
+     * The versions the "BPMS" has. A test may add one while the application runs.
      */
     static final List<DeployedProcessVersion> VERSIONS = new java.util.concurrent.CopyOnWriteArrayList<>();
 
     /**
-     * How often the "BPMS" was asked - the query must not run per task delivery.
+     * How often the "BPMS" was asked. The query must not run for every task delivery.
      */
     static final AtomicInteger QUERIES = new AtomicInteger();
 
     /**
-     * The version the "BPMS" gave the model this start deployed, <code>null</code> to report
-     * none.
+     * The version the "BPMS" gave the model which this start deployed. <code>null</code>
+     * reports none.
      */
     static final java.util.concurrent.atomic.AtomicReference<String> DEPLOYED = new java.util.concurrent.atomic.AtomicReference<>();
 
@@ -288,13 +288,13 @@ public class ProcessVersionsTest {
       dummyAdapter.invokeTask(MODULE, PROCESS, context("4711", "3"));
       Assertions.assertEquals("three", VersionsConfiguration.AGGREGATES.get("4711").getServedBy());
 
-      // the version carrying the tag - and no further BPMS query for it
+      // the version with the tag, and no further BPMS query for it
       dummyAdapter.invokeTask(MODULE, PROCESS, context("4711", "4"));
       Assertions.assertEquals("tagged", VersionsConfiguration.AGGREGATES.get("4711").getServedBy());
       Assertions.assertEquals(1, VersionsConfiguration.QUERIES.get());
 
-      // a BPMS reporting NO version reaches none of these methods: every one of them
-      // names versions, and which of them applies is not something to guess
+      // a BPMS which reports NO version reaches none of these methods. Each of them names
+      // versions, and VanillaBP must not guess which one applies
       final var unreported = Assertions.assertThrows(
           IllegalStateException.class,
           () -> dummyAdapter.invokeTask(MODULE, PROCESS, context("4711", null)));
@@ -305,8 +305,8 @@ public class ProcessVersionsTest {
           VersionsConfiguration.AGGREGATES.get("4711").getServedBy(),
           "no method ran");
 
-      // ANOTHER cluster node deploys version 5 and moves the tag to it: this node
-      // has never seen that version, so it asks the BPMS while the task is dispatched
+      // ANOTHER cluster node deploys version 5 and moves the tag to it. This node has
+      // never seen that version, so it asks the BPMS while the task is dispatched
       VersionsConfiguration.VERSIONS.set(3, DeployedProcessVersion.of("4", null));
       VersionsConfiguration.VERSIONS.add(DeployedProcessVersion.of("5", "release-2026"));
       dummyAdapter.invokeTask(MODULE, PROCESS, context("4711", "5"));
@@ -315,7 +315,7 @@ public class ProcessVersionsTest {
           VersionsConfiguration.QUERIES.get() > 1,
           "the version deployed by another node was looked up on demand");
 
-      // a version no method serves is a defect naming the version
+      // a version which no method serves is a defect, and the message names the version
       final var unmatched = Assertions.assertThrows(
           IllegalStateException.class,
           () -> dummyAdapter.invokeTask(MODULE, PROCESS, context("4711", "4")));

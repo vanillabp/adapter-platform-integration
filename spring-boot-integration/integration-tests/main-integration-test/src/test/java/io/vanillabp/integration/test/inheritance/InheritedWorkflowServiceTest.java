@@ -40,15 +40,15 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * What <code>&#64;Inherited</code> promises on Spring Boot, where it always held and has to
- * keep holding while Quarkus is brought level: the class of the BEAN is the
- * workflow service, so the BPMN process is named after the SUBCLASS, the subclass' handler
- * and the handler it inherited both serve that process, and the workflow module is the one of
- * the subclass.
+ * What <code>&#64;Inherited</code> promises on Spring Boot. It always held there, and it has
+ * to keep holding while Quarkus catches up. The class of the BEAN is the workflow service. So
+ * the BPMN process is named after the SUBCLASS. The handler of the subclass and the handler
+ * it inherited both serve that process. The workflow module is the one of the subclass.
  * <p>
- * Next to it, the two ways of writing a handler method which nobody sees. Both used to end in
- * the wiring validation asking for a method the developer can point at in their own source,
- * so the boot names them now - the method, the class it is declared in and the way out.
+ * Next to it are the two ways to write a handler method which VanillaBP does not see. Both
+ * used to end in the wiring validation, which asked for a method the developer could point at
+ * in their own source. So the boot names them now: the method, the class it is declared in,
+ * and the way out.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class InheritedWorkflowServiceTest {
@@ -138,8 +138,8 @@ public class InheritedWorkflowServiceTest {
     }
 
     /**
-     * Stands in for the BPMN model: both tasks of the process the subclass serves, the one
-     * whose handler the subclass writes itself and the one whose handler it inherited.
+     * Stands in for the BPMN model. It has both tasks of the process which the subclass
+     * serves: one with a handler the subclass writes itself, one with an inherited handler.
      */
     @Bean
     DummyTaskWiringSource inheritanceWiringSource() {
@@ -156,8 +156,8 @@ public class InheritedWorkflowServiceTest {
     }
 
     /**
-     * The subclass is a bean, the class carrying the declaration is not - which is what makes
-     * the subclass the workflow service.
+     * The subclass is a bean, and the class with the declaration is not. That makes the
+     * subclass the workflow service.
      */
     @Bean
     InheritingWorkflowService inheritingWorkflowService() {
@@ -169,8 +169,8 @@ public class InheritedWorkflowServiceTest {
   }
 
   /**
-   * The application of the second test: nothing here ever reaches an aggregate, the boot's
-   * report about the two handler methods is what is asserted.
+   * The application of the second test. Nothing here ever reaches an aggregate. The test
+   * checks the boot's report about the two handler methods.
    */
   @Configuration
   static class InvisibleHandlersConfiguration {
@@ -211,8 +211,8 @@ public class InheritedWorkflowServiceTest {
   }
 
   /**
-   * Two classes splitting the handlers of the process their common base names. This is the
-   * shape the refusal of an annotated interface points a developer at, so it has to work.
+   * Two classes which split the handlers of the process that their common base names. The
+   * refusal of an annotated interface points a developer to this form, so it has to work.
    */
   @Configuration
   static class SharedProcessConfiguration {
@@ -319,9 +319,9 @@ public class InheritedWorkflowServiceTest {
   }
 
   /**
-   * Each scenario deploys BPMN files of its own, so each brings its own resources location:
-   * a process no workflow service of the running application claims would otherwise be
-   * reported for every application here.
+   * Each scenario deploys BPMN files of its own, so each brings its own resources location.
+   * Otherwise every application here would report the processes which none of its workflow
+   * services claims.
    */
   private static String applicationYaml(
       final String resourcesLocation) {
@@ -451,8 +451,8 @@ public class InheritedWorkflowServiceTest {
   public void bothInvisibleHandlersAreReported(
       final CapturedOutput output) throws IOException {
 
-    // the file of this location holds the process of another test of this class, which no
-    // class of this application claims
+    // the file of this location holds the process of another test of this class. No class
+    // of this application claims it
     try (var testApp = buildTestApp("inheritance"); var context = runTestApplication(testApp,
         new String[]{
             "vanillabp.workflow-modules.test-module.workflows.InheritingWorkflowService.implemented-externally=true"

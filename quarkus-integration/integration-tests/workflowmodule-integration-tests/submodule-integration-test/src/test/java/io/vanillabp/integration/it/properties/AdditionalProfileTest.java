@@ -16,9 +16,9 @@ import io.vanillabp.integration.test.utils.OneFreePortPerJvm;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Validate properties read from application and workflow module properties
- * respecting additional profiles: the profile-specific file of a
- * workflow module beats its plain one, and both lose against the application.
+ * Checks properties read from the files of the application and of the workflow modules,
+ * with an additional profile. The profile-specific file of a workflow module beats its
+ * plain one, and both lose against the application.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AdditionalProfileTest {
@@ -55,8 +55,8 @@ public class AdditionalProfileTest {
         Map.of(
             "test-module", 21, // loaded from test-module-testprofile.yaml
             "multi-bpmn-module", 121, // loaded from multi-bpmn-module-testprofile.yaml
-            // multi-bpmn-module-testprofile.yaml also sets this key, and loses -
-            // application.yaml is the strongest source of the application configuring it
+            // multi-bpmn-module-testprofile.yaml also sets this key, and loses.
+            // application.yaml is the strongest of the application's sources which set it
             "no-module", 48),
         workflowModules);
 

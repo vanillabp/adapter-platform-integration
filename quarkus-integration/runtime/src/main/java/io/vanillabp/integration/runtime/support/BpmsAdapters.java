@@ -3,14 +3,14 @@ package io.vanillabp.integration.runtime.support;
 /**
  * The wording the message about missing BPMS adapter extensions ends with.
  * <p>
- * A developer whose application has no adapter should not have to search for what to add,
- * but the list of adapters does not belong into compiled code either: adapters are
- * released independently of VanillaBP, and a list in a JAR is out of date the day a new
- * adapter appears. So the message points at the wiki page which carries the complete list
- * including the name of each Quarkus extension.
+ * A developer whose application has no adapter should not have to search for what to add.
+ * But the list of adapters does not belong in compiled code either. Adapters are released
+ * apart from VanillaBP, so a list in a JAR is out of date on the day a new adapter appears.
+ * So the message points at the wiki page. It has the complete list, with the name of each
+ * Quarkus extension.
  * <p>
  * It says the same as its Spring Boot counterpart in
- * <code>vanillabp-spring-boot-support</code> - the two are one message with two wordings.
+ * <code>vanillabp-spring-boot-support</code>. The two are one message in two wordings.
  */
 public final class BpmsAdapters {
 
@@ -24,8 +24,8 @@ public final class BpmsAdapters {
   public static final String ADAPTERS_WIKI_URL = "https://github.com/vanillabp/adapter-platform-integration/wiki/BPMS-adapters";
 
   /**
-   * The part the message about a missing adapter ends with: where to look up an adapter,
-   * that more than one is what a migration needs, and where the version comes from.
+   * The end of the message about a missing adapter. It says where to look up an adapter, that
+   * a migration needs more than one, and where the version comes from.
    *
    * @return The wording, starting on a new line
    */

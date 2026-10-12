@@ -4,8 +4,8 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.inject.Singleton;
 
 /**
- * Nothing of this test reaches a workflow aggregate, so the persistence answers what it
- * has to answer and nothing else.
+ * Nothing in this test reaches a workflow aggregate. So the persistence only answers what
+ * it has to.
  */
 @Singleton
 public class NoBeanAggregatePersistence implements AggregatePersistenceAware<NoBeanAggregate> {

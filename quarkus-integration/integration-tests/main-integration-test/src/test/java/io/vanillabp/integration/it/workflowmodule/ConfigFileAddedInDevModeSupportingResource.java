@@ -10,10 +10,10 @@ import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
 
 /**
- * Reports what the application read from the configuration files of the workflow module,
- * so a dev-mode test can ask a restarted application whether a file which appeared while
- * it ran was read. Each value has a default, because every file this resource reports on
- * is missing when the application boots for the first time.
+ * Reports what the application read from the configuration files of the workflow module.
+ * So a dev-mode test can ask a restarted application whether it read a file which appeared
+ * while it ran. Each value has a default, because every file this resource reports on is
+ * missing when the application boots for the first time.
  */
 @Path("/")
 public class ConfigFileAddedInDevModeSupportingResource {

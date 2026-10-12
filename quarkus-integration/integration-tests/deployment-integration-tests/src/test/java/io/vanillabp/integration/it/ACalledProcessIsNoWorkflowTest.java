@@ -39,13 +39,13 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * A called process is no workflow of its own, on Quarkus: its start and its end do not reach
+ * A called process is no workflow of its own, on Quarkus. Its start and its end do not reach
  * the application, and the workflow at the top ends once.
  * <p>
- * The workflow service serves {@code Ordering} and declares {@code Shipping}, which
- * {@code Ordering} calls, as a secondary process. It declares {@code Dispatching} as well, the
- * id a renamed process left behind, and no model arrives for it. The workflows the BPMS still
- * holds under that id were started under it, so they keep their end.
+ * The workflow service serves {@code Ordering}. It declares {@code Shipping}, which
+ * {@code Ordering} calls, as a secondary process. It also declares {@code Dispatching}, the
+ * id which a renamed process left behind. No model arrives for that id. But the workflows
+ * which the BPMS still holds under that id were started under it, so they keep their end.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ACalledProcessIsNoWorkflowTest {

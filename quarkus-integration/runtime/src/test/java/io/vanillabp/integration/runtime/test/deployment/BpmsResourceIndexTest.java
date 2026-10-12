@@ -14,9 +14,10 @@ import io.vanillabp.integration.runtime.deployment.BpmsResourceIndex;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Unit test of the build-time BPMN index's runtime lookup: location normalization
- * (Spring-style <code>classpath:</code> prefixes, slashes) and loading of indexed
- * resources with subdirectory-preserving relative keys.
+ * Unit test of the lookup at runtime in the BPMN index which the build creates. It covers
+ * how a location is normalized (Spring-style <code>classpath:</code> prefixes, slashes). It
+ * also covers how indexed resources are loaded, with relative keys which keep the
+ * subdirectories.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class BpmsResourceIndexTest {
@@ -49,8 +50,8 @@ public class BpmsResourceIndexTest {
   @DisplayName("Indexed resources are loaded below the location with subdirectory-preserving keys")
   public void indexedResourcesAreLoaded() throws Exception {
 
-    // the test classpath resources below bpmn-index-test/ act as the "application
-    // archive" content indexed at build time
+    // The test classpath resources below bpmn-index-test/ play the content of the
+    // "application archive" which the build indexed.
     final var index = BpmsResourceIndex
         .builder()
         .workflowModuleIds(List.of("test-module"))

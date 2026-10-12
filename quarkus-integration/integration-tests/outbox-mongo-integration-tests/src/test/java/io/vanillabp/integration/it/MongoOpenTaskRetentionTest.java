@@ -28,16 +28,16 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * The open-task retention in the MongoDB store on Quarkus: the record which answers the redeliveries of an
- * OPEN task outlives the retention as long as the BPMS keeps redelivering that task, and
- * the record of a task nobody hands out any more expires as it always did. The moment the
- * handler ran stays where it is, because the age of the open task is measured from it.
+ * The open-task retention in the MongoDB store on Quarkus. The record which answers the
+ * redeliveries of an OPEN task outlives the retention, as long as the BPMS keeps redelivering
+ * that task. The record of a task which nobody hands out any more expires as it always did.
+ * The moment the handler ran stays as it is, because the age of the open task is measured
+ * from it.
  * <p>
- * An hour of retention with records backdated by two, so nothing here waits for a clock.
- * What the cleanup of this test deleted is read back as state rather than counted: the
- * cleanup running in the background of this application deletes the same records, and
- * a count says who was first rather than what is left (decision 46 in the repository's
- * DECISIONS.md).
+ * The retention is one hour, and the records are backdated by two. So nothing here waits for
+ * a clock. The test reads back as state what the cleanup deleted, and does not count it. The
+ * cleanup in the background of this application deletes the same records. A count says who
+ * was first, not what is left (decision 46 in the repository's DECISIONS.md).
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoOpenTaskRetentionTest {
@@ -78,8 +78,8 @@ public class MongoOpenTaskRetentionTest {
   }
 
   /**
-   * A record written the given time ago - both of its timestamps, exactly as the insert
-   * writes them.
+   * A record written the given time ago. Both of its timestamps are set exactly as the
+   * insert writes them.
    */
   private TaskDelivery backdated(
       final String deliveryKey,
@@ -111,7 +111,7 @@ public class MongoOpenTaskRetentionTest {
     deliveryLog.record(backdated("job-forgotten", Duration.ofHours(2)));
     userTransaction.commit();
 
-    // the BPMS redelivered the open task, which is what the core reports to the store
+    // the BPMS redelivered the open task, and the core reports this to the store
     deliveryLog.stillOpen("job-open");
 
     deliveryLog.cleanUpExpiredRecords();

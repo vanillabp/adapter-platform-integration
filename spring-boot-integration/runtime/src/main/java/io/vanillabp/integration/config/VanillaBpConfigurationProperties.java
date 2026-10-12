@@ -5,22 +5,22 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 
 /**
- * Thin Spring Boot binding of the user-facing <code>vanillabp.*</code> configuration
- * tree onto the platform-neutral core model: the core POJOs are bound directly
- * (relaxed names, profiles and environment-variable overrides included), so the tree
- * is modeled exactly once - in the core - and every property added there is picked up
- * by Spring Boot without any platform code.
+ * A thin Spring Boot binding of the <code>vanillabp.*</code> configuration tree, which
+ * users write, onto the core model, which does not know the platform. Spring Boot binds
+ * the core POJOs directly, with relaxed names, profiles and environment-variable
+ * overrides. So the tree is modeled exactly once, in the core. Spring Boot picks up every
+ * property added there without any platform code.
  * <p>
- * This class only exists to carry the {@link ConfigurationProperties} annotation (and
- * to let the Spring Boot configuration processor emit IDE metadata for the inherited
- * properties). All model, defaulting ({@code normalize()}) and validation logic lives
+ * This class only exists to carry the {@link ConfigurationProperties} annotation. It also
+ * lets the Spring Boot configuration processor write IDE metadata for the inherited
+ * properties. All the model, the defaults ({@code normalize()}) and the validation live
  * in {@link MigrationAdapterProperties}.
  * <p>
- * BPMS adapters contribute their own keys to the same tree (e.g.
- * <code>vanillabp.adapters.&lt;id&gt;.rest-address</code>) by binding an adapter-owned
- * overlay class annotated with <code>@ConfigurationProperties("vanillabp")</code> -
- * same-prefix classes coexist, and keys unknown to this core view are ignored by the
- * JavaBean binding.
+ * BPMS adapters add their own keys to the same tree (e.g.
+ * <code>vanillabp.adapters.&lt;id&gt;.rest-address</code>). For that, an adapter binds an
+ * overlay class of its own, annotated with <code>@ConfigurationProperties("vanillabp")</code>.
+ * Classes with the same prefix can live side by side. The JavaBean binding ignores keys
+ * which this core view does not know.
  */
 @ConfigurationProperties(MigrationAdapterProperties.PREFIX)
 public class VanillaBpConfigurationProperties extends MigrationAdapterProperties {
@@ -30,8 +30,8 @@ public class VanillaBpConfigurationProperties extends MigrationAdapterProperties
    * environment, setter by setter. So everything this object holds arrives after the
    * constructor ran, and nothing may be computed here.
    * <p>
-   * Defaulting and validation happen later still, once the classpath facts are known: the
-   * bean method building the {@link MigrationAdapterProperties} bean of this application
+   * Defaults and validation come even later, once the classpath facts are known. The
+   * bean method which builds the {@link MigrationAdapterProperties} bean of this application
    * calls {@link MigrationAdapterProperties#validateProperties(io.vanillabp.integration.adapter.migration.config.ClasspathFacts, String)},
    * which derives the defaults first (see
    * {@link io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration}).

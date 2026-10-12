@@ -35,15 +35,15 @@ import io.vanillabp.spi.service.WorkflowTask;
 import lombok.Getter;
 
 /**
- * An application whose BPMN model reads its data with expressions learns at the start what
- * that binds. This is the whole way through a Spring Boot start: the adapter reports the
- * expressions of the model it wires, the core sorts them and the box says it once.
- * {@code ModelExpressionCheckTest} reads the messages alone, and
- * {@code ExpressionsInTheModelTest} of the Quarkus deployment tests holds the same behaviour
- * on the other platform.
+ * A BPMN model may read the application's data with expressions. Such an application learns
+ * at the start what that ties it to. This test goes the whole way through a Spring Boot
+ * start. The adapter reports the expressions of the model it wires. The core sorts them, and
+ * the startup message names them once. {@code ModelExpressionCheckTest} checks the messages
+ * alone. {@code ExpressionsInTheModelTest} of the Quarkus deployment tests checks the same
+ * behaviour on the other platform.
  * <p>
- * The counter-check is the second start: the same model, and a workflow which says its
- * expressions are meant as they are, which leaves nothing to report.
+ * The counter-check starts the same model again, with the expressions accepted in the
+ * configuration. Then there is nothing to report.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ExpressionsInTheModelTest {
@@ -51,8 +51,8 @@ public class ExpressionsInTheModelTest {
   private static final String PROCESS = "ShippingProcess";
 
   /**
-   * What the adapter reads off the model: two expressions reaching into the data, one
-   * computing, and two which do what VanillaBP recommends.
+   * What the adapter reads from the model: two expressions reach into the data, one
+   * computes something, and two do what VanillaBP recommends.
    */
   @Configuration
   static class ShippingWiringConfiguration {
@@ -161,8 +161,8 @@ public class ExpressionsInTheModelTest {
       """;
 
   /**
-   * The same configuration plus the line the message hands out - written at the workflow,
-   * which is where the two keys of this process stand.
+   * The same configuration plus the line which the message suggests. It is written at the
+   * workflow, next to the other key of this process.
    */
   private static final String ACCEPTED_AT_THE_WORKFLOW = WITHOUT_ACCEPTANCE
       + "          accept-expressions-in-the-model: true\n";
@@ -174,7 +174,8 @@ public class ExpressionsInTheModelTest {
       + "      accept-expressions-in-the-model: true\n";
 
   /**
-   * And at the application, for a team which decided it once for everything they model.
+   * The same line at the application level. A team uses it when it decided once for every
+   * model it writes.
    */
   private static final String ACCEPTED_AT_THE_APPLICATION = WITHOUT_ACCEPTANCE
       + "  accept-expressions-in-the-model: true\n";
@@ -271,8 +272,8 @@ public class ExpressionsInTheModelTest {
       try (var testApp = buildTestApp(applicationYaml); var context = runTestApplication(testApp)) {
 
         final var captured = output.getAll().substring(writtenBeforeThisBoot);
-        // a level which binds but is never read looks exactly like a level which works,
-        // so every one of the three is started here
+        // a level which is never read looks just like a level which works,
+        // so each of the three levels gets its own start here
         Assertions.assertFalse(captured.contains("more than the name of one variable"), captured);
         Assertions.assertFalse(captured.contains("compute instead of naming a variable"), captured);
 

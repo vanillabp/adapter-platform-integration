@@ -18,19 +18,19 @@ import io.vanillabp.integration.spi.parts.PartKind;
 import io.vanillabp.integration.spi.parts.VanillaBpParts;
 
 /**
- * Checks while building whether the BPMS adapters and the extensions of this application
- * belong to the VanillaBP platform integration they are built with, and puts their
+ * Checks during the build whether the BPMS adapters and the extensions of this application
+ * belong to the VanillaBP platform integration they are built with. It also puts their
  * version descriptors into the native image.
  * <p>
- * Quarkus knows the whole application while it builds it, so this is the earliest moment
- * the question can be asked, and a developer learns about a pair which does not belong
- * together before the application is even packaged. The same check runs again at startup,
- * for the adapters and extensions a build cannot see, and because a Spring Boot
- * application has no build step to ask.
+ * Quarkus knows the whole application while it builds it. So this is the earliest moment to
+ * ask the question. A developer learns about a pair which does not belong together before
+ * the application is even packaged. The same check runs again at startup. It covers the
+ * adapters and extensions a build cannot see, and a Spring Boot application has no build
+ * step to ask.
  * <p>
- * Registering the descriptors matters as much as the check: a native image carries only
- * the resources it was told about, and a descriptor left out of the image turns every
- * pair into an unknown one.
+ * Registering the descriptors matters as much as the check. A native image only carries the
+ * resources it was told about. A descriptor left out of the image turns every pair into an
+ * unknown one.
  *
  * @see VanillaBpParts
  */
@@ -52,7 +52,7 @@ public class PartVersionsBuildStepProcessor {
   /**
    * @param applicationArchives The archives of this Quarkus build
    * @param nativeImageResources Producer putting the descriptors into the native image
-   * @return The word that the parts were judged, which the deployment pipeline waits for
+   * @return The sign that the parts were checked. The deployment pipeline waits for it.
    */
   @BuildStep
   PartsCheckedBuildItem checkPartsBelongTogether(
@@ -107,8 +107,8 @@ public class PartVersionsBuildStepProcessor {
   }
 
   /**
-   * Judges the part the given descriptor belongs to. The platform integration's own
-   * descriptor is not a part and is only carried into the native image.
+   * Checks the part which the given descriptor belongs to. The platform integration's own
+   * descriptor is not a part. It is only carried into the native image.
    *
    * @param path The relative path of the descriptor
    * @param descriptor The content of the descriptor

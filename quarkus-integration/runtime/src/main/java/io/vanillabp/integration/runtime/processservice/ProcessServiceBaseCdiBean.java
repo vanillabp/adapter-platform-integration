@@ -24,14 +24,14 @@ import lombok.extern.slf4j.Slf4j;
  * The bean an application injects as {@link io.vanillabp.spi.process.ProcessService}, one per
  * workflow aggregate class.
  * <p>
- * The class is abstract because what differs per aggregate is settled while the application is
- * built: {@code ProcessServiceBuildStepProcessor} of the deployment module generates a subclass
- * per aggregate which answers the abstract methods below with constants, and registers it as an
- * {@code @ApplicationScoped} bean. What a call then does lives in the core - in
- * {@link ProcessServiceBase} and in the {@link MigrationProcessService} built by
- * {@link #initialize()}. This class is the CDI half of it: the beans of the application arrive
- * through the injected fields and are handed over, so nothing in the core has to know a
- * platform.
+ * The class is abstract, because what differs per aggregate is settled while the application
+ * is built. {@code ProcessServiceBuildStepProcessor} of the deployment module generates a
+ * subclass per aggregate. The subclass answers the abstract methods below with constants. The
+ * build step registers it as an {@code @ApplicationScoped} bean. What a call then does lives
+ * in the core: in {@link ProcessServiceBase} and in the {@link MigrationProcessService} built
+ * by {@link #initialize()}. This class is the CDI half of it. The beans of the application
+ * arrive through the injected fields and are handed over. So nothing in the core has to know
+ * a platform.
  *
  * @param <A> The workflow aggregate class this service serves
  */
@@ -39,9 +39,9 @@ import lombok.extern.slf4j.Slf4j;
 public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A> {
 
   /**
-   * Called by the generated subclass, which the CDI container builds. An application neither
-   * builds nor extends this class - the fields below are injected afterwards, and only then
-   * does {@link #initialize()} have what it needs.
+   * The generated subclass calls it, and the CDI container creates that subclass. An
+   * application neither creates nor extends this class. The fields below are injected
+   * afterwards. Only then does {@link #initialize()} have what it needs.
    */
   public ProcessServiceBaseCdiBean() {
   }
@@ -50,108 +50,110 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   MigrationAdapterProperties properties;
 
   /**
-   * The persistences available at runtime. This is injected using {@link Instance} because the services
-   * annotated by {@link io.vanillabp.spi.service.WorkflowService} may implement {@link AggregatePersistenceAware}
-   * what causes cycle dependencies since this bean is typically also injected into the service.
+   * The persistences which are there at runtime. They are injected as {@link Instance},
+   * because the services annotated with {@link io.vanillabp.spi.service.WorkflowService} may
+   * implement {@link AggregatePersistenceAware}. This bean is usually injected into the
+   * service as well, so a direct injection would be a cycle.
    */
   @Inject
   @Any
   Instance<AggregatePersistenceAware<?>> persistences;
 
   /**
-   * The process services of the VanillaBP adapters available at runtime. The
-   * convention is one <i>element</i> bean per adapter (never a bean of type
-   * <code>List&lt;MigratableProcessService&gt;</code>) so several adapter types
-   * coexist in one application.
+   * The process services of the VanillaBP adapters which are there at runtime. The
+   * convention is one <i>element</i> bean per adapter, never a bean of type
+   * <code>List&lt;MigratableProcessService&gt;</code>. So several adapter types can live
+   * side by side in one application.
    */
   @Inject
   @Any
   Instance<io.vanillabp.integration.adapter.spi.MigratableProcessService<?>> migratableProcessServices;
 
   /**
-   * Additionally accepted shape: beans of type
-   * <code>List&lt;MigratableProcessService&lt;Object&gt;&gt;</code>, flattened into
-   * the collected process services. Synthetic beans created from runtime
-   * configuration (one process service per configured adapter id,
-   * adapter config model) cannot be registered as individual element
-   * beans on Quarkus - a single List bean per adapter is the documented shape
-   * there. The element type parameter is LITERALLY {@code Object} by convention
-   * (CDI's parameterized-type matching of nested wildcards is not reliable across
-   * modes, so the platform looks the beans up with the exact type).
+   * A second accepted shape: beans of type
+   * <code>List&lt;MigratableProcessService&lt;Object&gt;&gt;</code>. They are flattened into
+   * the collected process services. Some synthetic beans are created from runtime
+   * configuration, one process service per configured adapter id. On Quarkus they cannot
+   * be registered as single element beans. A single List bean per adapter is the documented
+   * shape there. By convention, the type parameter of the element is LITERALLY
+   * {@code Object}. CDI does not match parameterized types with nested wildcards reliably in
+   * all modes. So the platform looks the beans up with the exact type.
    */
   @Inject
   @Any
   Instance<List<io.vanillabp.integration.adapter.spi.MigratableProcessService<Object>>> migratableProcessServiceLists;
 
   /**
-   * Which outbox an aggregate's transaction reaches (mixed persistence, dedicated
-   * outboxes). The bean of {@link PhaseTwoOutboxResolverProducer} rather than a
-   * resolver of this process service's own: an extension writing entries of its own
-   * has to reach the same answer, and two constructions would be two answers as soon
-   * as one of them changes.
+   * Which outbox an aggregate's transaction reaches (mixed persistence, outboxes of its own).
+   * It is the bean of {@link PhaseTwoOutboxResolverProducer}, not a resolver of this process
+   * service's own. An extension which writes entries of its own has to get the same answer.
+   * Two resolvers built in two places would give two answers as soon as one of them
+   * changes.
    */
   @Inject
   PhaseTwoOutboxResolver phaseTwoOutboxResolver;
 
   /**
    * Which log of processed task deliveries an aggregate's transaction reaches (mixed
-   * persistence, own stores). The bean of {@link TaskDeliveryLogResolverProducer} rather
-   * than a resolver of this process service's own: an extension reading what a workflow is
-   * waiting for has to reach the same answer, and two constructions would be two answers as
-   * soon as one of them changes.
+   * persistence, stores of its own). It is the bean of {@link TaskDeliveryLogResolverProducer},
+   * not a resolver of this process service's own. An extension which reads what a workflow is
+   * waiting for has to get the same answer. Two resolvers built in two places would give two
+   * answers as soon as one of them changes.
    */
   @Inject
   TaskDeliveryLogResolver taskDeliveryLogResolver;
 
   /**
-   * Answers whether a transaction is open where no runner of an aggregate can be asked -
-   * see {@link #noTransactionIsActive()}.
+   * Answers whether a transaction is open where no runner of an aggregate can be asked. See
+   * {@link #noTransactionIsActive()}.
    */
   @Inject
   TransactionSynchronizationRegistry txRegistry;
 
   /**
-   * Which transaction a workflow aggregate is written through - the application's runner
-   * where it contributed one, the platform's JTA otherwise. The bean of
-   * {@link TransactionRunnerProducer} rather than a resolver of this process service's
-   * own: an extension writing into the transaction of the same aggregate asks the same
-   * bean, and two constructions would be two answers as soon as one of them changes.
+   * Through which transaction a workflow aggregate is written. It is the application's runner
+   * where the application added one, and the platform's JTA otherwise. It is the bean of
+   * {@link TransactionRunnerProducer}, not a resolver of this process service's own. An
+   * extension which writes into the transaction of the same aggregate asks the same bean.
+   * Two resolvers built in two places would give two answers as soon as one of them
+   * changes.
    */
   @Inject
   TransactionRunnerResolver transactionRunnerResolver;
 
   /**
-   * The core-owned router dispatching committed phase-two outbox entries. This bean
-   * registers itself (including the aggregate-ID converter) at bean creation.
+   * The router, owned by the core, which dispatches committed phase-two outbox entries. This
+   * bean registers its process service with it when the bean is created. The process
+   * service also converts the aggregate ID.
    */
   @Inject
   Instance<PhaseTwoRouter> phaseTwoRouter;
 
   /**
-   * The core-owned registry of <code>&#64;WorkflowTask</code> handlers. Resolved via
-   * {@link Instance} for the same cycle reasons as the other collaborators.
+   * The registry of <code>&#64;WorkflowTask</code> handlers, owned by the core. It is
+   * resolved through {@link Instance} to avoid cycles, like the other collaborators.
    */
   @Inject
   Instance<io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry> workflowTaskRegistry;
 
   /**
-   * The cache of workflow&rarr;adapter associations consulted by the BPMS election
-   * (the platform's in-memory default or the application's own bean, e.g.
-   * cluster-shared).
+   * The cache which remembers which adapter holds which workflow. The BPMS election asks it.
+   * It is the platform's default in memory, or the application's own bean, e.g. one shared
+   * in a cluster.
    */
   @Inject
   Instance<io.vanillabp.integration.spi.WorkflowAdapterCache> workflowAdapterCache;
 
   /**
-   * The application-wide numbers of the election cache - every lookup of whatever
+   * The numbers of the election cache for the whole application. Every lookup of whatever
    * cache is in use is counted into this one instance.
    */
   @Inject
   Instance<io.vanillabp.integration.adapter.migration.processservice.WorkflowAdapterCacheStatistics> workflowAdapterCacheStatistics;
 
   /**
-   * What deliveries of this process are counted into; unsatisfied where
-   * the application uses no Micrometer extension.
+   * Where deliveries of this process are counted. It is unsatisfied where the application
+   * uses no Micrometer extension.
    */
   @Inject
   Instance<io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics> vanillaBpMetrics;
@@ -166,61 +168,62 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   private List<MigrationProcessService<A>> processServicesOfDeclaredIds;
 
   /**
-   * The persistence bean this service loads and saves its aggregates through, named by the
-   * class it was DECLARED as: either the {@link AggregatePersistenceAware} implementation of
-   * the application, or the one VanillaBP generated for the persistence idiom the aggregate is
-   * written in. The choice is made while the application is built, so a second implementation
-   * added later changes what is deployed and not what a running application picks.
+   * The persistence bean through which this service loads and saves its aggregates. It is
+   * named by the class it was DECLARED as. It is either the {@link AggregatePersistenceAware}
+   * implementation of the application, or the one which VanillaBP generated for the way the
+   * aggregate is persisted. The choice is made while the application is built. So a second
+   * implementation added later changes what is deployed, not what a running application
+   * picks.
    *
    * @return The class the persistence is looked up by, see {@code getAggregatePersistence()}
    */
   public abstract Class<AggregatePersistenceAware<A>> getAggregatePersistenceClass();
 
   /**
-   * The workflow aggregate this service serves. The store resolvers and the core's reflection
-   * on the aggregate's id start from it, and the generated subclass answers with a constant of
-   * its own rather than leaving the class to be read off a type parameter.
+   * The workflow aggregate which this service serves. The store resolvers and the core's
+   * reflection on the aggregate's id start from it. The generated subclass answers with a
+   * constant of its own. It does not leave the class to be read from a type parameter.
    *
    * @return The workflow aggregate class
    */
   public abstract Class<A> getWorkflowAggregateClass();
 
   /**
-   * The PRIMARY BPMN process id of this service: what
+   * The PRIMARY BPMN process id of this service. It is what
    * <code>&#64;WorkflowService.bpmnProcess</code> names, or the simple name of the workflow
-   * service class where it names nothing. Every call of the application reaches this process,
-   * while a task of a secondary process is delivered to the service built for that id (see
+   * service class where it names nothing. Every call of the application reaches this process.
+   * A task of a secondary process is delivered to the service built for that id (see
    * {@link #getProcessServicesOfDeclaredIds()}).
    *
-   * @return The BPMN process id calls of the application address
+   * @return The BPMN process id which the calls of the application address
    */
   public abstract String getBpmnProcessId();
 
   /**
-   * All (workflow module, workflow service class, BPMN process ID) combinations of
-   * the aggregate this process service serves, determined at build time: every
-   * class declaring the aggregate contributes all its declared BPMN process IDs
-   * ({@code @WorkflowService.bpmnProcess} and {@code secondaryBpmnProcesses}).
-   * Encoding: entries {@code <module>|<class name>|<bpmn process id>} joined by
-   * {@code ';'} (generated as a class-file constant - Gizmo-friendly).
+   * All combinations of workflow module, workflow service class and BPMN process ID for the
+   * aggregate which this process service serves. They are found at build time. Every class
+   * which declares the aggregate adds all its declared BPMN process IDs
+   * ({@code @WorkflowService.bpmnProcess} and {@code secondaryBpmnProcesses}). Encoding:
+   * entries {@code <module>|<class name>|<bpmn process id>}, joined by {@code ';'}. It is
+   * generated as a constant in the class file, which is easy to do with Gizmo.
    *
-   * @return The encoded registrations, never empty - an aggregate without a workflow service
+   * @return The encoded registrations, never empty. An aggregate without a workflow service
    *         class gets no process service either
    */
   public abstract String getWorkflowTaskRegistrations();
 
   /**
-   * Builds everything this bean serves with, once, when the container created it: the core's
-   * {@link MigrationProcessService} of the primary BPMN process, the registration for
-   * phase-two routing, and the workflow service classes of every declared id.
+   * Builds everything which this bean serves with, once, after the container created it: the
+   * core's {@link MigrationProcessService} of the primary BPMN process, the registration for
+   * the phase-two routing, and the workflow service classes of every declared id.
    * <p>
-   * The beans it collects are injected into this instance first, which is why the work is done
-   * here and not in the constructor.
+   * The beans which it collects are injected into this instance first. That is why the work
+   * is done here and not in the constructor.
    */
   @PostConstruct
   public void initialize() {
 
-    // collect element beans plus flattened List beans (see field javadoc)
+    // Collect the element beans plus the flattened List beans (see the field's Javadoc).
     @SuppressWarnings("unchecked")
     final List<io.vanillabp.integration.adapter.spi.MigratableProcessService<A>> processServices = java.util.stream.Stream
         .concat(
@@ -254,8 +257,8 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
     this.migrationProcessService
         .setMetrics(PhaseTwoRouterProducer.vanillaBpMetricsOf(vanillaBpMetrics));
 
-    // register as phase-two dispatch target: outbox entries for this workflow
-    // module/BPMN process are routed here after the local transaction was committed
+    // Register as a target of the phase-two dispatch. Outbox entries for this workflow
+    // module and BPMN process are routed here after the local transaction committed.
     if (phaseTwoRouter.isResolvable()) {
       phaseTwoRouter
           .get()
@@ -268,11 +271,11 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   }
 
   /**
-   * Registers all workflow service classes of this aggregate under all BPMN process
-   * IDs they declare (build-time facts, see {@link #getWorkflowTaskRegistrations()})
-   * with the core's workflow-task registry. Secondary BPMN processes get their own
-   * {@link MigrationProcessService} (registered for phase-two routing, too); the
-   * primary one is reused.
+   * Registers all workflow service classes of this aggregate with the core's workflow-task
+   * registry, under all BPMN process IDs they declare. These are facts from the build, see
+   * {@link #getWorkflowTaskRegistrations()}. Secondary BPMN processes get their own
+   * {@link MigrationProcessService}, which is also registered for the phase-two routing. The
+   * primary one is used again.
    */
   private void registerWorkflowTaskHandlers(
       final List<io.vanillabp.integration.adapter.spi.MigratableProcessService<A>> processServices,
@@ -285,15 +288,16 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
       return;
     }
     final var registry = workflowTaskRegistry.get();
-    // insertion ordered, and the primary service goes in first: the startup validations run
-    // over this list and a message about the primary id is the one a reader expects first
+    // Keeps the order of insertion, and the primary service goes in first. The startup
+    // checks run over this list, and a reader expects the message about the primary id
+    // first.
     final var processServicesByKey = new java.util.LinkedHashMap<String, MigrationProcessService<A>>();
     processServicesByKey.put(
         "%s|%s".formatted(getWorkflowModuleId(), getBpmnProcessId()),
         migrationProcessService);
-    // An awareness probe is asked about a workflow module AND every BPMN
-    // process serving this aggregate there, secondary processes of the same
-    // @WorkflowService included - they run on the same workflow
+    // An awareness probe is asked about a workflow module AND about every BPMN process
+    // which serves this aggregate there. This includes the secondary processes of the
+    // same @WorkflowService, because they run on the same workflow.
     final var processIdsByModule = new java.util.LinkedHashMap<String, java.util.List<String>>();
     final var moduleOfProcessService = new java.util.LinkedHashMap<MigrationProcessService<A>, String>();
     moduleOfProcessService.put(migrationProcessService, getWorkflowModuleId());
@@ -363,13 +367,13 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
           processService);
     }
 
-    // everything configurable per workflow is configurable for a secondary or declared-only
-    // id as well, so the startup validations get every declared id rather than the primary
-    // one alone
+    // Everything which can be configured per workflow can also be configured for a
+    // secondary id or an id which is only declared. So the startup checks get every
+    // declared id, not only the primary one.
     processServicesOfDeclaredIds = List.copyOf(processServicesByKey.values());
 
-    // every process service of this aggregate answers for the processes of ITS workflow
-    // module
+    // Every process service of this aggregate answers for the processes of ITS workflow
+    // module.
     moduleOfProcessService
         .forEach((
             processService,
@@ -378,34 +382,35 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   }
 
   /**
-   * Startup validation (observer methods are inherited by the generated
-   * process-service beans): if the first-priority adapter of this process requires
-   * a two-phase commit, the phase-two outbox is resolved AT STARTUP - a missing
-   * outbox fails the boot with a guiding message instead of surfacing at the first
-   * workflow start. The log of processed task deliveries is resolved in the same pass: a
-   * BPMS repeating deliveries without a log to remember them is reported at startup, not
-   * at the first redelivery.
+   * The startup checks. The generated process-service beans inherit observer methods. If the
+   * first-priority adapter of this process needs a two-phase commit, the phase-two outbox is
+   * resolved AT STARTUP. So a missing outbox fails the boot with a guiding message. It does
+   * not show up only at the first workflow start. The log of processed task deliveries is
+   * resolved in the same pass. A BPMS which repeats deliveries without a log to remember
+   * them is reported at startup, not at the first repeated delivery.
    *
    * @param event The startup event observed
    */
   public void onStart(
       @Observes final StartupEvent event) {
 
-    // once per DECLARED BPMN process id, not once per bean: a secondary or declared-only id
-    // has prioritized adapters, an outbox and persisted leftovers of its own, and a message
-    // which names the id it is about is the point of asking
+    // Once per DECLARED BPMN process id, not once per bean. A secondary id, or an id which
+    // is only declared, has its own prioritized adapters, outbox and persisted leftovers.
+    // And we ask in order to get a message which names the id it is about.
     getProcessServicesOfDeclaredIds()
         .forEach(processService -> {
-          // first of all: an adapter which cannot serve an operation every adapter has to
-          // serve is a gap nothing later would report except a workflow standing still
+          // First of all: an adapter which cannot serve an operation that every adapter has
+          // to serve. Nothing later would report this gap, only a workflow which stands
+          // still.
           processService.validateAdapterOperationsAtStartup();
           processService.validatePhaseTwoOutboxAtStartup();
-          // after the outbox: an application which configured a remote BPMS without a store
-          // hears about the store first, which is the more specific gap
+          // After the outbox: an application which configured a remote BPMS without a store
+          // hears about the store first, because that is the more specific gap.
           processService.validateTransactionRunnerAtStartup();
           processService.validateTaskDeliveryLogAtStartup();
-          // last: it asks the stores the two checks above resolved, so an application which
-          // needs neither is not made to materialize one for a question about it
+          // Last: it asks the stores which the two checks above resolved. So an application
+          // which needs neither store does not have to create one just to be asked about
+          // it.
           processService.validatePersistedAdapterIdsAtStartup();
         });
 
@@ -415,14 +420,14 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
    * The process service of EVERY BPMN process id the workflow service classes of this
    * aggregate declare, the primary one first.
    * <p>
-   * Everything configurable per workflow is configurable for a secondary or declared-only id
-   * too (its prioritized adapters, its outbox, what its leftovers were persisted under), and
-   * each of those services asks its own questions. So the startup validations run over this
-   * list rather than over the primary service alone - the id a rename leaves behind is exactly
-   * the one whose leftovers nobody would otherwise look at.
+   * Everything which can be configured per workflow can also be configured for a secondary id
+   * or an id which is only declared: its prioritized adapters, its outbox, and what its
+   * leftovers were persisted under. Each of those services asks its own questions. So the
+   * startup checks run over this list and not over the primary service alone. The id which a
+   * rename leaves behind is exactly the one whose leftovers nobody would look at otherwise.
    *
-   * @return The process services, the primary one first; the primary one alone where no
-   *         workflow task registry was resolvable
+   * @return The process services, the primary one first. Only the primary one where no
+   *         workflow task registry could be resolved
    */
   public List<MigrationProcessService<A>> getProcessServicesOfDeclaredIds() {
 
@@ -595,8 +600,8 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   }
 
   /**
-   * The viewer/history API is READ-ONLY: no transaction is required (nothing is
-   * persisted, the aggregate is only asked for its ID) - see
+   * The viewer and history API is READ-ONLY. It needs no transaction, because nothing is
+   * persisted and the aggregate is only asked for its ID. See
    * {@link MigrationProcessService#getProcessDefinitions(Object, String)}.
    */
   @Override
@@ -643,10 +648,10 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
 
   /**
    * The positive form of {@link #noTransactionIsActive()}. It exists because the Spring Boot
-   * bean offers it as well: what a test or an application asks a process service should not
+   * bean offers it too. What a test or an application asks a process service should not
    * depend on the platform underneath.
    *
-   * @return Whether something is open the aggregate could be persisted in
+   * @return Whether something is open which the aggregate could be persisted in
    */
   public boolean transactionIsActive() {
 
@@ -655,10 +660,10 @@ public abstract class ProcessServiceBaseCdiBean<A> extends ProcessServiceBase<A>
   }
 
   /**
-   * Whether nothing is open the aggregate could be persisted in. The question goes to the
-   * runner serving this aggregate: an application storing its aggregates in a
-   * system JTA does not cover has its own unit of work, and the JTA answer would be wrong
-   * for it.
+   * Whether nothing is open which the aggregate could be persisted in. The question goes to
+   * the runner which serves this aggregate. An application may store its aggregates in a
+   * system which JTA does not cover. Then it has its own unit of work, and the answer of JTA
+   * would be wrong for it.
    *
    * @return Whether the caller would write outside a transaction
    */

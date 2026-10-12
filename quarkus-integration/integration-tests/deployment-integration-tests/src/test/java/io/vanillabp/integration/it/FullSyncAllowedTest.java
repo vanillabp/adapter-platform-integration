@@ -16,8 +16,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * The same application as in {@code FullSyncWithoutPermissionTest}, with the permission
- * written at its workflow. It starts, which is what the permission is for.
+ * The same application as in {@code FullSyncWithoutPermissionTest}, but with the
+ * permission written at its workflow. It starts. That is what the permission is for.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class FullSyncAllowedTest {

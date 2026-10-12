@@ -9,11 +9,11 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * An extension in miniature: something which shows what a case is waiting for and reads
- * that out of the delivery log instead of keeping a memory of its own. It injects the
- * RESOLVER and asks it per aggregate class, which is the whole contract - an application
- * may run two persistences, and which store holds the records of an aggregate is not a
- * question an extension can answer from outside.
+ * An extension in miniature. It shows what a case is waiting for. It reads that out of the
+ * delivery log and keeps no memory of its own. It injects the RESOLVER and asks it for
+ * each aggregate class, and that is the whole contract. An application may run two
+ * persistences. So an extension cannot tell from outside which store holds the records of
+ * an aggregate.
  */
 @ApplicationScoped
 public class DeliveryLogUsingExtension {
@@ -36,9 +36,9 @@ public class DeliveryLogUsingExtension {
    * What the extension would put on a screen: the tasks this workflow still owes an answer
    * for.
    * <p>
-   * An application which configured no store at all answers nothing here, because the
-   * resolver answers <code>null</code> then. An extension which needs the records says so
-   * while it boots instead; this one has a screen to fill and lives with an empty one.
+   * An application which configured no store at all answers nothing here, because then the
+   * resolver answers <code>null</code>. An extension which needs the records says so while
+   * it boots. This one has a screen to fill and can live with an empty one.
    *
    * @param workflowAggregateClass The aggregate whose log is asked
    * @param workflowModuleId The workflow module of the workflow

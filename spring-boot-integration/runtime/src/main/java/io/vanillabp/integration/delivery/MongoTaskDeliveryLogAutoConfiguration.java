@@ -20,17 +20,18 @@ import io.vanillabp.integration.mongo.MongoIndexes;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 
 /**
- * Auto-configuration of the default {@link TaskDeliveryLog} for MongoDB-based aggregate
- * persistence, coexisting with the JDBC default
- * ({@link JdbcTaskDeliveryLogAutoConfiguration}) - each workflow aggregate is served by
- * the log matching its persistence.
+ * Auto-configuration of the default {@link TaskDeliveryLog} for aggregates persisted in
+ * MongoDB. It lives side by side with the JDBC default
+ * ({@link JdbcTaskDeliveryLogAutoConfiguration}). Each workflow aggregate is served by the
+ * log which matches its persistence.
  * <p>
- * The records live in the collection <code>vanillabp.outbox.mongo.delivery-collection</code>
- * names and are keyed by the delivery key, so uniqueness comes from the document ID and no
- * unique index is needed. Unless <code>vanillabp.outbox.create-schema</code> is disabled,
- * the indexes of {@link MongoSchema#DELIVERY_INDEXES} are created at startup. Where the
- * application manages its schema itself, the startup reads what the collection carries
- * instead and names every index which is missing, with the statement which creates it.
+ * The records live in the collection which
+ * <code>vanillabp.outbox.mongo.delivery-collection</code> names. Their key is the delivery
+ * key. So the document ID makes them unique, and no unique index is needed. Unless
+ * <code>vanillabp.outbox.create-schema</code> is disabled, the indexes of
+ * {@link MongoSchema#DELIVERY_INDEXES} are created at startup. Where the application
+ * manages its schema itself, the startup reads what the collection carries instead. It
+ * names every index which is missing, with the statement which creates it.
  */
 @AutoConfiguration(
     after = JdbcTaskDeliveryLogAutoConfiguration.class,
@@ -44,8 +45,8 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
 public class MongoTaskDeliveryLogAutoConfiguration {
 
   /**
-   * The name of the default MongoDB delivery-log bean - used by the resolver to
-   * attribute MongoDB-persisted aggregates to THE default when several log beans exist.
+   * The name of the default MongoDB delivery-log bean. When several log beans exist, the
+   * resolver uses it to assign aggregates persisted in MongoDB to THE default.
    */
   public static final String DEFAULT_DELIVERY_LOG_BEAN_NAME = "vanillaBpMongoTaskDeliveryLog";
 
@@ -57,10 +58,10 @@ public class MongoTaskDeliveryLogAutoConfiguration {
   }
 
   /**
-   * The collection the records go into: what
+   * The collection the records go into, as
    * <code>vanillabp.outbox.mongo.delivery-collection</code> says. The indexes are created
-   * on the same name the log writes to, which is why both beans below ask this method
-   * instead of remembering a name of their own.
+   * on the same name the log writes to. That is why both beans below ask this method and
+   * do not keep a name of their own.
    *
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree
    * @return The name of the delivery-log collection
@@ -79,18 +80,18 @@ public class MongoTaskDeliveryLogAutoConfiguration {
    * The delivery log of every workflow aggregate this application persists in MongoDB.
    * Spring builds it where Spring Data MongoDB is on the classpath, a
    * {@link MongoDatabaseFactory} and a {@link MongoTemplate} exist and
-   * <code>vanillabp.outbox.mongo.enabled</code> is not <code>false</code>; an aggregate
-   * living in a relational database is served by the other default beside it.
+   * <code>vanillabp.outbox.mongo.enabled</code> is not <code>false</code>. The other
+   * default beside it serves an aggregate which lives in a relational database.
    *
    * @param mongoTemplate The template writing the records within the current transaction
-   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, asked for the
+   * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree. It is asked for the
    *          retention of delivery records (<code>vanillabp.delivery.retention</code>,
-   *          falling back to <code>vanillabp.outbox.retention</code>) and for the one of the
-   *          documents about started workflows
-   * @param phaseTwoRouter Where the process services are collected, asked by the sieve of the
-   *          workflow-start documents and only where the application switched that sieve on. A
-   *          provider and not the bean itself, because the router is built from the
-   *          process-service beans
+   *          falling back to <code>vanillabp.outbox.retention</code>), and for the retention
+   *          of the documents about started workflows
+   * @param phaseTwoRouter Where the process services are collected. The sieve of the
+   *          workflow-start documents asks it, and only where the application switched that
+   *          sieve on. It is a provider and not the bean itself, because the router is built
+   *          from the process-service beans
    * @return The {@link TaskDeliveryLog} used for MongoDB-persisted aggregates
    */
   @Bean(name = DEFAULT_DELIVERY_LOG_BEAN_NAME, destroyMethod = "stop")
@@ -126,14 +127,14 @@ public class MongoTaskDeliveryLogAutoConfiguration {
       final VanillaBpConfigurationProperties vanillaBpProperties) {
 
     return () -> {
-      // what each of them is read by is described once, in the core, because the Quarkus
+      // what each index is read by is described once, in the core, because the Quarkus
       // extension creates the same ones
       if (vanillaBpProperties.getOutbox().isCreateSchema()) {
         MongoIndexes
             .createOn(mongoTemplate, collectionOf(vanillaBpProperties), MongoSchema.DELIVERY_INDEXES);
       } else {
-        // the collection itself needs no check: MongoDB creates one with the first
-        // document, so what an application managing its own schema owes are the indexes
+        // the collection itself needs no check, because MongoDB creates it with the first
+        // document. So an application which manages its own schema only owes the indexes
         MongoIndexes
             .reportMissingOn(mongoTemplate, collectionOf(vanillaBpProperties), MongoSchema.DELIVERY_INDEXES);
       }

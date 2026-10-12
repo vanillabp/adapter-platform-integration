@@ -27,7 +27,6 @@ import jakarta.inject.Inject;
 @ExtendWith(SuppressOutputExtension.class)
 public class TwoAdapterTypesConfigurationTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
@@ -56,8 +55,8 @@ public class TwoAdapterTypesConfigurationTest {
     final var processServiceBean = ((ProcessServiceBaseCdiBean<Aggregate>) sampleProcessService);
     final var migrationProcessService = processServiceBean.getMigrationProcessService();
 
-    // both adapter types are configured and both prioritized ids are served -
-    // otherwise the election's fail-fast would have thrown on bean creation
+    // both adapter types are configured, and both prioritized ids are served.
+    // Otherwise the election would have failed fast when the bean was created
     final var adaptersConfigured = migrationProcessService.getAdapters();
     Assertions.assertEquals(2, adaptersConfigured.size());
     Assertions.assertEquals("dummy", adaptersConfigured.get("test"));

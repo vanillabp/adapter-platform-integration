@@ -24,10 +24,10 @@ import io.vanillabp.integration.utils.SpringDataUtil;
  * answers it asks Spring Data or Hibernate, so VanillaBP keeps no knowledge of its own about
  * how an aggregate is mapped.
  * <p>
- * A repository is searched for the entity's class and then up its superclasses, because an
+ * A repository is searched for the entity's class and then up its superclasses. An
  * application may map a hierarchy and declare the repository on a base class. What is found
- * is cached per type: it cannot change while the application runs, and an aggregate is loaded
- * and saved on every task delivery.
+ * is cached per type. It cannot change while the application runs, and an aggregate is
+ * loaded and saved on every task delivery.
  */
 public class JpaSpringDataUtil implements SpringDataUtil {
 
@@ -44,7 +44,7 @@ public class JpaSpringDataUtil implements SpringDataUtil {
    * and by an application which wires the persistence itself.
    *
    * @param applicationContext Where the aggregates' repositories are looked up
-   * @param jpaContext Answers which entity manager manages a given type, so an application
+   * @param jpaContext Answers which entity manager manages a given type. So an application
    *          with more than one persistence unit asks the right one
    */
   public JpaSpringDataUtil(
@@ -140,8 +140,8 @@ public class JpaSpringDataUtil implements SpringDataUtil {
 
   /**
    * JPA allows the ID annotation on the field and on the getter, and both are in use. A
-   * field wins over a getter, which is the order Spring Data uses as well, so the same
-   * aggregate gets the same answer on JPA and on MongoDB.
+   * field wins over a getter. Spring Data uses the same order, so the same aggregate gets
+   * the same answer on JPA and on MongoDB.
    *
    * @param type The aggregate's type
    * @return The name of the ID property
@@ -208,8 +208,8 @@ public class JpaSpringDataUtil implements SpringDataUtil {
 
   }
 
-  // both annotations are called Id, so neither can be imported: whichever one was would
-  // read like the other and the second would have to be written out anyway
+  // both annotations are called Id, so neither is imported. An imported one would read
+  // like the other, and the second would have to be written out anyway
   private boolean isIdAnnotationPresent(
       Field field) {
 
@@ -218,8 +218,8 @@ public class JpaSpringDataUtil implements SpringDataUtil {
 
   }
 
-  // both annotations are called Id, so neither can be imported: whichever one was would
-  // read like the other and the second would have to be written out anyway
+  // both annotations are called Id, so neither is imported. An imported one would read
+  // like the other, and the second would have to be written out anyway
   private boolean isIdAnnotationPresent(
       Method getter) {
 
@@ -232,8 +232,8 @@ public class JpaSpringDataUtil implements SpringDataUtil {
   public <I> I getId(
       final Object domainEntity) {
 
-    // resolve the persistence unit responsible for the entity's type to be
-    // correct in applications using multiple persistence units
+    // ask the persistence unit which is responsible for the entity's type. That is
+    // correct in applications with several persistence units, too
     final var entityClass = Hibernate.getClass(domainEntity);
     final var id = jpaContext
         .getEntityManagerByManagedType(entityClass)

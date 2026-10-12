@@ -4,8 +4,8 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Nothing of that test reaches an aggregate: the point is what the boot says about the two
- * handler methods, not what a workflow does.
+ * Nothing of that test reaches an aggregate. The test is about what the boot says about the
+ * two handler methods, not about what a workflow does.
  */
 @ApplicationScoped
 public class InvisibleHandlersAggregatePersistence implements AggregatePersistenceAware<InvisibleHandlersAggregate> {

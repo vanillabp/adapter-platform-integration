@@ -8,8 +8,8 @@ import io.vanillabp.bpmsdouble.DummyPhaseTwoListener;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Records phase-two invocations of the dummy adapter and optionally fails a
- * configurable number of dispatches (to test retry behavior of the outbox).
+ * Records the phase-two calls of the dummy adapter. On request it fails a given number of
+ * dispatches, to test how the outbox retries.
  */
 @ApplicationScoped
 public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
@@ -19,34 +19,34 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   private final AtomicInteger failuresRemaining = new AtomicInteger(0);
 
   /**
-   * How many of the next dispatches are answered the way a BPMS answers whose read model is
-   * behind: "not yet, ask again in a while". Zero unless a test asked for it.
+   * How many of the next dispatches get the answer of a BPMS whose read model is behind:
+   * "not yet, ask again in a while". Zero unless a test asked for it.
    */
   private final AtomicInteger notYetRemaining = new AtomicInteger(0);
 
   /**
-   * The while such an answer names.
+   * How long "a while" is in such an answer.
    */
   private volatile java.time.Duration notYetWindow = java.time.Duration.ofSeconds(1);
 
   /**
-   * How long every dispatch stays inside the adapter, for a test about a dispatch which takes
-   * longer than the lease of its outbox entry. Zero unless a test asked for it, and the test
-   * which asked puts it back.
+   * How long every dispatch stays inside the adapter. It is for a test about a dispatch which
+   * takes longer than the lease of its outbox entry. Zero unless a test asked for it, and the
+   * test which asked sets it back.
    */
   private final java.util.concurrent.atomic.AtomicLong dispatchTakesMillis = new java.util.concurrent.atomic.AtomicLong(0);
 
   /**
-   * The next dispatch to be stopped in the middle, taken by the dispatch which finds it. A
-   * test which needs something to happen to an outbox entry while its dispatch is under way
-   * asks for one and lets it go afterwards.
+   * The next dispatch to be stopped in the middle. The dispatch which finds it takes it. A
+   * test may need something to happen to an outbox entry while its dispatch is under way.
+   * Such a test asks for a hold and lets it go afterwards.
    */
   private final java.util.concurrent.atomic.AtomicReference<HeldDispatch> holdTheNextDispatch = new java.util.concurrent.atomic.AtomicReference<>();
 
   /**
-   * Where the dispatches wait for each other, for a test about two of them travelling at the
-   * same time. Nothing waits unless a test asked for it, and a dispatch which waits in vain
-   * fails rather than going on alone.
+   * Where the dispatches wait for each other. It is for a test about two dispatches which
+   * travel at the same time. Nothing waits unless a test asked for it. A dispatch which waits
+   * in vain fails and does not go on alone.
    */
   private volatile java.util.concurrent.CyclicBarrier meetingPoint;
 
@@ -79,8 +79,8 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   }
 
   /**
-   * Makes every dispatch stay inside the adapter for a while, which is what an operation
-   * calling a system of somebody else's looks like from the outbox.
+   * Makes every dispatch stay inside the adapter for a while. That is how an operation which
+   * calls somebody else's system looks from the outbox.
    *
    * @param millis How long one dispatch lasts, zero to return every dispatch at once
    */
@@ -92,8 +92,8 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   }
 
   /**
-   * Answers the next dispatches the way a BPMS answers whose read model is behind, which is
-   * what a Camunda 8 cluster with a stopped exporter does.
+   * Answers the next dispatches like a BPMS whose read model is behind. A Camunda 8 cluster
+   * with a stopped exporter answers like that.
    *
    * @param howMany How many dispatches are answered "not yet"
    * @param window How long each answer asks the outbox to wait
@@ -116,9 +116,9 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   /**
    * Makes every dispatch wait until that many of them are inside the adapter at the same
-   * time. A store which dispatches one entry after the other never gets there, and the
-   * dispatches fail instead of going on alone, so their entries are not marked as done - which
-   * is what a test about two operations travelling together reads.
+   * time. A store which dispatches one entry after the other never gets there. Then the
+   * dispatches fail and do not go on alone, so their entries are not marked as done. A test
+   * about two operations which travel together reads exactly that.
    *
    * @param howMany How many dispatches have to meet
    */
@@ -156,9 +156,9 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   private static final long UNTIL_THE_OTHERS_ARRIVE = 10_000;
 
   /**
-   * Stops the dispatch which comes next until the test lets it go. The test holds the
-   * returned handle and has to end it, even where it failed in between: the thread waiting on
-   * it is the one the outbox polls with.
+   * Stops the next dispatch until the test lets it go. The test holds the returned handle
+   * and has to end it, even if the test failed in between. The reason: the thread which waits
+   * on it is the thread the outbox polls with.
    *
    * @return The handle the test ends the held dispatch with
    */
@@ -171,14 +171,14 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   }
 
   /**
-   * One dispatch stopped inside the adapter, which is where a test can work on the outbox
-   * entry of an operation that is under way.
+   * One dispatch stopped inside the adapter. There a test can work on the outbox entry of an
+   * operation which is under way.
    */
   public static final class HeldDispatch {
 
     /**
      * How long a held dispatch waits at most. It is a guard against a test which forgot to
-     * end its hold, not a distance anything is timed by.
+     * end its hold. Nothing is timed by it.
      */
     private static final long UNTIL_THE_TEST_LETS_GO = 60_000;
 
@@ -244,14 +244,14 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   }
 
   /**
-   * Waits until at least the given number of phase-two invocations were recorded.
+   * Waits until at least the given number of phase-two calls were recorded.
    * <p>
-   * This says that the ADAPTER was called, not that the operation is over: the listener
-   * runs inside the dispatch, and the dispatcher marks the outbox entry DONE - which is
-   * what frees its idempotency key - only after the dispatch returned. On return the
-   * entry may still be waiting to be marked, so a repetition of the same operation
-   * planned right here can be discarded as a duplicate. A test which needs the key to
-   * be free has to wait for the ENTRY, in the store.
+   * This says that the ADAPTER was called, not that the operation is over. The listener runs
+   * inside the dispatch. The dispatcher marks the outbox entry DONE only after the dispatch
+   * returned, and only that frees its idempotency key. So when this method returns, the
+   * entry may still wait to be marked. A repetition of the same operation planned right then
+   * can be dropped as a duplicate. A test which needs the key to be free has to wait for the
+   * ENTRY, in the store.
    *
    * @param numberOfInvocations The number of invocations to wait for
    * @param timeoutMillis How long to wait at most

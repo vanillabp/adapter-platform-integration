@@ -7,8 +7,9 @@ import lombok.Builder;
 import lombok.Getter;
 
 /**
- * A build item holding all {@link io.quarkus.runtime.configuration.ConfigBuilder}
- * names of classes responsible for loading workflow module specific config files.
+ * A build item which holds the class names of all
+ * {@link io.quarkus.runtime.configuration.ConfigBuilder} classes that load the config
+ * files of the workflow modules.
  */
 @Builder
 @Getter
@@ -21,8 +22,8 @@ public final class GeneratedConfigBuilderClassesBuildItem extends SimpleBuildIte
 
   /**
    * Built by {@code WorkflowModuleBuildStepProcessor} through the builder, after it wrote
-   * the classes. A step of its own reads the item and registers the classes with Quarkus,
-   * because a generated class has to exist before anything may name it.
+   * the classes. A separate step reads the item and registers the classes with Quarkus. A
+   * generated class has to exist before anything may name it.
    *
    * @param configBuilderClassnames The names of the classes generated: one for the
    *          properties files of the workflow modules, and one more where the application

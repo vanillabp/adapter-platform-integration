@@ -27,9 +27,9 @@ import jakarta.inject.Inject;
 
 /**
  * An extension picks the method by the version of the BPMN process its event came from,
- * on Quarkus as on Spring Boot. The selection is the one VanillaBP's own
- * <code>&#64;WorkflowTask</code> methods go through, and it is measured on both platforms
- * because a mechanism working in the core says nothing about a platform ever calling it.
+ * on Quarkus as on Spring Boot. VanillaBP's own <code>&#64;WorkflowTask</code> methods go
+ * through the same selection. It is measured on both platforms: a mechanism which works in
+ * the core does not prove that a platform ever calls it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ExtensionHandlerVersionsTest {

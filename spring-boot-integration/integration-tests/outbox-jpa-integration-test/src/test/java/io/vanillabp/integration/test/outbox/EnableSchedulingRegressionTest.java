@@ -16,12 +16,12 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Regression test for the removed <code>vanillaBpOutboxTaskScheduler</code> beans:
- * the outbox dispatchers run on private executors, so an application using
- * <code>&#64;EnableScheduling</code> gets Spring Boot's own {@link TaskScheduler}
- * (bean <code>taskScheduler</code>) - VanillaBP must not register (and thereby
- * suppress or hijack) any {@link TaskScheduler} bean even with the outbox on the
- * classpath.
+ * Regression test for the removed <code>vanillaBpOutboxTaskScheduler</code> beans. The
+ * outbox dispatchers run on private executors. So an application which uses
+ * <code>&#64;EnableScheduling</code> gets Spring Boot's own {@link TaskScheduler} (bean
+ * <code>taskScheduler</code>). VanillaBP must not register any {@link TaskScheduler}
+ * bean, even with the outbox on the classpath. Such a bean would replace or take over
+ * the scheduler of the application.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -29,8 +29,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
     classes = {
         TestApplication.class, EnableSchedulingRegressionTest.SchedulingConfiguration.class
     },
-    // own H2 database: this context's outbox poller must not steal dispatches from
-    // the entries written by the other test contexts sharing the default database
+    // its own H2 database: the outbox poller of this context must not take the entries
+    // which the other test contexts write into the shared default database
     properties = "spring.datasource.url=jdbc:h2:mem:outbox-scheduling-it;DB_CLOSE_DELAY=-1")
 public class EnableSchedulingRegressionTest {
 
@@ -50,8 +50,8 @@ public class EnableSchedulingRegressionTest {
         context.containsBean("vanillaBpOutboxTaskScheduler"),
         "VanillaBP must not register a TaskScheduler bean");
 
-    // Spring Boot's task-scheduling auto-configuration has to provide its own
-    // scheduler for @EnableScheduling since VanillaBP no longer occupies the type
+    // VanillaBP no longer takes the type. So the task-scheduling auto-configuration of
+    // Spring Boot must provide its own scheduler for @EnableScheduling
     assertTrue(
         context.containsBean("taskScheduler"),
         "Spring Boot's own taskScheduler bean is expected with @EnableScheduling");

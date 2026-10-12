@@ -14,15 +14,15 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * <code>quarkus.http.test-port=0</code>.
  * <p>
  * Every test which boots a Quarkus application binds that port, and the default of the key
- * is 8081. Two builds on one machine therefore fight over one port, and the loser dies with
- * "Port already bound: 8081". It cost two agents a fifteen-minute build on 2026-09-17, and
- * the class which died was whichever started while the other one held the port. A CI runner
- * builds alone, so nothing there shows it.
+ * is 8081. So two builds on one machine fight over one port, and the loser dies with
+ * "Port already bound: 8081". On 2026-09-17 this cost two agents a fifteen-minute build. The
+ * class which died was whichever one started while the other build held the port. A CI
+ * runner builds alone, so nothing shows it there.
  * <p>
- * Zero means the operating system picks a free port. A test which has to know the port
- * reads the key back, because Quarkus writes the port it really bound into it once the
- * application listens. So no test needs a number of its own, and a number written anywhere
- * brings the clash back. See "Ports during tests" in <code>quarkus-integration/README.md</code>.
+ * Zero means that the operating system picks a free port. A test which has to know the port
+ * reads the key back. Once the application listens, Quarkus writes the port it really bound
+ * into that key. So no test needs a number of its own, and a number written anywhere brings
+ * the clash back. See "Ports during tests" in <code>quarkus-integration/README.md</code>.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class HttpTestPortIsFreeTest {

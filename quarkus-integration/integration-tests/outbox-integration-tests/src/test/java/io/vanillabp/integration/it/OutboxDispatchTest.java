@@ -26,17 +26,17 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Integration test of the JDBC/JTA-based phase-two outbox using the dummy adapter
- * forced to require a two-phase commit
- * (<code>dummy-adapter.at-least-once-delivery: true</code>):
+ * Integration test of the phase-two outbox based on JDBC and JTA. The dummy adapter is
+ * forced to need a two-phase commit
+ * (<code>dummy-adapter.at-least-once-delivery: true</code>). The test checks:
  * <ul>
- *   <li>the outbox entry is enlisted in the local JTA transaction (visible within the
- *       transaction, gone on rollback),</li>
- *   <li>phase two is dispatched after the commit (with the aggregate ID converted back
- *       to its original type) and the entry is marked DONE (deleted asynchronously
- *       after the retention period only - see {@link OutboxRetentionTest}),</li>
- *   <li>a duplicate schedule for the same aggregate is a no-op (unique idempotency
- *       key) and</li>
+ *   <li>the outbox entry joins the local JTA transaction. It is visible within the
+ *       transaction and gone on rollback.</li>
+ *   <li>phase two is dispatched after the commit, with the aggregate ID converted back to
+ *       its original type. The entry is marked DONE. It is deleted only later, in the
+ *       background, after the retention period (see {@link OutboxRetentionTest}).</li>
+ *   <li>a duplicate schedule for the same aggregate is a no-op, because the idempotency
+ *       key is unique.</li>
  *   <li>a failing dispatch is retried.</li>
  * </ul>
  */
@@ -46,11 +46,10 @@ public class OutboxDispatchTest {
   /**
    * How long a test waits before it says that nothing more happened. The application
    * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * set to half a second. So this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A machine which gives this JVM no turn only
+   * makes the wait longer. Afterwards the test asserts a count which did not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -86,7 +85,7 @@ public class OutboxDispatchTest {
 
   /**
    * What the outbox table holds. The data source of a Quarkus application hands out a
-   * connection of the running JTA transaction, so an entry is counted while the
+   * connection of the running JTA transaction. So an entry can be counted while the
    * transaction which wrote it is still open.
    *
    * @return All entries
@@ -129,8 +128,8 @@ public class OutboxDispatchTest {
     final Aggregate attachedAggregate;
     try {
       attachedAggregate = workflowService.startWorkflow("commit-test");
-      // the outbox entry has to be visible within the still-running transaction:
-      // the count query joins the active JTA transaction
+      // the outbox entry has to be visible within the transaction which still runs. The
+      // count query joins the active JTA transaction
       assertEquals(entriesBefore + 1, countOutboxEntries());
     } catch (Exception e) {
       userTransaction.rollback();
@@ -140,13 +139,13 @@ public class OutboxDispatchTest {
 
     assertNotNull(attachedAggregate.getId());
 
-    // after the commit, phase two has to be dispatched with the aggregate's ID
-    // converted back from its string representation to the original type
+    // after the commit, phase two has to be dispatched. The aggregate's ID is converted
+    // back from its string form to the original type
     final var invocations = listener.awaitInvocations(1, 30_000);
     assertEquals(attachedAggregate.getId(), invocations.getFirst());
 
     // DONE instead of delete: the entry has to be marked DONE after the successful
-    // dispatch and stays visible until the asynchronous retention cleanup
+    // dispatch. It stays visible until the retention cleanup runs in the background
     final var deadline = System.currentTimeMillis() + 30_000;
     while (entriesOf(attachedAggregate.getId()).stream().noneMatch(Entry::wasDispatched)) {
       assertTrue(System.currentTimeMillis() < deadline, "outbox entry was not marked DONE");
@@ -159,10 +158,10 @@ public class OutboxDispatchTest {
   @DisplayName("A duplicate schedule while the first one is still pending is a no-op")
   public void duplicateScheduleAgainstAPendingEntryIsNoOp() throws Exception {
 
-    // both starts ride ONE transaction, so nothing is dispatched in between and the
-    // second one meets an entry which is still waiting: the unique constraint over
-    // DEDUP_KEY makes it a no-op. What happens after the dispatch is
-    // RepeatedOperationTest's subject
+    // both starts are written in ONE transaction, so nothing is dispatched in between.
+    // The second one meets an entry which still waits, and the unique constraint over
+    // DEDUP_KEY makes it a no-op. RepeatedOperationTest covers what happens after the
+    // dispatch
     userTransaction.begin();
     final var attachedAggregate = workflowService.startWorkflow("dedup-pending");
     workflowService.startWorkflowAgain(attachedAggregate);
@@ -189,7 +188,7 @@ public class OutboxDispatchTest {
     assertEquals(entriesBefore + 1, countOutboxEntries());
     userTransaction.rollback();
 
-    // the entry must be gone since it was enlisted in the rolled-back transaction
+    // the entry must be gone, because it was part of the rolled-back transaction
     assertEquals(entriesBefore, countOutboxEntries());
 
     // wait longer than the poll interval: phase two must never be dispatched

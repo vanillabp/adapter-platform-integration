@@ -15,20 +15,20 @@ import io.vanillabp.integration.test.utils.ConstantOfAnotherModule;
  * application under test.
  * <p>
  * A test asks what the log wrote down for a task, and what one of those records says. It
- * does not ask for columns, and it never writes the table name down: the name comes from
- * the platform class which owns the table, so a rename in the platform is followed in one
- * file instead of in every repository which tests against a BPMS.
+ * does not ask for columns, and it never writes down the table name. The name comes from
+ * the platform class which owns the table. So when the platform renames it, only this
+ * file follows, not every repository which tests against a BPMS.
  * <p>
- * That name is read when a statement needs it and not when the reader is built. A test
+ * That name is read when a statement needs it, not when the reader is built. A test
  * which builds the reader in its setup and then asks it nothing must not fail over a name
  * nobody needed.
  * <p>
  * The reader uses a connection of its own, outside the transaction of the test. So it
- * reads what is committed, which is what a test about the log asks about anyway: the
- * record of a delivery becomes visible when the transaction of the handler commits.
+ * reads what is committed. A test about the log asks about that anyway: the record of a
+ * delivery becomes visible when the transaction of the handler commits.
  * <p>
- * The relational log is the one this serves. An application whose delivery log is a
- * MongoDB collection reads it through the template it already has.
+ * This serves only the relational log. An application whose delivery log is a MongoDB
+ * collection reads it through the template it already has.
  */
 public final class TaskDeliveryLogReader {
 
@@ -46,8 +46,9 @@ public final class TaskDeliveryLogReader {
       TASK_DEFINITION, BPMN_ELEMENT_ID, OUTCOME, TASK_CLOSED_AT, TASK_KIND, PROCESS_VERSION""";
 
   /**
-   * The kind of row a delivery is written as. A row of the log is either that or the start of a
-   * workflow, so every question about deliveries says which one it means instead of counting both.
+   * The kind of row a delivery is written as. A row of the log is either a delivery or the start
+   * of a workflow. So every question about deliveries says which one it means, and does not
+   * count both.
    */
   private static final String TASK_DELIVERY = "TASK_DELIVERY";
 
@@ -59,9 +60,9 @@ public final class TaskDeliveryLogReader {
   /**
    * What the log wrote down about one delivery of one task.
    * <p>
-   * A task can carry more than one record: the delivery which handed it to the
-   * application and the delivery which reported its cancellation are two, and so are two
-   * turns of a task the BPMS handed out twice.
+   * A task can have more than one record. The delivery which handed it to the application
+   * and the delivery which reported its cancellation are two records. So are two turns of
+   * a task which the BPMS handed out twice.
    *
    * @param taskId The task as the BPMS names it, empty where the BPMS named none
    * @param adapterId The adapter which delivered the task
@@ -114,8 +115,8 @@ public final class TaskDeliveryLogReader {
   }
 
   /**
-   * The reader for the delivery log of an application, as long as that application did
-   * not configure a table name of its own.
+   * The reader for the delivery log of an application which did not configure a table
+   * name of its own.
    *
    * @param dataSource The database of the application under test
    * @return The reader
@@ -141,13 +142,13 @@ public final class TaskDeliveryLogReader {
   }
 
   /**
-   * Every record of a DELIVERY in the log. A test asking about something this reader has no
-   * question for reads them all and picks its own, which a test database can afford: it holds the
-   * records of that test and of nothing else.
+   * Every record of a DELIVERY in the log. A test which asks something this reader has no
+   * method for reads them all and picks its own. A test database can afford that, because it
+   * holds only the records of that test.
    * <p>
-   * The rows about started workflows are not in it. They are no deliveries, they are written once
-   * per workflow rather than once per handler, and a test counting what its handlers did would
-   * otherwise count them too - see {@link #workflowStarts()}.
+   * The rows about started workflows are not included. They are not deliveries. They are
+   * written once per workflow, not once per handler. Otherwise a test which counts what its
+   * handlers did would count them too. See {@link #workflowStarts()}.
    *
    * @return The records, the newest first
    */
@@ -158,9 +159,10 @@ public final class TaskDeliveryLogReader {
   }
 
   /**
-   * What the log wrote down about the workflows which were STARTED: one row per workflow of one
-   * aggregate, carrying the aggregate and the id that workflow has in the BPMS. Those rows are no
-   * deliveries and are in none of the answers above, so a test which wants them asks here.
+   * What the log wrote down about the workflows which were STARTED. There is one row per
+   * workflow of one aggregate, with the aggregate and the id of that workflow in the BPMS.
+   * These rows are not deliveries, and none of the methods above returns them. A test which
+   * wants them asks here.
    *
    * @return The rows, the newest first, empty where the log holds none
    */
@@ -197,9 +199,9 @@ public final class TaskDeliveryLogReader {
   }
 
   /**
-   * Removes every record, which is what a test leaves behind for the next one. The log
-   * outlives a test class otherwise: nothing in the platform empties it, and the
-   * retention removes a record long after every test is over.
+   * Removes every record, so a test leaves an empty log for the next one. Otherwise the
+   * log outlives a test class. Nothing in the platform empties it, and the retention
+   * removes a record long after every test is over.
    */
   public void removeAllDeliveries() {
 

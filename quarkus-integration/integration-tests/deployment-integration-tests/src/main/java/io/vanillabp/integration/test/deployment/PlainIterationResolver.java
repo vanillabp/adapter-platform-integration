@@ -7,8 +7,8 @@ import java.util.Map;
 import io.vanillabp.spi.service.MultiInstanceElementResolver;
 
 /**
- * A resolver which is NO bean (no scope annotation) - used by the test proving that
- * this is said while building instead of at the first iteration of the task.
+ * A resolver which is NO bean, because it has no scope annotation. A test uses it to
+ * prove that the build reports this, and not the first iteration of the task.
  */
 public class PlainIterationResolver implements MultiInstanceElementResolver<ResolverAggregate, String> {
 

@@ -21,7 +21,6 @@ import jakarta.inject.Inject;
 @ExtendWith(SuppressOutputExtension.class)
 public class BeanInstantiationTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap

@@ -11,10 +11,10 @@ import lombok.Setter;
 public class UriSubstitute {
 
   /**
-   * The empty substitute both sides start from: {@link UriSubstitution} builds one while the
-   * application is built, and the bytecode of the boot builds one and fills it through the
-   * setter. A {@link java.net.URI} cannot travel that way, which is the whole reason this
-   * class exists.
+   * Creates an empty substitute. Both sides start from it. {@link UriSubstitution} creates one
+   * while the application is built. The recorded bytecode of the boot creates one and fills it
+   * through the setter. A {@link java.net.URI} cannot travel that way. That is the whole reason
+   * why this class exists.
    */
   public UriSubstitute() {
   }

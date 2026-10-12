@@ -12,9 +12,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An adapter writes its details in the order somebody reading the health endpoint needs
- * them: what was asked first, what answered, then the rest. That order used to be lost
- * while the details were closed, so the endpoint showed them in whatever order the map
+ * An adapter writes its details in the order a reader of the health endpoint needs them:
+ * first what was asked, then what answered, then the rest. This order used to get lost
+ * when the details were closed. The endpoint then showed them in whatever order the map
  * had picked.
  */
 @ExtendWith(SuppressOutputExtension.class)

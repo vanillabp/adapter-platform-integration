@@ -11,9 +11,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * The one question the coverage gate answers from the command line: does this run reach
  * the phase which writes the reports it judges?
  * <p>
- * Every case which says "no" makes the gate step aside, so the cases which say "yes"
- * are the ones worth writing down. A wrong "no" hides a coverage drop, which is why a
- * command line the gate cannot read counts as a "yes".
+ * Every case which says "no" makes the gate step aside. So the cases which say "yes" are
+ * the ones worth writing down. A wrong "no" hides a drop in coverage. That is why a
+ * command line the gate cannot read counts as "yes".
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class CoverageGateCommandLineTest {
@@ -40,8 +40,8 @@ public class CoverageGateCommandLineTest {
   @DisplayName("A command line the gate cannot read leaves the judging as it was")
   public void anUnreadableCommandLineChangesNothing() {
 
-    // the POM hands over '${env.MAVEN_CMD_LINE_ARGS}', which stays as it stands when
-    // Maven was started by something which does not export it
+    // The POM hands over '${env.MAVEN_CMD_LINE_ARGS}'. It stays unresolved when Maven was
+    // started by something which does not export it.
     assertFalse(CoverageGate.stopsBeforeTheReportsAreWritten("${env.MAVEN_CMD_LINE_ARGS}"));
     assertFalse(CoverageGate.stopsBeforeTheReportsAreWritten("   "));
     assertFalse(CoverageGate.stopsBeforeTheReportsAreWritten(null));

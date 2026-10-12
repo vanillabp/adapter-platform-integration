@@ -14,8 +14,8 @@ import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
 
 /**
  * Which failures Spring Boot reports as "somebody else changed the workflow aggregate".
- * The transaction runner is asked without any transaction manager, since
- * the classification looks at the exception alone.
+ * The test asks the transaction runner without any transaction manager, because the
+ * classification looks only at the exception.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SpringConcurrentModificationTest {
@@ -28,7 +28,7 @@ public class SpringConcurrentModificationTest {
   public void springsTranslationIsRecognized() {
 
     assertTrue(runner.isConcurrentModification(new ObjectOptimisticLockingFailureException("Aggregate", 4711L)));
-    // MongoDB reports the base type rather than the JPA-flavored subclass
+    // MongoDB reports the base type, not the subclass for JPA
     assertTrue(runner.isConcurrentModification(new OptimisticLockingFailureException("version 3 expected")));
     assertTrue(
         runner

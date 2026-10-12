@@ -42,14 +42,16 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * Acceptance test of the inbound idempotency on Spring Boot, with the default
- * JDBC-based delivery log doing the remembering: the dummy adapter delivers a task TWICE
- * under the same delivery identity - as a BPMS which never learned the result does - and
- * the <code>&#64;WorkflowTask</code> method has to run once while both deliveries are
- * answered with the same outcome. Also pinned: a delivery whose handler threw leaves no
- * record (its retry runs the handler again), the task-level switch turns the feature
- * off, and two deliveries of one task which overlap each other are named in the log and
- * counted, since a record written after the work cannot prevent that case.
+ * Acceptance test on Spring Boot for the inbound idempotency. The default delivery log based
+ * on JDBC does the remembering. The dummy adapter delivers a task TWICE under the same
+ * delivery identity, as a BPMS does which never learned the result. The
+ * <code>&#64;WorkflowTask</code> method has to run once, and both deliveries get the same
+ * outcome.
+ * <p>
+ * The test pins three more things. A delivery whose handler threw leaves no record, so its
+ * retry runs the handler again. The switch on the task level turns the feature off. And two
+ * deliveries of one task which overlap are named in the log and counted. A record written
+ * after the work cannot prevent that case.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class InboundIdempotencyTest {
@@ -61,9 +63,9 @@ public class InboundIdempotencyTest {
   private static final String ADAPTER = "test";
 
   /**
-   * In-memory persistence of the test aggregate plus the transaction infrastructure the
-   * delivery log rides on (H2 - the records are really written and read back through
-   * JDBC).
+   * In-memory persistence of the test aggregate, plus the transaction setup which the
+   * delivery log runs on. It uses H2, so the records are really written and read back
+   * through JDBC.
    */
   @Configuration
   static class DeliveryConfiguration {
@@ -142,8 +144,8 @@ public class InboundIdempotencyTest {
     }
 
     /**
-     * Stands in for the BPMN model: the tasks of 'DeliveryProcess' matching the
-     * handlers, so the wiring validation passes.
+     * Stands in for the BPMN model. It lists the tasks of 'DeliveryProcess' which match
+     * the handlers, so the wiring validation passes.
      */
     @Bean
     DummyTaskWiringSource deliveryTaskWiringSource() {
@@ -167,9 +169,9 @@ public class InboundIdempotencyTest {
   }
 
   /**
-   * The delivery-log store settings are the outbox' ones; the task
-   * 'undeduplicatedTask' switches the feature off for itself, which is the
-   * per-task resolution of that key.
+   * The store of the delivery log uses the settings of the outbox. The task
+   * 'undeduplicatedTask' switches the feature off for itself. This tests how that key is
+   * resolved per task.
    */
   private static final String APPLICATION_YAML = """
       vanillabp:
@@ -206,8 +208,8 @@ public class InboundIdempotencyTest {
             DeliveryWorkflowService.class,
             WorkflowModuleConfiguration.class,
             DeliveryConfiguration.class,
-            // after the data source it is conditional on: the auto-configuration is
-            // listed as a plain source here, so its conditions see the bean definitions
+            // after the data source which it depends on. The auto-configuration is listed
+            // as a plain source here, so its conditions only see the bean definitions
             // registered before it
             JdbcTaskDeliveryLogAutoConfiguration.class,
             DeploymentTest.TestConfig.class)
@@ -227,8 +229,8 @@ public class InboundIdempotencyTest {
   }
 
   /**
-   * One delivery of a task, as an adapter of a remote BPMS builds it: the delivery ID is
-   * what stays the same when the BPMS repeats it.
+   * One delivery of a task, as an adapter of a remote BPMS builds it. The delivery ID stays
+   * the same when the BPMS repeats the delivery.
    */
   private TaskInvocationContext delivery(
       final String taskDefinition,
@@ -292,8 +294,8 @@ public class InboundIdempotencyTest {
 
       final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
 
-      // A redelivery answered from the record is counted, because a rising
-      // rate means the BPMS hands work out again - usually too short a lock
+      // A redelivery answered from the record is counted. A rising rate means that the
+      // BPMS hands out work again. The usual reason is a lock which is too short
       final var registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
       context
           .getBean(io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics.class)
@@ -335,8 +337,8 @@ public class InboundIdempotencyTest {
           () -> dummyAdapter.invokeTask(MODULE, PROCESS, delivery("failTask", "4713", "job-4")));
       Assertions.assertEquals(0, recordCount(context, "4713"));
 
-      // (d) switched off for this task: nothing is remembered, the handler runs per
-      // delivery - the behaviour of every VanillaBP before this feature
+      // (d) switched off for this task: nothing is remembered, and the handler runs for
+      // every delivery. Every VanillaBP before this feature behaved like this
       storeAggregate("4714");
       dummyAdapter.invokeTask(MODULE, PROCESS, delivery("undeduplicatedTask", "4714", "job-5"));
       dummyAdapter.invokeTask(MODULE, PROCESS, delivery("undeduplicatedTask", "4714", "job-5"));
@@ -361,10 +363,10 @@ public class InboundIdempotencyTest {
   }
 
   /**
-   * The case the record cannot catch: the BPMS hands the task out again while the first
-   * handler is still running, so neither delivery finds a record and the
-   * <code>&#64;WorkflowTask</code> method runs twice. One record is written, and the
-   * delivery which lost the race is where that becomes visible.
+   * The case which the record cannot catch. The BPMS hands out the task again while the
+   * first handler is still running. So neither delivery finds a record, and the
+   * <code>&#64;WorkflowTask</code> method runs twice. One record is written. The delivery
+   * which lost the race makes the overlap visible.
    */
   @Test
   public void twoDeliveriesAtTheSameTimeAreNamedAndCounted(
@@ -384,8 +386,8 @@ public class InboundIdempotencyTest {
       final var firstHandlerIsRunning = new CountDownLatch(1);
       final var secondDeliveryCommitted = new CountDownLatch(1);
       final var handlerRuns = new AtomicInteger();
-      // the first delivery to arrive stays in the handler until the second one is
-      // through, which is the overlap a real BPMS produces when its lock is too short
+      // the first delivery stays in the handler until the second one is through. A real
+      // BPMS produces this overlap when its lock is too short
       DeliveryWorkflowService.WHILE_THE_CONCURRENT_TASK_RUNS.set(() -> {
         if (handlerRuns.incrementAndGet() > 1) {
           return;

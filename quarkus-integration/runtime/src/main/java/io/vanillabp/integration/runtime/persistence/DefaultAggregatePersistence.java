@@ -4,37 +4,35 @@ import io.vanillabp.integration.spi.AggregateIdTypes;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 
 /**
- * Base class of the persistence implementations VanillaBP provides for the
- * persistence idioms of Quarkus (Hibernate ORM Panache, MongoDB Panache and Spring
- * Data). One subclass per aggregate is generated at build time
- * (<code>ProcessServiceBuildStepProcessor</code>) whenever the application does not
- * provide an {@link AggregatePersistenceAware} of its own for that aggregate - an
- * application-provided implementation always wins.
+ * Base class of the persistence implementations which VanillaBP provides for the usual ways
+ * to persist on Quarkus: Hibernate ORM Panache, MongoDB Panache and Spring Data. The build
+ * generates one subclass per aggregate (<code>ProcessServiceBuildStepProcessor</code>). It
+ * does so whenever the application has no {@link AggregatePersistenceAware} of its own for
+ * that aggregate. An implementation of the application always wins.
  * <p>
- * Everything about the aggregate's ID is answered by reflection
- * ({@link AggregateIdTypes}) rather than by asking the persistence framework: the
- * ID's name and type are needed at startup and at deployment, where neither a
- * transaction nor a session is guaranteed to be around, and the rules of
- * {@link AggregateIdTypes} (a field or getter annotated with
- * {@code jakarta.persistence.Id}, {@code jakarta.persistence.EmbeddedId} or
- * {@code org.bson.codecs.pojo.annotations.BsonId}, otherwise a member named
- * <code>id</code>) match what JPA and the MongoDB codecs use anyway.
+ * Everything about the aggregate's ID is answered by reflection ({@link AggregateIdTypes}).
+ * The persistence framework is not asked. The name and type of the ID are needed at startup
+ * and at deployment. There, a transaction or a session may be missing. The rules of
+ * {@link AggregateIdTypes} match what JPA and the MongoDB codecs use anyway: a field or
+ * getter annotated with {@code jakarta.persistence.Id},
+ * {@code jakarta.persistence.EmbeddedId} or {@code org.bson.codecs.pojo.annotations.BsonId},
+ * and otherwise a member named <code>id</code>.
  *
  * @param <A> The aggregate type
  */
 public abstract class DefaultAggregatePersistence<A> implements AggregatePersistenceAware<A> {
 
   /**
-   * The aggregate type this instance serves. There is one instance per aggregate, so
-   * the class is known when the bean is built and every question about the aggregate's
-   * ID is answered against it.
+   * The aggregate type which this instance serves. There is one instance per aggregate. So the
+   * class is known when the bean is created, and every question about the aggregate's ID is
+   * answered against it.
    */
   protected final Class<A> aggregateClass;
 
   /**
-   * Called by the subclass the build generates for one aggregate, which passes the
-   * class literal. Nothing of the persistence framework is touched here - the bean is
-   * built before the CDI container serves anybody.
+   * The subclass which the build generates for one aggregate calls it and passes the class
+   * literal. Nothing of the persistence framework is used here. The bean is created before
+   * the CDI container serves anybody.
    *
    * @param aggregateClass The aggregate type this instance persists
    */

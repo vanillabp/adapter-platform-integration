@@ -14,10 +14,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * One workflow aggregate has one {@code ProcessService}, so one of the
- * classes declaring the aggregate names the process {@code startWorkflow} starts.
- * That used to be whichever class the classpath scan returned first - an order coming
- * from the file system.
+ * One workflow aggregate has one {@code ProcessService}. So one of the classes which declare
+ * the aggregate names the process that {@code startWorkflow} starts. That used to be whichever
+ * class the classpath scan returned first, and that order came from the file system.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PrimaryWorkflowServiceClassTest {
@@ -26,9 +25,9 @@ public class PrimaryWorkflowServiceClassTest {
   }
 
   /**
-   * The fixtures carry NO {@code @WorkflowService}: annotated classes on this test
-   * classpath would be found by the classpath scan of every other test in this
-   * module. Their process is handed to the rule instead.
+   * The fixtures carry NO {@code @WorkflowService}. The classpath scan of every other test in
+   * this module would find annotated classes on this test classpath. So the test hands their
+   * process to the rule instead.
    */
   public static class CallingWorkflowService {
   }
@@ -60,8 +59,8 @@ public class PrimaryWorkflowServiceClassTest {
     assertTrue(message.contains(CalledWorkflowService.class.getName()), message);
     assertTrue(message.contains("LoanApproval"), message);
     assertTrue(message.contains("RiskAssessment"), message);
-    // the way out is part of it: one class declares the process to be started, the
-    // others move under its secondaryBpmnProcesses
+    // the message also names the way out: one class declares the process to be started,
+    // and the others move under its secondaryBpmnProcesses
     assertTrue(message.contains("secondaryBpmnProcesses"), message);
 
   }

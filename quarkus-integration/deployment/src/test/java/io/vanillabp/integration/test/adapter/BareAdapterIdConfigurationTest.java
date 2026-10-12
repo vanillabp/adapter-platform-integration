@@ -14,17 +14,16 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * An adapter section consisting of nothing but the adapter id relies on the
- * convention "the adapter id IS the adapter type". It configures the adapter on
- * Spring Boot, but NOT on Quarkus: the configuration binding derives the keys of a
- * properties map from the property NAMES below its prefix, and a section without
- * any property contributes no name - the id never reaches the runtime and the
- * situation cannot be detected.
+ * An adapter section with nothing but the adapter id relies on the convention "the
+ * adapter id IS the adapter type". This configures the adapter on Spring Boot, but NOT on
+ * Quarkus. The configuration binding takes the keys of a properties map from the property
+ * NAMES below its prefix. A section without any property adds no name. So the id never
+ * reaches the runtime, and nobody can detect the situation.
  * <p>
- * That limitation does not hurt the documented setups: with ONE
- * adapter type in the classpath the adapter is derived from the classpath anyway,
- * so the application boots exactly as the developer intended. (A CUSTOM bare id
- * still cannot be derived - see {@link BareCustomAdapterIdConfigurationTest}.)
+ * That limitation does not hurt the documented setups. With ONE adapter type in the
+ * classpath, the adapter is derived from the classpath anyway. So the application boots
+ * exactly as the developer intended. (A CUSTOM bare id still cannot be derived, see
+ * {@link BareCustomAdapterIdConfigurationTest}.)
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class BareAdapterIdConfigurationTest {

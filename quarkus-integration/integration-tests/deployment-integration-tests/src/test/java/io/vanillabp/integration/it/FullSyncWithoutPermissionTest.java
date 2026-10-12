@@ -21,11 +21,11 @@ import lombok.Setter;
 
 /**
  * An aggregate which keeps nothing back hands every attribute to the BPMS, and nobody
- * decided that. The boot ends, and the message names the workflow, the aggregate, the
- * attributes which travel and the property line allowing them.
+ * decided that. The boot ends. The message names the workflow, the aggregate, the
+ * attributes which travel and the property line which allows them.
  * <p>
- * {@code FullSyncAllowedTest} is the other half: the same shape of application starts
- * where its workflow allows the full sync.
+ * {@code FullSyncAllowedTest} is the other half. The same shape of application starts when
+ * its workflow allows the full sync.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class FullSyncWithoutPermissionTest {

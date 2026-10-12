@@ -16,9 +16,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
  * <p>
  * The classes of the platform are not on the classpath of this module, so this test uses
  * classes of its own. Two cases matter. A name which is gone has to be reported with a
- * message telling the next person where to follow the rename. And a class which needs a
- * library nobody brought counts as a class which is not there, because what that class
- * configures is not there either.
+ * message which tells the next person where to follow the rename. And a class which needs
+ * a library nobody brought counts as missing, because what that class configures is
+ * missing too.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ConstantOfAnotherModuleTest {
@@ -33,16 +33,16 @@ public class ConstantOfAnotherModuleTest {
   }
 
   /**
-   * A class in the shape of the one which configures the gruelbox outbox: it names a
-   * table, and it needs a library which an application does not have to bring. Loading it
-   * fails with a {@link NoClassDefFoundError}, the way the class loader fails on the real
-   * one in a repository whose test classpath carries the Spring Boot integration without
+   * A class in the shape of the one which configures the gruelbox outbox. It names a table,
+   * and it needs a library which an application does not have to bring. Loading it fails
+   * with a {@link NoClassDefFoundError}. The class loader fails the same way on the real
+   * class in a repository whose test classpath has the Spring Boot integration but not
    * the gruelbox library.
    * <p>
-   * The error is thrown here instead of arriving from a class loader because this test
-   * cannot take a library off its own classpath. What it stands in for is the whole point
-   * of the case: the error is not a {@link ClassNotFoundException}, so a lookup which only
-   * expects that one lets it through.
+   * The error is thrown here and does not come from a class loader, because this test
+   * cannot take a library off its own classpath. The kind of error is the whole point of
+   * the case. It is not a {@link ClassNotFoundException}, so a lookup which only expects
+   * that one lets it through.
    */
   public static final class AConfigurationWithoutItsLibrary {
 
@@ -57,7 +57,7 @@ public class ConstantOfAnotherModuleTest {
   }
 
   /**
-   * A class of this module holding names, which is what the messages point at.
+   * A class of this module which holds names. The messages point at it.
    */
   private static final class TheNamesOfAReader {
 

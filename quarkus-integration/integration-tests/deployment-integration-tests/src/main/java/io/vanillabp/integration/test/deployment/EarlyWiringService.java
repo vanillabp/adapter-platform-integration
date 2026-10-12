@@ -5,9 +5,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * A second, application-provided extension with an order BEFORE the dummy extension
- * (order 0) - used to assert that extensions are wired and started ordered by
- * {@code getOrder()}. Events are recorded as
+ * A second extension, which the application provides. Its order is BEFORE the dummy
+ * extension (order 0). A test uses it to check that extensions are wired and started in
+ * the order of {@code getOrder()}. Events are recorded as
  * <code>extensionEarly:&lt;method&gt;:&lt;moduleId&gt;</code>.
  */
 @ApplicationScoped

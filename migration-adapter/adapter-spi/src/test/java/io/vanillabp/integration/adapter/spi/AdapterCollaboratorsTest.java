@@ -17,15 +17,15 @@ import io.vanillabp.integration.test.utils.CapturedOutput;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * What a complete registration is, asserted where it is decided: the platform hands its
- * collaborators to an adapter in one object, and that object is the place which knows
- * which of them every adapter gets and which an application may not have.
+ * Tests what a complete registration is, at the place where this is decided. The
+ * platform hands its collaborators to an adapter in one object. That object knows which
+ * collaborators every adapter gets and which ones an application may not have.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AdapterCollaboratorsTest {
 
-  // the collaborators themselves are never called here - what this test pins is which of
-  // them have to arrive, so mocks say that without a page of empty method bodies
+  // The test never calls the collaborators. It only checks which of them have to arrive.
+  // Mocks say that without a page of empty method bodies.
   private static final WorkflowTaskWiring WIRING = mock(WorkflowTaskWiring.class);
 
   private static final WorkflowTaskInvoker INVOKER = mock(WorkflowTaskInvoker.class);
@@ -73,13 +73,13 @@ public class AdapterCollaboratorsTest {
             .workflowTaskWiring(WIRING)
             .workflowTaskInvoker(INVOKER)
             .scoping(SCOPING)
-            // the aggregate sync and the pre-commit registrar are the ones forgotten here
+            // the aggregate sync and the pre-commit registrar are missing here
             .build());
 
     assertTrue(failure.getMessage().contains("'c8'"), failure::getMessage);
     assertTrue(failure.getMessage().contains("'workflowAggregateSync'"), failure::getMessage);
     assertTrue(failure.getMessage().contains("'preCommitRegistrar'"), failure::getMessage);
-    // and it says whose defect it is, because no application can configure this away
+    // The message also says whose defect it is. No application can fix this by configuration.
     assertTrue(failure.getMessage().contains("registration code"), failure::getMessage);
 
   }

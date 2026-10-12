@@ -31,14 +31,13 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test on Quarkus, with the default JDBC-based delivery log: a task the BPMS
- * cancels leaves no open record behind.
+ * Acceptance test on Quarkus, with the default delivery log based on JDBC. A task which
+ * the BPMS cancels leaves no open record behind.
  * <p>
- * The record the task left open is stamped by the cancelling delivery itself, and that
- * delivery writes no second OPEN record although the method carries a
- * <code>&#64;TaskId</code> parameter. A method which does not subscribe to the
- * cancellation is the case which must not change: its record stays open, because nothing
- * told it the task is over.
+ * The cancelling delivery itself stamps the record which the task left open. That delivery
+ * writes no second OPEN record, although the method carries a <code>&#64;TaskId</code>
+ * parameter. The case of a method which does not subscribe to the cancellation must not
+ * change: its record stays open, because nothing told it that the task is over.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class CanceledTaskTest {
@@ -89,8 +88,8 @@ public class CanceledTaskTest {
   }
 
   /**
-   * One delivery of one task. The delivery id carries the event as well, the way an
-   * adapter which activates a job per event builds it.
+   * One delivery of one task. The delivery id carries the event as well, like an adapter
+   * builds it which activates a job per event.
    */
   private TaskInvocationContext delivery(
       final String taskDefinition,
@@ -205,9 +204,10 @@ public class CanceledTaskTest {
         persistence.get("4711").getCanceledTasks(),
         "the method asked for the event, so it was called with it");
 
-    // what the table says afterwards: no open record left, and every record naming that
-    // task carries the moment it was closed. Two rows, one per delivery: the cancellation
-    // keeps a record of its own so a BPMS repeating it does not run the method again
+    // what the table says afterwards: no open record is left, and every record which names
+    // that task carries the moment it was closed. There are two rows, one per delivery. The
+    // cancellation keeps a record of its own, so a BPMS which repeats it does not run the
+    // method again
     assertEquals(0, openRecordCount("4711"), "the record the task left open is closed by the cancelling delivery");
     assertEquals(2, recordCount("4711"), "one record per delivery");
     assertEquals(0, recordsWithoutAClosingMoment("4711"), "and both of them carry the moment the task was closed");
@@ -215,8 +215,8 @@ public class CanceledTaskTest {
         deliveryLog.openTasksOfAggregate(MODULE, PROCESS, "4711").isEmpty(),
         "so nothing reads that workflow as waiting for a task any more");
 
-    // (c) a method which never asked for the event: the delivery is skipped and the
-    // record it left open stays exactly as it was
+    // (c) a method which never asked for the event: the delivery is skipped, and the
+    // record which the task left open stays exactly as it was
     persistence.store("4712");
     dummyAdapter.invokeTask(MODULE, PROCESS, delivery("awaitCompletion", "4712", "task-2", TaskEvent.Event.CREATED));
     assertEquals(1, openRecordCount("4712"));
@@ -230,9 +230,9 @@ public class CanceledTaskTest {
   }
 
   /**
-   * The second record of one task is what {@code markTaskClosed} has to close as well: a
-   * task delivered twice under two delivery ids leaves two rows naming the same task, and
-   * a row left open keeps the task alive for everything which reads the open work.
+   * {@code markTaskClosed} has to close the second record of one task as well. A task
+   * delivered twice under two delivery ids leaves two rows which name the same task. A row
+   * left open keeps the task alive for everything which reads the open work.
    */
   @Test
   @DisplayName("Every record naming the task is closed, not only the newest one")

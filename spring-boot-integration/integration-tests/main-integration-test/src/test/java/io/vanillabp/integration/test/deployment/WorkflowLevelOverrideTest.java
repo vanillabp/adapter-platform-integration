@@ -29,17 +29,16 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test of workflow-level properties: the workflow module
- * prioritizes adapter id 'test' while ONE workflow ('DummyProcess') overrides to
- * 'test2' - the classic migration scenario of moving a single process to a new BPMS
- * while the rest of the module stays.
+ * Acceptance test of workflow-level properties. The workflow module prioritizes adapter id
+ * 'test', and ONE workflow ('DummyProcess') overrides it with 'test2'. That is the classic
+ * migration scenario: a single process moves to a new BPMS, and the rest of the module stays.
  * <ul>
  * <li>Deployment-target union: 'test2' is named at the workflow level only but still
  * receives the module's {@code deployResources}.</li>
  * <li>Election: starting THAT workflow uses 'test2', other workflows use the
  * module-level 'test'.</li>
- * <li>Guiding validation: a configured workflow ID matching no BPMN process yields a
- * startup WARN naming the known process IDs (asserted in a separate run).</li>
+ * <li>Guiding validation: a configured workflow ID which matches no BPMN process gives a
+ * WARN at startup. It names the known process IDs (checked in a separate run).</li>
  * </ul>
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -166,10 +165,10 @@ public class WorkflowLevelOverrideTest {
       // deployment-target union: 'test2' is named at the workflow level ONLY but
       // still receives the module's resources
       //
-      // Everything read below is the output of the running test alone. The absent
-      // sentence names adapter id 'test' starting a workflow, and the second test of
-      // this class configures that id as well, so only the narrow view keeps the two
-      // boots apart.
+      // Everything read below is the output of the running test alone. The sentence
+      // which must be absent says that adapter id 'test' starts a workflow. The second
+      // test of this class configures that id as well. Only the narrow view keeps the
+      // two boots apart.
       final var capturedOutput = output.getAllOfThisTest();
       Assertions.assertTrue(
           capturedOutput.contains("Dummy-Adapter[test]: Deploying resources for test-module"),
@@ -253,8 +252,8 @@ public class WorkflowLevelOverrideTest {
         .hideResource("application.yaml")
         .build(); var context = runTestApplication(testApp)) {
 
-      // boots anyway (the BPMN may arrive later, e.g. during a BPMS migration) but
-      // WARNs with the property key and the known BPMN process IDs
+      // boots anyway, because the BPMN may arrive later (e.g. during a BPMS migration).
+      // But it WARNs with the property key and the known BPMN process IDs
       final var capturedOutput = output.getAll();
       Assertions.assertTrue(
           capturedOutput.contains("vanillabp.workflow-modules.test-module.workflows.NoSuchProcess"),

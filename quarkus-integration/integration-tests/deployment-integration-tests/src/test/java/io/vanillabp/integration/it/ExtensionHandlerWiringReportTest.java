@@ -65,8 +65,8 @@ public class ExtensionHandlerWiringReportTest {
   @DisplayName("The boot names the method serving each key of an extension")
   public void theWiringOfTheExtensionIsReported() {
 
-    // the assertion is the one above: it reads the log of the boot, which has happened
-    // before any test method of this class runs
+    // the assertion is the one above. It reads the log of the boot, and the boot has
+    // happened before any test method of this class runs
 
   }
 

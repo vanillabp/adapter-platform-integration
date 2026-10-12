@@ -33,19 +33,19 @@ import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test on Spring Boot: an application storing EVERYTHING in MongoDB -
- * the aggregate in a MongoDB repository, the phase-two outbox and the log of processed task
- * deliveries in VanillaBP's MongoDB defaults - with no data source anywhere.
+ * Acceptance test on Spring Boot. The application stores EVERYTHING in MongoDB and has no
+ * data source anywhere. The aggregate is in a MongoDB repository. The phase-two outbox and
+ * the log of processed task deliveries use the MongoDB defaults of VanillaBP.
  * <p>
- * What is pinned here are the two conditions of that setup, which nothing said before this
- * story: the application defines a <code>MongoTransactionManager</code> (see
- * {@link TestApplication}, Spring Boot auto-configures none) and the deployment is a replica
- * set. Under both, all three writes really share one MongoDB transaction - a reader outside
- * it sees nothing while it runs, and everything after the commit.
+ * The test pins the two conditions of that setup, which nothing said before this story.
+ * The application defines a <code>MongoTransactionManager</code> (see
+ * {@link TestApplication}, Spring Boot creates none). And the deployment is a replica set.
+ * Under both, all three writes really share one MongoDB transaction. A reader outside it
+ * sees nothing while it runs, and everything after the commit.
  * <p>
- * The delivery record is written by VanillaBP inside its own transaction, so this test writes
- * one itself: what matters is that the store rides the transaction it is called in, which is
- * what {@link TaskDeliveryLog#record} demands.
+ * VanillaBP writes the delivery record inside its own transaction. So this test writes one
+ * itself. What matters is that the store writes in the transaction it is called in, as
+ * {@link TaskDeliveryLog#record} demands.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput
@@ -56,8 +56,8 @@ import io.vanillabp.spi.process.ProcessService;
 public class MongoOneTransactionTest {
 
   /**
-   * The collection the application writes its outbox into, asked of the reader rather
-   * than written down here.
+   * The collection the application writes its outbox into. The test asks the reader for it
+   * and does not write it down here.
    */
   private static final String OUTBOX_COLLECTION = MongoPhaseTwoOutboxReader.defaultOutboxCollectionName();
 
@@ -110,8 +110,8 @@ public class MongoOneTransactionTest {
   }
 
   /**
-   * Counts through a connection which is NOT part of the running transaction - the only way
-   * to tell "written immediately" from "written in a transaction".
+   * Counts through a connection which is NOT part of the running transaction. Only so can
+   * the test tell "written immediately" from "written in a transaction".
    */
   private long visibleOutside(
       final String collection) {
@@ -136,7 +136,7 @@ public class MongoOneTransactionTest {
               new TaskDelivery("test-module|SampleWorkflowService|one-transaction|job-1", "test-adapter", "test-module", "SampleWorkflowService", started
                   .getId(), null, "someTask", null, null, "COMPLETED", null, null, java.time.Instant.now(), null));
 
-      // still inside the transaction: nothing of this is visible to anybody else
+      // still inside the transaction: nobody else sees any of this
       assertEquals(0, visibleOutside("outbox-test-aggregate"), "the aggregate was written before the commit");
       assertEquals(0, visibleOutside(OUTBOX_COLLECTION), "the outbox entry was written before the commit");
       assertEquals(0, visibleOutside(DELIVERY_COLLECTION), "the delivery record was written before the commit");

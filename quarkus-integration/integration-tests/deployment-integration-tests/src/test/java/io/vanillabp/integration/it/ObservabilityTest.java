@@ -36,10 +36,10 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of what an operator gets to see on Quarkus: every task
- * delivery is counted by outcome and measured, it carries a logging context naming
- * the workflow it belongs to, and the BPMS adapters contribute what they know about
- * their BPMS to the readiness check.
+ * Acceptance test of what an operator sees on Quarkus. Every task delivery is counted by
+ * outcome and its duration is measured. It carries a logging context which names the
+ * workflow it belongs to. And the BPMS adapters add what they know about their BPMS to the
+ * readiness check.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ObservabilityTest {

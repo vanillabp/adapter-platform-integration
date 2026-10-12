@@ -7,15 +7,15 @@ import org.springframework.context.annotation.Import;
 import io.vanillabp.bpmsdouble.DummyAdapter;
 
 /**
- * Wires the double's process-service and deployment-service beans: ONE
- * element bean per configured adapter id of the dummy type, registered by the
- * imported {@link DummyAdapterBeanRegistrar} (the reference implementation of the
- * per-id bean convention).
+ * Wires the double's process-service and deployment-service beans. There is ONE element
+ * bean per configured adapter id of the dummy type. The imported
+ * {@link DummyAdapterBeanRegistrar} registers them. It is the reference for the bean
+ * rule of one instance per adapter id.
  * <p>
- * Additionally registers the adapter's OVERLAY of the shared
- * <code>vanillabp.*</code> tree ({@link DummyAdapterOverlayProperties}) - the
- * reference implementation of contributing adapter-specific keys to the canonical
- * per-adapter location <code>vanillabp.adapters.&lt;id&gt;.*</code>.
+ * It also registers the adapter's OVERLAY of the shared <code>vanillabp.*</code> tree
+ * ({@link DummyAdapterOverlayProperties}). That is the reference for how an adapter adds
+ * its own keys at the usual place of each adapter,
+ * <code>vanillabp.adapters.&lt;id&gt;.*</code>.
  */
 @AutoConfiguration
 @EnableConfigurationProperties(DummyAdapterOverlayProperties.class)
@@ -24,7 +24,7 @@ public class DummyAdapterProcessServiceConfiguration {
 
   /**
    * Spring builds this auto-configuration once per application. A test never creates
-   * it: putting the double on the test classpath is what brings it in.
+   * it. Putting the double on the test classpath brings it in.
    */
   public DummyAdapterProcessServiceConfiguration() {
   }

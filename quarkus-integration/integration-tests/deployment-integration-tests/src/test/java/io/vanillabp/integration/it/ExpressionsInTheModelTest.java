@@ -30,13 +30,13 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * An application whose BPMN model reads its data with expressions learns at the start what
- * that binds - here through a Quarkus start, where {@code ModelExpressionCheckTest} of the
- * core reads the messages alone and the Spring Boot twin of this class boots the other
- * platform.
+ * The BPMN model of this application reads its data with expressions. At the start, the
+ * application learns what that binds. Here this happens through a Quarkus start.
+ * {@code ModelExpressionCheckTest} of the core reads only the messages, and the Spring Boot
+ * twin of this class boots the other platform.
  * <p>
  * {@code AcceptedExpressionsTest} is the other half: the same application, and a workflow
- * saying its expressions are meant as they are.
+ * which says that its expressions are meant as they are.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ExpressionsInTheModelTest {
@@ -78,7 +78,7 @@ public class ExpressionsInTheModelTest {
                 .contains(
                     "vanillabp.workflow-modules.test-module.workflows.ShippingProcess.accept-expressions-in-the-model"),
             box);
-        // the two expressions doing what VanillaBP recommends are counted, never named
+        // the two expressions which do what VanillaBP recommends are counted, never named
         assertFalse(box.contains("'Flow_Normal'"), box);
         assertFalse(box.contains("'Flow_Big'"), box);
       });
@@ -91,7 +91,7 @@ public class ExpressionsInTheModelTest {
   public void theApplicationStartsAndSaysWhatItFound() {
 
     // the findings themselves are asserted on the boot's log records (assertLogRecords
-    // above); what matters here is that a model full of expressions still starts
+    // above). What matters here is that a model full of expressions still starts
     assertTrue(workflowService != null, "the application booted");
 
   }
@@ -165,8 +165,8 @@ public class ExpressionsInTheModelTest {
   }
 
   /**
-   * What the adapter reads off the model: two expressions reaching into the data, one
-   * computing, and two which do what VanillaBP recommends.
+   * What the adapter reads off the model: two expressions which reach into the data, one
+   * which computes, and two which do what VanillaBP recommends.
    */
   @ApplicationScoped
   public static class ShippingWiringSource implements DummyTaskWiringSource {

@@ -5,8 +5,9 @@ import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Lets the BPMS double report the workflows of this scenario as running, so the election
- * an extension asks has something to elect. One id is deliberately unknown to everybody.
+ * Lets the BPMS double report the workflows of this scenario as running. So the election
+ * which an extension asks has something to elect. One id is unknown to everybody on
+ * purpose.
  */
 @ApplicationScoped
 public class EveryWorkflowRunsHere implements DummyTaskAwarenessSource {

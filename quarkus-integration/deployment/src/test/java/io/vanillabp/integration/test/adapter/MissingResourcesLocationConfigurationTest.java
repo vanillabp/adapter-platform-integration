@@ -28,7 +28,6 @@ public class MissingResourcesLocationConfigurationTest {
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
-          // load sample application properties
           .addAsResource("missing-resources-location/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class)
@@ -47,9 +46,9 @@ public class MissingResourcesLocationConfigurationTest {
     final var resourcesLocations = properties.getAdapterResourcesLocationsFor("test-module", "test");
     final var resourcesLocation = resourcesLocations.getFirst();
 
-    // the module is searched at its own location first and at the application's root
-    // second - a module tested inside its own Maven module is the main artifact as
-    // well while its files sit below the module id
+    // the module is searched at its own location first, and at the application's root
+    // second. A module tested inside its own Maven module is also the main artifact,
+    // while its files are below the module id
     Assertions.assertEquals(
         java.util.List.of("classpath*:test-module/processes/test", "classpath*:processes/test"),
         resourcesLocations

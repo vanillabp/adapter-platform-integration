@@ -49,14 +49,14 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackgroundOutput;
 
 /**
- * The two promises the MongoDB store makes now that it dispatches on more than one thread:
- * what belongs to one workflow aggregate keeps its order, and what belongs to different ones
- * travels at the same time.
+ * The MongoDB store dispatches on more than one thread, and it makes two promises about that.
+ * The entries of one workflow aggregate keep their order. The entries of different aggregates
+ * travel at the same time.
  * <p>
- * What this adds to {@code DispatchLanesTest}, which holds the rule itself without a
- * database, is the wiring of this store: that the claim really reads the entries in the order
- * they were written, and that the dispatcher really hands them to the lanes instead of
- * dispatching them where it claims them.
+ * {@code DispatchLanesTest} holds the rule itself, without a database. This test adds the
+ * wiring of this store. The claim really reads the entries in the order they were written.
+ * And the dispatcher really hands them to the lanes, and does not dispatch them where it
+ * claims them.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @ExtendWith(MockitoExtension.class)
@@ -66,18 +66,18 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackg
 public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
 
   /**
-   * How many operations of one workflow wait for their dispatch at the same moment. Ten of
-   * them: enough that a dispatcher which took its entries in any other order would be caught.
-   * Most of them wait in the table meanwhile, because a lane takes one entry beyond the one it
-   * dispatches, and the order is what the poller hands them over in either way.
+   * How many operations of one workflow wait for their dispatch at the same moment. Ten are
+   * enough to catch a dispatcher which takes its entries in any other order. Most of them
+   * wait in the collection meanwhile, because a lane takes only one entry beyond the one it
+   * dispatches. Either way, the order is the one the poller hands them over in.
    */
   private static final int OPERATIONS_OF_ONE_WORKFLOW = 10;
 
   private static final int LANES = 4;
 
   /**
-   * When every entry of a test is due. One moment for all of them, so the order they are
-   * claimed in can only come from the moment they were written.
+   * When every entry of a test is due. All of them share one moment. So the order of the
+   * claim can only come from the moment each entry was written.
    */
   private static final Instant DUE_AT = Instant.now().minusSeconds(30);
 
@@ -90,13 +90,13 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
   private static final String PROCESS = "TestProcess";
 
   /**
-   * The argument every entry carries so the dispatches can be told apart. The aggregate alone
-   * cannot do it: the entries of the ordering test all belong to the same one.
+   * Every entry carries this argument, so the test can tell the dispatches apart. The
+   * aggregate alone cannot do it, because all entries of the ordering test share one.
    */
   private static final String ARG_POSITION = "position";
 
-  // no wait strategy of its own: the one the container brings waits until the MAPPED port
-  // accepts a connection, while a log line only says that mongod listens inside the container
+  // no wait strategy of its own: the container's own strategy waits until the MAPPED port
+  // accepts a connection. A log line only says that mongod listens inside the container
   @Container
   static MongoDBContainer mongoDb = new MongoDBContainer(DockerImageName.parse(ContainerImages.MONGODB));
 
@@ -109,8 +109,8 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
   private final List<String> arrived = new CopyOnWriteArrayList<>();
 
   /**
-   * Released by the dispatches themselves once enough of them are inside the adapter at the
-   * same time. A dispatcher which serialises everything never releases it.
+   * The dispatches release it themselves once enough of them are inside the adapter at the
+   * same time. A dispatcher which runs everything one after the other never releases it.
    */
   private final CountDownLatch dispatchesInsideAtTheSameTime = new CountDownLatch(2);
 
@@ -175,8 +175,8 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
   }
 
   /**
-   * One bean, as the dispatcher is handed it. A running application gets these from its
-   * container; a test which builds the dispatcher itself has to say what they answer.
+   * One bean, in the form the dispatcher gets it. A running application gets these providers
+   * from its container. A test which builds the dispatcher itself has to say what they answer.
    *
    * @param <T> What the provider stands for
    * @param bean The bean to hand out
@@ -220,9 +220,9 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
       final Instant writtenAt) {
 
     final var id = UUID.randomUUID().toString();
-    // every entry of a test is due at the same moment, and only the moment it was written
-    // tells them apart. An entry which failed once carries a due time of its own anyway, so
-    // the claim cannot read the order off that field - it has to sort by the other one
+    // every entry of a test is due at the same moment. Only the moment it was written tells
+    // them apart. An entry which failed once has its own due time anyway. So the claim cannot
+    // read the order from the due time. It has to sort by the moment it was written
     mongoTemplate
         .getCollection(collection)
         .insertOne(new Document()
@@ -272,13 +272,13 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
     final var collection = "outbox-one-aggregate-in-order";
     dispatcherOn(collection, false);
     final var writtenAt = Instant.now().minusSeconds(60);
-    // written into the collection the other way round, so the order of the documents is not
-    // the order of the moments. A claim which reads whatever the collection answers first
-    // would then hand the entries to the lane the wrong way round, and this test says so
+    // written into the collection in reverse, so the order of the documents is not the order
+    // of the moments. A claim which takes whatever the collection answers first would hand
+    // the entries to the lane in reverse, and this test would fail
     IntStream
         .iterate(OPERATIONS_OF_ONE_WORKFLOW - 1, position -> position >= 0, position -> position - 1)
-        // a millisecond apart, because two entries written in the same one would leave
-        // their order to the collection and this test would be about that instead
+        // one millisecond apart. Two entries written in the same millisecond would leave
+        // their order to the collection, and this test would be about that instead
         .forEach(position -> anEntryDueNow(
             collection, "one-aggregate", positionOf(position), writtenAt.plusMillis(position)));
 
@@ -303,7 +303,7 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
 
     final var collection = "outbox-two-aggregates-at-once";
     dispatcherOn(collection, true);
-    // two aggregates whose lanes differ - two which shared one would wait for each other
+    // two aggregates on different lanes. Two which share a lane would wait for each other,
     // however many lanes there are, and the test would be about the hash instead
     final var aggregates = twoAggregatesOnDifferentLanes();
     final var writtenAt = Instant.now().minusSeconds(60);
@@ -311,8 +311,8 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
     anEntryDueNow(collection, aggregates[1], positionOf(1), writtenAt.plusMillis(1));
 
     dispatcher.startPolling();
-    // both dispatches let each other out, so both entries are marked. Where one lane served
-    // them the second one would still be waiting for its turn when the first one gave up
+    // each dispatch lets the other one out, so both entries are marked. If one lane served
+    // them, the second would still wait for its turn when the first one gave up
     waitUntil("the two operations did not travel at the same time", () -> dispatchedIn(collection) == 2);
 
     assertEquals(2, arrived.size(), "both operations have to reach the adapter");
@@ -320,8 +320,8 @@ public class MongoEntriesOfOneAggregateKeepTheirOrderTest {
   }
 
   /**
-   * Two aggregates the lanes keep apart, read from the rule the dispatcher applies rather
-   * than guessed.
+   * Two aggregates on different lanes. The test reads them from the rule the dispatcher uses,
+   * and does not guess them.
    *
    * @return The ids of two aggregates served by different lanes
    */

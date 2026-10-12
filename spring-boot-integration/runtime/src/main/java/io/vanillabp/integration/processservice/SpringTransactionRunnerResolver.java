@@ -17,26 +17,26 @@ import io.vanillabp.integration.spi.TransactionRunnerAware;
 import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
 
 /**
- * Spring Boot implementation of the core's {@link TransactionRunnerResolver}:
- * which transaction VanillaBP runs the work on a workflow aggregate in, and what that
+ * Spring Boot implementation of the core's {@link TransactionRunnerResolver}. It says in
+ * which transaction VanillaBP runs the work on a workflow aggregate, and what that
  * transaction covers.
  * <p>
- * Resolution order:
+ * The order:
  * <ol>
- * <li>the most specific {@link TransactionRunnerAware} bean covering the aggregate class
- * (selection via {@link AwareSelection}, ambiguity ends the boot),</li>
- * <li>a plain {@link TransactionRunner} bean of the application, serving every aggregate
- * no aware bean covers,</li>
+ * <li>the most specific {@link TransactionRunnerAware} bean which covers the aggregate
+ * class (chosen by {@link AwareSelection}; if it is ambiguous, the boot ends),</li>
+ * <li>a plain {@link TransactionRunner} bean of the application. It serves every
+ * aggregate which no aware bean covers,</li>
  * <li>the platform's {@link SpringTransactionRunner}, if a unique
  * <code>PlatformTransactionManager</code> exists,</li>
  * <li>nothing, which the core turns into a guiding startup failure.</li>
  * </ol>
- * The coverage verdict is what makes the difference between "weaker" and "cannot work":
- * a MongoDB-managed aggregate in an application whose only transaction manager is a
- * relational one is written outside every transaction, and the fix has a name
+ * The coverage verdict tells "weaker" apart from "cannot work". Take an aggregate managed
+ * by MongoDB in an application whose only transaction manager is a relational one. It is
+ * written outside every transaction, and the fix has a name
  * (<code>MongoTransactionManager</code>, or a runner of the application). That case ends
  * the boot unless the application accepts it. A MongoDB deployment which is no replica
- * set is reported as well, since a MongoDB transaction cannot even start there.
+ * set is reported as well, because a MongoDB transaction cannot even start there.
  */
 public class SpringTransactionRunnerResolver implements TransactionRunnerResolver {
 
@@ -64,12 +64,13 @@ public class SpringTransactionRunnerResolver implements TransactionRunnerResolve
 
   /**
    * Built once per application by the autoconfiguration. It detects an aggregate's
-   * persistence technology itself; the constructor below takes that detection as a
-   * function and is what the tests use.
+   * persistence technology itself. The constructor below takes that detection as a
+   * function, and the tests use it.
    *
    * @param applicationContext The context the runner and aware beans are looked up in
-   * @param platformRunner The platform's runner, used for every aggregate the application
-   *     contributed no runner for (see decision 11 in the repository's DECISIONS.md)
+   * @param platformRunner The platform's runner. It is used for every aggregate for which
+   *     the application contributed no runner (see decision 11 in the repository's
+   *     DECISIONS.md)
    */
   public SpringTransactionRunnerResolver(
       final ApplicationContext applicationContext,
@@ -80,9 +81,9 @@ public class SpringTransactionRunnerResolver implements TransactionRunnerResolve
   }
 
   /**
-   * Takes the detection of an aggregate's persistence technology as a function - the shape
-   * the tests of the coverage verdicts use, since building a real Spring Data repository
-   * infrastructure would say nothing more about them.
+   * Takes the detection of an aggregate's persistence technology as a function. The tests
+   * of the coverage verdicts use this shape. A real Spring Data repository infrastructure
+   * would say nothing more about them.
    *
    * @param applicationContext Used to look up runner and aware beans
    * @param platformRunner The platform's runner, the last resolution step
@@ -121,7 +122,7 @@ public class SpringTransactionRunnerResolver implements TransactionRunnerResolve
     final var managers = applicationContext.getBeanNamesForType(
         PlatformTransactionManager.class);
     if (managers.length > 1) {
-      // the mixed-persistence case: managers exist, but none of them is THE one
+      // the case of mixed persistence: managers exist, but none of them is THE one
       return """
           - this application has several transaction managers (%s), so none of them is the one to \
           use: attribute your workflow aggregates to them by defining \
@@ -144,7 +145,7 @@ public class SpringTransactionRunnerResolver implements TransactionRunnerResolve
     final var resolution = resolution(workflowAggregateClass);
     if ((resolution.origin() == Origin.AWARE) || (resolution.origin() == Origin.APPLICATION_BEAN)) {
       // the application brought the transaction, so the application knows what it
-      // covers - VanillaBP has nothing to add and says nothing
+      // covers. VanillaBP has nothing to add and says nothing
       return TransactionCoverage.unknown();
     }
     if (resolution.origin() == Origin.NONE) {
@@ -168,8 +169,9 @@ public class SpringTransactionRunnerResolver implements TransactionRunnerResolve
   }
 
   /**
-   * A MongoDB-managed aggregate with a MongoDB transaction manager is covered - as long
-   * as the deployment is a replica set, because a MongoDB transaction needs one.
+   * An aggregate managed by MongoDB, with a MongoDB transaction manager, is covered. That
+   * holds as long as the deployment is a replica set, because a MongoDB transaction needs
+   * one.
    */
   private TransactionCoverage replicaSetCoverage(
       final Class<?> workflowAggregateClass) {
@@ -179,7 +181,7 @@ public class SpringTransactionRunnerResolver implements TransactionRunnerResolve
     }
     final var replicaSet = SpringMongoDeployment.isReplicaSet(applicationContext);
     if (!Boolean.FALSE.equals(replicaSet)) {
-      // true, or a question which could not be answered: a probe must not produce a
+      // true, or a question which could not be answered. A probe must not produce a
       // verdict it is not sure about
       return TransactionCoverage.covered();
     }
@@ -275,7 +277,7 @@ public class SpringTransactionRunnerResolver implements TransactionRunnerResolve
                   .formatted(aware.getKey()));
     }
 
-    // 2. a plain TransactionRunner bean of the application - VanillaBP's own platform
+    // 2. a plain TransactionRunner bean of the application. VanillaBP's own platform
     // runner is a bean as well, and it is not the application's answer
     final var runners = new LinkedHashMap<>(
         applicationContext.getBeansOfType(TransactionRunner.class));

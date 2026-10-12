@@ -9,30 +9,30 @@ import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.adapter.spi.WorkflowVisibilityDelay;
 
 /**
- * The BPMS double of this scenario, standing in for a cluster whose exporter is behind:
- * the workflow is running, and the read model the awareness probe searches does not show
- * it yet.
+ * The BPMS double of this scenario. It plays a cluster whose exporter is behind. The
+ * workflow runs, but the read model which the awareness probe searches does not show it
+ * yet.
  * <p>
- * A test switches the lag on and reads afterwards how often the core asked, which is what
- * turns the waiting into a number instead of a suspicion.
+ * A test switches the lag on. Afterwards it reads how often the core asked. That turns
+ * the waiting into a number instead of a suspicion.
  */
 public class ALaggingReadModel implements DummyTaskAwarenessSource {
 
   /**
-   * The window the adapter reports. The default is the one the Camunda 8 adapter
-   * reports out of the box, so that what is measured here is what an application meets.
+   * The window the adapter reports. The default is the window of the Camunda 8 adapter
+   * without configuration. So the measurement shows what an application meets.
    */
   private final AtomicReference<Duration> window = new AtomicReference<>(Duration.ofSeconds(10));
 
   /**
-   * How often the core asks while it waits. Not configurable in the Camunda 8 adapter
-   * either, which is why it is a constant of that adapter rather than a property.
+   * How often the core asks while it waits. The Camunda 8 adapter does not make it
+   * configurable either. So it is a constant there, not a property.
    */
   public static final Duration PROBE_INTERVAL = Duration.ofMillis(250);
 
   /**
    * Whether the read model shows the workflow. A test starts with a visible workflow, so
-   * that the election writes its hint, and hides it afterwards.
+   * the election writes its hint. Then the test hides the workflow.
    */
   private final AtomicReference<Boolean> visible = new AtomicReference<>(Boolean.TRUE);
 

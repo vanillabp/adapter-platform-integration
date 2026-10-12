@@ -7,7 +7,7 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * In-memory persistence for the process-version acceptance test's aggregate.
+ * In-memory persistence for the aggregate of the process-version acceptance test.
  */
 @ApplicationScoped
 public class VersionedAggregatePersistence implements AggregatePersistenceAware<VersionedAggregate> {

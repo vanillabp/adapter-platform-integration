@@ -1,9 +1,9 @@
 package io.vanillabp.integration.test.apptx;
 
 /**
- * The interface the workflow aggregates of this application implement, so ONE
- * {@link io.vanillabp.integration.spi.TransactionRunnerAware} bean naming it serves them
- * all.
+ * The workflow aggregates of this application implement this interface. So ONE
+ * {@link io.vanillabp.integration.spi.TransactionRunnerAware} bean which names it serves
+ * them all.
  */
 public interface AppTxStored {
 

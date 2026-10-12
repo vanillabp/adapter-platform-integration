@@ -8,8 +8,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * A "BPMS" which gave the model of this start version 5, a version without a tag. The
- * methods of {@link VersionedWorkflowService} serve versions 1 to 3 and the version tagged
- * 'release-2026', so nothing serves the task of the deployed model.
+ * methods of {@link VersionedWorkflowService} serve versions 1 to 3 and the version with
+ * the tag 'release-2026'. So nothing serves the task of the deployed model.
  */
 @ApplicationScoped
 public class UncoveredDeployedVersionSource implements DummyProcessVersionSource {

@@ -29,21 +29,21 @@ import lombok.Builder;
 public class QuarkusMigrationAdapterTransformer {
 
   /**
-   * Each VanillaBP adapter is a Quarkus extension publishing a Quarkus extension
-   * capability with its name prefixed by this prefix. e.g. io.vanillabp.adapter.dummy
+   * Each VanillaBP adapter is a Quarkus extension. It publishes a Quarkus extension
+   * capability whose name starts with this prefix, e.g. io.vanillabp.adapter.dummy.
    */
   public static final String PREFIX_ADAPTER_PACKAGE = "io.vanillabp.adapter.";
 
   /**
-   * Quarkus' configuration binding derives the keys of a properties map from the
-   * property NAMES below its prefix. A section consisting of nothing but its id
-   * (YAML <code>&lt;id&gt;:</code> or <code>&lt;id&gt;: {}</code>) contributes no
-   * property name and is therefore dropped silently - and spelling it as a property
-   * with an empty value (<code>&lt;id&gt;=</code>) is rejected by SmallRye
-   * ("does not map to any root"). So unlike on Spring Boot, the id-is-the-type
-   * convention ({@link MigrationAdapterProperties#adapterTypes()}) cannot be used
-   * with an otherwise empty section here. Since the id never reaches the runtime,
-   * this cannot be detected - the developer has to learn it from the message.
+   * The configuration binding of Quarkus takes the keys of a properties map from the
+   * property NAMES below its prefix. A section with nothing but its id (YAML
+   * <code>&lt;id&gt;:</code> or <code>&lt;id&gt;: {}</code>) adds no property name. So it is
+   * dropped without a word. Writing it as a property with an empty value
+   * (<code>&lt;id&gt;=</code>) does not help either, because SmallRye refuses that ("does not
+   * map to any root"). So unlike on Spring Boot, the convention "the id is the type"
+   * ({@link MigrationAdapterProperties#adapterTypes()}) does not work here with an otherwise
+   * empty section. The id never reaches the runtime, so this cannot be detected. The
+   * developer has to learn it from the message.
    */
   public static final String QUARKUS_EMPTY_SECTION_NOTE = """
       Note for Quarkus: a properties section needs AT LEAST ONE property - a section consisting of its id alone \
@@ -51,32 +51,26 @@ public class QuarkusMigrationAdapterTransformer {
       configuration binding. For adapters set 'type=<adapter type>', even if the id already is the type."""
       .formatted(PREFIX);
 
-  /**
-   * The properties to transform
-   */
   private final QuarkusMigrationAdapterProperties properties;
 
   /**
-   * Raw names of all properties available, including unconverted
-   * environment-variable names. Used by the core to detect <code>VANILLABP_*</code>
-   * environment variables which were not taken over by the configuration binding.
+   * The raw names of all available properties, including environment variable names which
+   * are not converted. The core uses them to find <code>VANILLABP_*</code> environment
+   * variables which the configuration binding did not take over.
    */
   private final Iterable<String> propertyNames;
 
-  /**
-   * Capabilities of Quarkus extensions available
-   */
   private final Collection<String> capabilities;
 
   /**
-   * Built through the generated builder, by the recorder which runs while the
-   * application starts. Everything it needs is known at that moment and never changes
-   * afterwards, so the three fields are final and the class is used once and dropped.
+   * The recorder which runs while the application starts creates it through the generated
+   * builder. Everything it needs is known at that moment and never changes later. So the
+   * three fields are final, and the object is used once and then dropped.
    *
    * @param properties What SmallRye bound below <code>vanillabp.</code>
    * @param propertyNames Every property name the configuration knows, unconverted
-   * @param capabilities The capabilities of the Quarkus extensions of this application,
-   *          which is how the adapters on the classpath are recognised
+   * @param capabilities The capabilities of the Quarkus extensions of this application. They
+   *          tell which adapters are on the classpath
    */
   @Builder
   QuarkusMigrationAdapterTransformer(
@@ -103,7 +97,7 @@ public class QuarkusMigrationAdapterTransformer {
       final Collection<WorkflowModule> workflowModulesFound,
       final Collection<String> adaptersFound) throws IllegalStateException {
 
-    // determine adapters by examining capabilities of Quarkus extensions available:
+    // Find the adapters through the capabilities of the available Quarkus extensions.
     final var adapterTypesProvidedByExtensions = capabilities
         .stream()
         .filter(capability -> capability.startsWith(PREFIX_ADAPTER_PACKAGE))
@@ -118,7 +112,7 @@ public class QuarkusMigrationAdapterTransformer {
               .formatted(PREFIX_ADAPTER_PACKAGE, BpmsAdapters.extensionsToAdd()));
     }
 
-    // validate adapters provided by VanillaBP Quarkus adapter extensions
+    // Check the adapters which the VanillaBP Quarkus adapter extensions provide.
     final var extensionsWithoutCapability = adaptersFound
         .stream()
         .filter(adapter -> !adapterTypesProvidedByExtensions.contains(adapter))
@@ -132,16 +126,15 @@ public class QuarkusMigrationAdapterTransformer {
               .formatted(extensionsWithoutCapability));
     }
 
-    // purely mechanical copy onto the core model - no validation, no defaulting
+    // Only copy the values onto the core model. No checks, no defaults.
     final var result = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
-    // run the core validation - one validation, in core, identical on all
-    // platforms (adapter types are the capability suffixes of the VanillaBP
-    // adapter extensions loaded)
-    // convention over configuration: the classpath facts are what the
-    // conventions are derived from - a GLOBAL workflow module is one declared by
-    // the root application archive (the application IS the workflow module),
-    // which decides the conventional resources location
+    // Run the core's checks. There is one set of checks, in the core, the same on all
+    // platforms. The adapter types are the capability suffixes of the loaded VanillaBP
+    // adapter extensions.
+    // Convention over configuration: the conventions come from the classpath facts. A
+    // GLOBAL workflow module is one which the root application archive declares (the
+    // application IS the workflow module). This decides the default resources location.
     final var knownWorkflowModules = workflowModulesFound
         .stream()
         .map(workflowModule -> new ClasspathFacts.WorkflowModuleInfo(
@@ -154,9 +147,9 @@ public class QuarkusMigrationAdapterTransformer {
       result.validateEnvironmentVariableUsage(propertyNames);
     }
 
-    // Quarkus-specific consistency - AFTER the core validation, so configuration
-    // typos are reported with the core's guiding messages first: every VanillaBP
-    // adapter extension added to the application has to be configured
+    // A check only Quarkus needs: every VanillaBP adapter extension added to the
+    // application has to be configured. It runs AFTER the core's checks. So typos in the
+    // configuration get the core's guiding messages first.
     validateAllExtensionsConfigured(adaptersFound, adapterTypesProvidedByExtensions, result.adapterTypes());
 
     return result;
@@ -164,8 +157,8 @@ public class QuarkusMigrationAdapterTransformer {
   }
 
   /**
-   * Validates that every VanillaBP adapter extension added to the application is
-   * actually configured.
+   * Checks that every VanillaBP adapter extension added to the application is really
+   * configured.
    *
    * @param adaptersFound All adapters found during augmentation
    * @param adapterTypesProvidedByExtensions The capability-derived adapter types
@@ -191,7 +184,7 @@ public class QuarkusMigrationAdapterTransformer {
               .formatted(buildItemsNotConfigured));
     }
 
-    // test for adapters not found in properties
+    // Look for adapters which have no section in the properties.
     final var unconfiguredAdapters = adapterTypesProvidedByExtensions
         .stream()
         .filter(adapter -> !adapters.containsValue(adapter))

@@ -17,16 +17,15 @@ import io.vanillabp.integration.test.utils.OneFreePortPerJvm;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Proves that a workflow-module JAR NOT having a Jandex index (containing only the
- * <code>META-INF/workflow-module</code> descriptor, its configuration file and BPMN
- * resources) is detected as a workflow module: the workflow-module descriptor is
- * registered as an additional application-archive marker by the VanillaBP extension.
- * If the module was not detected, the config source for
- * <code>no-index-module.yaml</code> would not be generated: the application would not
- * even build since the workflow module's configuration
- * (<code>vanillabp.workflow-modules.no-index-module</code>) is part of that file, and
- * the property <code>no-index-module.test</code> asserted by this test would fall back
- * to its default value.
+ * Proves that a workflow-module JAR WITHOUT a Jandex index is detected as a workflow
+ * module. The JAR holds only the <code>META-INF/workflow-module</code> descriptor, its
+ * configuration file and BPMN resources. The VanillaBP extension registers the
+ * workflow-module descriptor as an additional marker of application archives. If the
+ * module was not detected, the config source for <code>no-index-module.yaml</code> would
+ * not be generated. Then the application would not even build, because the workflow
+ * module's configuration (<code>vanillabp.workflow-modules.no-index-module</code>) is part
+ * of that file. And the property <code>no-index-module.test</code>, which this test
+ * asserts, would fall back to its default value.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowModuleWithoutJandexIndexTest {

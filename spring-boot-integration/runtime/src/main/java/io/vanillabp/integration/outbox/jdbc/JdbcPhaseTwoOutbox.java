@@ -32,18 +32,18 @@ import jakarta.annotation.PreDestroy;
 
 /**
  * The default {@link PhaseTwoOutbox} of a Spring Boot application whose workflow
- * aggregates live in a relational database. What it stores and how it dispatches is the
- * core's {@link JdbcPhaseTwoOutboxStore} with its {@link JdbcPhaseTwoOutboxDispatcher} -
- * the same code a Quarkus application runs. This bean is the Spring half of it: the
- * connection {@code DataSourceUtils} binds to the running transaction, the
+ * aggregates live in a relational database. The core's {@link JdbcPhaseTwoOutboxStore}
+ * and its {@link JdbcPhaseTwoOutboxDispatcher} decide what it stores and how it
+ * dispatches. A Quarkus application runs the same code. This bean is the Spring half of
+ * it: the connection which {@code DataSourceUtils} binds to the running transaction, the
  * synchronization which says that the transaction committed, and the
  * {@link ApplicationReadyEvent} the poller starts on.
  * <p>
- * The poller starts AFTER workflow processing did
- * ({@link SpringBootDeploymentService#OUTBOX_DISPATCHER_LISTENER_ORDER}), so nothing a
- * crashed instance left behind is carried to a BPMS which has not seen the models yet.
- * The tables are created before that, while this bean is built, because a workflow may
- * be started as soon as the application context is up.
+ * The poller starts AFTER workflow processing has started
+ * ({@link SpringBootDeploymentService#OUTBOX_DISPATCHER_LISTENER_ORDER}). So nothing which
+ * a crashed instance left behind is carried to a BPMS which has not seen the models yet.
+ * The tables are created before that, while this bean is built, because a workflow may be
+ * started as soon as the application context is up.
  */
 public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
 
@@ -52,16 +52,16 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
   private final JdbcPhaseTwoOutboxDispatcher dispatcher;
 
   /**
-   * The outbox on the table <code>vanillabp.outbox.jdbc.table</code> names, which is what
-   * every application gets unless it builds a second outbox of its own.
+   * The outbox on the table which <code>vanillabp.outbox.jdbc.table</code> names. Every
+   * application gets it, unless it builds a second outbox of its own.
    *
-   * @param dataSource Where the outbox table lives - the database the workflow
-   *          aggregates are persisted in
+   * @param dataSource Where the outbox table lives: the database the workflow aggregates
+   *          are persisted in
    * @param properties The bound <code>vanillabp.outbox</code> section
    * @param payloadStore Where the bytes of a call which carries a payload lie
    * @param phaseTwoRouter Provider of the router a claimed entry is handed to
-   * @param metrics Provider of what a blocked entry is counted into; Micrometer is
-   *          optional, so the bean may legitimately be absent
+   * @param metrics Provider of what a blocked entry is counted into. Micrometer is
+   *          optional, so the bean may be absent
    */
   public JdbcPhaseTwoOutbox(
       final DataSource dataSource,
@@ -76,10 +76,10 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * An outbox on a table of its own, which is how a high-load process gets a store
-   * nothing else writes into. Everything else is the same, the settings included: two
-   * dispatchers polling one table would compete and dispatch an entry twice, so the
-   * table and the payload table have to be ones no other outbox uses.
+   * An outbox on a table of its own. That way a high-load process gets a store which
+   * nothing else writes into. Everything else is the same, including the settings. Two
+   * dispatchers which poll one table would compete and dispatch an entry twice. So no
+   * other outbox may use the table or the payload table.
    *
    * @param dataSource Where the tables live
    * @param properties The bound <code>vanillabp.outbox</code> section
@@ -107,7 +107,7 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * The table this outbox writes its entries into. The auto-configuration asks, because the
+   * The table this outbox writes its entries into. The auto-configuration asks for it. The
    * message about entries left in the former store has to name the table this one uses.
    *
    * @return The table this outbox writes its entries into
@@ -170,8 +170,8 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * Stops the poller when the application context closes. An entry which was not dispatched
-   * stays in the table, and the first poll of the next start carries it.
+   * Stops the poller when the application context closes. An entry which was not
+   * dispatched stays in the table, and the first poll of the next start carries it.
    */
   @PreDestroy
   public void stopPolling() {
@@ -181,12 +181,12 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * The connection Spring binds to the transaction currently running, and a plain
-   * connection of the pool where none runs - which is what the poller and the lanes of
-   * the dispatcher get, because they work outside the application's transactions.
+   * The connection Spring binds to the transaction which is running now. Where none runs,
+   * it is a plain connection of the pool. The poller and the lanes of the dispatcher get
+   * that, because they work outside the application's transactions.
    * <p>
-   * Public because an application building an outbox of its own needs the same thing for
-   * the payload store it hands in.
+   * It is public because an application which builds an outbox of its own needs the same
+   * thing for the payload store it hands in.
    *
    * @param dataSource The data source the outbox table lives in
    * @return How this platform hands out connections
@@ -233,9 +233,9 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
           final Runnable action) {
 
         if (!TransactionSynchronizationManager.isSynchronizationActive()) {
-          // a transaction Spring does not synchronize, which a store cannot be told
-          // about. Running the action now costs one poll which may find nothing - the
-          // entry is read from the table, so a rollback simply leaves nothing to read
+          // a transaction Spring does not synchronize, so a store cannot be told about
+          // it. Running the action now costs one poll which may find nothing. The entry
+          // is read from the table, so a rollback simply leaves nothing to read
           action.run();
           return;
         }

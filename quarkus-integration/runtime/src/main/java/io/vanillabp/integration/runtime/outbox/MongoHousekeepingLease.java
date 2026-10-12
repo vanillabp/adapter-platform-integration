@@ -15,24 +15,25 @@ import com.mongodb.client.model.Updates;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Which node house-keeps a MongoDB outbox store tonight, one document per store.
+ * Which node does the housekeeping of a MongoDB outbox store tonight. There is one document
+ * per store.
  * <p>
  * The relational counterpart is
- * {@link io.vanillabp.integration.adapter.migration.outbox.JdbcHousekeepingLease}, and
- * what both do is the same: a claim is taken by a write nobody else's write can match,
- * and it lasts until the window is over rather than being renewed while the work runs
- * (decision 91 in the repository's DECISIONS.md). It is written once per platform because
- * the platform-neutral core carries no MongoDB driver, the way the payload store of each
- * platform is written once per platform.
+ * {@link io.vanillabp.integration.adapter.migration.outbox.JdbcHousekeepingLease}. Both do
+ * the same. A claim is taken by a write which no write of another node can match. It lasts
+ * until the window is over. It is not renewed while the work runs (decision 91 in the
+ * repository's DECISIONS.md). It is written once per platform, because the core, which does
+ * not depend on a platform, has no MongoDB driver. The payload store is written once per
+ * platform for the same reason.
  * <p>
- * The claim is an upsert. Where the document is held by somebody else the filter matches
- * nothing and the insert runs into the document's own id, which is MongoDB saying no.
+ * The claim is an upsert. Where somebody else holds the document, the filter matches
+ * nothing. Then the insert runs into the document's own id. That is MongoDB saying no.
  */
 @Slf4j
 public class MongoHousekeepingLease {
 
   /**
-   * What MongoDB answers a write which would produce a second document of the same id.
+   * What MongoDB answers to a write which would create a second document with the same id.
    */
   private static final int DUPLICATE_KEY = 11000;
 
@@ -41,8 +42,8 @@ public class MongoHousekeepingLease {
   /**
    * Builds the claim of the stores in one MongoDB database.
    *
-   * @param collection Where the claims live - a supplier for the reason the payload
-   *          collection is one: the name is read lazily
+   * @param collection Where the claims live. It is a supplier for the same reason as the
+   *          payload collection: the name is read lazily
    */
   public MongoHousekeepingLease(
       final Supplier<MongoCollection<Document>> collection) {
@@ -84,15 +85,15 @@ public class MongoHousekeepingLease {
       return (result.getMatchedCount() > 0) || (result.getUpsertedId() != null);
     } catch (final MongoWriteException e) {
       if (e.getError().getCode() == DUPLICATE_KEY) {
-        // the document is there and held by somebody else, so the filter matched nothing
-        // and the upsert ran into the document's own id. That is MongoDB saying no
+        // The document is there and somebody else holds it. So the filter matched nothing,
+        // and the upsert ran into the document's own id. That is MongoDB saying no.
         return false;
       }
       log.debug("Could not claim the housekeeping of the outbox store '{}'", store, e);
       return false;
     } catch (final RuntimeException e) {
-      // the database could not be asked, which here means the same: this node does not
-      // house-keep tonight, and the meters show the night which was missed
+      // The database could not be asked. Here this means the same: this node does no
+      // housekeeping tonight, and the meters show the night which was missed.
       log.debug("Could not claim the housekeeping of the outbox store '{}'", store, e);
       return false;
     }
@@ -100,8 +101,8 @@ public class MongoHousekeepingLease {
   }
 
   /**
-   * Gives a claim back. A node which does not hold the store writes nothing, which is
-   * what the condition over the owner is for.
+   * Gives a claim back. A node which does not hold the store writes nothing. That is what
+   * the condition on the owner is for.
    *
    * @param store The store to release
    * @param owner The node which claimed
@@ -117,7 +118,7 @@ public class MongoHousekeepingLease {
               Filters.and(Filters.eq("_id", store), Filters.eq("leasedBy", owner)),
               Updates.combine(Updates.unset("leasedBy"), Updates.unset("leasedUntil")));
     } catch (final RuntimeException e) {
-      // the claim runs out by itself, so the next window is free either way
+      // The claim runs out by itself, so the next window is free either way.
       log.debug("Could not release the housekeeping claim of the outbox store '{}'", store, e);
     }
 

@@ -4,8 +4,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * The guiding message of a failed build, picked out of the exception chain by its first
- * words: how deeply Quarkus wraps a build failure is Quarkus' business, not the
- * assertion's.
+ * words. How deeply Quarkus wraps a build failure is Quarkus' business, not the business of
+ * the assertion.
  */
 final class GuidingMessage {
 

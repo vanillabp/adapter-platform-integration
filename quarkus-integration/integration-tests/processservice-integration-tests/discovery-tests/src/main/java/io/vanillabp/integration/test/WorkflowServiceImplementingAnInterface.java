@@ -3,7 +3,7 @@ package io.vanillabp.integration.test;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The bean of {@link WorkflowServiceInterface}: its own <code>processTask</code> carries no
+ * The bean of {@link WorkflowServiceInterface}. Its own <code>processTask</code> carries no
  * annotation, because Java does not inherit a method annotation from an interface.
  */
 @ApplicationScoped

@@ -13,16 +13,15 @@ import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An adapter which cannot ask its BPMS whether it holds a workflow answers the election
- * optimistically. That is right while it is the only BPMS configured, and a guess as soon
- * as it is not: the walk stops at the first adapter saying yes, so the guessing adapter
- * takes the operations of every adapter behind it in the list.
+ * Some adapters cannot ask their BPMS whether it holds a workflow. Such an adapter answers
+ * the election with yes. That is right while it is the only BPMS configured. As soon as it
+ * is not, it is a guess. The election stops at the first adapter which says yes. So the
+ * guessing adapter takes the operations of every adapter behind it in the list.
  * <p>
- * The boot ends there, with the message naming the adapter, the workflow module and the
- * three ways out. The application which wants that routing anyway says so, and gets the
- * WARN instead - that half is
- * {@code AcceptedGuessingAdapterStartupTest}, which needs an application of its own
- * because a Quarkus test boots exactly one.
+ * So the boot ends there. The message names the adapter, the workflow module and the three
+ * ways out. An application which wants that routing anyway says so, and gets the WARN
+ * instead. That half is {@code AcceptedGuessingAdapterStartupTest}. It needs an application
+ * of its own, because a Quarkus test boots exactly one.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class GuessingAdapterStartupTest {
@@ -52,7 +51,7 @@ public class GuessingAdapterStartupTest {
             "expected the guiding startup message but got: "
                 + failure);
         Assertions.assertTrue(failure.contains("test-module"), failure);
-        // the ways out are part of it
+        // the message contains the ways out
         Assertions.assertTrue(failure.contains("secondary storage"), failure);
         Assertions.assertTrue(
             failure.contains("vanillabp.workflow-modules.test-module.election.guessing-adapters"),

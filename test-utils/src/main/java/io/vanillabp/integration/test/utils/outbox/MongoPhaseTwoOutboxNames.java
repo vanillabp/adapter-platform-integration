@@ -6,15 +6,15 @@ import io.vanillabp.integration.test.utils.ConstantOfAnotherModule;
  * The names of the phase-two outbox on MongoDB, taken from the classes which declare
  * them.
  * <p>
- * The same idea as {@link PhaseTwoOutboxNames} and for the same reason: a test which
- * reads the outbox needs the name of a collection and the values its status field holds,
- * and writing those into the test is what this class prevents. {@link
- * ConstantOfAnotherModule} does the reading and says why it happens by reflection.
+ * The same idea as {@link PhaseTwoOutboxNames}, for the same reason. A test which reads
+ * the outbox needs the name of a collection and the values of its status field. This
+ * class keeps them out of the test. {@link ConstantOfAnotherModule} does the reading and
+ * says why it uses reflection.
  * <p>
  * The collection names come from the core, which both platforms share. The three status
- * values are declared per platform, in a class each platform brings, so they are asked of
- * whichever of the two is on the classpath. They are the same three strings either way,
- * and a reader which picked one platform would be unusable on the other.
+ * values are declared per platform, in a class each platform brings. So they are read
+ * from whichever of the two is on the classpath. They are the same three strings either
+ * way. A reader which picked one platform could not be used on the other.
  */
 final class MongoPhaseTwoOutboxNames {
 
@@ -38,8 +38,8 @@ final class MongoPhaseTwoOutboxNames {
   }
 
   /**
-   * @return The collection VanillaBP writes its entries into, as long as the application
-   *         did not configure a name of its own
+   * @return The collection VanillaBP writes its entries into when the application did
+   *         not configure a name of its own
    */
   static String outboxCollection() {
 
@@ -94,8 +94,8 @@ final class MongoPhaseTwoOutboxNames {
    *
    * @param fieldName The constant holding the value
    * @return What that constant holds
-   * @throws IllegalStateException If neither platform's class can be loaded, which means
-   *           the application under test runs no MongoDB outbox at all
+   * @throws IllegalStateException If neither platform's class can be loaded. Then the
+   *           application under test runs no MongoDB outbox at all
    */
   private static String statusOfThisPlatform(
       final String fieldName) {

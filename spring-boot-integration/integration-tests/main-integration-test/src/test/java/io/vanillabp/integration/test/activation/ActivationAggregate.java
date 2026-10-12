@@ -2,8 +2,8 @@ package io.vanillabp.integration.test.activation;
 
 /**
  * The workflow aggregate of the activation-identity test. All siblings of a
- * multi-instance call activity share it - that is what makes their correlations
- * collide - so it carries nothing which could tell them apart.
+ * multi-instance call activity share it. That is why their correlations collide. So it
+ * carries nothing which could tell them apart.
  */
 public class ActivationAggregate {
 

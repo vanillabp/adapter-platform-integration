@@ -31,27 +31,28 @@ import io.vanillabp.spi.process.ProcessService;
  * What an application pays for the upgrade from version 1, counted on the side which
  * changed.
  * <p>
- * Version 1 wrote no outbox row and kept no delivery log; neither class exists in any of
- * its artifacts, which is why the version 1 side of this comparison is read off those
- * artifacts and the version 2 side is counted here. What version 2 adds is a row in the
- * caller's transaction, a transaction of its own for the call which leaves, and a record per
- * task delivery. Those three are what this class pins down, in rows and in commits rather
- * than in milliseconds: a millisecond from a machine of today is read as a promise half a
- * year later.
+ * Version 1 wrote no outbox row and kept no delivery log. Neither class exists in any of
+ * its artifacts. So we read the version 1 side of this comparison off those artifacts, and
+ * we count the version 2 side here. Version 2 adds three things: a row in the transaction
+ * of the caller, an own transaction for the call which leaves, and a record per task
+ * delivery. This class pins down these three, in rows and in commits, not in milliseconds.
+ * Half a year later, a millisecond from a machine of today is read as a promise.
  * <p>
- * The handler does nothing, on purpose. The time an application spends in its own handler is
- * the application's, and it moved from the engine's job transaction into a transaction
- * VanillaBP opens. That belongs in the documentation as a sentence, not in here as a number.
+ * The handler does nothing, on purpose. The time an application spends in its own handler
+ * belongs to the application. That time moved from the job transaction of the engine into
+ * a transaction which VanillaBP opens. This belongs in the documentation as a sentence, not
+ * here as a number.
  * <p>
- * Commits are asserted and statements are not. A commit is a transaction an upgrader can count,
- * while the number of statements inside one is Hibernate's business and changes with it. The
- * statements measured on 2026-10-02 are written down rather than pinned: eight for a start in the
- * caller's thread, one for its dispatch, and five for a task delivery.
+ * The tests assert commits, but not statements. An upgrader can count a commit as a
+ * transaction. The number of statements inside one is up to Hibernate and changes with
+ * it. So the statements measured on 2026-10-02 are only written down here, not pinned:
+ * eight for a start in the thread of the caller, one for its dispatch, and five for a task
+ * delivery.
  * <p>
- * The widths the last test reads are the sizing answer for an upgrader. On Camunda 7 version
- * 1 progressed a workflow on the engine's job executor, three threads growing to ten with the
- * Spring Boot starter's defaults, and on Camunda 8 it sent from the thread which committed.
- * Version 2 dispatches on lanes of its own, as many as
+ * The widths the last test reads tell an upgrader how to size. On Camunda 7, version 1 moved
+ * a workflow on in the job executor of the engine: three threads, growing to ten with the
+ * defaults of the Spring Boot starter. On Camunda 8, it sent from the thread which
+ * committed. Version 2 dispatches on its own lanes, as many as
  * <code>vanillabp.outbox.dispatch-threads</code>.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -65,14 +66,14 @@ public class WhatAnUpgradeFromVersionOneCostsTest {
 
   /**
    * How long a test waits for a dispatch before it says none is coming. Nothing is measured
-   * in that time, so the budget is only ever spent by a test which fails.
+   * in that time. So only a failing test ever uses up this budget.
    */
   private static final long UNTIL_A_DISPATCH_COUNTS_AS_LOST = 30000;
 
   /**
-   * How long one held call waits for the others to arrive beside it. Generous, because a
-   * machine carrying other builds leaves this JVM without a turn for seconds at a time, and
-   * what is read afterwards is how many arrived rather than how fast.
+   * How long one held call waits for the others to arrive. It is generous. A machine which
+   * runs other builds may leave this JVM without a turn for seconds. And the test reads how
+   * many calls arrived, not how fast.
    */
   private static final long UNTIL_THE_OTHERS_COUNT_AS_ABSENT = 15000;
 
@@ -160,7 +161,7 @@ public class WhatAnUpgradeFromVersionOneCostsTest {
   }
 
   /**
-   * Starts one workflow the way an endpoint does: inside a transaction of the caller.
+   * Starts one workflow the way an endpoint does, inside a transaction of the caller.
    *
    * @param content What the aggregate carries
    * @return The attached aggregate
@@ -257,7 +258,7 @@ public class WhatAnUpgradeFromVersionOneCostsTest {
         "the delivery committed %d times, so the record did not ride the handler's transaction"
             .formatted(meter.commitsOf(deliveryThread)));
 
-    // the same delivery again is what a BPMS which never learned the result sends
+    // a BPMS which never learned the result sends the same delivery again
     deliverTheTaskOf(aggregate, "delivery-1");
 
     assertEquals(
@@ -268,7 +269,8 @@ public class WhatAnUpgradeFromVersionOneCostsTest {
   }
 
   /**
-   * One delivery of this scenario's single task, as an adapter of a remote BPMS builds it.
+   * One delivery of the single task of this scenario, as an adapter of a remote BPMS builds
+   * it.
    *
    * @param aggregate The workflow the task belongs to
    * @param deliveryId What stays the same when the BPMS repeats the delivery
@@ -318,8 +320,8 @@ public class WhatAnUpgradeFromVersionOneCostsTest {
   @DisplayName("The dispatch runs on as many threads as it is configured for, all at once")
   public void theDispatchIsAsWideAsItsLanes() throws Exception {
 
-    // the default of the property rather than a number typed here: what the documentation
-    // tells an upgrader to count into its connection pool has to be what the code does
+    // the default of the property, not a number typed here. The documentation tells an
+    // upgrader what to count into the connection pool, and that must match the code
     final var lanes = new PhaseTwoOutboxProperties().getDispatchThreads();
     assertEquals(
         4,

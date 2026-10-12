@@ -17,19 +17,19 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Publishes what VanillaBP's BPMS adapters say about their BPMS as the readiness
- * check <code>vanillabp</code>, so <code>/q/health/ready</code> shows a cluster an
+ * Publishes what VanillaBP's BPMS adapters say about their BPMS. It does so as the readiness
+ * check <code>vanillabp</code>. So <code>/q/health/ready</code> shows a cluster which an
  * application cannot reach.
  * <p>
- * Readiness rather than liveness on purpose: an unreachable BPMS means this instance
- * cannot do its work, not that the JVM is broken - restarting it changes nothing.
+ * It is a readiness check and not a liveness check on purpose. An unreachable BPMS means
+ * that this instance cannot do its work. It does not mean that the JVM is broken, so a
+ * restart changes nothing.
  * <p>
- * MicroProfile Health knows UP and DOWN and nothing in between, so the
- * {@link AdapterHealth.Status#UNKNOWN} of an adapter which is not configured yet is
- * reported as UP with its status in the data. The application booted with a guiding
- * warning on purpose, and an incomplete configuration must not read as an outage. An
- * adapter contributing nothing at all is absent from the data rather than reported as
- * healthy.
+ * MicroProfile Health knows UP and DOWN and nothing in between. So the
+ * {@link AdapterHealth.Status#UNKNOWN} of an adapter which is not configured yet is reported
+ * as UP, with its status in the data. The application started with a guiding warning on
+ * purpose. An incomplete configuration must not look like an outage. An adapter which
+ * reports nothing at all is left out of the data. It is not reported as healthy.
  * <p>
  * This class is registered as a bean ONLY if the application uses the SmallRye Health
  * extension (see {@code VanillaBpHealthBuildStepProcessor}).
@@ -39,16 +39,17 @@ import jakarta.inject.Inject;
 public class VanillaBpReadinessCheck implements HealthCheck {
 
   /**
-   * Built by the CDI container, and only in an application which brought the SmallRye Health
-   * extension - the build step named in the class comment is what registers the bean.
+   * The CDI container creates it, and only in an application which has the SmallRye Health
+   * extension. The build step named in the class comment registers the bean.
    */
   public VanillaBpReadinessCheck() {
   }
 
   /**
-   * The adapters' deployment services, one per configured adapter id. Collected the
-   * way the deployment runner collects them: element beans plus the flattened
-   * <code>List</code> beans of adapters with runtime-config multiplicity.
+   * The deployment services of the adapters, one per configured adapter id. They are
+   * collected the same way as the deployment runner collects them: element beans plus the
+   * flattened <code>List</code> beans of adapters which create one instance per configured
+   * adapter id at runtime.
    */
   @Inject
   @Any

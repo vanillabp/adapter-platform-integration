@@ -23,16 +23,16 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Store-name configuration of the JDBC default outbox: with
- * <code>vanillabp.outbox.jdbc.table</code> set, the outbox stores (and the
- * dispatcher polls) the configured table - the default table is never created.
- * Every outbox instance needs its own store, so a dedicated outbox for a high-load
- * process gets its own table this way.
+ * Configuring the store name of the JDBC default outbox. With
+ * <code>vanillabp.outbox.jdbc.table</code> set, the outbox stores into the configured
+ * table, and the dispatcher polls it. The default table is never created. Every outbox
+ * instance needs its own store. So this way a dedicated outbox for a process with high load
+ * gets its own table.
  * <p>
- * The payloads follow the outbox they belong to: nothing here names the payload table, so
- * it is the configured outbox table plus <code>_PAYLOAD</code>. Two applications keeping
- * themselves apart on one schema by the outbox name would otherwise still house-keep each
- * other's payloads.
+ * The payloads follow the outbox they belong to. Nothing here names the payload table, so
+ * its name is the configured outbox table plus <code>_PAYLOAD</code>. Otherwise two
+ * applications which keep apart on one schema by the outbox name would still clean up
+ * each other's payloads.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OutboxCustomTableTest {

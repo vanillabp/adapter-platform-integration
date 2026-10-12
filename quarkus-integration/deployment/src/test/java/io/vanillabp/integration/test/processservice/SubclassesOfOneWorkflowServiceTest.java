@@ -18,13 +18,13 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Two subclasses of one annotated base are two workflow services, which is the honest reading
- * of the annotation: each of them is a class an application can get handlers from. Where the
- * base names the BPMN process, both serve THAT process, which is the documented way of
- * splitting the handlers of one process across classes.
+ * Two subclasses of one annotated base are two workflow services. That is the honest reading
+ * of the annotation. An application can get handlers from each of them. Where the base names
+ * the BPMN process, both serve THAT process. This is the documented way to split the handlers
+ * of one process across classes.
  * <p>
- * It used to be one workflow service - the base - and an ambiguous CDI lookup, thrown at the
- * first task delivery rather than while the application was built.
+ * It used to be one workflow service, the base, and an ambiguous CDI lookup. That lookup
+ * failed at the first task delivery, and not while the application was built.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SubclassesOfOneWorkflowServiceTest {

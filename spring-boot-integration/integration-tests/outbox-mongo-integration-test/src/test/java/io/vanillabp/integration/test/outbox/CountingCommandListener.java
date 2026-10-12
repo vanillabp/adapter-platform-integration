@@ -9,11 +9,13 @@ import com.mongodb.event.CommandListener;
 import com.mongodb.event.CommandStartedEvent;
 
 /**
- * Every command the driver sends, so a test can claim that a collection was not touched.
+ * Collects every command the driver sends. So a test can claim that a collection was not
+ * touched.
  * <p>
- * The driver reports a command before it goes out, which is the number an application pays
- * for. Its own topology monitoring does not come through here - those commands travel on
- * connections of their own - so what is counted is what the application asked for.
+ * The driver reports a command before it goes out, and that is the number an application
+ * pays for. The driver's own topology monitoring does not come through here, because
+ * those commands use their own connections. So the count is what the application asked
+ * for.
  */
 public class CountingCommandListener implements CommandListener {
 
@@ -31,9 +33,9 @@ public class CountingCommandListener implements CommandListener {
   }
 
   /**
-   * The collection a command names. A command document starts with its own name mapped to
-   * the collection it is about, which is where this reads it; a command about the database
-   * rather than about a collection answers an empty name.
+   * The collection a command names. A command document starts with its own name, mapped
+   * to the collection it is about. This method reads it there. A command about the
+   * database, not about a collection, gives an empty name.
    *
    * @param event The command which started
    * @return The collection or an empty string

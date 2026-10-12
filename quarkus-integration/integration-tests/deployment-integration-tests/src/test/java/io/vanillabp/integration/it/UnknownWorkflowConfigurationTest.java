@@ -19,13 +19,13 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Guiding validation of workflow-level properties: a configured workflow
- * ID (<code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;id&gt;</code>)
- * matching no executable BPMN process of that module does NOT prevent the boot (the
- * BPMN may arrive later, e.g. during a BPMS migration) but yields a startup WARN
- * naming the property key and the known BPMN process IDs. BPMN process IDs are known
- * only after the adapters' <code>readBpmn</code>, so the check runs in the deployment
- * pipeline - identical on both platforms.
+ * Guiding validation of workflow-level properties. A configured workflow ID
+ * (<code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;id&gt;</code>) may match no
+ * executable BPMN process of that module. That does NOT prevent the boot, because the BPMN
+ * may arrive later, e.g. during a BPMS migration. Instead it gives a WARN at startup which
+ * names the property key and the known BPMN process IDs. The BPMN process IDs are known only
+ * after the adapters' <code>readBpmn</code>. So the check runs in the deployment pipeline,
+ * the same on both platforms.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class UnknownWorkflowConfigurationTest {
@@ -65,7 +65,7 @@ public class UnknownWorkflowConfigurationTest {
   @DisplayName("A configured workflow ID unknown to the BPMN resources boots with a guiding WARN")
   public void unknownConfiguredWorkflowIdBootsWithGuidingWarn() {
 
-    // the module deployed and started normally - the unknown workflow ID is a WARN only
+    // the module deployed and started normally. The unknown workflow ID is only a WARN
     final var recorded = events.getEvents();
     assertTrue(recorded.contains("adapter:demo1:deployResources:test-module"), recorded.toString());
     assertTrue(recorded.contains("adapter:demo1:startWorkflowProcessing:test-module"), recorded.toString());

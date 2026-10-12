@@ -24,24 +24,24 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 /**
  * Every key of a section of the core model is proposed and described.
  * <p>
- * The annotation processor writes what it compiles, and the sections below
- * <code>vanillabp</code> arrive as a dependency, so it sees the section and nothing inside
- * it. Whoever adds a key to one of those classes therefore has to write it into
- * <code>META-INF/additional-spring-configuration-metadata.json</code> by hand, and nothing
- * reminds them. This test is the reminder: it reads the fields of each section and looks
- * every one of them up.
+ * The annotation processor writes what it compiles. The sections below
+ * <code>vanillabp</code> arrive as a dependency. So the processor sees the section, but
+ * nothing inside it. Whoever adds a key to one of those classes has to write it into
+ * <code>META-INF/additional-spring-configuration-metadata.json</code> by hand. Nothing else
+ * reminds them. This test is the reminder. It reads the fields of each section and looks up
+ * every one of them.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class EveryKeyOfASectionIsDescribedTest {
 
   /**
-   * Where the sections of the core model live. A field of that package is a section of its
-   * own and is walked into, anything else is a key.
+   * Where the sections of the core model live. A field whose type is in that package is a
+   * section of its own, and the walk goes down into it. Anything else is a key.
    */
   private static final String SECTIONS_PACKAGE = MigrationAdapterProperties.class.getPackageName();
 
   /**
-   * Reads every section of the core model and looks each of its keys up in the metadata.
+   * Reads every section of the core model and looks up each of its keys in the metadata.
    *
    * @throws IOException If the classpath cannot be read
    */

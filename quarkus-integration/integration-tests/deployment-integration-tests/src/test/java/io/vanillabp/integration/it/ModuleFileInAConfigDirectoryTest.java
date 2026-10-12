@@ -16,10 +16,10 @@ import jakarta.inject.Inject;
 
 /**
  * A workflow module which ships its file as <i>config/test-module.yaml</i>. Spring Boot
- * reads that place and so does this extension, which is the whole point of decision 65 in
- * the repository's DECISIONS.md: the four places are styles, and VanillaBP prescribes
- * none of them. The other three are measured by
- * {@code WorkflowModuleConfigLocationsTest} of the runtime module.
+ * reads that place, and so does this extension. That is the whole point of decision 65 in
+ * the repository's DECISIONS.md: the four places are styles, and VanillaBP prescribes none
+ * of them. {@code WorkflowModuleConfigLocationsTest} of the runtime module measures the
+ * other three.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ModuleFileInAConfigDirectoryTest {

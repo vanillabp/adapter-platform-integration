@@ -14,14 +14,14 @@ import jakarta.enterprise.event.Observes;
 import jakarta.inject.Inject;
 
 /**
- * Stands in for a real VanillaBP extension (e.g. the Business Cockpit) using the
- * outbox for its own crash-safe after-commit work: it registers an operation of its
- * own in the {@link PhaseOperationRegistry} at startup and records the calls
- * dispatched to it.
+ * Stands in for a real VanillaBP extension, e.g. the Business Cockpit. Such an extension
+ * uses the outbox for its own work after the commit, so the work survives a crash. At
+ * startup this class registers an operation of its own in the
+ * {@link PhaseOperationRegistry}. It records the calls dispatched to it.
  * <p>
- * Everything an extension needs is used here: a namespaced operation name, an
- * idempotency key of its own making, arguments travelling with the call and a
- * dispatch which is NOT routed through the aggregate-to-adapter election of the
+ * It uses everything an extension needs: an operation name with a namespace, an
+ * idempotency key of its own making, and arguments which travel with the call. Its
+ * dispatch does NOT go through the election which maps an aggregate to an adapter for the
  * core operations.
  */
 @ApplicationScoped
@@ -32,9 +32,9 @@ public class SampleExtension {
   public static final String ARG_EVENT = "event";
 
   /**
-   * The operation contributed by this extension: deduplicated per workflow
-   * aggregate AND event, so the same event is published at most once while
-   * different events of the same workflow are all published.
+   * The operation which this extension contributes. It is deduplicated per workflow
+   * aggregate AND event. So the same event is published at most once, but different events
+   * of the same workflow are all published.
    */
   public static final PhaseOperation OPERATION = PhaseOperation
       .extensionOperation(OPERATION_NAME)
@@ -56,22 +56,22 @@ public class SampleExtension {
 
   private volatile int failNextDispatches;
   /**
-   * Counts down when a held dispatch entered the handler, so a test knows the entry is
-   * claimed.
+   * Counts down when a held dispatch entered the handler. So a test knows that the entry
+   * is claimed.
    */
   private volatile java.util.concurrent.CountDownLatch dispatchEntered;
 
   /**
-   * What a held dispatch waits for. A test which plans against an entry a dispatch has
-   * ALREADY taken needs that dispatch to stand still while it plans, and there is no
-   * other way to be sure the claim happened.
+   * What a held dispatch waits for. A test may plan against an entry which a dispatch has
+   * ALREADY taken. That dispatch has to stand still while the test plans. There is no other
+   * way to be sure that the claim happened.
    */
   private volatile java.util.concurrent.CountDownLatch releaseDispatch;
 
   /**
    * Whether a dispatch is still to be held. Only the FIRST dispatch after
-   * {@link #holdNextDispatch()} waits, and this is what takes the hold away from the
-   * ones which follow.
+   * {@link #holdNextDispatch()} waits. This flag takes the hold away from the ones which
+   * follow.
    */
   private final java.util.concurrent.atomic.AtomicBoolean holdArmed = new java.util.concurrent.atomic.AtomicBoolean();
 
@@ -95,8 +95,8 @@ public class SampleExtension {
   }
 
   /**
-   * Builds a call of this extension's operation - what the extension would
-   * schedule inside the business transaction.
+   * Builds a call of this extension's operation. The extension would schedule it inside
+   * the business transaction.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -115,8 +115,8 @@ public class SampleExtension {
   }
 
   /**
-   * Builds a call of this extension's operation which carries the state the extension
-   * saw when it planned the call - what a sync to the Business Cockpit passes.
+   * Builds a call of this extension's operation which carries the state the extension saw
+   * when it planned the call. A sync to the Business Cockpit passes such a state.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID
@@ -156,8 +156,8 @@ public class SampleExtension {
 
   /**
    * Makes the next dispatch stop inside the handler until
-   * {@link #releaseHeldDispatch()} lets it go. The entry is claimed by then, which is
-   * the state a test about a claimed entry needs.
+   * {@link #releaseHeldDispatch()} lets it go. By then the entry is claimed, and a test
+   * about a claimed entry needs exactly that state.
    */
   public void holdNextDispatch() {
 
@@ -223,9 +223,9 @@ public class SampleExtension {
   /**
    * Waits until the given number of calls was dispatched.
    * <p>
-   * The handler runs inside the dispatch, so on return the entry of the last call may
-   * still be waiting to be marked DONE and its key still deduplicates. A test which
-   * schedules that key again has to wait for the ENTRY, in the store.
+   * The handler runs inside the dispatch. So on return the entry of the last call may still
+   * wait to be marked DONE, and its key still deduplicates. A test which schedules that key
+   * again has to wait for the ENTRY, in the store.
    *
    * @param count The number of calls awaited
    * @param timeoutMillis The maximum time to wait

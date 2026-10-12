@@ -14,12 +14,12 @@ import io.vanillabp.integration.test.samples.twoaggregates.TwoAggregates;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * One class starts a BPMN process, a class of another workflow aggregate calls it. The build ends,
- * naming both classes, both aggregates and the way each declares the process. The class which
- * starts the process is added first, {@link AProcessOfTwoAggregatesCalledAndStartedTest} adds
- * the other one first.
+ * One class starts a BPMN process, and a class of another workflow aggregate calls it. The build
+ * ends. It names both classes, both aggregates and how each of them declares the process. Here
+ * the class which starts the process is added first.
+ * {@link AProcessOfTwoAggregatesCalledAndStartedTest} adds the other one first.
  * <p>
- * The text is the one Spring Boot says while it starts, see {@link TwoAggregates}.
+ * The text is the same which Spring Boot reports while it starts, see {@link TwoAggregates}.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AProcessOfTwoAggregatesStartedAndCalledTest {

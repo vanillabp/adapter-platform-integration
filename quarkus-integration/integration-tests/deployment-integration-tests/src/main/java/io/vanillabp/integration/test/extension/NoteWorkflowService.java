@@ -19,8 +19,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 public class NoteWorkflowService {
 
   /**
-   * Matched by the element the annotation names, and taking every kind of parameter the
-   * contract allows.
+   * Matched by the element which the annotation names. It takes every kind of parameter
+   * which the contract allows.
    *
    * @param aggregate The workflow aggregate VanillaBP loaded
    * @param prefilled The note this extension prefilled
@@ -43,9 +43,9 @@ public class NoteWorkflowService {
   }
 
   /**
-   * One of two methods for the same user task, this one naming its BPMN element id. Which
-   * of the two runs is decided by the order the extension offers its keys in, and the
-   * element id is the one VanillaBP asks for first.
+   * One of two methods for the same user task. This one names its BPMN element id. The
+   * order in which the extension offers its keys decides which of the two runs. VanillaBP
+   * asks for the element id first.
    *
    * @param prefilled The note this extension prefilled
    * @return The note the extension publishes
@@ -60,9 +60,9 @@ public class NoteWorkflowService {
   }
 
   /**
-   * The other one, naming the task definition of the same user task. It reads a process
-   * variable the method naming the element id does not, so the extension can tell which of
-   * the two its keys reach.
+   * The other one, which names the task definition of the same user task. It reads a
+   * process variable which the method with the element id does not read. So the extension
+   * can tell which of the two its keys reach.
    *
    * @param prefilled The note this extension prefilled
    * @param reviewer A process variable only this method reads
@@ -79,10 +79,10 @@ public class NoteWorkflowService {
   }
 
   /**
-   * One of two methods for one element, this one for the first version of the model. A
-   * version an extension reports picks the method the way it picks a
-   * <code>&#64;WorkflowTask</code> method, so two generations of a model stand next to
-   * each other here as well.
+   * One of two methods for one element. This one is for the first version of the model.
+   * The version an extension reports picks the method the same way as it picks a
+   * <code>&#64;WorkflowTask</code> method. So two generations of a model stand next to each
+   * other here as well.
    *
    * @param prefilled The note this extension prefilled
    * @param input A process variable the first generation of the model provides
@@ -116,7 +116,7 @@ public class NoteWorkflowService {
   }
 
   /**
-   * Matched by its own name, which is the convention VanillaBP's own annotations follow.
+   * Matched by its own name. VanillaBP's own annotations follow the same convention.
    *
    * @param prefilled The note this extension prefilled
    * @return The note the extension publishes

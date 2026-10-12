@@ -22,10 +22,10 @@ import io.vanillabp.integration.test.utils.springboot.SpringBootTestApplication;
 import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
- * An extension whose contract asks for a method for the deployed version reports the elements
- * of the model in its <code>wireBpmn</code>, and the start ends where an element has methods but
- * none for the version the BPMS gave the model. The same check the
- * <code>&#64;WorkflowTask</code> methods go through, run by Spring Boot.
+ * An extension whose contract asks for a method for the deployed version reports the
+ * elements of the model in its <code>wireBpmn</code>. The start ends if an element has
+ * methods, but none for the version the BPMS gave the model. It is the same check as for
+ * the <code>&#64;WorkflowTask</code> methods, run by Spring Boot.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ExtensionElementsOfTheDeployedVersionTest {

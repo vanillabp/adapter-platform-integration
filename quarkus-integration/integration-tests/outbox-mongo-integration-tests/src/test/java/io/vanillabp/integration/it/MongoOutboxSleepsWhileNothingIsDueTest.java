@@ -25,12 +25,12 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * What a quiet application costs on the MongoDB store of Quarkus, counted in commands rather
- * than measured in seconds. A poll was a claim attempt plus a retention delete whether or not
- * anything was waiting, and an application sitting in a timer paid for them every ten
- * seconds.
+ * What a quiet application costs on the MongoDB store of Quarkus, counted in commands and
+ * not measured in seconds. A poll used to be a claim attempt plus a retention delete,
+ * whether or not anything was waiting. An application which waited in a timer paid for them
+ * every ten seconds.
  * <p>
- * The cap is an hour here, so a command against the outbox collection while nothing is due
+ * The cap is an hour here. So a command against the outbox collection while nothing is due
  * would have to come from a poller which ignored what its store told it.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -39,9 +39,9 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
   private static final String DATABASE = "outbox-sleeping-it";
 
   /**
-   * The collection the application writes its outbox into. The command listener counts
-   * what was sent to a collection BY NAME, so this test needs the name as well as the
-   * reader, and it asks the reader for it.
+   * The collection which the application writes its outbox into. The command listener
+   * counts what was sent to a collection BY NAME. So this test needs the name as well as the
+   * reader, and it asks the reader for the name.
    */
   private static final String OUTBOX_COLLECTION = MongoPhaseTwoOutboxReader.defaultOutboxCollectionName();
 
@@ -71,8 +71,8 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
   MongoClient mongoClient;
 
   /**
-   * The outbox of the application, asked through the reader so that no field is named
-   * here.
+   * The outbox of the application. It is asked through the reader, so this test names no
+   * field.
    */
   private MongoPhaseTwoOutboxReader outbox() {
 
@@ -81,21 +81,20 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
   }
 
   /**
-   * How long the store is watched after it went quiet. Three seconds, which is long enough
-   * for a poller sleeping on a rhythm of its own to come back at least once: the shortest
-   * rhythm anything here has is the half second of
-   * <code>vanillabp.outbox.attempt-frequency</code>.
+   * How long the store is watched after it went quiet. Three seconds is long enough for a
+   * poller which sleeps on a rhythm of its own to come back at least once. The shortest
+   * rhythm here is the half second of <code>vanillabp.outbox.attempt-frequency</code>.
    * <p>
-   * The number is not a budget anybody has to be faster than: what is asserted afterwards
-   * is that nothing was asked at all, and a machine which leaves this JVM without a turn
-   * only makes the silence longer.
+   * The number is not a budget which anybody has to beat. Afterwards the test asserts that
+   * nothing was asked at all. A machine which gives this JVM no turn for a while only makes
+   * the silence longer.
    */
   private static final long SILENCE_MEASURED_OVER_MS = 3000;
 
   /**
-   * How long the collection has to stay untouched before the dispatch counts as over.
-   * Below {@link #SILENCE_MEASURED_OVER_MS}, so a poller asking on a rhythm shorter than
-   * that is caught by the wait rather than passing through it.
+   * How long the collection has to stay untouched before the dispatch counts as over. It
+   * is below {@link #SILENCE_MEASURED_OVER_MS}. So the wait catches a poller which asks on a
+   * shorter rhythm, and the poller does not slip through it.
    */
   private static final long QUIET_FOR_MS = 500;
 
@@ -113,16 +112,15 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
    * Waits until the dispatch which emptied the store has stopped talking to the
    * collection.
    * <p>
-   * Nothing left OPEN is not the end of that dispatch. The poll which marked the entry
-   * looks for the next due one, deletes what the retention lets go and reads when to
-   * wake up again, and those commands arrive AFTER the wait above has returned.
-   * Forgetting what was sent in between is what turned this test red once in a while on
-   * a run where nothing was wrong.
+   * When nothing is left OPEN, that dispatch is not yet over. The poll which marked the
+   * entry looks for the next due one, deletes what the retention lets go, and reads when to
+   * wake up again. Those commands arrive AFTER the wait above has returned. Forgetting what
+   * was sent in between turned this test red now and then, on runs where nothing was wrong.
    * <p>
-   * The wait reads the commands the listener collected and asks the collection nothing
-   * itself, because a question of its own would be the traffic it is waiting out. A
-   * store which never goes quiet is the very thing this test is about, so the deadline
-   * says that instead of timing out without a word.
+   * The wait reads the commands which the listener collected. It asks the collection
+   * nothing itself, because its own question would be the traffic it waits out. This test
+   * is about a store which never goes quiet. So the deadline says that, and does not just
+   * time out without a word.
    */
   private void awaitTheDispatchWentQuiet() throws Exception {
 
@@ -147,11 +145,11 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
   @DisplayName("The questions the poller asks are answered from an index")
   public void theQuestionsOfThePollerAreIndexed() {
 
-    // without these each question reads the whole collection, and that cost grows with everything
-    // the collection ever held while the wake-ups stay as rare.
-    // The field names stand here rather than coming from the reader, because they are what
-    // this test is about: an index is a promise about a field, and a field renamed without
-    // its index makes this assertion fail, which is the whole point of it
+    // without these, each question reads the whole collection. That cost grows with
+    // everything the collection ever held, while the wake-ups stay as rare.
+    // The field names stand here and do not come from the reader, because this test is
+    // about them. An index is a promise about a field. A field renamed without its index
+    // makes this assertion fail, and that is the whole point of it
     final var keys = outbox().indexKeys();
 
     assertTrue(
@@ -182,7 +180,7 @@ public class MongoOutboxSleepsWhileNothingIsDueTest {
     workflowService.startWorkflow("quiet-store");
     userTransaction.commit();
     awaitNothingLeftUndone();
-    // the silence below says nothing unless this listener can see traffic at all
+    // the silence below means nothing unless this listener can see traffic at all
     assertFalse(
         CountingCommandListener.commandsOn(OUTBOX_COLLECTION).isEmpty(),
         "dispatching an entry has to show up here, or this test measures its own instrument");

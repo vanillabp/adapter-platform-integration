@@ -16,26 +16,25 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.enterprise.inject.Produces;
 
 /**
- * Provides the double's {@link DummyProcessService} instances - the
- * reference implementation of the per-adapter-id bean convention every VanillaBP
- * adapter follows on Quarkus: a CDI producer cannot yield N element beans for N
- * runtime-configured adapter ids, so the adapter produces ONE bean of type
- * <code>List&lt;MigratableProcessService&gt;</code> with one instance PER configured
- * adapter id of its type (multiple ids of one BPMS type = the migration scenario);
- * the platform's collection point flattens List beans alongside element beans. The
- * adapter id is a CONSTRUCTOR parameter of each instance.
+ * Provides the double's {@link DummyProcessService} instances. It is the reference for
+ * the bean rule every VanillaBP adapter follows on Quarkus, one instance per adapter id.
+ * A CDI producer cannot create N element beans for N adapter ids configured at runtime.
+ * So the adapter produces ONE bean of type <code>List&lt;MigratableProcessService&gt;</code>,
+ * with one instance PER configured adapter id of its type. Several ids of one BPMS type
+ * are the migration scenario. The platform's collection point flattens List beans next
+ * to element beans. The adapter id is a CONSTRUCTOR parameter of each instance.
  * <p>
- * The adapter-id set ALWAYS comes from the platform's core properties
- * ({@code adapterIdsOfType()}, which is where the whole rule lives - filtering
- * {@code adapterTypes()} would lose the ids an application names in
- * <code>prioritized-adapters</code> without a section, and the id an application
- * configuring nothing gets from the classpath). Adapter-owned overlay maps of the
- * <code>vanillabp.*</code> tree are per-known-id lookups only and must never be
- * iterated to discover ids.
+ * The set of adapter ids ALWAYS comes from the platform's core properties, from
+ * {@code adapterIdsOfType()}. The whole rule lives there. Filtering {@code adapterTypes()}
+ * would lose two kinds of ids: those an application names in
+ * <code>prioritized-adapters</code> without a section, and the id which an application
+ * without configuration gets from the classpath. Overlay maps which an adapter owns in
+ * the <code>vanillabp.*</code> tree are only looked up by ids already known. Never
+ * iterate them to find ids.
  * <p>
- * Optional {@link DummyPhaseTwoListener} beans are notified on phase two, and the
- * properties of {@link DummyAdapter} switch on the two behaviours a real BPMS has and
- * a logging double otherwise would not.
+ * Optional {@link DummyPhaseTwoListener} beans are notified in phase two. The
+ * properties of {@link DummyAdapter} switch on two behaviours which a real BPMS has and
+ * a logging double would not.
  */
 @ApplicationScoped
 public class DummyProcessServiceProducer {
@@ -57,7 +56,7 @@ public class DummyProcessServiceProducer {
 
   /**
    * CDI builds this producer once per application. A test never creates it and never
-   * calls the method below: it asks the container for the process services, or lets the
+   * calls the method below. It asks the container for the process services, or lets the
    * core's election do it.
    */
   public DummyProcessServiceProducer() {
@@ -66,7 +65,7 @@ public class DummyProcessServiceProducer {
   /**
    * Builds one {@link DummyProcessService} per configured adapter id of the dummy type,
    * as the one List bean described above. The two switches are read from the
-   * configuration here, so every instance of one boot behaves the same way.
+   * configuration here. So every instance of one application start behaves the same way.
    *
    * @param properties The platform's core properties, the only place the adapter ids
    *          come from

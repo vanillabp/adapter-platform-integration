@@ -37,17 +37,17 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * A BPMN file carries two executable processes - which is what a modeller produces by
- * drawing a called process next to the calling one, and what a migration leaves behind
- * when a process moves out of an application while its model stays in the file. The file
- * travels to the BPMS as a whole, so both processes are deployed.
+ * A BPMN file holds two executable processes. A modeller gets that by drawing a called
+ * process next to the calling one. A migration leaves it behind when a process moves out of
+ * an application but its model stays in the file. The file goes to the BPMS as a whole, so
+ * both processes are deployed.
  * <p>
- * The boot cannot tell a forgotten workflow service from a process somebody else serves, so
- * the application says which one it is. Without a word the boot ends, naming both ways out.
- * With <code>implemented-externally=true</code> at the process the boot goes on and says
- * nothing about it. What did not change is the case which is a defect either way: a process a
- * workflow service DOES claim and whose task has no method still ends the boot, and so does a
- * method matching no task of any process of the module.
+ * The boot cannot tell a forgotten workflow service from a process which somebody else
+ * serves. So the application has to say which one it is. If it says nothing, the boot ends
+ * and the message names both ways out. With <code>implemented-externally=true</code> at the
+ * process, the boot goes on and says nothing about it. Two cases are a defect either way, and
+ * they still end the boot: a process which a workflow service DOES claim and whose task has
+ * no method, and a method which matches no task of any process of the module.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class UnclaimedBpmnProcessTest {
@@ -55,8 +55,8 @@ public class UnclaimedBpmnProcessTest {
   private static final String MODULE = "test-module";
 
   /**
-   * The process of the file this application serves. Its neighbour <code>Called</code>
-   * is served by nobody.
+   * The process of the file which this application serves. Nobody serves its neighbour
+   * <code>Called</code>.
    */
   @Service
   @WorkflowService(
@@ -75,9 +75,9 @@ public class UnclaimedBpmnProcessTest {
   }
 
   /**
-   * Serves <code>Calling</code> and declares a second method for a task nobody
-   * modelled - the reverse direction of the validation, which the unclaimed process next
-   * to it must not make quieter.
+   * Serves <code>Calling</code> and declares a second method for a task which nobody
+   * modelled. That is the other direction of the validation. The unclaimed process next to
+   * it must not make this check any quieter.
    */
   @Service
   @WorkflowService(
@@ -112,8 +112,8 @@ public class UnclaimedBpmnProcessTest {
 
   /**
    * What the file really holds: the two executable processes and their tasks. Only
-   * <code>Calling</code> is claimed, and the task of <code>Called</code> is a service
-   * task - the non-optional kind, which is what used to end the boot.
+   * <code>Calling</code> is claimed. The task of <code>Called</code> is a service task.
+   * That kind is not optional, and it used to end the boot.
    */
   @Configuration
   static class TwoProcessesConfiguration {
@@ -154,8 +154,8 @@ public class UnclaimedBpmnProcessTest {
     }
 
     /**
-     * Saved and read back, so the task of the claimed process can be invoked - the
-     * proof that the process next to the unclaimed one is wired as before.
+     * Saves and reads back the aggregate, so the task of the claimed process can be
+     * invoked. That proves the process next to the unclaimed one is wired as before.
      */
     @Bean
     AggregatePersistenceAware<CallingAggregate> callingAggregatePersistence() {
@@ -198,8 +198,8 @@ public class UnclaimedBpmnProcessTest {
   }
 
   /**
-   * The same file, but the CLAIMED process has a task no method serves - the defect
-   * which still ends the boot.
+   * The same file, but the CLAIMED process has a task which no method serves. That defect
+   * still ends the boot.
    */
   @Configuration
   static class ClaimedProcessMissingAHandlerConfiguration {
@@ -343,7 +343,7 @@ public class UnclaimedBpmnProcessTest {
 
     TwoProcessesConfiguration.AGGREGATES.clear();
 
-    // what the other tests of this class already wrote: all of them boot the same
+    // what the other tests of this class already wrote. All of them boot the same
     // module, so only the output of THIS boot answers the question
     final var writtenBeforeThisBoot = output.getAll().length();
 
@@ -435,8 +435,8 @@ public class UnclaimedBpmnProcessTest {
   }
 
   /**
-   * The guiding message of a failing boot arrives wrapped: Spring runs the deployment
-   * while it refreshes the context.
+   * The guiding message of a failing boot arrives wrapped, because Spring runs the
+   * deployment while it refreshes the context.
    */
   private String rootMessageOf(
       final Throwable failure) {

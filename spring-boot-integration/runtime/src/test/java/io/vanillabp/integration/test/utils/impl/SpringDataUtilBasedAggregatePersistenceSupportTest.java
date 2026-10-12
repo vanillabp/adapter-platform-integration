@@ -87,10 +87,10 @@ public class SpringDataUtilBasedAggregatePersistenceSupportTest {
   }
 
   /**
-   * The ID type is where the core asks while the application starts, so it is
-   * where a missing repository has to speak up. It used to answer <code>null</code>, which
-   * is the contract's "a custom layer owns the serialized form" - the application then
-   * booted and failed at the first task delivery.
+   * The core asks for the ID type while the application starts. So a missing repository has
+   * to speak up there. It used to answer <code>null</code>. In the contract, that means "a
+   * custom layer owns the serialized form". So the application booted and then failed at the
+   * first task delivery.
    */
   @Test
   @DisplayName("An aggregate without a repository is reported, naming the aggregate, its module and the ways out")
@@ -123,9 +123,10 @@ public class SpringDataUtilBasedAggregatePersistenceSupportTest {
   }
 
   /**
-   * The other half of the same narrowing: a repository which cannot say what the ID type
-   * is keeps answering <code>null</code>. That is a contract answer, not a defect - a
-   * custom {@link SpringDataUtil} implementation owning the serialized form is the case.
+   * The other half of the same change. Where a repository exists but nobody can say what the
+   * ID type is, the answer stays <code>null</code>. That is an answer of the contract, not a
+   * defect. It is the case of a custom {@link SpringDataUtil} implementation which owns the
+   * serialized form.
    */
   @Test
   @DisplayName("An undeterminable ID type stays the contract's null")

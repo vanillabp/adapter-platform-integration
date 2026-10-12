@@ -15,20 +15,20 @@ import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.spi.TaskDeliveryLogAware;
 
 /**
- * Spring Boot implementation of the core's {@link TaskDeliveryLogResolver}: resolves the
- * {@link TaskDeliveryLog} used for a workflow aggregate so delivery records always ride
- * the aggregate's own transaction (also in mixed-persistence applications). Resolution
- * order - the same as {@link SpringPhaseTwoOutboxResolver} applies to outbox entries:
+ * Spring Boot implementation of the core's {@link TaskDeliveryLogResolver}. It finds the
+ * {@link TaskDeliveryLog} for a workflow aggregate. So delivery records always ride the
+ * aggregate's own transaction, also in applications with mixed persistence. The order is
+ * the same one {@link SpringPhaseTwoOutboxResolver} uses for outbox entries:
  * <ol>
- * <li>the most specific {@link TaskDeliveryLogAware} bean covering the aggregate
+ * <li>the most specific {@link TaskDeliveryLogAware} bean which covers the aggregate
  * class,</li>
- * <li>the single {@link TaskDeliveryLog} bean if exactly one exists - unless it is a
- * platform default NOT matching the aggregate's detectable persistence technology (that
- * mismatch would break the atomicity of record and aggregate change and fails with a
- * guiding message instead),</li>
- * <li>with several log beans: the platform-default bean matching the persistence
- * technology managing the aggregate (JPA-managed → the JDBC default, Mongo-managed → the
- * MongoDB default).</li>
+ * <li>the single {@link TaskDeliveryLog} bean if exactly one exists. The exception is a
+ * platform default which does NOT match the persistence technology detected for the
+ * aggregate. That mismatch would break the atomicity of record and aggregate change, so
+ * it fails with a guiding message instead,</li>
+ * <li>with several log beans: the platform-default bean which matches the persistence
+ * technology of the aggregate (managed by JPA → the JDBC default, managed by MongoDB →
+ * the MongoDB default).</li>
  * </ol>
  * <p>
  * The outbox resolver next to this one walks the same three steps. The two stay apart on
@@ -45,7 +45,7 @@ public class SpringTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
 
   /**
    * Built once per application by the autoconfiguration. The log beans are looked up on
-   * every question rather than kept here, so a store which is created late is found too.
+   * every question and not kept here. So a store which is created late is found too.
    *
    * @param applicationContext The context the delivery-log beans and the aggregate's
    *     repository are looked up in
@@ -85,9 +85,9 @@ public class SpringTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
 
     final var technology = persistenceTechnology.of(workflowAggregateClass);
 
-    // 2. exactly one log bean: use it - unless it is a platform default clearly not
-    // matching the aggregate's persistence (a record which does not commit with the
-    // aggregate is worse than no deduplication, so this fails guiding)
+    // 2. exactly one log bean: use it, unless it is a platform default which clearly does
+    // not match the aggregate's persistence. A record which does not commit with the
+    // aggregate is worse than no deduplication, so this fails with a guiding message
     if (logs.size() == 1) {
       final var entry = logs
           .entrySet()
@@ -106,8 +106,8 @@ public class SpringTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
       return entry.getValue();
     }
 
-    // 3. several log beans: attribute by the persistence technology managing the
-    // aggregate - to THE platform-default bean of that technology
+    // 3. several log beans: choose by the persistence technology of the aggregate, and
+    // take THE platform-default bean of that technology
     final var defaultBeanName = switch (technology) {
       case JPA -> JdbcTaskDeliveryLogAutoConfiguration.DEFAULT_DELIVERY_LOG_BEAN_NAME;
       case MONGO -> MongoTaskDeliveryLogAutoConfiguration.DEFAULT_DELIVERY_LOG_BEAN_NAME;
@@ -122,10 +122,10 @@ public class SpringTaskDeliveryLogResolver implements TaskDeliveryLogResolver {
   }
 
   /**
-   * Unwraps a proxied store: an application may put <code>&#64;Transactional</code> on
-   * its own {@link TaskDeliveryLog}, and the proxy Spring creates for it overrides every
-   * method of the target - the SPI's default doing nothing included. Reflecting on the
-   * proxy would therefore report a release which does not exist.
+   * Unwraps a proxied store. An application may put <code>&#64;Transactional</code> on its
+   * own {@link TaskDeliveryLog}. The proxy Spring creates for it overrides every method of
+   * the target, including the SPI's default which does nothing. So reflection on the proxy
+   * would report a release which does not exist.
    */
   @Override
   public Class<?> storeClassOf(

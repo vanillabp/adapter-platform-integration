@@ -15,9 +15,9 @@ import io.vanillabp.integration.test.TestApplication;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The one order inside a workflow module which had to survive moving
- * its files below the application - <i>test-module-testprofile.yaml</i> beats
- * <i>test-module.yaml</i>, and both still lose against the application.
+ * The one order inside a workflow module which had to survive when its files moved below
+ * the application. <i>test-module-testprofile.yaml</i> beats <i>test-module.yaml</i>, and
+ * both still lose against the application.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SpringBootTest(classes = {

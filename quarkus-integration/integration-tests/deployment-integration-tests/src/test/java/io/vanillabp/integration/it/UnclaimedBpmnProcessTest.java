@@ -26,15 +26,15 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * A BPMN file carries two executable processes - which is what a modeller produces by
- * drawing a called process next to the calling one, and what a migration leaves behind
- * when a process moves out of an application while its model stays in the file. The file
- * travels to the BPMS as a whole, so both processes are deployed.
+ * A BPMN file carries two executable processes. A modeller produces this by drawing a
+ * called process next to the calling one. A migration leaves it behind when a process moves
+ * out of an application but its model stays in the file. The file travels to the BPMS as a
+ * whole, so both processes are deployed.
  * <p>
- * The application says with <code>implemented-externally=true</code> that something else
+ * With <code>implemented-externally=true</code>, the application says that something else
  * serves the second process. Then the application starts and says nothing about that
- * process, and the process next to it is wired as before, which its task running through the
- * core proves. Without the line the start ends, see
+ * process. The process next to it is wired as before, and its task, which runs through the
+ * core, proves that. Without the line the start ends, see
  * {@link UnclaimedBpmnProcessEndsTheBootTest}.
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -92,8 +92,8 @@ public class UnclaimedBpmnProcessTest {
   @DisplayName("The application boots, and the claimed process of the same file works")
   public void theClaimedProcessOfTheSameFileWorks() {
 
-    // the silence about the marked process is asserted on the boot's log records; here the
-    // process the application does serve has to behave as it did before
+    // the silence about the marked process is asserted on the boot's log records. Here the
+    // process which the application does serve has to behave as it did before
     persistence.seed("4711");
     final var outcome = dummyAdapter()
         .invokeTask("test-module", "Calling", new TaskInvocationContext() {

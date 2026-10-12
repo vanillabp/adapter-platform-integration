@@ -48,14 +48,15 @@ import jakarta.inject.Singleton;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * VanillaBP extension build step processor, responsible for building {@link ProcessService} beans.
+ * Build step processor of the VanillaBP extension. It builds the {@link ProcessService}
+ * beans.
  * <p>
- * One bean per workflow aggregate is written as bytecode while the application is built,
- * which is where Quarkus fixes its set of beans: an application injecting
- * <code>ProcessService&lt;TheAggregate&gt;</code> finds a bean only where the build wrote
- * one. The same moment decides which persistence that bean uses and which classes a native
- * image keeps for reflection. Both are read off the Jandex index, and neither question can
- * be asked again once the application is packaged.
+ * One bean for each workflow aggregate is written as bytecode while the application is
+ * built. That is when Quarkus fixes its set of beans. An application which injects
+ * <code>ProcessService&lt;TheAggregate&gt;</code> only finds a bean where the build wrote
+ * one. At the same time it is decided which persistence that bean uses, and which classes a
+ * native image keeps for reflection. Both are read from the Jandex index. Once the
+ * application is packaged, neither question can be asked again.
  */
 @Slf4j
 public class ProcessServiceBuildStepProcessor {
@@ -63,10 +64,10 @@ public class ProcessServiceBuildStepProcessor {
   /**
    * The name of the {@link WorkflowService} attribute naming the workflow aggregate class.
    * <p>
-   * The attributes are read off the Jandex index by name, so renaming one in the SPI would
-   * not reach the compiler here - the steps below would simply find nothing. That is what
-   * {@code WorkflowServiceAnnotationTest} guards: it asks the annotation for a member of
-   * this name.
+   * The attributes are read from the Jandex index by name. So if one is renamed in the SPI,
+   * the compiler does not notice it here. The steps below would simply find nothing.
+   * {@code WorkflowServiceAnnotationTest} guards against this. It asks the annotation for a
+   * member of this name.
    */
   public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_AGGREGATECLASS = "workflowAggregateClass";
 
@@ -77,8 +78,8 @@ public class ProcessServiceBuildStepProcessor {
   public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS_BPMNPROCESSID = "bpmnProcessId";
 
   /**
-   * The attribute holding the further BPMN processes one class serves, each of them a
-   * <code>&#64;BpmnProcess</code> of its own.
+   * The attribute holding the further BPMN processes which one class serves. Each of them is
+   * a <code>&#64;BpmnProcess</code> of its own.
    */
   public static final String ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_SECONDARYBPMNPROCESSES = "secondaryBpmnProcesses";
 
@@ -90,10 +91,10 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * Beans implementing {@link AggregatePersistenceAware} are not necessarily injected by
-   * application code but looked up dynamically at runtime (see
-   * {@link ProcessServiceBaseCdiBean}). This build step prevents ArC from removing them
-   * as unused beans.
+   * Application code does not always inject beans which implement
+   * {@link AggregatePersistenceAware}. They are looked up at runtime (see
+   * {@link ProcessServiceBaseCdiBean}). This build step stops ArC from removing them as
+   * unused beans.
    *
    * @return The unremovable-bean build item covering all {@link AggregatePersistenceAware} beans
    */
@@ -105,8 +106,8 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * Build step for build {@link ProcessService} beans for all services
-   * annotated by {@link WorkflowService} at class level.
+   * Builds the {@link ProcessService} beans for all services annotated with
+   * {@link WorkflowService} at class level.
    *
    * @param applicationArchivesBuildItem Information about All archives (JARs and directories) of the project
    * @param combinedIndex The index of the application and of all indexed dependencies, used to
@@ -138,11 +139,9 @@ public class ProcessServiceBuildStepProcessor {
       final BuildProducer<VanillaBpWorkflowAggregatesBuildItem> workflowAggregatesProducer) {
 
     final var aggregatePersistenceAwares = applicationArchivesBuildItem
-        // search all archives of the project
         .getAllArchives()
         .stream()
         .flatMap(archive -> archive
-            // collect each archive's known implementations
             .getIndex()
             .getAllKnownImplementations(AggregatePersistenceAware.class)
             .stream()
@@ -159,7 +158,6 @@ public class ProcessServiceBuildStepProcessor {
     // why getAllArchives is used: it lists the root archive first and the remaining
     // archives in the order Quarkus resolved them.
     final var workflowServiceAnnotations = applicationArchivesBuildItem
-        // search all archives of the project
         .getAllArchives()
         .stream()
         .flatMap(archive -> archive
@@ -168,21 +166,21 @@ public class ProcessServiceBuildStepProcessor {
             .stream())
         .toList();
 
-    // an annotated type which is no class serves nothing, and this is where that is
-    // still visible: what Jandex reports here is the type the annotation SITS on, and
-    // the build ends before the ensure-is-bean item below turns the defect into a
-    // question about CDI beans
+    // an annotated type which is no class serves nothing. This is the place where that is
+    // still visible: Jandex reports the type the annotation SITS on. The build ends here,
+    // before the ensure-is-bean item below turns the defect into a question about CDI
+    // beans
     refuseAnnotationsNotOnAClass(combinedIndex.getIndex(), workflowServiceAnnotations);
 
-    // an annotated class is a DECLARATION, and @Inherited says that every subclass of it
-    // is a workflow service of its own. Jandex reports the declaration sites, so the
-    // classes which will serve the processes are resolved here, while the index can still
-    // be asked who extends whom
+    // an annotated class is a DECLARATION. @Inherited says that every subclass of it is a
+    // workflow service of its own. Jandex reports where the declarations are. So the
+    // classes which will serve the processes are found here, while the index can still be
+    // asked who extends whom
     final var workflowServices = workflowServiceClassesOf(combinedIndex.getIndex(), workflowServiceAnnotations);
 
     // a BPMN process belongs to exactly one workflow aggregate per workflow module, see
-    // decision 125 in the repository's DECISIONS.md. Said here, while building, with the same
-    // text Spring Boot uses while it starts
+    // decision 125 in the repository's DECISIONS.md. This is checked here, while building,
+    // with the same text which Spring Boot uses while it starts
     AProcessBelongsToOneAggregate.refuseProcessesOfSeveralAggregates(workflowServices
         .stream()
         .flatMap(service -> {
@@ -224,8 +222,8 @@ public class ProcessServiceBuildStepProcessor {
             workflowAggregateType,
             services) -> {
 
-          // record every class of this aggregate under all its declared BPMN
-          // process IDs and make sure each class is a CDI bean at runtime
+          // record every class of this aggregate under all BPMN process IDs it declares,
+          // and make sure that each class is a CDI bean at runtime
           final var workflowTaskRegistrations = new LinkedList<String>();
           for (final var service : services) {
             final var servingClass = service.serviceClass();
@@ -235,17 +233,17 @@ public class ProcessServiceBuildStepProcessor {
                     .className(servingClass.name())
                     .usageDescription("Workflow service annotated with @"
                         + WorkflowService.class.getName())
-                    // a bean of a subclass is a workflow service of its own here, and one
-                    // serving a BPMN process of its own wherever the process ID follows the
-                    // class name - so it cannot stand in for this class
+                    // a bean of a subclass is a workflow service of its own here. Where the
+                    // process ID follows the class name, it even serves a BPMN process of
+                    // its own. So it cannot stand in for this class
                     .aBeanOfASubclassCounts(false)
                     .remedy(notABeanRemedy(service))
                     .build());
             // the core finds the @WorkflowTask, @WorkflowStartedByBpms and @WorkflowEnded
-            // methods by scanning the class at RUNTIME, and a native image reflects only
-            // on what it was told about - without this every BPMN process is reported as
-            // incompletely wired at startup, although the methods are right there. The
-            // superclasses come along, because a handler the class inherits is declared
+            // methods by scanning the class at RUNTIME. A native image only reflects on
+            // what it was told about. Without this, every BPMN process is reported as not
+            // fully wired at startup, although the methods are right there. The
+            // superclasses are registered too, because an inherited handler is declared
             // there and nowhere else
             declarationChainOf(combinedIndex.getIndex(), service)
                 .forEach(scannedClass -> reflectiveClassBuildItemProducer
@@ -264,11 +262,11 @@ public class ProcessServiceBuildStepProcessor {
             }
           }
 
-          // ONE ProcessService per aggregate is the SPI's injection contract, so ONE
-          // of the classes declares the process startWorkflow starts. Which one used
-          // to be whichever class was found first. Several classes
-          // declaring the SAME process are fine (handlers split across classes),
-          // different ones are ambiguous and end the build.
+          // the SPI's injection contract is ONE ProcessService per aggregate. So ONE of
+          // the classes declares the process which startWorkflow starts. It used to be
+          // whichever class was found first. Several classes may declare the SAME
+          // process (handlers split across classes). Different processes are ambiguous
+          // and end the build.
           final var primaryService = primaryWorkflowService(services, workflowAggregateType);
           final var annotation = primaryService.annotation();
           final var serviceClass = primaryService.serviceClass();
@@ -279,11 +277,10 @@ public class ProcessServiceBuildStepProcessor {
                   serviceClass);
           final var bpmnProcessId = primaryBpmnProcessId(annotation, serviceClass);
 
-          // find persistence support class for the aggregate class: an implementation
-          // provided by the application always wins, the most specific one of them
+          // find the persistence class for the aggregate class. An implementation of the
+          // application always wins, and among those the most specific one
           final var applicationPersistenceType = aggregatePersistenceAwares
               .stream()
-              // calculate distance of classes
               .map(awareEntry -> Map.entry(
                   awareEntry.getKey(),
                   AggregatePersistenceResolver.distance(
@@ -291,7 +288,7 @@ public class ProcessServiceBuildStepProcessor {
                       awareEntry.getKey(),
                       workflowAggregateType.name()
                   )))
-              // filter persistence awares those aggregate type is not assignable to the current aggregate type
+              // drop the persistence awares whose aggregate type does not fit this aggregate
               .filter(awareEntry -> awareEntry.getValue() != Integer.MAX_VALUE)
               // choose the most specific persistence support in terms of inheritance class distance
               .min(Comparator.comparingInt(Map.Entry::getValue))
@@ -299,7 +296,7 @@ public class ProcessServiceBuildStepProcessor {
 
           final String aggregatePersistenceClassName;
           if (applicationPersistenceType.isPresent()) {
-            // ensure service class will be a CDI bean at runtime
+            // make sure the persistence class is a CDI bean at runtime
             ensureClassIsBeanBuildItemProducer
                 .produce(EnsureClassIsBeanValidationBuildItem
                     .builder()
@@ -314,8 +311,8 @@ public class ProcessServiceBuildStepProcessor {
                 .name()
                 .toString();
           } else {
-            // no implementation of the application: use the one matching the
-            // persistence idiom the aggregate is written in
+            // the application has no implementation. Use the one which matches the
+            // persistence idiom of the aggregate
             final var defaultPersistence = DefaultAggregatePersistenceResolver
                 .resolve(combinedIndex.getIndex(), workflowAggregateType.name())
                 .orElseThrow(() -> new IllegalStateException(
@@ -340,19 +337,18 @@ public class ProcessServiceBuildStepProcessor {
                 defaultPersistence,
                 workflowAggregateType);
             if (defaultPersistence.repositoryClass() != null) {
-              // an application whose repository is used by VanillaBP alone injects it
-              // nowhere, and Quarkus removes beans nobody injects while building the
-              // application (the same shape as the multi-instance
-              // resolvers). Panache and Spring Data keep their repositories
-              // themselves today, so this is insurance rather than a fix - VanillaBP
-              // looks the bean up by class and should not depend on another
-              // extension's decision
+              // if only VanillaBP uses a repository, the application injects it nowhere.
+              // Quarkus removes beans nobody injects while it builds the application
+              // (the same case as the multi-instance resolvers). Today Panache and
+              // Spring Data keep their repositories themselves. So this is insurance,
+              // not a fix. VanillaBP looks the bean up by class and should not depend
+              // on the decision of another extension
               unremovableBeanBuildItemProducer
                   .produce(UnremovableBeanBuildItem.beanTypes(defaultPersistence.repositoryClass()));
             }
-            // the ID is read by reflection (AggregateIdTypes), which a native image
-            // has to be told about - the persistence frameworks register their
-            // entities themselves, but an aggregate may be neither
+            // the ID is read by reflection (AggregateIdTypes), so a native image has to
+            // be told about it. The persistence frameworks register their entities
+            // themselves, but an aggregate may not be such an entity
             reflectiveClassBuildItemProducer
                 .produce(ReflectiveClassBuildItem
                     .builder(workflowAggregateType
@@ -378,8 +374,8 @@ public class ProcessServiceBuildStepProcessor {
 
         });
 
-    // the aggregates are the universe an extension's per-aggregate service is built for
-    // as well - published here rather than scanned a second time
+    // an extension's service for each aggregate is built for the same aggregates. So they
+    // are published here, and nobody has to scan for them a second time
     workflowAggregatesProducer
         .produce(new VanillaBpWorkflowAggregatesBuildItem(servicesByAggregate
             .keySet()
@@ -390,8 +386,8 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * One class which IS a workflow service, together with the declaration it is one by:
-   * either its own <code>&#64;WorkflowService</code> or the one it inherited from a
+   * One class which IS a workflow service, together with the declaration which makes it one.
+   * That is either its own <code>&#64;WorkflowService</code> or the one it inherited from a
    * superclass.
    *
    * @param serviceClass The class serving the BPMN processes of the declaration
@@ -407,16 +403,16 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * The classes which serve the BPMN processes of the declarations found, which is what
-   * <code>&#64;Inherited</code> promises the developer: a subclass of an annotated class is a
-   * workflow service, and the class the handler methods are read off is the SUBCLASS. Jandex
-   * resolves no <code>&#64;Inherited</code>, so the walk down to the subclasses happens here,
-   * where the index can still be asked - and it is the same reading Spring Boot arrives at by
-   * registering the class of the bean (see decision 32 in the repository's DECISIONS.md).
+   * The classes which serve the BPMN processes of the declarations found. This is what
+   * <code>&#64;Inherited</code> promises the developer. A subclass of an annotated class is a
+   * workflow service, and the handler methods are read from the SUBCLASS. Jandex does not
+   * resolve <code>&#64;Inherited</code>. So the subclasses are looked up here, where the index
+   * can still be asked. Spring Boot gets the same result, because it registers the class of
+   * the bean (see decision 32 in the repository's DECISIONS.md).
    * <p>
-   * Abstract classes are left out: VanillaBP asks CDI for an instance of a workflow service, so
-   * a class nobody can instantiate serves nothing. A declaration whose whole family is abstract
-   * is therefore a declaration nobody serves, and the build ends naming it.
+   * Abstract classes are left out. VanillaBP asks CDI for an instance of a workflow service.
+   * So a class which nobody can instantiate serves nothing. If a declaration and all its
+   * subclasses are abstract, nobody serves it. Then the build ends and names it.
    *
    * @param index The index of the application and its indexed dependencies
    * @param annotations Every <code>&#64;WorkflowService</code> of the application archives
@@ -447,8 +443,8 @@ public class ProcessServiceBuildStepProcessor {
       }
       for (final var serviceClass : serviceClasses) {
         final var known = byClassName.get(serviceClass.name());
-        // a class inherits the annotation of its NEAREST annotated superclass, and its own
-        // one - distance zero - replaces everything it inherited
+        // a class inherits the annotation of its NEAREST annotated superclass. Its own
+        // annotation (distance zero) replaces everything it inherited
         if ((known == null) || (inheritanceDistance(index, serviceClass,
             declaringClass.name()) < inheritanceDistance(index, serviceClass, known.declaringClass().name()))) {
           byClassName.put(
@@ -469,8 +465,8 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * How many superclasses lie between a class and the one carrying the declaration it serves,
-   * zero where the class carries the declaration itself and
+   * How many superclasses lie between a class and the class which carries the declaration it
+   * serves. It is zero where the class carries the declaration itself. It is
    * {@link Integer#MAX_VALUE} where the index does not connect the two.
    */
   private static int inheritanceDistance(
@@ -496,9 +492,9 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * The class and every superclass up to the one carrying the declaration: the handler
-   * methods of a workflow service may be declared in any of them, and a native image reflects
-   * only on what it was told about.
+   * The class and every superclass up to the one which carries the declaration. The handler
+   * methods of a workflow service may be declared in any of them. And a native image only
+   * reflects on what it was told about.
    */
   private static List<DotName> declarationChainOf(
       final IndexView index,
@@ -521,9 +517,9 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * What to do about a workflow service class which is no CDI bean, which reads differently for
-   * a class inheriting its declaration: there the developer may not have meant this class to be
-   * a workflow service at all.
+   * What to do about a workflow service class which is no CDI bean. The advice differs for a
+   * class which inherits its declaration. There the developer may not have meant this class
+   * to be a workflow service at all.
    */
   private static String notABeanRemedy(
       final WorkflowServiceClass service) {
@@ -565,11 +561,11 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * Ends the build where <code>&#64;WorkflowService</code> does not sit on a class: on an
-   * interface, or on an annotation of the application composing it - Jandex resolves no
-   * meta-annotation and reports the annotation type itself as the annotated one, so both
-   * shapes arrive here as an annotated INTERFACE. Every one of them is reported, so a
-   * developer does not meet the second on the next build.
+   * Ends the build where <code>&#64;WorkflowService</code> does not sit on a class. It may sit
+   * on an interface, or on an annotation of the application which uses it as a
+   * meta-annotation. Jandex does not resolve meta-annotations. It reports the annotation type
+   * itself as the annotated type. So both cases arrive here as an annotated INTERFACE. All of
+   * them are reported, so a developer does not meet the second one on the next build.
    *
    * @param index The index of the application and its indexed dependencies, asked which
    *        classes brought the declaration in
@@ -609,8 +605,8 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * The names of the classes which brought a declaration in, sorted so the message does
-   * not depend on the order the archives happened to be scanned in.
+   * The names of the classes which brought a declaration in. They are sorted, so the message
+   * does not depend on the order in which the archives were scanned.
    */
   private static List<String> classNamesOf(
       final Collection<ClassInfo> classes) {
@@ -624,19 +620,17 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * The message shown when neither the application nor one of the persistence idioms
-   * VanillaBP knows answers for an aggregate. It names what was looked for, because
-   * "provide a bean" alone leaves the reader guessing which of the Quarkus ways they
-   * were expected to use.
+   * The message shown when neither the application nor one of the persistence idioms which
+   * VanillaBP knows handles an aggregate. It names what was looked for. "Provide a bean"
+   * alone would leave the reader guessing which of the Quarkus ways to use.
    */
   private static String missingAggregatePersistenceMessage(
       final Type workflowAggregateType,
       final String workflowModuleId) {
 
-    // the workflow module travels along, the way Spring Boot
-    // report the same defect: an application with several modules should not have to
-    // guess which one the aggregate belongs to, and the two platforms report the same
-    // thing in the same words
+    // the message names the workflow module, the same way Spring Boot reports this
+    // defect. An application with several modules should not have to guess which one the
+    // aggregate belongs to. And the two platforms report the same thing in the same words
     return """
         VanillaBP does not know how to persist the workflow aggregate '%s' of workflow module '%s'!
         Either the aggregate uses one of the persistence idioms VanillaBP serves out of the box:
@@ -661,7 +655,7 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * Generates the CDI bean providing one of VanillaBP's persistence implementations
+   * Generates the CDI bean which provides one of VanillaBP's persistence implementations
    * for a specific aggregate:
    *
    * <pre>
@@ -673,9 +667,9 @@ public class ProcessServiceBuildStepProcessor {
    * }
    * </pre>
    *
-   * The generic superclass is spelled out (not raw) on purpose: the bean type has to
-   * be {@code AggregatePersistenceAware<Aggregate>} for the runtime lookup of
-   * {@link ProcessServiceBaseCdiBean} to find it.
+   * The generic superclass is spelled out (not raw) on purpose. The bean type has to be
+   * {@code AggregatePersistenceAware<Aggregate>}, so the runtime lookup of
+   * {@link ProcessServiceBaseCdiBean} finds it.
    *
    * @param className The class name of the bean to build
    * @param defaultPersistence The implementation chosen for the aggregate
@@ -729,9 +723,9 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * The primary BPMN process ID of a workflow service class:
-   * {@code @WorkflowService.bpmnProcess().bpmnProcessId()} or, by convention, the
-   * class' simple name.
+   * The primary BPMN process ID of a workflow service class. It is
+   * {@code @WorkflowService.bpmnProcess().bpmnProcessId()}, or by convention the simple
+   * name of the class.
    */
   private static String primaryBpmnProcessId(
       final AnnotationInstance annotation,
@@ -754,17 +748,17 @@ public class ProcessServiceBuildStepProcessor {
    * @param workflowAggregateType The aggregate
    * @return The class whose primary BPMN process the process service serves
    * @throws IllegalStateException If the classes declare different primary processes
-   *         for one aggregate - which of them {@code startWorkflow} would start
-   *         cannot be decided here (the BPMN models are read later, by the adapter,
-   *         while deploying), so the application decides it by naming one process as
-   *         the primary one and the others as secondary
+   *         for one aggregate. It cannot be decided here which of them {@code startWorkflow}
+   *         would start. The adapter reads the BPMN models later, while deploying. So the
+   *         application decides it. It names one process as the primary one and the
+   *         others as secondary
    */
   private static WorkflowServiceClass primaryWorkflowService(
       final List<WorkflowServiceClass> services,
       final Type workflowAggregateType) {
 
-    // reproducible: with several classes on one process the choice must not depend on
-    // the order the archives happened to be scanned in
+    // reproducible: with several classes on one process, the choice must not depend on
+    // the order in which the archives were scanned
     final var sorted = services
         .stream()
         .sorted(Comparator.comparing(candidate -> candidate
@@ -813,9 +807,9 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * All BPMN process IDs a workflow service class declares: the primary
-   * {@code bpmnProcess} plus every {@code secondaryBpmnProcesses} entry. Secondary
-   * entries have to be explicit - there is no class-name convention for them.
+   * All BPMN process IDs which a workflow service class declares: the primary
+   * {@code bpmnProcess} plus every {@code secondaryBpmnProcesses} entry. Secondary entries
+   * have to be explicit. There is no class-name convention for them.
    */
   private static List<String> declaredBpmnProcessIds(
       final AnnotationInstance annotation,
@@ -844,7 +838,7 @@ public class ProcessServiceBuildStepProcessor {
   }
 
   /**
-   * Generate process service CDI bean specific to the workflow aggregate type given.
+   * Generates the process service CDI bean for the given workflow aggregate type.
    *
    * @param generatedBeanBuildItemBuildProducer The producer used to build multiple beans if necessary
    * @param workflowModuleId The ID of the workflow module the service belongs to
@@ -880,9 +874,9 @@ public class ProcessServiceBuildStepProcessor {
 
     // @ApplicationScoped
     cc.addAnnotation(ApplicationScoped.class);
-    // @Unremovable: the bean is injected by aggregate class specific injection points
-    // (e.g. "ProcessService<MyAggregate>") which ArC's removal detection does not
-    // recognize in all situations (e.g. if only accessed programmatically)
+    // @Unremovable: the bean is injected by injection points for one aggregate class
+    // (e.g. "ProcessService<MyAggregate>"). ArC's removal detection does not always see
+    // them (e.g. if the bean is only looked up in code)
     cc.addAnnotation(Unremovable.class);
 
     /*

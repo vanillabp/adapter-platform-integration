@@ -16,9 +16,9 @@ import io.vanillabp.integration.test.deployment.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Deployment-failure policy on Quarkus, <code>fail</code> case (the default,
- * identical to Spring Boot): a failing deployment aborts the boot - here for a
- * non-first-priority adapter WITHOUT <code>deployment-failure: warn</code>.
+ * Deployment-failure policy on Quarkus, case <code>fail</code>. It is the default, the same
+ * as on Spring Boot: a failing deployment aborts the boot. Here it fails for an adapter
+ * which is not first priority and has NO <code>deployment-failure: warn</code>.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class DeploymentFailureFailTest {

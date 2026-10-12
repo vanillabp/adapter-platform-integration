@@ -23,11 +23,11 @@ import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Round-trip test pinning the hand-written {@code toCore()} mapping: every property of
- * the Quarkus {@code @ConfigMapping} interface has to arrive in the core model. That a
- * property is copied at all is the job of
- * {@link QuarkusMigrationAdapterPropertiesMapperGuardTest}; this test pins what the
- * copied value MEANS (Optional unwrapping, empty-list defaults, nested maps).
+ * A round-trip test of the hand-written {@code toCore()} mapping. Every property of the
+ * Quarkus {@code @ConfigMapping} interface has to arrive in the core model.
+ * {@link QuarkusMigrationAdapterPropertiesMapperGuardTest} checks that a property is copied
+ * at all. This test holds what the copied value MEANS (Optional unwrapping, empty-list
+ * defaults, nested maps).
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class QuarkusMigrationAdapterPropertiesMapperTest {
@@ -221,8 +221,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     }
 
     /**
-     * None of these fixtures accepts the expressions of a model either - what the mapper
-     * does with that answer is asserted where the level it belongs to is built.
+     * None of these fixtures accepts the expressions of a model either. What the mapper does
+     * with that answer is asserted where the level it belongs to is built.
      */
     @Override
     public Optional<Boolean> acceptExpressionsInTheModel() {
@@ -311,8 +311,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     }
 
     /**
-     * None of these fixtures accepts the expressions of a model either - what the mapper
-     * does with that answer is asserted where the level it belongs to is built.
+     * None of these fixtures accepts the expressions of a model either. What the mapper does
+     * with that answer is asserted where the level it belongs to is built.
      */
     @Override
     public Optional<Boolean> acceptExpressionsInTheModel() {
@@ -323,8 +323,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
 
     /**
-     * None of these fixtures configures the election, so the module inherits whatever
-     * applies globally.
+     * None of these fixtures configures the election. So the module inherits whatever applies
+     * globally.
      */
     @Override
     public QuarkusMigrationAdapterProperties.ElectionProperties election() {
@@ -395,8 +395,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                     Optional<Boolean> keepWorkflowStartWhileAggregateExists) implements QuarkusMigrationAdapterProperties.DeliveryProperties {
 
     /**
-     * Only the release setting, which is what the fixtures written before the maximum
-     * age existed need.
+     * Only the release setting. The fixtures which were written before the maximum age
+     * existed need only this.
      */
     private DeliveryProperties(
         final Optional<Boolean> releaseOnWorkflowEnd) {
@@ -406,8 +406,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     }
 
     /**
-     * The release setting and the maximum age, which is what the fixtures written before
-     * the retention was split off the outbox' one need.
+     * The release setting and the maximum age. The fixtures which were written before the
+     * retention was split from the outbox retention need only these.
      */
     private DeliveryProperties(
         final Optional<Boolean> releaseOnWorkflowEnd,
@@ -418,8 +418,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     }
 
     /**
-     * The three settings which existed before a delivery looked at the other tasks of
-     * its workflow.
+     * The three settings which existed before a delivery looked at the other tasks of its
+     * workflow.
      */
     private DeliveryProperties(
         final Optional<Boolean> releaseOnWorkflowEnd,
@@ -516,8 +516,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     }
 
     /**
-     * None of these fixtures accepts the expressions of a model either - what the mapper
-     * does with that answer is asserted where the level it belongs to is built.
+     * None of these fixtures accepts the expressions of a model either. What the mapper does
+     * with that answer is asserted where the level it belongs to is built.
      */
     @Override
     public Optional<Boolean> acceptExpressionsInTheModel() {
@@ -528,8 +528,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
 
     /**
-     * None of these fixtures configures the election - the mapper's job here is the rest
-     * of the tree.
+     * None of these fixtures configures the election. Here the mapper's job is the rest of the
+     * tree.
      */
     @Override
     public QuarkusMigrationAdapterProperties.ElectionProperties election() {
@@ -539,8 +539,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     }
 
     /**
-     * The adapter ids retired deliberately - none of these fixtures names any,
-     * so the mapper's list is empty and the startup check has nothing to keep quiet about.
+     * The adapter ids which were retired on purpose. None of these fixtures names any. So the
+     * mapper's list is empty, and the startup check has nothing to keep quiet about.
      */
     @Override
     public Optional<List<String>> retiredAdapters() {
@@ -719,12 +719,12 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
         "task-level",
         workflow.getTasks().get("assessRisk").getAdapters().get("c8-cloud").getResourcesLocation());
     assertEquals("adapter-level", core.getAdapters().get("c8-cloud").getResourcesLocation());
-    // what an extension is told about ONE adapter is bound too, or the resolution would
-    // offer a position nothing ever fills
+    // What an extension gets for ONE adapter is bound too. Otherwise the resolution would
+    // offer a position which nothing ever fills.
     assertEquals(
         Map.of("cockpit", Map.of("title", "what c7 is called")),
         core.getAdapters().get("c7").getExtensions());
-    // the switch travels the same four levels as every adapter-scoped key
+    // The switch travels through the same four levels as every adapter-scoped key.
     assertEquals(
         Boolean.FALSE,
         core.getAdapters().get("c8-cloud").getDeduplicateDeliveries());
@@ -734,8 +734,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(
         Boolean.FALSE,
         workflow.getTasks().get("assessRisk").getAdapters().get("c8-cloud").getDeduplicateDeliveries());
-    // The outfaded versions and their policy travel the same levels; an
-    // empty Optional has to arrive as null, so the next level decides
+    // The outfaded versions and their policy travel through the same levels. An empty
+    // Optional has to arrive as null, so that the next level decides.
     assertEquals(
         List.of("<3"),
         core.getAdapters().get("c8-cloud").getOutfadedVersions());
@@ -843,7 +843,7 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(coreDefaults.getAttemptFrequency(), mappedDefaults.getAttemptFrequency());
     assertEquals(coreDefaults.getMaxAttemptFrequency(), mappedDefaults.getMaxAttemptFrequency());
     assertEquals(coreDefaults.getBlockAfterAttempts(), mappedDefaults.getBlockAfterAttempts());
-    // not set on either side, which is what makes both read the time the attempts take
+    // Not set on either side. That makes both read the time which the attempts take.
     assertEquals(coreDefaults.getWaitForVisibilityAtMost(), mappedDefaults.getWaitForVisibilityAtMost());
     assertEquals(coreDefaults.getDispatchThreads(), mappedDefaults.getDispatchThreads());
     assertEquals(coreDefaults.isCreateSchema(), mappedDefaults.isCreateSchema());
@@ -853,8 +853,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(coreDefaults.getJdbc().getPayloadTable(), mappedDefaults.getJdbc().getPayloadTable());
     assertEquals(coreDefaults.getMongo().isEnabled(), mappedDefaults.getMongo().isEnabled());
     assertEquals(coreDefaults.getMongo().getCollection(), mappedDefaults.getMongo().getCollection());
-    // both sides leave it unset, so the comparison is about the name the core builds
-    // from the outbox collection and not about two null values
+    // Both sides leave it unset. So the comparison is about the name which the core
+    // builds from the outbox collection, and not about two null values.
     assertEquals(
         coreDefaults.getMongo().payloadCollectionName(),
         mappedDefaults.getMongo().payloadCollectionName());
@@ -868,8 +868,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
   @DisplayName("The delivery retention travels, and is absent where it is not configured")
   public void theDeliveryRetentionTravels() {
 
-    // the delivery log resolves this against the outbox retention, so "not configured"
-    // has to arrive as null rather than as a zero or a default of its own
+    // The delivery log resolves this against the outbox retention. So "not configured"
+    // has to arrive as null, not as a zero or as a default of its own.
     final var configured = QuarkusMigrationAdapterPropertiesMapper.INSTANCE
         .toCore(new DeliveryProperties(Optional.empty(), Optional.empty(), Optional.of(Duration.ofDays(30))));
     assertEquals(Duration.ofDays(30), configured.getRetention());
@@ -906,8 +906,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
     assertEquals(rejected, core.getTransactions().getUnguardedAggregateWrites());
-    // the module's own value wins; a module saying nothing, and a module without any
-    // section at all, inherit what the application configured globally
+    // The module's own value wins. A module which says nothing, and a module without any
+    // section at all, inherit what the application configured globally.
     assertTrue(core.acceptsUnguardedAggregateWrites("loan-approval"));
     assertFalse(core.acceptsUnguardedAggregateWrites("payments"));
     assertFalse(core.acceptsUnguardedAggregateWrites("unconfigured-module"));
@@ -932,8 +932,8 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(properties);
 
     assertEquals(Boolean.FALSE, core.getDelivery().getReleaseOnWorkflowEnd());
-    // the module's own value wins; a module saying nothing, and a module without any
-    // section at all, inherit what the application configured globally
+    // The module's own value wins. A module which says nothing, and a module without any
+    // section at all, inherit what the application configured globally.
     assertTrue(core.releasesDeliveryRecordsOnWorkflowEnd("loan-approval"));
     assertFalse(core.releasesDeliveryRecordsOnWorkflowEnd("payments"));
     assertFalse(core.releasesDeliveryRecordsOnWorkflowEnd("unconfigured-module"));

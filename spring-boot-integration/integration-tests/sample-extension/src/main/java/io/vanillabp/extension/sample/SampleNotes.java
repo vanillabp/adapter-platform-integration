@@ -6,8 +6,8 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * Holds the repetitions of {@link SampleNote} - one method may build the note of several
- * BPMN elements, the way one <code>&#64;WorkflowTask</code> method may serve several
+ * Holds the repetitions of {@link SampleNote}. One method may build the note of several
+ * BPMN elements, just as one <code>&#64;WorkflowTask</code> method may serve several
  * tasks.
  */
 @Retention(RetentionPolicy.RUNTIME)

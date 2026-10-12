@@ -8,11 +8,11 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The workflow service of this scenario. Its handler does nothing, on purpose: what an
- * application does inside its own handler is the application's time, and on version 1 it ran
- * inside the engine's job transaction while on version 2 it runs inside a transaction
- * VanillaBP opens. That difference is real and it is a sentence of the documentation rather
- * than a number of this measurement.
+ * The workflow service of this scenario. Its handler does nothing, on purpose. The time an
+ * application spends in its own handler belongs to the application. On version 1 the
+ * handler ran inside the job transaction of the engine. On version 2 it runs inside a
+ * transaction which VanillaBP opens. That difference is real. But it is a sentence in the
+ * documentation, not a number of this measurement.
  */
 @Service
 @WorkflowService(
@@ -46,7 +46,7 @@ public class CostWorkflowService {
   }
 
   /**
-   * The handler of the one service task. It does nothing, so what the measurement counts is
+   * The handler of the one service task. It does nothing. So the measurement counts only
    * what VanillaBP writes around it.
    *
    * @param aggregate The workflow aggregate VanillaBP loaded

@@ -86,8 +86,8 @@ public class SpringBootDeploymentServiceTest {
 
     final var testee = new SpringBootDeploymentService(null, null, null);
 
-    // the decision tables of a location are asked for separately, so a DMN file never
-    // reaches readBpmn and a BPMN file never reaches readDmn
+    // the decision tables of a location are loaded in a separate call. So a DMN file never
+    // reaches readBpmn, and a BPMN file never reaches readDmn
     assertEquals(
         Set.of("rating.dmn"),
         testee.resourcesLoader("classpath:deployment-test-processes", ".dmn").keySet());

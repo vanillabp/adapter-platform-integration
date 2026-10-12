@@ -15,18 +15,17 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Tests that on graceful shutdown of the application the adapter's
- * <code>stopWorkflowProcessing</code> is invoked for all deployed workflow modules
- * (driven by the {@link io.quarkus.runtime.ShutdownEvent} observer of the VanillaBP
- * Quarkus integration delegating to the deployment runner): a BPMN file below the
- * configured resources-location makes the pipeline deploy and start the module at
- * boot, and the {@link TestAdapterDeploymentService} records the shutdown pass in a
- * system property (visible across the test's classloaders).
+ * Tests that a graceful shutdown of the application calls the adapter's
+ * <code>stopWorkflowProcessing</code> for all deployed workflow modules. The VanillaBP
+ * Quarkus integration observes the {@link io.quarkus.runtime.ShutdownEvent} and hands it
+ * to the deployment runner. A BPMN file below the configured resources-location makes the
+ * pipeline deploy and start the module at boot. The {@link TestAdapterDeploymentService}
+ * records the shutdown pass in a system property, which all class loaders of the test can
+ * see.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ShutdownObserverTest {
 
-  // Start the unit test with the extension loaded, and sample classes
   @RegisterExtension
   static final QuarkusExtensionTest extensionTest = new QuarkusExtensionTest()
       .setArchiveProducer(() -> ShrinkWrap
@@ -42,7 +41,7 @@ public class ShutdownObserverTest {
           .addClass(TestAdapterDeploymentServiceProducer.class))
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter()) // add mocked adapter
       // the adapter double names the process after its file, and no class of the sample claims
-      // it: the line says that it is somebody else's, so the start goes on
+      // it. The next line says that it belongs to somebody else, so the start goes on
       .overrideConfigKey("vanillabp.workflow-modules.test-module.workflows.\"test.bpmn\".implemented-externally",
           "true")
       // the shutdown pass runs when the application is undeployed after all tests
@@ -55,7 +54,7 @@ public class ShutdownObserverTest {
   ProcessService<Aggregate> sampleProcessService;
 
   /**
-   * While the application is running, the shutdown pass must not have been executed yet.
+   * While the application is running, the shutdown pass must not have run yet.
    */
   @Test
   public void testApplicationIsRunning() {

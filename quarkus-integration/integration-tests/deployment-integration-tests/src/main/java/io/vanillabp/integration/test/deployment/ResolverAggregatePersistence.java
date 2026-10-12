@@ -7,7 +7,7 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * In-memory persistence of the multi-instance resolver test's aggregate.
+ * In-memory persistence of the aggregate of the multi-instance resolver test.
  */
 @ApplicationScoped
 public class ResolverAggregatePersistence implements AggregatePersistenceAware<ResolverAggregate> {

@@ -33,14 +33,14 @@ import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Integration test of the MongoDB phase-two outbox using the dummy adapter forced to
- * require a two-phase commit (<code>dummy-adapter.at-least-once-delivery: true</code>). The
- * TestContainers MongoDB runs as a replica set, so aggregate and outbox entry are
- * written in one MongoDB transaction:
+ * Integration test of the MongoDB phase-two outbox. The dummy adapter is forced to need a
+ * two-phase commit (<code>dummy-adapter.at-least-once-delivery: true</code>). The
+ * Testcontainers MongoDB runs as a replica set, so aggregate and outbox entry are written
+ * in one MongoDB transaction:
  * <ul>
- *   <li>the outbox entry is enlisted in the local transaction (gone on rollback),</li>
- *   <li>phase two is dispatched after the commit and the entry is marked DONE
- *       (deleted asynchronously after the retention period only),</li>
+ *   <li>the outbox entry is part of the local transaction (a rollback removes it),</li>
+ *   <li>phase two is dispatched after the commit, and the entry is marked DONE (it is
+ *       deleted later in the background, only after the retention period),</li>
  *   <li>a duplicate schedule for the same aggregate is a no-op,</li>
  *   <li>a failing dispatch is retried and</li>
  *   <li>a left-over entry (e.g. of a crashed instance) is dispatched by the
@@ -59,12 +59,12 @@ public class MongoOutboxDispatchTest {
 
   /**
    * How long a test waits before it says that nothing more happened. The application
-   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>. These tests set it
+   * to half a second, so this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard, not a measurement of speed. A busy machine which leaves this JVM
+   * without a turn only makes the wait longer. And the test then asserts a count which did
+   * not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -106,14 +106,13 @@ public class MongoOutboxDispatchTest {
   public void resetListenerAndOutbox() {
 
     listener.reset();
-    // remove entries possibly left over from previous tests
     store().removeAllEntries();
 
   }
 
   /**
-   * The store of the application, asked through the reader so that neither a collection
-   * nor a field is named here.
+   * The store of the application. The test asks it through the reader, so no collection
+   * and no field is named here.
    */
   private MongoPhaseTwoOutboxReader store() {
 
@@ -137,10 +136,9 @@ public class MongoOutboxDispatchTest {
    * Waits until no entry deduplicates any more.
    * <p>
    * The listener runs INSIDE the dispatch, one update before the dispatcher sets the
-   * status to DONE and frees the dedup key. A repetition planned in that window meets
-   * an entry which is still waiting and is discarded - correct behaviour, and the
-   * reason a test may not take the listener as the signal that the first operation is
-   * over.
+   * status to DONE and frees the dedup key. A repetition planned in that window meets an
+   * entry which is still waiting, and it is thrown away. That is correct. It is also why a
+   * test must not take the listener as the signal that the first operation is over.
    */
   private void awaitDeduplicationWindowClosed() throws Exception {
 
@@ -177,8 +175,8 @@ public class MongoOutboxDispatchTest {
   }
 
   /**
-   * Writes an entry which stays where it is: its next attempt lies an hour ahead, so
-   * the dispatcher's poll does not pick it up.
+   * Writes an entry which stays where it is. Its next attempt is an hour ahead, so the
+   * poll of the dispatcher does not pick it up.
    *
    * @param id The id of the entry
    * @param writtenAt When it was written
@@ -215,8 +213,8 @@ public class MongoOutboxDispatchTest {
     final var invocations = listener.awaitInvocations(1, 10000);
     assertEquals(attachedAggregate.getId(), invocations.getFirst());
 
-    // DONE instead of delete: the entry has to be marked DONE after the successful
-    // dispatch and stays visible until the asynchronous retention cleanup
+    // DONE instead of delete: the entry must be marked DONE after the successful
+    // dispatch. It stays visible until the retention cleanup removes it in the background
     final var deadline = System.currentTimeMillis() + 10000;
     while (countDoneOutboxEntries() == 0) {
       assertTrue(System.currentTimeMillis() < deadline, "outbox entry was not marked DONE");
@@ -229,10 +227,10 @@ public class MongoOutboxDispatchTest {
   @DisplayName("A duplicate schedule while the first one is still pending is a no-op")
   public void duplicateScheduleAgainstAPendingEntryIsNoOp() throws Exception {
 
-    // both starts ride ONE transaction, so the second one meets an entry which is
-    // still waiting for its dispatch: the unique index over the dedup key makes it a
-    // no-op. Planning against a pending entry is what this test WANTS, so it must not
-    // wait for the window to close
+    // both starts run in ONE transaction. So the second one meets an entry which still
+    // waits for its dispatch, and the unique index over the dedup key makes it a no-op.
+    // This test WANTS to plan against a waiting entry, so it must not wait for the window
+    // to close
     final var attachedAggregate = transactionTemplate.execute(status -> {
       final var aggregate = new Aggregate();
       aggregate.setContent("dedup-pending");
@@ -261,7 +259,7 @@ public class MongoOutboxDispatchTest {
     listener.awaitInvocations(1, 10000);
     awaitDeduplicationWindowClosed();
 
-    // the dispatched entry took its own id as dedup key, so the same operation can be
+    // the dispatched entry took its own id as dedup key. So the same operation can be
     // planned again (see decision 22 in the repository's DECISIONS.md)
     transactionTemplate.execute(status -> processService.startWorkflow(attachedAggregate));
 
@@ -286,7 +284,7 @@ public class MongoOutboxDispatchTest {
         }));
     assertEquals("test rollback", exception.getMessage());
 
-    // the entry must be gone since it was enlisted in the rolled-back transaction
+    // the entry must be gone, because it was part of the transaction which was rolled back
     assertEquals(0, countOutboxEntries());
 
     // wait longer than the poll interval: phase two must never be dispatched
@@ -319,8 +317,8 @@ public class MongoOutboxDispatchTest {
   @DisplayName("A left-over entry (like after a crash) is dispatched by the poller")
   public void leftOverEntryIsDispatchedByPoller() throws Exception {
 
-    // simulate an entry committed by a crashed instance: this JVM's outbox never saw
-    // it being scheduled, so only the poller can pick it up
+    // plays an entry committed by a crashed instance. The outbox of this JVM never saw it
+    // being scheduled, so only the poller can pick it up
     final var now = Instant.now();
     store()
         .writeWaitingEntry(

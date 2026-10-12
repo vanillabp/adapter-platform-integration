@@ -20,8 +20,8 @@ public class NoPersistenceForTheStandaloneAggregate {
 
       @Override
       public Class<Object> getAggregateClass() {
-        // every aggregate is an Object, and at the greatest inheritance distance there
-        // is - so a double declared for a specific class always wins over this one
+        // every aggregate is an Object, at the greatest inheritance distance there is.
+        // So a double declared for a specific class always wins over this one
         return Object.class;
       }
 
@@ -45,8 +45,8 @@ public class NoPersistenceForTheStandaloneAggregate {
 
       @Override
       public Class<?> getAggregateIdType() {
-        // the contract's "not determinable": this double owns the serialized form, as
-        // far as it owns anything at all
+        // "not determinable" in the terms of the contract. This double owns the
+        // serialized form, as far as it owns anything at all
         return null;
       }
 

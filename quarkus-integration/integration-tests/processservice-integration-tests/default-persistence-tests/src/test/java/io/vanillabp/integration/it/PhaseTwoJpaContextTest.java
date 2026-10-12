@@ -22,17 +22,17 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Phase two runs on the outbox dispatcher's own thread and calls back into
- * the application - a remote BPMS adapter loads the aggregate to build what it sends
- * to the BPMS. On Quarkus that thread had neither a transaction nor an active CDI
- * request context, so an aggregate stored with an entity manager could not be read:
- * the dispatch failed with a {@code ContextNotActiveException} and was retried until
- * the entry was blocked, while the application looked healthy (the API had answered,
- * the aggregate was in the database) and the workflow never appeared in the BPMS.
+ * Phase two runs on the outbox dispatcher's own thread and calls back into the
+ * application. An adapter for a remote BPMS loads the aggregate to build what it sends to
+ * the BPMS. On Quarkus, that thread once had neither a transaction nor an active CDI
+ * request context. So an aggregate stored with an entity manager could not be read. The
+ * dispatch failed with a {@code ContextNotActiveException}, and it was retried until the
+ * entry was blocked. Meanwhile the application looked healthy: the API had answered, and
+ * the aggregate was in the database. But the workflow never appeared in the BPMS.
  * <p>
- * The dummy adapter is forced into the two-phase start here and reads the aggregate
- * like a remote BPMS does. Both dispatched operations of a JPA-backed application are
- * covered: starting the workflow and completing a task.
+ * Here the dummy adapter is forced into the two-phase start, and it reads the aggregate
+ * like a remote BPMS does. The test covers both dispatched operations of an application
+ * which stores with JPA: starting the workflow and completing a task.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PhaseTwoJpaContextTest {

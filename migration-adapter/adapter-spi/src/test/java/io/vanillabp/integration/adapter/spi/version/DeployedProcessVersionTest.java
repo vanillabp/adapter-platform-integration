@@ -11,8 +11,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * How a deployed version is written down for a person to read. One spelling for every
- * caller, so a cockpit, a log line and a support tool name the same deployment the same
+ * How a deployed version is written for a person to read. Every caller uses the same
+ * spelling. So a cockpit, a log line and a support tool name the same deployment the same
  * way.
  */
 @ExtendWith(SuppressOutputExtension.class)

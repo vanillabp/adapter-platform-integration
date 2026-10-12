@@ -7,9 +7,9 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.Target;
 
 /**
- * An annotation of the application composing <code>&#64;WorkflowService</code>, the second
- * shape of the same defect: Jandex resolves no meta-annotation, so it reports THIS
- * annotation type as the annotated one and the class using it is never seen. See
+ * An annotation of the application which carries <code>&#64;WorkflowService</code>. It is the
+ * second shape of the same defect. Jandex resolves no meta-annotation. So it reports THIS
+ * annotation type as the annotated one, and nobody sees the class which uses it. See
  * {@code WorkflowServiceViaAnAnnotationOfItsOwnTest}.
  */
 @Retention(RUNTIME)

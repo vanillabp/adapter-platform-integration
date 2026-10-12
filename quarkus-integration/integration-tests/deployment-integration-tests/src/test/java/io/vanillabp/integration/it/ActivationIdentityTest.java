@@ -29,19 +29,19 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Acceptance test on Quarkus of what the identity of an activation buys: the dummy
+ * Acceptance test on Quarkus of what the identity of an activation gives us. The dummy
  * adapter delivers the same task of the same workflow aggregate three times, once per
- * element of a multi-instance activity, and the handler correlates the same message name
- * with the same correlation id every time. All three correlations have to be planned.
+ * element of a multi-instance activity. The handler correlates the same message name with
+ * the same correlation id every time. All three correlations have to be planned.
  * <p>
- * Before this they shared one idempotency key - a called process is a secondary workflow
- * of the SAME aggregate, so module, process, aggregate id, message name and correlation
- * id were equal - and two of the three were discarded while the first one was still
- * waiting for its dispatch (see decision 23 in the repository's DECISIONS.md).
+ * Before this, they shared one idempotency key. A called process is a secondary workflow
+ * of the SAME aggregate, so module, process, aggregate id, message name and correlation id
+ * were equal. Two of the three were discarded while the first one still waited for its
+ * dispatch (see decision 23 in the repository's DECISIONS.md).
  * <p>
- * Pinned next to it: the guarantee this must not cost (a redelivery of ONE element is
- * still one correlation) and the case it deliberately does not fix (the same correlation
- * planned twice outside any activation).
+ * The test pins two more things. The guarantee which this must not cost: a redelivery of
+ * ONE element is still one correlation. And the case which it does not fix on purpose: the
+ * same correlation planned twice outside any activation.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ActivationIdentityTest {
@@ -109,8 +109,8 @@ public class ActivationIdentityTest {
 
   /**
    * One delivery, as an adapter of a remote BPMS builds it. The delivery identity stays
-   * the same while the BPMS repeats itself; the activation identity names the element
-   * instance the BPMS is running.
+   * the same while the BPMS repeats itself. The activation identity names the element
+   * instance which the BPMS runs.
    */
   private TaskInvocationContext delivery(
       final String deliveryId,
@@ -153,8 +153,8 @@ public class ActivationIdentityTest {
 
     final var dummyAdapter = dummyAdapter();
 
-    // three elements of a multi-instance call activity, three deliveries of the same
-    // task of the same aggregate, one correlation each
+    // three elements of a multi-instance call activity: three deliveries of the same task
+    // of the same aggregate, one correlation each
     dummyAdapter.invokeTask(MODULE, PROCESS, delivery("job-1", "element-1"));
     dummyAdapter.invokeTask(MODULE, PROCESS, delivery("job-2", "element-2"));
     dummyAdapter.invokeTask(MODULE, PROCESS, delivery("job-3", "element-3"));
@@ -175,8 +175,8 @@ public class ActivationIdentityTest {
                         ActivationWorkflowService.CORRELATION_ID)),
             key));
 
-    // the guarantee this must not cost: the BPMS handing element 2 out again is not a
-    // fourth element, so its correlation is the one already waiting
+    // the guarantee this must not cost: when the BPMS hands out element 2 again, that is
+    // not a fourth element. So its correlation is the one which already waits
     dummyAdapter.invokeTask(MODULE, PROCESS, delivery("job-2", "element-2"));
     assertEquals(3, outbox.plannedKeys().size(), "a redelivery of one element adds nothing: "
         + outbox.plannedKeys());
@@ -187,9 +187,9 @@ public class ActivationIdentityTest {
   @DisplayName("A correlation outside any activation keeps the key it always had")
   public void aCorrelationOutsideAnyActivationKeepsTheKeyItAlwaysHad() throws Exception {
 
-    // what a REST endpoint does: no activation, so no component naming one, and the
-    // repetition is indistinguishable from a repeat of itself - which this story does not
-    // fix and does not claim to
+    // what a REST endpoint does: there is no activation, so no component names one. Then
+    // the repetition cannot be told apart from a repeat of itself. This story does not
+    // fix that and does not claim to
     correlateInItsOwnTransaction();
     correlateInItsOwnTransaction();
 

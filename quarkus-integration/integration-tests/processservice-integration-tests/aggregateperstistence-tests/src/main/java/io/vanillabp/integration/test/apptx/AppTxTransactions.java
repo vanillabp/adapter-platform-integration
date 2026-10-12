@@ -6,8 +6,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * Attributes the application's unit of work to every aggregate implementing
- * {@link AppTxStored} - one bean for the whole workflow module.
+ * Assigns the application's unit of work to every aggregate which implements
+ * {@link AppTxStored}. One bean serves the whole workflow module.
  */
 @ApplicationScoped
 public class AppTxTransactions implements TransactionRunnerAware<AppTxStored> {

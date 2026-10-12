@@ -15,17 +15,17 @@ import io.vanillabp.integration.test.utils.OneFreePortPerJvm;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The BPMN and DMN files of a Quarkus application are indexed while it is built,
- * because a fast-jar cannot be searched for <code>**&#47;*.bpmn</code> once it runs.
- * A developer who adds a process to a workflow module therefore adds it to a list which
- * was written before, and this test says what happens then: the file is read and
- * deployed like the ones which were there from the start.
+ * The BPMN and DMN files of a Quarkus application are indexed while it is built. The
+ * reason: once a fast-jar runs, nobody can search it for <code>**&#47;*.bpmn</code>. So a
+ * developer who adds a process to a workflow module adds it to a list which was written
+ * before. This test says what happens then: the file is read and deployed like the ones
+ * which were there from the start.
  * <p>
- * Dev mode is where a developer meets that case first, so it is the one pinned here.
- * The file arrives while the application runs, the next request restarts it, and the
+ * A developer meets that case first in dev mode, so this test pins dev mode. The file
+ * arrives while the application runs. The next request restarts the application, and the
  * restarted application reports the new file among the ones it read. The second test
- * keeps the other half: a BPMN file which changes still restarts the application, which
- * is what carries the changed model to the BPMS.
+ * keeps the other half: a BPMN file which changes still restarts the application. That
+ * restart carries the changed model to the BPMS.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class BpmnFileAddedInDevModeTest {
@@ -49,7 +49,7 @@ public class BpmnFileAddedInDevModeTest {
               + PORT
               + "\n"
               // the BPMS double names a process after its file, and no class here claims
-              // either of the two: the lines say that they are somebody else's
+              // either of the two. These lines say that they belong to somebody else
               + "vanillabp.workflow-modules.test-module.workflows.first.implemented-externally=true\n"
               + "vanillabp.workflow-modules.test-module.workflows.second.implemented-externally=true\n"),
               "application.properties")

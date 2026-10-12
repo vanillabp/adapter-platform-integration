@@ -9,7 +9,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * Stands in for the BPMN model of the class-level version acceptance test: the one task
- * both generations of the model are wired to.
+ * which both generations of the model are wired to.
  */
 @ApplicationScoped
 public class ClassVersionedProcessWiringSource implements DummyTaskWiringSource {

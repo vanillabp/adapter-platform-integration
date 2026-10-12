@@ -17,8 +17,9 @@ import io.vanillabp.integration.test.adapter.TestMigratableProcessService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Same-config-same-outcome matrix (core validation on all platforms): a cache which
- * cannot hold a single entry is rejected at startup with a guiding message.
+ * Part of the matrix "same configuration, same outcome" (core validation on all
+ * platforms). A cache which cannot hold a single entry is rejected at startup with a
+ * guiding message.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class InvalidWorkflowAdapterCacheConfigurationTest {

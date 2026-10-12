@@ -6,16 +6,15 @@ import io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflo
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
 
 /**
- * Which election cache an application ended up with. On Spring Boot that is a question
- * rather than a lookup: the platform's in-memory default is auto-configured
- * conditionally, but depending on the order in which configuration classes are read it
- * can coexist with the bean an application defines, and then a plain injection by type
- * is ambiguous.
+ * Which election cache an application ended up with. On Spring Boot that is a question,
+ * not a lookup. The platform's in-memory default is auto-configured under a condition.
+ * But depending on the order in which configuration classes are read, it can exist next
+ * to the bean an application defines. Then a plain injection by type is ambiguous.
  * <p>
  * The rule is the one an application expects: a cache it wrote itself replaces the
- * default. It is asked twice - by the process services, which hand the cache to the
- * election, and by the meters of the in-memory cache, which must not publish a size
- * while the elections run through somebody else's cache.
+ * default. Two places ask. The process services hand the cache to the election. The
+ * meters of the in-memory cache must not publish a size while the elections run through
+ * somebody else's cache.
  */
 public final class WorkflowAdapterCacheSelection {
 
@@ -27,8 +26,8 @@ public final class WorkflowAdapterCacheSelection {
    * Selects the election cache in use.
    *
    * @param candidates All {@code WorkflowAdapterCache} beans of the application
-   * @return The cache to use or <code>null</code> if none exists (elections then probe
-   *         every time)
+   * @return The cache to use, or <code>null</code> if none exists. Then elections probe
+   *         every time
    * @throws IllegalStateException If several application-provided beans exist
    */
   public static WorkflowAdapterCache theCacheInUse(

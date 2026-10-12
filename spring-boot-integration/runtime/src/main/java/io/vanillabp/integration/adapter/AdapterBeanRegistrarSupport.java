@@ -19,20 +19,19 @@ import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 
 /**
- * Support for BPMS adapters registering their per-adapter-id beans on Spring Boot:
- * for each configured adapter id of the adapter's type, ONE
+ * Helps BPMS adapters on Spring Boot to register their beans, one set per adapter id.
+ * For each configured adapter id of the adapter's type, an adapter registers ONE
  * {@code MigratableProcessService} element bean and ONE
- * {@code AdapterDeploymentService} element bean have to be registered (multiple ids
- * of the same BPMS type are the migration scenario) - never a bean of type
- * {@code List<...>}: the platform collects element beans via
- * {@code ObjectProvider.stream()}.
+ * {@code AdapterDeploymentService} element bean. Several ids of the same BPMS type are
+ * the migration case. An adapter never registers a bean of type {@code List<...>},
+ * because the platform collects element beans with {@code ObjectProvider.stream()}.
  * <p>
- * Since the id set comes from the runtime configuration, the beans have to be
- * registered programmatically (a {@code BeanRegistrar}) - configuration-properties
- * beans are not bound yet at registration time, so this helper binds the core
- * <code>vanillabp.*</code> tree directly off the {@link Environment} (workflow-module
- * config files are ordinary property sources added by an
- * {@code EnvironmentPostProcessor}, so they are visible here). Usage in an adapter's
+ * The set of ids comes from the runtime configuration. So the beans have to be
+ * registered in code, by a {@code BeanRegistrar}. Configuration-properties beans are
+ * not bound yet at registration time. So this helper binds the core
+ * <code>vanillabp.*</code> tree directly from the {@link Environment}. The config files
+ * of workflow modules are ordinary property sources, added by an
+ * {@code EnvironmentPostProcessor}, so they are visible here. Usage in an adapter's
  * {@code BeanRegistrar}:
  *
  * <pre>
@@ -45,10 +44,11 @@ import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
  * }
  * </pre>
  *
- * The adapter-id set ALWAYS comes from the platform's core properties (this helper);
- * adapter-owned overlay maps of the <code>vanillabp.*</code> tree are per-known-id
- * lookups only and must never be iterated to discover ids (environment-variable
- * overrides can materialize phantom map entries in overlays).
+ * The set of adapter ids ALWAYS comes from the platform's core properties, through this
+ * helper. An adapter may also bind its own overlay maps of the <code>vanillabp.*</code>
+ * tree. It only looks up ids it already knows in them. It must never iterate them to
+ * find ids, because environment-variable overrides can create phantom map entries in
+ * overlays.
  */
 public final class AdapterBeanRegistrarSupport {
 
@@ -56,15 +56,15 @@ public final class AdapterBeanRegistrarSupport {
   }
 
   /**
-   * Invokes the given consumer for each adapter id configured in
-   * <code>vanillabp.adapters.&lt;id&gt;.*</code> whose (defaulted) type equals the
-   * given adapter type, in stable (sorted) order.
+   * Calls the given consumer for each adapter id configured in
+   * <code>vanillabp.adapters.&lt;id&gt;.*</code> whose type equals the given adapter
+   * type. The type counts after defaults are applied. The order is stable (sorted).
    * <p>
-   * WHICH ids those are is
-   * {@link MigrationAdapterProperties#adapterIdsOfType(String)} - the rule lives in the
-   * core because Quarkus has to answer the same question, and because an extension
-   * bridging to a BPMS asks it about the same configuration. What is left here is
-   * binding the tree off the environment, which is the part only Spring Boot can do.
+   * {@link MigrationAdapterProperties#adapterIdsOfType(String)} decides WHICH ids those
+   * are. The rule lives in the core because Quarkus has to answer the same question. An
+   * extension which bridges to a BPMS also asks it about the same configuration. What is
+   * left here is binding the tree from the environment. Only Spring Boot can do that
+   * part.
    *
    * @param environment The Spring environment to bind the core properties from
    * @param adapterType The adapter's type
@@ -85,10 +85,10 @@ public final class AdapterBeanRegistrarSupport {
   }
 
   /**
-   * Collects what this platform hands to an adapter, so that a registrar asks for the
-   * set instead of remembering the individual beans. The two collaborators an
-   * application may not have are looked up as providers and stay absent if no bean
-   * exists - which {@link AdapterCollaborators} reports naming the adapter id.
+   * Collects what this platform hands to an adapter. So a registrar asks for the set
+   * and does not have to remember the single beans. An application may lack two of the
+   * collaborators. These are looked up as providers and stay absent if there is no bean.
+   * {@link AdapterCollaborators} reports that and names the adapter id.
    *
    * @param supplierContext The context of the bean being registered
    * @param adapterId The adapter id the beans are registered for

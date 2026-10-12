@@ -32,16 +32,16 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * What a workflow service declares is more than one BPMN process id, and everything
- * configurable per workflow is configurable for each of them: its prioritized adapters, its
- * outbox, what its leftovers were persisted under. The startup validations used to run for
- * the PRIMARY process only, so the id a rename leaves behind - the one whose workflows are
- * still out there - was the one nobody looked at.
+ * A workflow service may declare more than one BPMN process id. Everything you can configure
+ * per workflow, you can configure for each of these ids: the prioritized adapters, the outbox,
+ * and the ids its leftovers were persisted under. The startup checks used to run for the
+ * PRIMARY process only. So nobody looked at the id which a rename leaves behind, although
+ * workflows still run under it.
  * <p>
- * The check measured here is the one with the sharpest failure mode: an aggregate whose
- * persisted adapter id names an adapter the configuration dropped is found at the first
- * operation instead of at boot, and for a renamed process the leftovers sit under the
- * SECONDARY id.
+ * This test covers the check whose failure hurts most. An aggregate may have a persisted
+ * adapter id which names an adapter the configuration dropped. Without the check, this shows
+ * up at the first operation and not at boot. And for a renamed process, the leftovers sit
+ * under the SECONDARY id.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SecondaryProcessValidationTest {
@@ -49,7 +49,7 @@ public class SecondaryProcessValidationTest {
   private static final String DEPLOYED_PROCESS = "DummyProcess";
 
   /**
-   * The id the rename left behind: declared, with no model of this boot under it.
+   * The id the rename left behind. It is declared, but this boot deploys no model under it.
    */
   private static final String OLD_PROCESS = "OldDummyProcess";
 
@@ -62,8 +62,8 @@ public class SecondaryProcessValidationTest {
   }
 
   /**
-   * The application after a rename: the new id is what this boot deploys, the old one is
-   * declared so the workflows still running under it keep being served.
+   * The application after a rename. This boot deploys the new id. The old id is still
+   * declared, so the workflows which still run under it keep being served.
    */
   @Service
   @WorkflowService(
@@ -132,9 +132,9 @@ public class SecondaryProcessValidationTest {
   }
 
   /**
-   * An outbox holding calls of the OLD id which were planned by an adapter the
-   * configuration does not know any more - what a migration abandoned halfway leaves
-   * behind, under the id a rename left behind.
+   * An outbox with calls of the OLD id. An adapter planned these calls, and the configuration
+   * does not know this adapter any more. A migration which was given up halfway leaves this
+   * behind, here under the id the rename left behind.
    */
   @Configuration
   static class OutboxHoldingCallsOfTheOldProcess {

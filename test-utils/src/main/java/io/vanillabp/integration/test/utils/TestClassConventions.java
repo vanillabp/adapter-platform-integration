@@ -11,27 +11,26 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * The convention a build can check by itself: every test class registers
- * {@link SuppressOutputExtension}, so a build log carries what a FAILING test printed
- * and nothing else. A class which is meant to print on a green build carries
- * {@link PrintsWhenPassing} with the reason and is left alone.
+ * The rule a build can check by itself: every test class registers
+ * {@link SuppressOutputExtension}. So a build log holds what a FAILING test printed, and
+ * nothing else. A class which is meant to print in a green build carries
+ * {@link PrintsWhenPassing} with the reason, and is left alone.
  * <p>
- * This is a check and not a sentence because the rule stood in the testing
- * conventions and in a checklist, and 13 of 373 test classes across two repositories
- * still did not follow it. All 13 were quiet at the time, which is why nobody noticed.
- * A class starts printing the day it gets a mock which warns, and then the noise
- * arrives without a test having changed.
+ * This is a check and not only a sentence. The rule stood in the testing conventions and
+ * in a checklist, and still 13 of 373 test classes in two repositories did not follow
+ * it. All 13 were quiet at the time, so nobody noticed. A class starts printing the day
+ * it gets a mock which warns. Then the noise arrives without any change to a test.
  * <p>
- * The check reads sources instead of compiled classes, so ONE test per repository
- * covers every module of it, the per-release-line test sources of the Camunda 8 adapter
- * (<code>src/test/java-line-8.9</code>) included.
+ * The check reads sources, not compiled classes. So ONE test per repository covers all
+ * its modules, including the test sources per release line of the Camunda 8 adapter
+ * (<code>src/test/java-line-8.9</code>).
  */
 public final class TestClassConventions {
 
   /**
-   * What makes a source file a test class. A file declaring none of these has nothing to
-   * suppress: it is a helper, a test double, or a base class whose subclasses carry the
-   * tests and, with them, the annotation.
+   * What makes a source file a test class. A file which declares none of these has
+   * nothing to suppress. It is a helper, a test double, or a base class. The subclasses of
+   * a base class carry the tests, and with them the annotation.
    */
   private static final Pattern TEST_METHOD = Pattern
       .compile("^\\s*@(Test|ParameterizedTest|RepeatedTest|TestFactory|TestTemplate)\\b",
@@ -42,9 +41,9 @@ public final class TestClassConventions {
   private static final String EXEMPTION = PrintsWhenPassing.class.getSimpleName();
 
   /**
-   * The one way out of the rule, matched at the start of a line for the same reason the
-   * others are: a class which prints on purpose says so, with a reason, and everything
-   * else is an omission.
+   * The one way out of the rule. It is matched at the start of a line, for the same
+   * reason as the others. A class which prints on purpose says so, with a reason.
+   * Everything else is an omission.
    */
   private static final Pattern EXEMPTION_ANNOTATION = Pattern
       .compile("^@"
@@ -52,9 +51,9 @@ public final class TestClassConventions {
           + "\\b", Pattern.MULTILINE);
 
   /**
-   * Annotations are matched at the start of a line, never anywhere in the file: a Javadoc
-   * paragraph explaining {@code @Testcontainers} is prose, and reading it as a
-   * registration reported a class which had done everything right.
+   * Annotations are matched at the start of a line, never anywhere in the file. A Javadoc
+   * paragraph which explains {@code @Testcontainers} is prose. Reading it as a
+   * registration once reported a class which had done everything right.
    */
   private static final Pattern TESTCONTAINERS_ANNOTATION = Pattern
       .compile("^@Testcontainers\\b", Pattern.MULTILINE);
@@ -126,11 +125,11 @@ public final class TestClassConventions {
    * The test classes which let another extension start containers BEFORE
    * {@link SuppressOutputExtension} is registered.
    * <p>
-   * JUnit registers declarative extensions in the order they are written, and the
+   * JUnit registers declarative extensions in the order they are written. The
    * Testcontainers extension starts what it manages in its own {@code beforeAll}. Written
-   * after {@code @Testcontainers}, the extension arrives too late: the Docker client has
-   * already logged through an appender holding the real stdout. Measured on the schema
-   * module of adapter-platform-integration, that was 2208 debug lines in a green build.
+   * after {@code @Testcontainers}, the extension comes too late. The Docker client has
+   * already logged to the real stdout. Measured on the schema module of
+   * adapter-platform-integration, that was 2208 debug lines in a green build.
    *
    * @param repositoryRoot The repository's root directory
    * @return The offending source files, relative to the root, in a stable order
@@ -185,7 +184,7 @@ public final class TestClassConventions {
       final String source) {
 
     if (lacksSuppression(source)) {
-      // that is the other check's finding, and reporting it twice helps nobody
+      // That is the other check's finding. Reporting it twice helps nobody.
       return false;
     }
     final var containers = firstMatch(TESTCONTAINERS_ANNOTATION, source);
@@ -223,7 +222,7 @@ public final class TestClassConventions {
       final String source) {
 
     if (EXEMPTION_ANNOTATION.matcher(source).find()) {
-      // it prints while it passes and has said why, see PrintsWhenPassing
+      // It prints while it passes and has said why (see PrintsWhenPassing).
       return false;
     }
     return !source.contains(SUPPRESSION);

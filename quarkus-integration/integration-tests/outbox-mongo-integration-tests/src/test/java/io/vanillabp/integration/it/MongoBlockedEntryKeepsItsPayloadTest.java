@@ -30,15 +30,14 @@ import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 
 /**
- * What the housekeeping of the MongoDB store removes and what it leaves: the retention
- * counts at the entry, so an entry which is blocked keeps its payload however long the
- * repair takes, a dispatched entry takes its payload with it when it goes, and a payload
- * no entry names is removed by age.
+ * What the housekeeping of the MongoDB store removes and what it leaves. The retention
+ * counts at the entry. So a blocked entry keeps its payload, however long the repair takes.
+ * A dispatched entry takes its payload with it when it goes. And a payload which no entry
+ * names is removed by age.
  * <p>
- * The documents are written here rather than scheduled, because what is under test is a
- * store which has been standing for longer than the retention. Nothing is dispatched
- * while the test runs: the entries are BLOCKED respectively DONE, and the poller passes
- * over both.
+ * The test writes the documents itself and does not schedule them. It tests a store which
+ * has been standing for longer than the retention. Nothing is dispatched while the test
+ * runs. One entry is BLOCKED and the other one is DONE, and the poller passes over both.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoBlockedEntryKeepsItsPayloadTest {
@@ -46,15 +45,15 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
   private static final String DATABASE = "outbox-housekeeping-it";
 
   /**
-   * Older than the default retention of seven days, so everything written here is old
-   * enough to be removed - which makes the entries the only reason a payload stays.
+   * Older than the default retention of seven days. So everything written here is old
+   * enough to be removed, and the entries are the only reason why a payload stays.
    */
   private static final Instant LONG_BEFORE_THE_RETENTION = Instant.now().minus(Duration.ofDays(10));
 
   /**
    * How long the test waits for the poll which cleans up. The application polls twice a
-   * second, so this is a guard against a machine which leaves the JVM without a turn,
-   * not a measurement of speed.
+   * second. So this is a guard against a machine which gives the JVM no turn for a while.
+   * It does not measure speed.
    */
   private static final long UNTIL_THE_HOUSEKEEPING_RAN = 30_000;
 
@@ -70,9 +69,9 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
           .addClass(RecordingPhaseTwoListener.class)
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .overrideConfigKey("quarkus.mongodb.database", DATABASE)
-      // the housekeeping runs in a window at night, and this test watches it work now.
-      // A window which ends before it starts crosses midnight, so this one is open all
-      // day but for the first minute of it
+      // the housekeeping runs in a window at night, but this test watches it work now.
+      // A window which ends before it starts crosses midnight. So this one is open all
+      // day except for its first minute
       .overrideConfigKey("vanillabp.outbox.housekeeping.start", "00:01")
       .overrideConfigKey("vanillabp.outbox.housekeeping.end", "00:00")
       .overrideConfigKey("vanillabp.outbox.housekeeping.zone", "Europe/Vienna");
@@ -81,8 +80,8 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
   MongoClient mongoClient;
 
   /**
-   * The store of the application, asked through the reader so that neither a collection
-   * nor a field is named here.
+   * The store of the application. It is asked through the reader, so this test names
+   * neither a collection nor a field.
    */
   private MongoPhaseTwoOutboxReader store() {
 
@@ -91,8 +90,8 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
   }
 
   /**
-   * Writes a payload the way a call which carried one wrote it, old enough to be removed
-   * by age.
+   * Writes a payload the way a call which carried one wrote it. It is old enough to be
+   * removed by age.
    *
    * @param reference The reference an entry names it by
    * @param content What the call carried
@@ -113,7 +112,7 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
   }
 
   /**
-   * Writes an entry the store put aside for a person, the way it stood before this test
+   * Writes an entry which the store put aside for a person, as it stood before this test
    * began.
    *
    * @param payloadReference The payload this entry names
@@ -181,14 +180,14 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
   }
 
   /**
-   * Waits until the housekeeping removed one document, and says what was expected of it
-   * where it never did.
+   * Waits until the housekeeping removed one document. If it never does, it says what was
+   * expected of that document.
    * <p>
-   * Every document this test waits for is one the assertion is about. A sweep which ran
-   * before the test had written everything down removes none of them, so the wait goes on
-   * until the next sweep. Waiting for another document is what used to end this test early:
-   * the orphaned payload was gone after a sweep which had not seen the dispatched entry
-   * yet, and that entry was then still there.
+   * The assertion is about every document this test waits for. A sweep which ran before the
+   * test had written everything removes none of them, so the wait goes on until the next
+   * sweep. Waiting for some other document used to end this test too early. The orphaned
+   * payload was gone after a sweep which had not yet seen the dispatched entry, and so that
+   * entry was still there.
    *
    * @param document Reads the document, <code>null</code> once it is gone
    * @param whatIsExpected What the housekeeping owes this document
@@ -212,8 +211,8 @@ public class MongoBlockedEntryKeepsItsPayloadTest {
     final var blockedPayload = UUID.randomUUID().toString();
     final var dispatchedPayload = UUID.randomUUID().toString();
     final var orphanPayload = UUID.randomUUID().toString();
-    // an entry is written before the payload it names, because a sweep between the two
-    // writes would meet a payload nothing names yet and remove the very payload this
+    // an entry is written before the payload it names. A sweep between the two writes would
+    // meet a payload which nothing names yet. It would remove the very payload which this
     // test says is kept
     final var blockedEntry = blockedEntry(blockedPayload);
     final var dispatchedEntry = dispatchedEntry(dispatchedPayload);

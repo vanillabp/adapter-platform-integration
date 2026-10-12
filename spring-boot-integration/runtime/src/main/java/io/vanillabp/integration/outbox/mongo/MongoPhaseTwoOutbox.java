@@ -24,20 +24,22 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * The default {@link PhaseTwoOutbox} implementation for Spring Boot applications using
  * MongoDB for aggregate persistence (gruelbox is JDBC-only). The outbox entry is
- * written via {@link MongoTemplate} which participates in the currently running
- * Spring-managed MongoDB transaction. The entry persists all fields of the
- * {@link PhaseTwoCall} including the operation discriminator and the elected adapter
- * ID; deduplication is enforced by a unique index on the entry's <code>dedupKey</code>
- * and therefore spans the entries still waiting for their dispatch, as the contract of
- * {@link PhaseTwoOutbox} demands: that field carries the idempotency key while the
- * entry waits and the entry's own id once the dispatcher marked it DONE, while
- * <code>idempotencyKey</code> keeps the key readable for support. The at-least-once
- * guarantee is unaffected, because a redispatch reads the same document - it is the
- * entry's status and attempt count which carry it, never the key.
- * A duplicate schedule is detected by a pre-check read and turned into the
- * contract's no-op (<code>false</code>) - within a MongoDB transaction a
- * {@link DuplicateKeyException} would abort the whole transaction, so the unique
- * index only remains the backstop for concurrent duplicates.
+ * written with {@link MongoTemplate}, which takes part in the running Spring-managed
+ * MongoDB transaction. The entry stores all fields of the {@link PhaseTwoCall},
+ * including the operation discriminator and the elected adapter ID.
+ * <p>
+ * A unique index on the entry's <code>dedupKey</code> enforces the deduplication. So it
+ * spans the entries which still wait for their dispatch, as the contract of
+ * {@link PhaseTwoOutbox} demands. While the entry waits, that field carries the
+ * idempotency key. Once the dispatcher marked the entry DONE, it carries the entry's own
+ * id. <code>idempotencyKey</code> keeps the key readable for support. The at-least-once
+ * guarantee does not change, because a redispatch reads the same document. The entry's
+ * status and attempt count carry that guarantee, never the key.
+ * <p>
+ * A read before the insert finds a duplicate schedule and turns it into the contract's
+ * no-op (<code>false</code>). Within a MongoDB transaction, a
+ * {@link DuplicateKeyException} would abort the whole transaction. So the unique index
+ * is only the safety net for duplicates which arrive at the same time.
  * <p>
  * <strong>A younger call may take the waiting entry's place</strong> instead of being
  * discarded against it, where it says so
@@ -50,11 +52,11 @@ import lombok.extern.slf4j.Slf4j;
  * matches nothing and the call becomes an entry of its own, with <code>dedupKey</code>
  * set to its own id because the key belongs to the entry on its way.
  * <p>
- * <strong>Note:</strong> MongoDB transactions require a replica set. Without one (no
- * <code>MongoTransactionManager</code> or standalone server) the entry is written
- * immediately and dispatching is best-effort: a crash between persisting the aggregate
- * and writing the entry may lose the phase-two call, and a rollback of the aggregate
- * does not remove an already written entry.
+ * <strong>Note:</strong> MongoDB transactions need a replica set. Without a MongoDB
+ * transaction (no <code>MongoTransactionManager</code>, or a standalone server), the
+ * entry is written at once, and dispatching is best-effort. A crash between saving the
+ * aggregate and writing the entry may lose the phase-two call. And a rollback of the
+ * aggregate does not remove an entry which was already written.
  */
 @Slf4j
 public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
@@ -64,21 +66,21 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   private final MongoPhaseTwoOutboxDispatcher dispatcher;
 
   /**
-   * The collection used to store outbox entries
-   * (<code>vanillabp.outbox.mongo.collection</code>). Every outbox instance needs
-   * its own collection - two dispatchers polling the same collection would compete
-   * and double-dispatch.
+   * The collection which stores the outbox entries
+   * (<code>vanillabp.outbox.mongo.collection</code>). Every outbox instance needs its own
+   * collection. Two dispatchers which poll the same collection would compete and
+   * dispatch twice.
    */
   private final String collection;
 
   /**
    * Built by {@link MongoPhaseTwoOutboxAutoConfiguration} where the workflow aggregates of
-   * this application live in MongoDB, and by an application building an outbox of its own
-   * on a collection nothing else writes into.
+   * this application live in MongoDB. Also built by an application which builds an outbox
+   * of its own, on a collection which nothing else writes into.
    *
-   * @param mongoTemplate The template the entries are written and read through - the same
-   *          one the aggregates use, so both take part in one MongoDB transaction wherever
-   *          the deployment is a replica set
+   * @param mongoTemplate The template the entries are written and read through. The
+   *          aggregates use the same one. So both take part in one MongoDB transaction
+   *          wherever the deployment is a replica set
    * @param dispatcher What polls the collection. It is told after every commit that
    *          something is waiting, and it owns the payloads of the entries
    * @param collection The collection the entries go into, one per outbox
@@ -95,9 +97,9 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * The adapter ids the OPEN entries of one BPMN process are waiting for: an
-   * id which is not configured any more means that it was renamed or removed too early,
-   * and both leave the workflow of a START entry unstarted.
+   * The adapter ids which the OPEN entries of one BPMN process are waiting for. An id which
+   * is not configured any more was renamed or removed too early. Both leave the workflow of
+   * a START entry unstarted.
    */
   @Override
   public Set<String> adapterIdsOfPendingCalls(
@@ -121,7 +123,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * Counts the entries waiting for their dispatch - a single count over the same
+   * Counts the entries which wait for their dispatch. It is a single count over the same
    * collection the dispatcher polls.
    */
   @Override
@@ -143,8 +145,8 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
 
   /**
    * How long the oldest waiting entry has been waiting, read from its
-   * <code>createdAt</code> - the moment the entry was written, which a replacing call
-   * sets anew because the document then carries a younger operation. One document, read
+   * <code>createdAt</code>. That is the moment the entry was written. A replacing call sets
+   * it anew, because the document then carries a younger operation. It reads one document,
    * along the index over the status and that moment.
    */
   @Override
@@ -161,7 +163,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
                   .limit(1),
               PhaseTwoOutboxEntry.class,
               collection);
-      // nothing waiting means nothing is owed, and that zero is a measurement
+      // nothing waiting means nothing is owed, and that zero is a real measurement
       return Optional
           .of(((oldest == null) || (oldest.getCreatedAt() == null))
               ? Duration.ZERO
@@ -178,11 +180,11 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   public boolean schedule(
       final PhaseTwoCall call) {
 
-    // pre-check for an operation still waiting for its dispatch: within a MongoDB
-    // transaction a duplicate-key error would abort the whole transaction (including
-    // the aggregate), so the common duplicate case is detected by a read; the unique
-    // index remains the backstop for concurrent duplicates (there the losing
-    // transaction aborts - acceptable, since the operation was a duplicate anyway)
+    // check first for an operation which still waits for its dispatch. Within a MongoDB
+    // transaction, a duplicate-key error would abort the whole transaction, including the
+    // aggregate. So a read finds the common duplicate case. The unique index stays the
+    // safety net for duplicates at the same time. There the losing transaction aborts.
+    // That is acceptable, because the operation was a duplicate anyway
     final var idempotencyKey = call.idempotencyKey().orElse(null);
     final var waiting = idempotencyKey == null
         ? null
@@ -194,10 +196,10 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
 
     final var now = Instant.now();
     final var entryId = UUID.randomUUID().toString();
-    // what the unique index sees. An operation which must not be deduplicated dedupes
-    // against itself, so the field is present on every entry and the index needs no
-    // partial filter, and a second entry beside one a dispatch already took does the
-    // same: the key belongs to the entry on its way
+    // what the unique index sees. An operation which must not be deduplicated is
+    // deduplicated against itself. So every entry has the field, and the index needs no
+    // partial filter. A second entry beside one which a dispatch already took does the
+    // same, because the key belongs to the entry on its way
     var dedupKey = idempotencyKey == null ? entryId : idempotencyKey;
     if (waiting != null) {
       if (!call.replacesWhatIsStillWaiting()) {
@@ -208,7 +210,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
         triggerPollAfterCommit();
         return true;
       }
-      // a poller claimed the entry between the read and the update: it runs to its end
+      // a poller claimed the entry between the read and the update. It runs to its end,
       // and this call becomes an entry of its own
       logSecondEntryBesideAClaimedOne(call);
       dedupKey = entryId;
@@ -225,9 +227,9 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
       return false;
     }
 
-    // the entry is in, so the bytes it names may follow - through the same template,
-    // and only now, because a schedule discarded as a duplicate must leave nothing
-    // behind
+    // the entry is in, so the bytes it names may follow. They go through the same
+    // template, and only now, because a schedule discarded as a duplicate must leave
+    // nothing behind
     if (call.hasPayload()) {
       dispatcher.getPayloadStore().write(call);
     }
@@ -239,9 +241,9 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * A call which replaces goes the same way as any other, and this is the one method
-   * which says so - the mark travels in the call, so {@link #schedule(PhaseTwoCall)}
-   * reads it where the entry is written.
+   * A call which replaces goes the same way as any other. This is the one method which
+   * says so. The mark travels in the call, so {@link #schedule(PhaseTwoCall)} reads it
+   * where the entry is written.
    */
   @Override
   public boolean scheduleReplacingWhatIsStillWaiting(
@@ -252,22 +254,22 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * Puts the younger call into the document of the waiting entry, its payload
-   * included, and removes the payload the replaced entry named.
+   * Puts the younger call into the document of the waiting entry, including its payload.
+   * Then it removes the payload the replaced entry named.
    * <p>
-   * What decides is the pair of the attempts and the lease: no attempt of this entry has
-   * ended and nobody is dispatching it right now, so no dispatch has read it and none is
-   * holding its payload. The update carries both conditions, which makes it the same atomic
-   * claim the dispatcher uses - if a poller wins the document, the update matches nothing.
-   * Both halves are needed, because the attempts are written when an attempt ends: a dispatch
-   * which is on its way still shows zero of them and is named by the lease alone.
+   * The attempts and the lease decide together. No attempt of this entry has ended, and
+   * nobody is dispatching it right now. So no dispatch has read it, and none holds its
+   * payload. The update carries both conditions. That makes it the same atomic claim the
+   * dispatcher uses. If a poller wins the document, the update matches nothing. Both
+   * halves are needed, because the attempts are written when an attempt ends. A dispatch
+   * which is on its way still shows zero attempts, and only the lease names it.
    * <p>
-   * Where a MongoDB transaction covers the writes they commit together and a rollback
-   * takes them all. Without one they are three separate writes, the window this store's
-   * javadoc calls best-effort.
+   * Where a MongoDB transaction covers the writes, they commit together, and a rollback
+   * takes them all. Without a transaction, they are three separate writes. That is the
+   * window which the javadoc of this store calls best-effort.
    *
-   * @return Whether the entry was replaced - <code>false</code> where a poller claimed
-   *         it in the meantime, which makes the call an entry of its own
+   * @return Whether the entry was replaced. <code>false</code> where a poller claimed it
+   *         in the meantime. Then the call becomes an entry of its own
    */
   private boolean replacePendingEntry(
       final PhaseTwoOutboxEntry waiting,
@@ -315,9 +317,9 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * Dispatches the entry right after the transaction was committed; recovery after a
-   * crash is covered by the dispatcher's poller, which wakes at the moment the earliest
-   * entry it still owes becomes due.
+   * Dispatches the entry right after the transaction was committed. The dispatcher's
+   * poller covers recovery after a crash. It wakes at the moment the earliest entry it
+   * still owes becomes due.
    */
   private void triggerPollAfterCommit() {
 
@@ -335,8 +337,8 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * A younger call took the place of the entry which was waiting. At DEBUG for the
-   * reason a discard is: it is what the caller asked for, and under a backlog it
+   * A younger call took the place of the entry which was waiting. It is at DEBUG for the
+   * same reason as a discard. It is what the caller asked for, and under a backlog it
    * happens as often as reports are planned.
    */
   private static void logReplacedEntry(
@@ -355,8 +357,8 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   /**
    * A younger call could not take the place of the entry it meant to replace, because a
    * dispatch had claimed it. It becomes an entry of its own, so the handler is called
-   * twice - worth a line, because an application counting its reports finds the second
-   * one here.
+   * twice. That is worth a line, because an application which counts its reports finds the
+   * second one here.
    */
   private static void logSecondEntryBesideAClaimedOne(
       final PhaseTwoCall call) {
@@ -373,9 +375,9 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * The technical half of a discarded schedule. Which of the two causes it was - a
-   * redelivered dispatch or an operation lost against one still waiting - the store
-   * cannot tell, so the core reports it to the caller and this line stays at DEBUG.
+   * The technical half of a discarded schedule. There are two possible causes: a
+   * redelivered dispatch, or an operation which lost against one still waiting. The store
+   * cannot tell which. So the core reports it to the caller, and this line stays at DEBUG.
    */
   private static void logDiscardedSchedule(
       final PhaseTwoCall call) {

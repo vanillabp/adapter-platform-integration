@@ -4,10 +4,10 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The aggregate of the class-level version acceptance test. Lives in its own package
- * for the same classpath-scan reason as the other test aggregates:
- * {@code @WorkflowService} classes are found by scanning, so every test of this Maven
- * module sees the two classes next to it as well.
+ * The aggregate of the acceptance test for versions at class level. It lives in its own
+ * package for the same reason as the other test aggregates. A scan finds the
+ * {@code @WorkflowService} classes, so every test of this Maven module also sees the two
+ * classes next to it.
  */
 @Getter
 @Setter
@@ -16,7 +16,7 @@ public class ClassVersionedAggregate {
   private String id;
 
   /**
-   * Which class served the task - the version of the deployed process decides it,
+   * Which class served the task. The version of the deployed process decides it,
    * although no method names a version.
    */
   private String servedBy;

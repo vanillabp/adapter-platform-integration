@@ -20,65 +20,63 @@ import jakarta.interceptor.Interceptor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Runs the core deployment pipeline at boot - the Quarkus counterpart of the Spring
- * Boot integration's <code>SpringBootDeploymentService</code>: for every workflow
- * module and every prioritized adapter the pipeline
+ * Runs the deployment pipeline of the core at boot. It is the Quarkus counterpart of the
+ * Spring Boot integration's <code>SpringBootDeploymentService</code>. For every workflow
+ * module and every prioritized adapter, it runs the pipeline
  * <code>readBpmn &rarr; prepareBpmn &rarr; wireBpmn &rarr; deployResources &rarr;
- * startWorkflowProcessing</code> is executed, honoring the
- * <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code> policy and wiring
- * extensions ordered by <code>getOrder()</code> (all of this lives in the core
- * {@link DeploymentService}).
+ * startWorkflowProcessing</code>. It follows the
+ * <code>vanillabp.adapters.&lt;id&gt;.deployment-failure</code> policy. It wires the
+ * extensions in the order of <code>getOrder()</code>. All of this lives in the core's
+ * {@link DeploymentService}.
  * <p>
- * <b>Lifecycle semantics compared to Spring Boot</b> (see also the module README):
- * Spring deploys during context refresh (<code>SmartLifecycle.start()</code>) and
- * starts workflow processing on <code>ApplicationReadyEvent</code>, i.e. after the
- * web server started serving. Quarkus' idiomatic hook is the {@link StartupEvent},
- * which fires before the application accepts traffic - so on Quarkus both
- * deployment and start of workflow processing happen <i>before</i> serving, and the
- * end of the start (the block of everything the start noticed, and the collected
- * refusals) is the end of this one observer. Spring has to end its start earlier, see
- * <code>SpringBootDeploymentService</code>. The
- * invariant shared by both platforms: the phase-two outbox dispatchers only start
- * dispatching (including crash recovery) <i>after</i> workflow processing started -
- * enforced by {@link #STARTUP_PRIORITY} vs.
- * {@link #OUTBOX_DISPATCHER_STARTUP_PRIORITY} here and by
- * <code>@Order</code>-ed <code>ApplicationReadyEvent</code> listeners on Spring.
+ * <b>The lifecycle compared with Spring Boot</b> (see also the module README): Spring
+ * deploys while the context refreshes (<code>SmartLifecycle.start()</code>). It starts the
+ * workflow processing on <code>ApplicationReadyEvent</code>, that is after the web server
+ * started serving. The usual hook on Quarkus is the {@link StartupEvent}. It fires before the
+ * application accepts traffic. So on Quarkus, both the deployment and the start of the
+ * workflow processing happen <i>before</i> serving. The end of the start is the end of this
+ * one observer. The end of the start means the block of everything the start noticed, and
+ * the collected refusals. Spring has to end its start earlier, see
+ * <code>SpringBootDeploymentService</code>. Both platforms share one rule: the phase-two
+ * outbox dispatchers start dispatching (crash recovery included) only <i>after</i> the
+ * workflow processing started. Here, {@link #STARTUP_PRIORITY} and
+ * {@link #OUTBOX_DISPATCHER_STARTUP_PRIORITY} make sure of that. On Spring,
+ * <code>ApplicationReadyEvent</code> listeners with an <code>@Order</code> do it.
  * <p>
- * Adapters' {@link AdapterDeploymentService} beans are collected as element beans
+ * The {@link AdapterDeploymentService} beans of the adapters are collected as element beans
  * plus flattened beans of type
- * <code>List&lt;AdapterDeploymentService&lt;Object, Object&gt;&gt;</code> (one
- * instance per configured adapter id) - the same per-adapter-id convention as for
- * the process services. Extensions contribute plain {@link ExtensionWiringService}
- * element beans.
+ * <code>List&lt;AdapterDeploymentService&lt;Object, Object&gt;&gt;</code> (one instance per
+ * configured adapter id). This is the same per-adapter-id convention as for the process
+ * services. Extensions add plain {@link ExtensionWiringService} element beans.
  */
 @Slf4j
 @ApplicationScoped
 public class VanillaBpDeploymentRunner {
 
   /**
-   * Built by the CDI container, which the platform's build step told about this class. An
-   * application never builds one: what the runner needs arrives through the injected
-   * fields, and the pipeline it holds must be the one the shutdown observer stops again.
+   * The CDI container creates it, because the platform's build step told it about this class.
+   * An application never creates one. What the runner needs arrives through the injected
+   * fields. And the shutdown observer must stop the same pipeline which this runner holds.
    */
   public VanillaBpDeploymentRunner() {
   }
 
   /**
-   * Priority of the deployment runner's {@link StartupEvent} observer: AFTER the
-   * default-priority observers (the process-service startup validations, e.g.
-   * unserved-prioritized-adapter and phase-two-outbox checks, fire BEFORE anything
-   * is deployed - Spring Boot parity: validation at
-   * <code>SmartInitializingSingleton</code>, deployment at
-   * <code>SmartLifecycle.start()</code>), but BEFORE the phase-two outbox
-   * dispatchers ({@link #OUTBOX_DISPATCHER_STARTUP_PRIORITY}) - a crash-recovered
-   * phase-two operation must never be dispatched before the deployment pipeline
-   * deployed the resources and started workflow processing.
+   * Priority of the deployment runner's {@link StartupEvent} observer. It runs AFTER the
+   * observers with default priority. These are the startup checks of the process services,
+   * e.g. the checks for a prioritized adapter which nothing serves and for the phase-two
+   * outbox. They run BEFORE anything is deployed. Spring Boot does the same: it checks at
+   * <code>SmartInitializingSingleton</code> and deploys at
+   * <code>SmartLifecycle.start()</code>. The runner runs BEFORE the phase-two outbox
+   * dispatchers ({@link #OUTBOX_DISPATCHER_STARTUP_PRIORITY}). A phase-two operation from
+   * crash recovery must never be dispatched before the deployment pipeline deployed the
+   * resources and started the workflow processing.
    */
   public static final int STARTUP_PRIORITY = Interceptor.Priority.APPLICATION + 600;
 
   /**
-   * Priority of the phase-two outbox dispatchers' {@link StartupEvent} observers:
-   * after the deployment runner ({@link #STARTUP_PRIORITY}).
+   * Priority of the {@link StartupEvent} observers of the phase-two outbox dispatchers. They
+   * run after the deployment runner ({@link #STARTUP_PRIORITY}).
    */
   public static final int OUTBOX_DISPATCHER_STARTUP_PRIORITY = Interceptor.Priority.APPLICATION + 700;
 
@@ -89,54 +87,53 @@ public class VanillaBpDeploymentRunner {
   BpmsResourceIndex bpmsResourceIndex;
 
   /**
-   * Adapters' deployment services as <i>element</i> beans (one bean per adapter).
+   * The deployment services of the adapters as <i>element</i> beans (one bean per adapter).
    */
   @Inject
   @Any
   Instance<AdapterDeploymentService<?, ?>> adapterDeploymentServices;
 
   /**
-   * Additionally accepted shape: beans of type
-   * <code>List&lt;AdapterDeploymentService&lt;Object, Object&gt;&gt;</code>,
-   * flattened into the collected deployment services - one instance per configured
-   * adapter id (a CDI producer cannot yield N element beans for N
-   * runtime-configured ids). Both element type parameters are LITERALLY
-   * {@code Object} by convention, regardless of the adapter's actual model and
-   * context classes (CDI's parameterized-type matching of differing type arguments
-   * is not reliable across modes, so the platform looks the beans up with the exact
-   * type - the pipeline matches models via {@code getModelType()} /
-   * {@code getProcessContextType()}, never via the generics).
+   * A second accepted shape: beans of type
+   * <code>List&lt;AdapterDeploymentService&lt;Object, Object&gt;&gt;</code>. They are
+   * flattened into the collected deployment services, one instance per configured adapter id.
+   * A CDI producer cannot create N element beans for N ids configured at runtime. By
+   * convention, both type parameters of the element are LITERALLY {@code Object}, whatever
+   * model and context classes the adapter really uses. CDI does not match parameterized types
+   * with different type arguments reliably in all modes. So the platform looks the beans up
+   * with the exact type. The pipeline matches models through {@code getModelType()} and
+   * {@code getProcessContextType()}, never through the generics.
    */
   @Inject
   @Any
   Instance<List<AdapterDeploymentService<Object, Object>>> adapterDeploymentServiceLists;
 
   /**
-   * Extensions' wiring services (element beans). Adapters may show up here, too,
-   * since {@link AdapterDeploymentService} extends {@link ExtensionWiringService} -
-   * the core {@link DeploymentService} filters them out.
+   * The wiring services of the extensions (element beans). Adapters may show up here too,
+   * because {@link AdapterDeploymentService} extends {@link ExtensionWiringService}. The
+   * core's {@link DeploymentService} filters them out.
    */
   @Inject
   @Any
   Instance<ExtensionWiringService<?, ?>> extensionWiringServices;
 
   /**
-   * All generated process-service beans - stopped on graceful shutdown (parity with
-   * Spring Boot's <code>SmartLifecycle.stop()</code>).
+   * All generated process-service beans. They are stopped on graceful shutdown, like Spring
+   * Boot does in <code>SmartLifecycle.stop()</code>.
    */
   @Inject
   @Any
   Instance<ProcessService<?>> processServices;
 
   /**
-   * The core's wiring interface - handed to the {@link DeploymentService} for what
-   * belongs to a workflow module as a whole and is answered once the last adapter of
-   * the module finished deploying: the deployed processes no
-   * <code>&#64;WorkflowService</code> class claims, the versions a BPMS still holds for
-   * a process id the application only declares, the
-   * <code>&#64;WorkflowTask</code> methods serving no task at all and the version tags
-   * the annotations name. The core runs them rather than leaving them to an adapter
-   * which can forget them.
+   * The core's wiring interface. It goes to the {@link DeploymentService} for the checks which
+   * belong to a workflow module as a whole. They run once the last adapter of the module
+   * finished deploying. They look at the deployed processes which no
+   * <code>&#64;WorkflowService</code> class claims, and at the versions a BPMS still holds for
+   * a process id which the application only declares. They also look at the
+   * <code>&#64;WorkflowTask</code> methods which serve no task at all, and at the version tags
+   * which the annotations name. The core runs these checks, so that no adapter can forget
+   * them.
    */
   @Inject
   io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskWiring;
@@ -148,8 +145,8 @@ public class VanillaBpDeploymentRunner {
   private volatile boolean running = false;
 
   /**
-   * Builds the core {@link DeploymentService}, deploys the BPMN resources of all
-   * workflow modules found in the classpath and starts workflow processing.
+   * Builds the core's {@link DeploymentService}, deploys the BPMN resources of all workflow
+   * modules found in the classpath and starts the workflow processing.
    *
    * @param event The startup event observed
    */
@@ -162,9 +159,9 @@ public class VanillaBpDeploymentRunner {
   }
 
   /**
-   * Builds the core's deployment service for this start. A seam rather than a
-   * <code>new</code> in the middle of the start, so a test can watch the order in which
-   * the steps of a start are called on it.
+   * Builds the core's deployment service for this start. It is a separate method, not a
+   * <code>new</code> in the middle of the start. So a test can replace it and watch the order
+   * in which the steps of a start call the service.
    *
    * @param deploymentServices The deployment service of every configured adapter
    * @param wiringServices The wiring service of every extension taking part
@@ -199,9 +196,9 @@ public class VanillaBpDeploymentRunner {
 
     deploymentService = deploymentServiceOf(deploymentServices, wiringServices);
 
-    // what the BUILD found out about the workflow modules' configuration files: the
-    // recorder saying it runs before there are beans, so it kept the sentence and this
-    // is the first moment it can go into the box of the start
+    // What the BUILD found out about the configuration files of the workflow modules.
+    // The recorder which reports it runs before there are beans. So it kept the
+    // sentence, and this is the first moment it can go into the block of the start.
     final var configFilesReport = io.vanillabp.integration.runtime.config.WorkflowModuleConfigFilesRecorder
         .takeReport();
     if (configFilesReport != null) {
@@ -218,16 +215,16 @@ public class VanillaBpDeploymentRunner {
         workflowModuleIds,
         bpmsResourceIndex::loadResources);
 
-    // the election capability of the prioritized adapters is checked once the adapters
-    // deployed - only then does an adapter know what its BPMS can do - and before
-    // anything touches a workflow
+    // Check the election capability of the prioritized adapters. This happens after the
+    // adapters deployed, because only then does an adapter know what its BPMS can do.
+    // And it happens before anything touches a workflow.
     processServices
         .stream()
         .filter(ProcessServiceBaseCdiBean.class::isInstance)
         .map(processService -> (ProcessServiceBaseCdiBean<?>) processService)
-        // per DECLARED BPMN process id: which adapters serve a workflow is configurable per
-        // workflow, so a secondary or declared-only id may be the one whose combination
-        // cannot locate its workflows
+        // Per DECLARED BPMN process id. Which adapters serve a workflow can be configured
+        // per workflow. So a secondary id or an id which is only declared may be the one
+        // whose combination of adapters cannot find its workflows.
         .flatMap(processService -> processService.getProcessServicesOfDeclaredIds().stream())
         .forEach(processService -> {
           processService.validateElectionCapabilityAfterDeployment();
@@ -236,10 +233,10 @@ public class VanillaBpDeploymentRunner {
 
     deploymentService.startWorkflowProcessing(workflowModuleIds);
 
-    // the end of the start, which on Quarkus is right here: deployment and start of the
-    // workflow processing happen in one observer, so nothing a start can notice comes
-    // later. On Spring Boot the two are split over the lifecycle and the ready event, and
-    // the end of the start is the earlier of them
+    // The end of the start. On Quarkus it is right here. The deployment and the start of
+    // the workflow processing happen in one observer, so nothing a start can notice comes
+    // later. On Spring Boot, the two are split over the lifecycle and the ready event,
+    // and the end of the start is the earlier of them.
     deploymentService.endOfStartup();
 
     running = true;
@@ -247,10 +244,9 @@ public class VanillaBpDeploymentRunner {
   }
 
   /**
-   * Stops workflow processing of adapters and extensions in reverse start order and
-   * stops all process services - invoked on graceful shutdown by
-   * {@link VanillaBpShutdownObserver}. Safe to call more than once (subsequent
-   * calls are no-ops).
+   * Stops the workflow processing of adapters and extensions in reverse start order. Then it
+   * stops all process services. {@link VanillaBpShutdownObserver} calls it on graceful
+   * shutdown. It is safe to call it more than once, because later calls do nothing.
    */
   public synchronized void stop() {
 

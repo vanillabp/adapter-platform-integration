@@ -26,8 +26,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
 
 /**
- * A phase-one check of an adapter runs right before the commit, and it runs in the
- * unit of work of the aggregate - which may be one the application brought.
+ * A phase-one check of an adapter runs right before the commit. It runs in the unit of work
+ * of the aggregate, and the application may have brought that unit of work itself.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SpringPreCommitRegistrarTest {
@@ -112,7 +112,7 @@ public class SpringPreCommitRegistrarTest {
             events.add("still inside the transaction");
           });
 
-      // the check did NOT run when it was handed over, it ran at the end
+      // the check did NOT run when it was handed over. It ran at the end
       assertEquals(List.of("still inside the transaction", "check"), events);
     }
 

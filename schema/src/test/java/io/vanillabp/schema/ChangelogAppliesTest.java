@@ -27,17 +27,17 @@ import liquibase.database.jvm.JdbcConnection;
 import liquibase.resource.ClassLoaderResourceAccessor;
 
 /**
- * The changelog applied by Liquibase itself, on H2 - one of the two databases this module
- * promises. What is asserted is not "it ran" but that the tables VanillaBP writes into exist with
- * the columns the runtime would have created, because an application may start with the runtime's
+ * Liquibase itself applies the changelog to H2, one of the two databases this module promises.
+ * The test does not only check that it ran. It checks that the tables VanillaBP writes into exist
+ * with the columns the runtime would have created. An application may start with the runtime's
  * tables and switch to this changelog later.
  *
  * <p>
- * Which tables, columns and indexes those are is not typed out here. {@link ChangelogDescription}
- * asks the changelog, and the assertions compare its answer with the database. A list in the test
- * would only ever catch what disappeared: a table newly arrived would read as green, which is how
- * the payload table of the phase-two outbox went unnoticed for months. The one list left is
- * {@link #TABLES_OF_VANILLABP}, and it exists to be compared, not to be trusted.
+ * The tables, columns and indexes are not typed out here. {@link ChangelogDescription} asks the
+ * changelog, and the assertions compare its answer with the database. A list in the test would
+ * only catch what disappeared. A new table would pass unnoticed. That is how nobody saw the
+ * payload table of the phase-two outbox for months. The one list left is
+ * {@link #TABLES_OF_VANILLABP}. It is there to be compared, not to be trusted.
  * </p>
  */
 @ExtendWith(SuppressOutputExtension.class)
@@ -66,8 +66,8 @@ public class ChangelogAppliesTest {
 
   /**
    * Applies the changelog to a fresh in-memory database and returns a connection to it. Liquibase
-   * closes the connection it was handed, so the assertions get one of their own - the database
-   * survives thanks to <code>DB_CLOSE_DELAY=-1</code>.
+   * closes the connection it gets, so the assertions get a connection of their own. The database
+   * survives because of <code>DB_CLOSE_DELAY=-1</code>.
    */
   private static Connection applyTo(
       final String name,

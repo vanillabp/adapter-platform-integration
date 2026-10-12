@@ -7,9 +7,9 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * An implementation written by the application for an aggregate which HAS a Panache
- * repository: VanillaBP has to use this one, the escape hatch has to stay one. Every
- * call is counted so the test can prove which implementation ran.
+ * The application wrote this implementation for an aggregate which HAS a Panache
+ * repository. VanillaBP has to use this one, so the escape hatch stays open. Every call is
+ * counted, so the test can prove which implementation ran.
  */
 @ApplicationScoped
 public class ApplicationRepositoryPersistence implements AggregatePersistenceAware<RepositoryAggregate> {

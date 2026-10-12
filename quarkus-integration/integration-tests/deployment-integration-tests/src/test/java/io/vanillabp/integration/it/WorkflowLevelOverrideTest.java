@@ -22,12 +22,12 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Workflow-level properties on Quarkus: the workflow module prioritizes
- * adapter id 'demo1' while the workflow 'WorkflowService' overrides to 'demo2' - the
- * classic migration scenario of moving a single process to a new BPMS while the rest
- * of the module stays. The deployment-target union guarantees 'demo2', although named
- * at the workflow level only, receives the module's resources and starts processing -
- * otherwise starting that workflow would fail at runtime.
+ * Workflow-level properties on Quarkus. The workflow module prioritizes adapter id 'demo1',
+ * but the workflow 'WorkflowService' overrides it with 'demo2'. This is the classic
+ * migration: a single process moves to a new BPMS, and the rest of the module stays. 'demo2'
+ * is named at the workflow level only. The union of deployment targets makes sure that it
+ * still receives the module's resources and starts processing. Otherwise starting that
+ * workflow would fail at runtime.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowLevelOverrideTest {
@@ -40,8 +40,8 @@ public class WorkflowLevelOverrideTest {
           .addClass(AggregatePersistence.class)
           .addClass(WorkflowService.class)
           .addClass(RecordingDeploymentEvents.class)
-          // the dummy adapter derives the BPMN process ID from the filename - name
-          // the file after the workflow so the configured workflow ID is known
+          // the dummy adapter derives the BPMN process ID from the filename. So the file is
+          // named after the workflow, and the configured workflow ID is known
           .addAsResource("bpmn/first.bpmn", "processes/dummy/WorkflowService.bpmn")
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"));
 
@@ -60,7 +60,7 @@ public class WorkflowLevelOverrideTest {
 
     final var recorded = events.getEvents();
 
-    // deployment-target union: 'demo2' is named at the workflow level ONLY but
+    // union of deployment targets: 'demo2' is named at the workflow level ONLY, but it
     // still receives the module's resources and starts processing
     assertTrue(recorded.contains("adapter:demo1:deployResources:test-module"), recorded.toString());
     assertTrue(recorded.contains("adapter:demo2:deployResources:test-module"), recorded.toString());
@@ -75,8 +75,8 @@ public class WorkflowLevelOverrideTest {
         List.of("demo2", "demo1"),
         migrationProcessService.getPrioritizedAdapters());
 
-    // starting THAT workflow succeeds (phase one runs against 'demo2' which got the
-    // module's deployment via the union)
+    // starting THAT workflow succeeds. Phase one runs against 'demo2', which got the
+    // module's deployment through the union
     final var aggregate = workflowService.startWorkflow("workflow-level-override");
     assertNotNull(aggregate.getId());
 

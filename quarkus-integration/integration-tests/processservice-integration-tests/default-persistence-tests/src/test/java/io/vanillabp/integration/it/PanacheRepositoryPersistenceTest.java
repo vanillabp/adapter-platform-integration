@@ -27,11 +27,10 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * An application storing its aggregate in a Hibernate ORM Panache
- * repository writes no {@code AggregatePersistenceAware} at all - VanillaBP uses the
- * repository. Both directions are exercised: starting a workflow stores the
- * aggregate, and a task delivered by the BPMS loads it, runs the handler and stores
- * the change.
+ * An application stores its aggregate in a Hibernate ORM Panache repository. It writes no
+ * {@code AggregatePersistenceAware} at all, because VanillaBP uses the repository. The test
+ * covers both directions. Starting a workflow stores the aggregate. A task delivered by the
+ * BPMS loads it, runs the handler and stores the change.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PanacheRepositoryPersistenceTest {

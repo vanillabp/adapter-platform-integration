@@ -8,7 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * What the BPMS is asked about a workflow, and how often. The count is the whole point of
- * the delivery record: an operation answered from it asks nobody.
+ * the delivery record. An operation which the record answers asks nobody.
  */
 @ApplicationScoped
 public class OrderAwarenessSource implements DummyTaskAwarenessSource {

@@ -16,18 +16,18 @@ import io.quarkus.runtime.configuration.ConfigUtils;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * VanillaBP extension build step processor telling an application which of its own
- * profile-specific configuration files a native image is going to ignore.
+ * Build step processor of the VanillaBP extension. It tells an application which of its own
+ * profile-specific configuration files a native image will ignore.
  * <p>
- * Quarkus resolves the list of configuration files it reads while the image is built, so
- * <code>application-{profile}.yaml</code> reaches a binary only if that profile was active
- * during the build. A profile chosen when the binary starts switches the values VanillaBP and
- * the adapters read, and it switches the profile sections inside <code>application.yaml</code>,
- * but it adds no further file. On the JVM the same application reads the file, which is what
- * makes the difference easy to miss.
+ * Quarkus decides which configuration files it reads while the image is built. So
+ * <code>application-{profile}.yaml</code> only reaches a binary if that profile was active
+ * during the build. A profile chosen when the binary starts does switch the values which
+ * VanillaBP and the adapters read. It also switches the profile sections inside
+ * <code>application.yaml</code>. But it adds no further file. On the JVM the same application
+ * does read the file, so the difference is easy to miss.
  * <p>
- * VanillaBP does not load those files itself. They belong to Quarkus, a second loading
- * mechanism next to it would have its own precedence and its own surprises, and each of the
+ * VanillaBP does not load those files itself. They belong to Quarkus. A second loading
+ * mechanism next to it would have its own precedence and its own surprises. And each of the
  * ways out below is a one-line change in the application.
  */
 @Slf4j
@@ -41,24 +41,24 @@ public class ProfileSpecificApplicationFilesBuildStepProcessor {
   }
 
   /**
-   * Matches <code>application-{profile}.{extension}</code> at the root of an archive, which is
-   * where Quarkus reads the application's own configuration from.
+   * Matches <code>application-{profile}.{extension}</code> at the root of an archive. Quarkus
+   * reads the application's own configuration from there.
    */
   private static final Pattern PROFILE_SPECIFIC_APPLICATION_FILE = Pattern
       .compile("application-([^/.]+)\\.(?:properties|yaml|yml)");
 
   /**
-   * Profiles a packaged binary is not built to run: warning about their files would fire in
-   * every project without naming a problem anybody has.
+   * Profiles which a packaged binary is not built to run. A warning about their files would
+   * show up in every project, and it would name a problem nobody has.
    */
   private static final Set<String> PROFILES_A_BINARY_IS_NOT_MEANT_FOR = Set.of("dev", "test");
 
   /**
    * Reports the application's profile-specific configuration files which the image being built
-   * will not honor, and names the ways to reach the values in them.
+   * will not honor. It names the ways to reach the values in them.
    *
-   * The step produces nothing, which is why it declares the result of the build as its
-   * product: a step nobody waits for is dropped instead of being executed.
+   * The step produces nothing. So it declares the result of the build as its product. Quarkus
+   * drops a step nobody waits for, instead of running it.
    *
    * @param applicationArchives The archives of this Quarkus build
    */
@@ -78,8 +78,8 @@ public class ProfileSpecificApplicationFilesBuildStepProcessor {
    * Searches all application archives for files named <code>application-{profile}</code>.
    *
    * @param applicationArchives The archives of this Quarkus build
-   * @return The names of those files, deduplicated because the same name may show up in more
-   *         than one archive
+   * @return The names of those files, without duplicates. The same name may show up in more
+   *         than one archive.
    */
   private static SortedSet<String> profileSpecificApplicationFiles(
       final ApplicationArchivesBuildItem applicationArchives) {
@@ -101,8 +101,8 @@ public class ProfileSpecificApplicationFilesBuildStepProcessor {
 
   /**
    * Builds the warning for the files whose profile the image is not built with. A file of a
-   * profile the build itself uses is part of the image and needs no warning, and neither do
-   * the files of the profiles a packaged binary is not meant for.
+   * profile which the build itself uses is part of the image. It needs no warning. The files
+   * of the profiles a packaged binary is not meant for need none either.
    *
    * @param profileSpecificApplicationFiles The files found in the application's archives
    * @param profilesTheImageIsBuiltWith The profiles active while this image is being built

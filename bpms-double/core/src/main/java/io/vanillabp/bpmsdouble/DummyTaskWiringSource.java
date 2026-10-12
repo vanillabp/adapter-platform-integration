@@ -7,13 +7,13 @@ import io.vanillabp.integration.adapter.spi.expressions.ModelExpression;
 import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 
 /**
- * Optional hook of the dummy adapter used by integration tests to supply the "BPMN
- * tasks" of a process: the dummy adapter has no real BPMN model, so a bean of this
- * type stands in for what a real adapter reads from the BPMN during
- * <code>wireBpmn</code>. If a bean is present, the dummy adapter validates the task
- * wiring against the supplied tasks (via the core's
- * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring});
- * without a bean no wiring validation happens.
+ * Optional hook of the dummy adapter. Integration tests use it to supply the "BPMN
+ * tasks" of a process. The dummy adapter has no real BPMN model. So a bean of this type
+ * stands in for what a real adapter reads from the BPMN in <code>wireBpmn</code>. If a
+ * bean is present, the dummy adapter checks the task wiring against the supplied tasks,
+ * through the core's
+ * {@link io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring}. Without
+ * a bean the wiring is not checked.
  */
 @FunctionalInterface
 public interface DummyTaskWiringSource {
@@ -34,10 +34,10 @@ public interface DummyTaskWiringSource {
 
   /**
    * The executable BPMN processes the given file declares, as a real adapter reads them
-   * off the model. The default answers nothing, which keeps the dummy adapter's
-   * convention of one process per file, named after the file. A test needing a file with
-   * a SECOND executable process - what a modeller produces by drawing a called process
-   * next to the calling one - names both processes here.
+   * from the model. The default answers nothing. Then the dummy adapter keeps its rule of
+   * one process per file, named after the file. Some tests need a file with a SECOND
+   * executable process. A modeller produces one by drawing a called process next to the
+   * calling one. Such a test names both processes here.
    *
    * @param adapterId The adapter ID reading the file
    * @param workflowModuleId The workflow module ID
@@ -54,10 +54,10 @@ public interface DummyTaskWiringSource {
   }
 
   /**
-   * The expressions of the given BPMN process as a real adapter reads them off the model,
-   * all of them: the plain names of variables as well as the paths and the calls, because
-   * the core counts them. The default answers none, which is what an adapter unable to read
-   * its models reports.
+   * The expressions of the given BPMN process, as a real adapter reads them from the model.
+   * This means all of them: the plain names of variables, the paths and the calls, because
+   * the core counts them. The default answers none. An adapter which cannot read its models
+   * reports the same.
    *
    * @param adapterId The adapter ID reading the model
    * @param workflowModuleId The workflow module ID

@@ -20,9 +20,9 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Retention cleanup of the MongoDB-based phase-two outbox: with a tiny
- * <code>vanillabp.outbox.retention</code> a successfully dispatched (DONE) entry is
- * deleted asynchronously by the poller once the retention period passed.
+ * The retention cleanup of the phase-two outbox on MongoDB. With a tiny
+ * <code>vanillabp.outbox.retention</code>, the poller deletes a successfully dispatched
+ * (DONE) entry in the background, once the retention period passed.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoOutboxRetentionTest {
@@ -38,9 +38,9 @@ public class MongoOutboxRetentionTest {
           .addAsResource("workflow-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .overrideConfigKey("quarkus.mongodb.database", "outbox-retention-it")
       .overrideConfigKey("vanillabp.outbox.retention", "PT1S")
-      // the housekeeping runs in a window at night, and this test watches it work now.
-      // A window which ends before it starts crosses midnight, so this one is open all
-      // day but for the first minute of it
+      // the housekeeping runs in a window at night, but this test watches it work now.
+      // A window which ends before it starts crosses midnight. So this one is open all
+      // day except for its first minute
       .overrideConfigKey("vanillabp.outbox.housekeeping.start", "00:01")
       .overrideConfigKey("vanillabp.outbox.housekeeping.end", "00:00")
       .overrideConfigKey("vanillabp.outbox.housekeeping.zone", "Europe/Vienna");
@@ -58,8 +58,8 @@ public class MongoOutboxRetentionTest {
   MongoClient mongoClient;
 
   /**
-   * The outbox of the application, asked through the reader so that neither a collection
-   * nor a field is named here.
+   * The outbox of the application. It is asked through the reader, so this test names
+   * neither a collection nor a field.
    */
   private MongoPhaseTwoOutboxReader outbox() {
 

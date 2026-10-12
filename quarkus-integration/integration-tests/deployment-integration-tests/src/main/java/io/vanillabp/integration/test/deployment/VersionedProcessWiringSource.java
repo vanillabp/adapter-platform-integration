@@ -8,7 +8,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Stands in for the BPMN model of the process-version acceptance test: the one task
+ * Stands in for the BPMN model of the process-version acceptance test: the one task which
  * all three methods of {@link VersionedWorkflowService} are wired to.
  */
 @ApplicationScoped

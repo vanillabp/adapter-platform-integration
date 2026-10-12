@@ -26,11 +26,10 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * An aggregate written as a Hibernate ORM Panache active record (no
- * repository anywhere) is persisted by VanillaBP through the entity manager of the
- * aggregate's persistence unit. Both directions are exercised: starting a workflow
- * stores the aggregate, and a task delivered by the BPMS loads it, runs the handler
- * and stores the change.
+ * An aggregate is written as a Hibernate ORM Panache active record, with no repository
+ * anywhere. VanillaBP stores it through the entity manager of the aggregate's persistence
+ * unit. The test covers both directions. Starting a workflow stores the aggregate. A task
+ * delivered by the BPMS loads it, runs the handler and stores the change.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PanacheActiveRecordPersistenceTest {

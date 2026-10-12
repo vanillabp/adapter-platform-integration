@@ -11,12 +11,12 @@ import io.vanillabp.integration.test.TestApplication;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Validate properties read from application and workflow module properties
- * with no additional profiles.
+ * Checks the properties read from the files of the application and of the workflow
+ * modules, with no extra profiles.
  *
- * <p>Note: In Spring Boot, {@code application.properties} has higher priority
- * than {@code application.yaml}. For workflow module files, YAML has higher
- * priority than {@code .properties} (matching the Quarkus behavior).
+ * <p>Note: In Spring Boot, {@code application.properties} wins over
+ * {@code application.yaml}. For the files of a workflow module, YAML wins over
+ * {@code .properties}, as in Quarkus.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SpringBootTest(classes = TestApplication.class)

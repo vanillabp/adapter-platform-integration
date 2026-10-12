@@ -1,11 +1,10 @@
 package io.vanillabp.bpmsdouble;
 
 /**
- * Optional hook of the dummy adapter used by integration tests to observe (and
- * possibly fail) phase two of a two-phase workflow start. Provide a bean of this type
- * to get notified; throwing an exception makes the dispatch fail, so retry behavior of
- * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementations can be
- * tested.
+ * Optional hook of the dummy adapter. Integration tests use it to watch phase two of a
+ * two-phase workflow start, and to make it fail. Provide a bean of this type to get
+ * notified. An exception thrown here makes the dispatch fail. So a test can check how
+ * {@link io.vanillabp.integration.spi.PhaseTwoOutbox} implementations retry.
  */
 @FunctionalInterface
 public interface DummyPhaseTwoListener {
@@ -20,9 +19,9 @@ public interface DummyPhaseTwoListener {
       Object workflowAggregateId);
 
   /**
-   * Adapter-id-aware variant called by the dummy (defaults to the id-less
-   * callback) - multi-adapter tests (migration scenario) override this
-   * one to assert WHICH dummy instance executed phase two.
+   * The variant with the adapter id, called by the double. By default it calls the
+   * variant without the id. Tests with several adapters (the migration scenario)
+   * override this one to check WHICH double ran phase two.
    *
    * @param adapterId The dummy adapter's ID
    * @param workflowAggregateId The ID of the workflow aggregate
@@ -47,7 +46,7 @@ public interface DummyPhaseTwoListener {
   }
 
   /**
-   * Adapter-id-aware variant (defaults to the id-less callback) - see
+   * The variant with the adapter id. By default it calls the variant without the id. See
    * {@link #startedWorkflowPhaseTwo(String, Object)}.
    *
    * @param adapterId The dummy adapter's ID
@@ -126,8 +125,8 @@ public interface DummyPhaseTwoListener {
 
 
   /**
-   * Called whenever a signal is broadcast - in phase one for an adapter without a
-   * two-phase commit, in phase two for one with it.
+   * Called whenever a signal is broadcast. This happens in phase one for an adapter
+   * without a two-phase commit, and in phase two for an adapter with one.
    *
    * @param signalName The PLAIN BPMN signal name
    * @param phaseTwo Whether this was phase two (after the commit)
@@ -138,8 +137,9 @@ public interface DummyPhaseTwoListener {
   }
 
   /**
-   * Called whenever a changed workflow-aggregate is pushed to the BPMS - in phase
-   * one for an adapter without a two-phase commit, in phase two for one with it.
+   * Called whenever a changed workflow aggregate is pushed to the BPMS. This happens in
+   * phase one for an adapter without a two-phase commit, and in phase two for an adapter
+   * with one.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param taskId The task whose scope received the values, or <code>null</code>

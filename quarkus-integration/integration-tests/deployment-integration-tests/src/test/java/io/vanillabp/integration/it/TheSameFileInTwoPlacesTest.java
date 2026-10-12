@@ -14,9 +14,9 @@ import io.vanillabp.integration.test.deployment.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The four places a workflow module may use do not rank against each other, so the same
- * file may lie in one of them only. A module which ships it twice ends the boot instead of
- * letting one of the two win (see decision 65 in the repository's DECISIONS.md).
+ * The four places which a workflow module may use have no ranking among each other. So
+ * the same file may lie in only one of them. A module which ships it twice ends the boot,
+ * and neither of the two wins (see decision 65 in the repository's DECISIONS.md).
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheSameFileInTwoPlacesTest {

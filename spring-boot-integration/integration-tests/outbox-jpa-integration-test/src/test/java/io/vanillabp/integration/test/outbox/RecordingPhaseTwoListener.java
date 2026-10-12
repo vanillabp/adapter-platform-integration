@@ -7,8 +7,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import io.vanillabp.bpmsdouble.DummyPhaseTwoListener;
 
 /**
- * Records phase-two invocations of the dummy adapter and optionally fails a
- * configurable number of dispatches (to test retry behavior of the outbox).
+ * Records the phase-two calls of the dummy adapter. It can also fail a given number of
+ * dispatches, to test how the outbox retries.
  */
 public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
@@ -226,8 +226,8 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   }
 
   /**
-   * Lets the next dispatches fail with a failure the adapter reports as PERMANENT - the
-   * store has to block such an entry right away.
+   * Lets the next dispatches fail with a failure the adapter reports as PERMANENT. The
+   * store must block such an entry right away.
    *
    * @param numberOfFailures How many dispatches fail
    */
@@ -269,12 +269,12 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   /**
    * Waits until at least the given number of phase-two invocations were recorded.
    * <p>
-   * This says that the ADAPTER was called, not that the operation is over: the listener
-   * runs inside the dispatch, and the dispatcher marks the outbox entry DONE - which is
-   * what frees its idempotency key - only after the dispatch returned. On return the
-   * entry may still be waiting to be marked, so a repetition of the same operation
-   * planned right here can be discarded as a duplicate. A test which needs the key to
-   * be free has to wait for the ENTRY, in the store.
+   * This says that the ADAPTER was called, not that the operation is over. The listener
+   * runs inside the dispatch. The dispatcher marks the outbox entry DONE only after the
+   * dispatch returned, and that frees its idempotency key. When this method returns, the
+   * entry may still wait to be marked. So if the same operation is planned again right
+   * here, it may be discarded as a duplicate. A test which needs a free key must wait for
+   * the ENTRY, in the store.
    *
    * @param numberOfInvocations The number of invocations to wait for
    * @param timeoutMillis How long to wait at most

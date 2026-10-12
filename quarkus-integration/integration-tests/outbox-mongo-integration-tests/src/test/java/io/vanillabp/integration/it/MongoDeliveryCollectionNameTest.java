@@ -26,13 +26,13 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * An application which has naming rules for its collections renames the delivery log the
- * way it renames the outbox: <code>vanillabp.outbox.mongo.delivery-collection</code>.
+ * An application which has naming rules for its collections renames the delivery log like
+ * it renames the outbox: <code>vanillabp.outbox.mongo.delivery-collection</code>.
  * <p>
- * The name is followed rather than read back: the record has to land in the configured
- * collection, the indexes have to be created on the same one, and the default name must
- * not exist at all. A wiring which read the property and then wrote to the constant would
- * pass a test asserting the property and fail this one.
+ * The test follows the name and does not just read it back. The record has to land in the
+ * configured collection. The indexes have to be created on the same one. And the default
+ * name must not exist at all. Code which read the property and then wrote to the constant
+ * would pass a test which checks the property, but it fails this one.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoDeliveryCollectionNameTest {

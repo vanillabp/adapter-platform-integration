@@ -12,37 +12,36 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
- * The convention a build can check about a guiding message: it reads as a sentence.
+ * The rule a build can check about a guiding message: it reads as a sentence.
  * <p>
- * A message is the manual a developer of a VanillaBP application reads in the moment
- * something is wrong, so a sentence which fell apart in the source costs them the one
- * explanation they get. One did: a text block was pulled onto a single line while its
- * indentation stayed where it was, and the reader got thirteen spaces in the middle of a
- * sentence. It stood like that over two changes, because nothing reads a message and
- * nobody diffs a string they did not touch.
+ * A message is the manual which a developer of a VanillaBP application reads when
+ * something is wrong. A sentence which fell apart in the source costs them the one
+ * explanation they get. This happened once. A text block was pulled onto a single line,
+ * but its indentation stayed. The reader got thirteen spaces in the middle of a sentence.
+ * It stayed like that over two changes, because nothing reads a message, and nobody
+ * diffs a string they did not touch.
  * <p>
  * Two things are checked. A run of spaces between two words is read from the VALUE of a
- * string, because a text block loses its indentation on the way to the reader and the check
+ * string. A text block loses its indentation on the way to the reader, and the check
  * strips it the way Java does. Two words glued into one are read from the source instead,
- * because the joining is what hides them. Only the main sources are read: a message a test
+ * because the joining hides them. Only the main sources are read. A message which a test
  * writes reaches nobody.
  * <p>
- * Two more rules were measured and left out. A message without a closing full stop cannot be
- * told from a fragment, since most messages are assembled from several strings and the end
- * of one of them is not the end of a sentence. And whether a message names a way out is not
- * a question a string can answer; a message which only reports what happened is sometimes
- * the right one.
+ * Two more rules were measured and left out. A message without a closing full stop cannot
+ * be told from a fragment. Most messages are built from several strings, and the end of
+ * one string is not the end of a sentence. And no string can answer whether a message
+ * names a way out. Sometimes a message which only reports what happened is the right one.
  */
 public final class MessageConventions {
 
   /**
-   * Two words with more than one space between them, which is what a sentence pulled
-   * apart looks like once the indentation is gone.
+   * Two words with more than one space between them. This is how a sentence pulled apart
+   * looks once the indentation is gone.
    * <p>
-   * Both sides have to be a word for a reason. A run of spaces which lines up the
-   * comments of a configuration sample is there on purpose, and so is the second space
-   * somebody puts after a full stop. Neither of those has a word to its left AND a word to
-   * its right, and both stand in this repository.
+   * Both sides have to be a word for a reason. A run of spaces which lines up the comments
+   * of a configuration sample is there on purpose. So is a second space after a full stop.
+   * Neither has a word on its left AND a word on its right, and both appear in this
+   * repository.
    */
   private static final Pattern WORDS_PULLED_APART = Pattern.compile("\\w {2,}\\w");
 
@@ -54,11 +53,11 @@ public final class MessageConventions {
   /**
    * A line of a text block which is continued into the next one and ends with a word.
    * <p>
-   * The continuation joins the two lines without anything between them, so a word at the
-   * end of the first one and a word at the start of the second one arrive as one word.
-   * That defect cannot be seen in the value any more, which is why this reads the source.
-   * A line ending with something else is left alone: a CREATE TABLE broken after its
-   * opening bracket is written that way on purpose, and this repository holds such lines.
+   * The continuation joins the two lines with nothing between them. So a word at the end
+   * of the first line and a word at the start of the second arrive as one word. The value
+   * no longer shows this defect, so this reads the source. A line which ends with
+   * something else is left alone. A CREATE TABLE broken after its opening bracket is
+   * written that way on purpose, and this repository has such lines.
    */
   private static final Pattern CONTINUED_AFTER_A_WORD = Pattern.compile("\\w\\\\$");
 
@@ -242,9 +241,9 @@ public final class MessageConventions {
   }
 
   /**
-   * Whether a line opens a text block. A line holding the opening AND the closing
-   * delimiter is a one-line text block, whose value has no indentation to lose, so it is
-   * read as a plain string.
+   * Whether a line opens a text block. A line with the opening AND the closing delimiter
+   * is a one-line text block. Its value has no indentation to lose, so it is read as a
+   * plain string.
    *
    * @param line The line
    * @return Whether the text block goes on below this line
@@ -293,8 +292,8 @@ public final class MessageConventions {
     for (var line = opening + 1; line < closing; line++) {
       body.add(lines[line]);
     }
-    // the closing delimiter may sit behind the last line of the text, and that line is
-    // then part of the text like any other
+    // The closing delimiter may stand at the end of the last line of text. That line is
+    // then part of the text like any other.
     final var beforeTheClosingDelimiter = lines[closing].substring(0, lines[closing].indexOf("\"\"\""));
     if (!beforeTheClosingDelimiter.isBlank()) {
       body.add(beforeTheClosingDelimiter);
@@ -317,9 +316,9 @@ public final class MessageConventions {
   }
 
   /**
-   * How much of the indentation of a text block belongs to the source rather than to the
-   * value: the smallest indentation of a line which holds something, and of the line
-   * carrying the closing delimiter.
+   * How much of the indentation of a text block belongs to the source and not to the
+   * value. It is the smallest indentation of the lines which hold something and of the
+   * line with the closing delimiter.
    *
    * @param body The lines of the text, the one carrying the closing delimiter behind it
    *          included
@@ -370,9 +369,9 @@ public final class MessageConventions {
   }
 
   /**
-   * The escapes this check has to resolve. A newline written as an escape starts a line
-   * of its own, and the two spaces behind it are then an indentation rather than a gap in
-   * a sentence. Everything else stays as it is: no other escape turns into a space.
+   * The escapes this check has to resolve. A newline written as an escape starts a new
+   * line. Two spaces after it are then an indentation, not a gap in a sentence. Everything
+   * else stays as it is, because no other escape turns into a space.
    *
    * @param text What the source holds
    * @return What the reader gets

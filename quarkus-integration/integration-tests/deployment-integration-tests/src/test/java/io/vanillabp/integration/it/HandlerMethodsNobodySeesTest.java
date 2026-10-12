@@ -18,12 +18,13 @@ import io.vanillabp.integration.test.inheritance.OverriddenHandlerBase;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Handler methods which a developer reads in their own source and VanillaBP never sees: a
- * <code>&#64;WorkflowTask</code> method which is not public, an override which repeated none
- * of the annotations, and the same defect in the annotation of an EXTENSION. All of them used
- * to end in a task nobody serves - the extension's one in nothing at all, since an extension
- * simply behaves as if the application had never written the method - so the boot now names
- * them, the class each is declared in and what to do about it.
+ * Handler methods which a developer reads in their own source, but which VanillaBP never
+ * sees: a <code>&#64;WorkflowTask</code> method which is not public, an override which
+ * repeated none of the annotations, and the same defect in the annotation of an EXTENSION.
+ * All of them used to end in a task which nobody serves. The extension's one ended in
+ * nothing at all, because an extension simply behaves as if the application had never
+ * written the method. So now the boot names them, the class each one is declared in, and
+ * what to do about it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class HandlerMethodsNobodySeesTest {
@@ -39,8 +40,8 @@ public class HandlerMethodsNobodySeesTest {
           .addAsResource("inheritance-module-descriptor/workflow-module", "META-INF/workflow-module"))
       .setLogRecordPredicate(record -> record.getLevel().intValue() >= Level.WARNING.intValue())
       .assertLogRecords(records -> {
-        // both reports stand in the block the whole start writes, which is ONE record,
-        // so they are told apart by the words each of them opens with
+        // both reports stand in the block which the whole start writes, and that is ONE
+        // record. So they are told apart by the words each of them starts with
         final var reports = records
             .stream()
             .map(record -> record.getMessage() == null

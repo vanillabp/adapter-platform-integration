@@ -12,9 +12,9 @@ import io.vanillabp.spi.service.TaskParam;
 import io.vanillabp.spi.service.WorkflowService;
 
 /**
- * The application's side of the sample extension: methods carrying the extension's own
- * annotation, right next to the {@code ProcessService} of the same aggregate - which is
- * what an application of the Business Cockpit looks like.
+ * The application side of the sample extension. These methods carry the annotation of the
+ * extension, right next to the {@code ProcessService} of the same aggregate. An
+ * application of the Business Cockpit looks like this.
  */
 @Service
 @WorkflowService(
@@ -25,8 +25,8 @@ public class NotedWorkflowService {
   private final ProcessService<NotedAggregate> processService;
 
   /**
-   * The extension's per-aggregate service, injected like the process service and
-   * optional - the second aggregate of this scenario never asks for it.
+   * The service of the extension for this aggregate. It is injected like the process
+   * service, and it is optional. The second aggregate of this scenario never asks for it.
    */
   private final SampleNoteService<NotedAggregate> noteService;
 
@@ -52,7 +52,7 @@ public class NotedWorkflowService {
   }
 
   /**
-   * Matched by the element the annotation names, and taking every kind of parameter the
+   * Matched by the element the annotation names. It takes every kind of parameter the
    * contract allows: the workflow aggregate, the prefilled note, what happened to the
    * element and a process variable.
    *
@@ -78,7 +78,7 @@ public class NotedWorkflowService {
   }
 
   /**
-   * Matched by its own name, which is the convention VanillaBP's own annotations follow.
+   * Matched by its own name, as with the annotations of VanillaBP itself.
    *
    * @param prefilled The note this extension prefilled
    * @return The note the extension publishes
@@ -93,9 +93,9 @@ public class NotedWorkflowService {
   }
 
   /**
-   * One of two methods for the same user task, this one naming its BPMN element id. Which
-   * of the two runs is decided by the order the extension offers its keys in, and the
-   * element id is the one VanillaBP asks for first.
+   * One of two methods for the same user task. This one names its BPMN element id. The
+   * order in which the extension offers its keys decides which of the two runs. VanillaBP
+   * asks for the element id first.
    *
    * @param prefilled The note this extension prefilled
    * @return The note the extension publishes
@@ -110,9 +110,9 @@ public class NotedWorkflowService {
   }
 
   /**
-   * The other one, naming the task definition of the same user task. It reads a process
-   * variable the method naming the element id does not, so the extension can tell which of
-   * the two its keys reach.
+   * The other one, which names the task definition of the same user task. It reads a
+   * process variable which the other method does not read. So the extension can tell
+   * which of the two its keys reach.
    *
    * @param prefilled The note this extension prefilled
    * @param reviewer A process variable only this method reads
@@ -129,10 +129,10 @@ public class NotedWorkflowService {
   }
 
   /**
-   * One of two methods for one element, this one for the first version of the model. A
-   * version an extension reports picks the method the way it picks a
-   * <code>&#64;WorkflowTask</code> method, so two generations of a model stand next to
-   * each other here as well.
+   * One of two methods for one element. This one is for the first version of the model.
+   * The version an extension reports picks the method, just as it picks a
+   * <code>&#64;WorkflowTask</code> method. So two generations of a model can live side by
+   * side here as well.
    *
    * @param prefilled The note this extension prefilled
    * @param input A process variable the first generation of the model provides
@@ -166,11 +166,11 @@ public class NotedWorkflowService {
   }
 
   /**
-   * A method of the extension which VanillaBP never sees, because the scan of a handler
-   * contract reads the PUBLIC methods of a workflow service class the way the scan of
-   * <code>&#64;WorkflowTask</code> does. Nothing about the wiring gives that away for an
-   * extension - it simply behaves as if this method had never been written - so the boot
-   * names it, which is what {@code ExtensionHandlerMethodsNobodySeesTest} reads.
+   * A method of the extension which VanillaBP never sees. The scan of a handler contract
+   * reads only the PUBLIC methods of a workflow service class, like the scan of
+   * <code>&#64;WorkflowTask</code>. For an extension, nothing in the wiring shows this. It
+   * just behaves as if this method had never been written. So the boot names it, and
+   * {@code ExtensionHandlerMethodsNobodySeesTest} reads that.
    *
    * @param prefilled The note this extension prefilled
    * @return What would have been published if anybody could call it

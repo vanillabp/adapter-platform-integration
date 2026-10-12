@@ -20,13 +20,12 @@ import jakarta.annotation.Priority;
 import jakarta.enterprise.event.Observes;
 
 /**
- * Pins the startup-observer ordering contract: the deployment runner
- * observes the {@link StartupEvent} with a LOWER priority value (= earlier) than
- * both phase-two outbox dispatchers, so a crash-recovered phase-two operation is
- * never dispatched before BPMN resources were deployed and workflow processing
- * started. The functional proof lives in the deployment integration tests
- * (OutboxRecoveryOrderingTest); this test fails fast if someone removes or reorders
- * the priorities.
+ * Holds the order of the startup observers. The deployment runner observes the
+ * {@link StartupEvent} with a LOWER priority value (that is, earlier) than both phase-two
+ * outbox dispatchers. So a phase-two operation from crash recovery is never dispatched
+ * before the BPMN resources were deployed and the workflow processing started. The
+ * functional proof lives in the deployment integration tests (OutboxRecoveryOrderingTest).
+ * This test fails fast if someone removes the priorities or changes their order.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class StartupObserverPriorityTest {

@@ -14,10 +14,9 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Convention over configuration: a workflow module found in the
- * classpath needs NO <code>vanillabp.workflow-modules.&lt;id&gt;</code> section at
- * all - the section is derived and its BPMN is read from the conventional
- * location.
+ * Convention over configuration: a workflow module found in the classpath needs NO
+ * <code>vanillabp.workflow-modules.&lt;id&gt;</code> section at all. The section is derived,
+ * and its BPMN is read from the conventional location.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class NoWorkflowModuleConfigurationTest {
@@ -27,7 +26,6 @@ public class NoWorkflowModuleConfigurationTest {
       .setArchiveProducer(() -> ShrinkWrap
           .create(JavaArchive.class)
           .addPackage("io.vanillabp.integration.test.samples.sample")  // load sample application classes
-          // load sample application properties
           .addAsResource("no-workflow-module/application.yaml", "application.yaml")
           .addAsResource("workflow-module-descriptor/workflow-module", WorkflowModule.METAINF_WORKFLOWMODULE)           // define workflow module at global classpath
           .addClass(DummyAdapters.class)

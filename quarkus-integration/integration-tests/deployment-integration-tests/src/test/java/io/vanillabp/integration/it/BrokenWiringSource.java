@@ -8,7 +8,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.BpmnTaskSpec;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Supplies a task the workflow service does not implement (see
+ * Supplies a task which the workflow service does not implement (see
  * {@link IncompleteTaskWiringTest}).
  */
 @ApplicationScoped

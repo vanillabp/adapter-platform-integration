@@ -9,8 +9,8 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * A JPA workflow aggregate: its outbox entries have to land in the JDBC
- * outbox, riding the JPA transaction.
+ * A JPA workflow aggregate. Its outbox entries must land in the JDBC outbox, inside the
+ * JPA transaction.
  */
 @Entity
 @Table(name = "MIXED_JPA_AGGREGATE")

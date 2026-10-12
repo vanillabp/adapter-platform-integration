@@ -7,12 +7,12 @@ import io.vanillabp.integration.spi.TransactionRunner;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * A transaction runner an APPLICATION brings, the shape used where the aggregates live
- * in a store the platform does not manage. It runs the work as it is and counts what it
- * was asked for, which is all a test about the resolution needs.
+ * A transaction runner which an APPLICATION brings. An application does this when its
+ * aggregates live in a store the platform does not manage. The runner runs the work as it
+ * is and counts what it was asked for. A test about the resolution needs no more.
  * <p>
- * That it is a bean of type {@link TransactionRunner} is the point: the platform's own
- * runner is a bean too, and only because that one is restricted to its concrete class
+ * The point is that it is a bean of type {@link TransactionRunner}. The platform's own
+ * runner is a bean too, but it is restricted to its concrete class. Only because of that
  * does this one stay the single bean of the SPI type.
  */
 @ApplicationScoped

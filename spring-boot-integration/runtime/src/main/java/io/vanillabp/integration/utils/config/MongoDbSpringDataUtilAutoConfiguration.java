@@ -12,16 +12,15 @@ import io.vanillabp.integration.utils.SpringDataUtil;
 
 /**
  * Auto-configuration of the MongoDB-based {@link SpringDataUtil} (see
- * {@link MongoDbSpringDataUtilConfiguration}). Only active if
+ * {@link MongoDbSpringDataUtilConfiguration}). It is only active if
  * <ul>
  *   <li>Spring Data MongoDB is on the classpath,</li>
  *   <li>a {@link MongoDatabaseFactory} is available and</li>
  *   <li>no other {@link SpringDataUtil} bean was defined.</li>
  * </ul>
- * It is ordered after {@link JpaSpringDataUtilConfiguration}: if both JPA and
- * MongoDB are configured, JPA wins deterministically. To force MongoDB-based
- * aggregate persistence in this situation import
- * {@link MongoDbSpringDataUtilConfiguration} explicitly.
+ * It runs after {@link JpaSpringDataUtilConfiguration}. So if both JPA and MongoDB are
+ * configured, JPA always wins. To use MongoDB for aggregate persistence in that case,
+ * import {@link MongoDbSpringDataUtilConfiguration} yourself.
  */
 @AutoConfiguration(
     after = JpaSpringDataUtilConfiguration.class,
@@ -34,9 +33,9 @@ public class MongoDbSpringDataUtilAutoConfiguration {
 
   /**
    * Built by Spring Boot while it applies its auto-configurations, and only where the
-   * conditions above hold. It defines no bean itself - importing
-   * {@link MongoDbSpringDataUtilConfiguration} is all it does, so an application may import
-   * that one directly and get the same bean without these conditions.
+   * conditions above hold. It defines no bean itself. All it does is import
+   * {@link MongoDbSpringDataUtilConfiguration}. So an application may import that one
+   * directly and get the same bean without these conditions.
    */
   public MongoDbSpringDataUtilAutoConfiguration() {
   }

@@ -6,8 +6,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
 /**
- * Attributes the test's aggregate to the outbox which never dispatches, so the JDBC
- * outbox the data source brings along stays out of this test.
+ * Assigns the aggregate of the test to the outbox which never dispatches. So the JDBC
+ * outbox, which comes with the data source, stays out of this test.
  */
 @ApplicationScoped
 public class ActivationOutboxAware implements PhaseTwoOutboxAware<ActivationAggregate> {

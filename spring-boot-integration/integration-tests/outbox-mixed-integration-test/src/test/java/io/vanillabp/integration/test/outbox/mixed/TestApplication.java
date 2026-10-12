@@ -33,20 +33,20 @@ import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
 import jakarta.persistence.EntityManagerFactory;
 
 /**
- * Test application combining JPA (H2) and MongoDB aggregate persistence in ONE
- * application (the mixed-persistence scenario, e.g. during a migration):
+ * Test application which persists aggregates with JPA (H2) and with MongoDB in ONE
+ * application. This is the mixed-persistence scenario, for example during a migration:
  * <ul>
- * <li>both transaction managers are defined explicitly (Spring Boot's JPA
- * auto-configured one backs off as soon as any other {@code TransactionManager} bean
- * exists); the JPA one keeps the conventional name {@code transactionManager} the
- * JDBC outbox default enlists with;</li>
- * <li>the MongoDB aggregate gets a Spring-Data-based persistence explicitly (the
- * platform's fallback uses THE single {@code SpringDataUtil} bean, which is the JPA
- * one here);</li>
- * <li>the "hot" JPA aggregate gets a DEDICATED outbox on tables of its own
- * ({@code HOT_OUTBOX} and {@code HOT_PAYLOAD}) via a {@link PhaseTwoOutboxAware} bean -
- * the user-side recipe for isolating a high-load process (an outbox of its own plus the
- * attribution bean).</li>
+ * <li>both transaction managers are defined explicitly. Spring Boot does not create its
+ * JPA manager as soon as any other {@code TransactionManager} bean exists. The JPA
+ * manager keeps the usual name {@code transactionManager}, which the default JDBC
+ * outbox joins;</li>
+ * <li>the MongoDB aggregate gets an explicit persistence based on Spring Data. The
+ * fallback of the platform uses THE single {@code SpringDataUtil} bean, and that is the
+ * JPA one here;</li>
+ * <li>the "hot" JPA aggregate gets its OWN outbox on its own tables ({@code HOT_OUTBOX}
+ * and {@code HOT_PAYLOAD}) through a {@link PhaseTwoOutboxAware} bean. This is how a user
+ * separates a process under high load: its own outbox plus the bean which assigns
+ * it.</li>
  * </ul>
  */
 @SpringBootApplication
@@ -74,10 +74,10 @@ public class TestApplication {
   }
 
   /**
-   * With a JPA and a MongoDB transaction manager in one application, no manager is
-   * THE one - so the application says which aggregate belongs to which. Each bean returns a
-   * runner bound to the matching manager, and VanillaBP runs everything it does with that
-   * aggregate inside it.
+   * With a JPA and a MongoDB transaction manager in one application, no manager is THE
+   * one. So the application says which aggregate belongs to which manager. Each bean
+   * returns a runner bound to the matching manager. VanillaBP runs everything it does with
+   * that aggregate inside this runner.
    *
    * @param transactionManager The JPA manager
    * @return The attribution of the JPA aggregate
@@ -104,8 +104,8 @@ public class TestApplication {
   }
 
   /**
-   * The "hot" aggregate is JPA-persisted as well, and gets the JPA manager for the same
-   * reason.
+   * The "hot" aggregate is persisted with JPA as well. So it gets the JPA manager for the
+   * same reason.
    *
    * @param transactionManager The JPA manager
    * @return The attribution of the hot aggregate
@@ -132,7 +132,7 @@ public class TestApplication {
   }
 
   /**
-   * The MongoDB aggregate gets the MongoDB manager - the one which really covers its store.
+   * The MongoDB aggregate gets the MongoDB manager, which really covers its store.
    *
    * @param transactionManager The MongoDB manager
    * @return The attribution of the MongoDB aggregate
@@ -175,10 +175,10 @@ public class TestApplication {
   }
 
   /**
-   * Spring-Data-based persistence for the MongoDB aggregate: the platform's
-   * fallback uses the single {@code SpringDataUtil} bean (the JPA one in this
-   * application), so the MongoDB aggregate needs its persistence assigned
-   * explicitly - the regular pattern for mixed-persistence applications.
+   * A persistence based on Spring Data for the MongoDB aggregate. The fallback of the
+   * platform uses the single {@code SpringDataUtil} bean, which is the JPA one in this
+   * application. So the MongoDB aggregate needs an explicit persistence. That is the usual
+   * pattern for applications with mixed persistence.
    *
    * @param applicationContext Used to look up the aggregate's repository
    * @param databaseFactory The MongoDB database factory
@@ -197,10 +197,10 @@ public class TestApplication {
   }
 
   /**
-   * The dedicated outbox for the "hot" process, writing its entries into
+   * The own outbox of the "hot" process. It writes its entries into
    * {@link #HOT_OUTBOX_TABLE} and the payloads into {@link #HOT_PAYLOAD_TABLE}. It is the
-   * same store the platform default is, on tables nothing else writes into, and it creates
-   * them itself the way the default does.
+   * same kind of store as the platform default, but on tables nobody else writes into. It
+   * creates them itself, as the default does.
    *
    * @param dataSource The data source holding the tables
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree, whose outbox
@@ -224,9 +224,9 @@ public class TestApplication {
   }
 
   /**
-   * Attributes the "hot" aggregate to its dedicated outbox - all other aggregates
-   * keep the platform-default selection (JPA aggregate → the JDBC default, MongoDB
-   * aggregate → MongoDB default).
+   * Assigns the "hot" aggregate to its own outbox. All other aggregates keep the choice
+   * of the platform (JPA aggregate → the JDBC default, MongoDB aggregate → the MongoDB
+   * default).
    *
    * @param hotPhaseTwoOutbox The dedicated outbox
    * @return The attribution bean

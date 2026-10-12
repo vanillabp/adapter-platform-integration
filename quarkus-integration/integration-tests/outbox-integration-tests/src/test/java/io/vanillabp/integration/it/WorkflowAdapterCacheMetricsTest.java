@@ -28,10 +28,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * Sizing and observing the election cache on Quarkus: the bounds come
- * from <code>vanillabp.workflow-adapter-cache.*</code>, and an application using the
- * Micrometer extension gets the cache's numbers as meters - Quarkus applies every
- * {@code MeterBinder} bean to its registry, so nothing but the bean is needed.
+ * Sizing and observing the election cache on Quarkus. The bounds come from
+ * <code>vanillabp.workflow-adapter-cache.*</code>. An application which uses the
+ * Micrometer extension gets the cache's numbers as meters. Quarkus applies every
+ * {@code MeterBinder} bean to its registry, so the bean is all that is needed.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowAdapterCacheMetricsTest {
@@ -64,9 +64,9 @@ public class WorkflowAdapterCacheMetricsTest {
   WorkflowAdapterCacheStatistics statistics;
 
   /**
-   * Quarkus' own {@code MeterRegistry} bean is a composite without any backend in
-   * this test, and a composite without children reports nothing - this registry is
-   * added to it as a child, so the values are readable.
+   * In this test, Quarkus' own {@code MeterRegistry} bean is a composite without any
+   * backend, and a composite without children reports nothing. This registry is added to
+   * it as a child, so the values can be read.
    */
   @Inject
   SimpleMeterRegistry meterRegistry;

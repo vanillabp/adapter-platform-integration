@@ -10,9 +10,9 @@ import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 
 /**
- * An annotation of the application composing {@code @WorkflowService}, the second shape
- * of the same defect: Spring Boot resolves such a meta-annotation, Quarkus reports the
- * annotation type itself as the annotated one. See
+ * An annotation of the application which carries {@code @WorkflowService}. It is the second
+ * form of the same defect. Spring Boot resolves such a meta-annotation (an annotation on an
+ * annotation). Quarkus reports the annotation type itself as the annotated one. See
  * {@link WorkflowServiceDiscoveryTest#anAnnotationOfTheApplicationEndsTheStartNamingBothTypes}.
  */
 @Retention(RUNTIME)

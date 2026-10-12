@@ -7,10 +7,9 @@ import io.vanillabp.spi.service.BpmnProcess;
 import io.vanillabp.spi.service.WorkflowService;
 
 /**
- * Bound to BPMN process 'DummyProcess' (the process ID the dummy adapter reports from
- * readBpmn) - the workflow whose prioritized adapters are overridden by
- * {@code WorkflowLevelOverrideTest}. See {@link OverriddenAggregate} for why this
- * lives in its own package.
+ * Bound to BPMN process 'DummyProcess', the process ID the dummy adapter reports from
+ * readBpmn. {@code WorkflowLevelOverrideTest} overrides the prioritized adapters of this
+ * workflow. {@link OverriddenAggregate} says why this class lives in its own package.
  */
 @WorkflowService(
     workflowAggregateClass = OverriddenAggregate.class,

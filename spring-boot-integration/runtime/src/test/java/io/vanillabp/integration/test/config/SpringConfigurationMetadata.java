@@ -11,19 +11,19 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * The configuration metadata of VanillaBP's own artifacts, for the tests which hold it.
+ * The configuration metadata of VanillaBP's own artifacts, for the tests which check it.
  * <p>
- * Every framework jar ships files of the same two names, so a test reading the whole
- * classpath would be answered by somebody else's file. What counts as ours: a module of
- * this build writes into its own <code>target</code> directory, and a module which is
- * already released lies below the group's directory in a Maven repository.
+ * Every framework jar ships files with the same two names. So a test which reads the whole
+ * classpath could get its answer from somebody else's file. These files count as ours: a
+ * module of this build writes into its own <code>target</code> directory, and a released
+ * module lies below the group's directory in a Maven repository.
  */
 final class SpringConfigurationMetadata {
 
   /**
-   * What the annotation processor writes while the main sources are compiled. It carries
-   * the fields it found plus everything the hand-written file adds, so it is the file a
-   * development environment reads.
+   * What the annotation processor writes while the main sources are compiled. It holds the
+   * fields the processor found plus everything the hand-written file adds. So a development
+   * environment reads this file.
    */
   static final String GENERATED = "META-INF/spring-configuration-metadata.json";
 

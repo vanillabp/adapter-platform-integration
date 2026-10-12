@@ -5,18 +5,18 @@ import io.vanillabp.integration.utils.SpringDataUtil;
 
 /**
  * The persistence VanillaBP falls back to when no {@link AggregatePersistenceAware} bean
- * covers a workflow aggregate: everything it does, it does through a Spring Data
+ * covers a workflow aggregate. Everything it does, it does through a Spring Data
  * repository of that aggregate.
  * <p>
- * Which is why a missing repository is a defect rather than a variant, and why it is
- * reported while the application STARTS. Without that the application
- * booted and failed at the first task delivery or the first <code>startWorkflow</code>,
- * with Spring Data's own <code>No Spring Data repository defined for ...</code> and
- * nothing about the workflow it belonged to. Quarkus decides the same question while it
- * builds, so the same application used to fail there and start here.
+ * So a missing repository is a defect, not a variant. That is why it is reported while
+ * the application STARTS. Before, the application booted and failed at the first task
+ * delivery or the first <code>startWorkflow</code>. The message was Spring Data's own
+ * <code>No Spring Data repository defined for ...</code>, with nothing about the workflow
+ * it belonged to. Quarkus decides the same question while it builds. So the same
+ * application used to fail there and start here.
  *
- * @param <A> The workflow aggregate this instance persists - one instance per aggregate
- *          class, because the class is what a repository is searched for
+ * @param <A> The workflow aggregate this instance persists. There is one instance per
+ *          aggregate class, because a repository is searched for by the class
  */
 public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements AggregatePersistenceAware<A> {
 
@@ -25,15 +25,15 @@ public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements Aggreg
   private final Class<A> aggregateClass;
 
   /**
-   * The workflow module the aggregate belongs to, for the message alone - may be
-   * <code>null</code> where the caller knows none.
+   * The workflow module the aggregate belongs to. It is only used for the message, and it
+   * may be <code>null</code> where the caller knows none.
    */
   private final String workflowModuleId;
 
   /**
-   * The support of an aggregate whose workflow module the caller does not name. The message
-   * about a missing repository then says less, so prefer the constructor below wherever the
-   * module is known.
+   * The support of an aggregate whose workflow module the caller does not name. Then the
+   * message about a missing repository says less. So prefer the constructor below wherever
+   * the module is known.
    *
    * @param springDataUtil How the aggregate's repository is found
    * @param aggregateClass The workflow aggregate's class, which is what the repository is
@@ -48,15 +48,15 @@ public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements Aggreg
   }
 
   /**
-   * The support of an aggregate of one known workflow module, which is what the process
-   * service registrar builds: an application with several modules then reads which of them
-   * the aggregate without a repository belongs to.
+   * The support of an aggregate of one known workflow module. The process service
+   * registrar builds this one. Then an application with several modules reads which of
+   * them the aggregate without a repository belongs to.
    *
    * @param springDataUtil How the aggregate's repository is found
    * @param aggregateClass The workflow aggregate's class, which is what the repository is
    *          searched for
-   * @param workflowModuleId The workflow module the aggregate belongs to, for the message
-   *          alone - <code>null</code> where the caller knows none
+   * @param workflowModuleId The workflow module the aggregate belongs to. It is only used
+   *          for the message. <code>null</code> where the caller knows none
    */
   public SpringDataUtilBasedAggregatePersistenceSupport(
       final SpringDataUtil springDataUtil,
@@ -107,16 +107,15 @@ public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements Aggreg
   public Class<?> getAggregateIdType() {
 
     // the one method the core calls while the application starts (see the constructor of
-    // MigrationProcessService), which makes it the place where a missing repository has to
-    // be reported
+    // MigrationProcessService). So this is where a missing repository has to be reported
     requireRepository();
 
-    // Spring Data is authoritative for the ID type (covers property access,
-    // non-"id"-named IDs etc.). A repository which cannot say what the ID type is answers
-    // null, the contract's "not determinable": that is the layer's own business, an own
-    // SpringDataUtil implementation owning the serialized form for instance. What null
-    // must NOT mean is that there is no repository at all, which is a conflation this
-    // check takes apart
+    // Spring Data has the last word on the ID type. It covers property access, IDs not
+    // named "id" and so on. A repository which cannot say what the ID type is answers
+    // null, which is "not determinable" in the contract. That is the business of that
+    // layer, e.g. an own SpringDataUtil implementation which owns the serialized form.
+    // But null must NOT mean that there is no repository at all. The check above keeps
+    // these two cases apart
     try {
       return springDataUtil.getIdType(aggregateClass);
     } catch (Exception e) {
@@ -137,8 +136,8 @@ public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements Aggreg
   }
 
   /**
-   * Resolves the aggregate's repository once, so an application says what is missing
-   * instead of failing at the first task.
+   * Looks up the aggregate's repository once. So an application learns what is missing,
+   * and does not fail at the first task.
    *
    * @throws IllegalStateException If the aggregate has no Spring Data repository
    */

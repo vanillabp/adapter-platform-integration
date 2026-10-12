@@ -11,10 +11,9 @@ import io.vanillabp.spi.process.WorkflowHistory;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * The BPMS double's viewer data: exactly ONE adapter id serves
- * definitions, BPMN XML and a history - for exactly one aggregate id. Everything
- * else is unknown, so the tests can assert both the happy path and the guiding
- * errors.
+ * The viewer data of the BPMS double. Exactly ONE adapter id serves definitions, BPMN XML
+ * and a history, for exactly one aggregate id. Everything else is unknown. So the tests
+ * can check both the happy path and the guiding errors.
  */
 @ApplicationScoped
 public class SteerableViewerSource implements DummyViewerSource {

@@ -17,60 +17,61 @@ import jakarta.inject.Inject;
 import jakarta.inject.Singleton;
 
 /**
- * Produces the {@link TaskDeliveryLogResolver} of this platform as a CDI bean, the one
- * place a Quarkus application builds it: the generated process-service beans (see
- * {@link ProcessServiceBaseCdiBean}) resolve the log of their aggregate through it, and an
- * extension reading what a workflow is waiting for asks it which store holds the records
- * of that aggregate.
+ * Produces the {@link TaskDeliveryLogResolver} of this platform as a CDI bean. This is the
+ * one place where a Quarkus application builds it. The generated process-service beans (see
+ * {@link ProcessServiceBaseCdiBean}) resolve the log of their aggregate through it. An
+ * extension which reads what a workflow is waiting for asks it which store holds the
+ * records of that aggregate.
  * <p>
- * An extension must not answer that question itself, for the reason
- * {@link PhaseTwoOutboxResolverProducer} spells out for the outbox: which store may serve
- * an aggregate follows the persistence VanillaBP resolved for it and whether a platform
- * default is switched on and usable at all, and both are facts of this module
- * ({@link PlatformDefaultStore} is part of no SPI). An extension guessing along would read
- * a store the aggregate never wrote to. The Spring Boot integration offers its resolver as
- * a bean for the same reason, so what an extension can inject there it can inject here.
+ * An extension must not answer that question itself. {@link PhaseTwoOutboxResolverProducer}
+ * gives the reason for the outbox, and it holds here too. Which store may serve an aggregate
+ * follows from the persistence which VanillaBP resolved for it. It also follows from
+ * whether a platform default is switched on and can be used at all. Only this module knows
+ * both facts ({@link PlatformDefaultStore} is part of no SPI). An extension which guesses
+ * would read a store which the aggregate never wrote to. The Spring Boot integration offers
+ * its resolver as a bean for the same reason. So what an extension can inject there, it can
+ * inject here.
  * <p>
- * Reading is all an extension does with the answer. The records are written by the core,
- * in the transaction which saves the workflow aggregate, and a second writer would put
- * work into the log which never ran.
+ * An extension only reads with the answer. The core writes the records, in the transaction
+ * which saves the workflow aggregate. A second writer would put work into the log which
+ * never ran.
  * <p>
- * The configuration is READ, not injected, for the reason
- * {@link WorkflowAdapterCacheProducer} names: an injected config mapping is validated
- * before the adapter extensions registered their run-time overlays, and every
- * adapter-specific key would then end the startup as unknown.
+ * The configuration is READ, not injected. {@link WorkflowAdapterCacheProducer} names the
+ * reason: an injected config mapping is checked before the adapter extensions registered
+ * their run-time overlays. Then every adapter-specific key would end the startup as
+ * unknown.
  */
 @ApplicationScoped
 public class TaskDeliveryLogResolverProducer {
 
   /**
-   * Built by the CDI container, which the platform's build step told about this class. What
-   * the producer method below needs arrives through the injected fields.
+   * The CDI container creates it, because the platform's build step told it about this class.
+   * What the producer method below needs arrives through the injected fields.
    */
   public TaskDeliveryLogResolverProducer() {
   }
 
   /**
-   * Application-provided attributions of aggregates to delivery logs (required in
-   * mixed-persistence setups, optional otherwise).
+   * What the application says about which delivery log serves which aggregate. It is
+   * required where the application mixes persistences, and optional otherwise.
    */
   @Inject
   @Any
   Instance<TaskDeliveryLogAware<?>> taskDeliveryLogAwares;
 
   /**
-   * The logs available at runtime: the platform defaults of both technologies plus
-   * whatever the application contributed. Unsatisfied where no store is available at all
-   * (no datasource, no MongoDB client) - the resolver answers <code>null</code> then, and
-   * the startup validation says what a BPMS repeating a delivery costs without one.
+   * The logs which are there at runtime: the platform defaults of both technologies plus
+   * whatever the application added. It is unsatisfied where there is no store at all (no
+   * datasource, no MongoDB client). Then the resolver answers <code>null</code>. The startup
+   * check says what a BPMS which repeats a delivery costs without a log.
    */
   @Inject
   @Any
   Instance<TaskDeliveryLog> taskDeliveryLogs;
 
   /**
-   * The persistences of the application, which is what an aggregate's store is read off.
-   * Injected as {@link Instance} because a class annotated by
+   * The persistences of the application. They tell which store an aggregate uses. They are
+   * injected as {@link Instance}, because a class annotated with
    * {@link io.vanillabp.spi.service.WorkflowService} may implement
    * {@link AggregatePersistenceAware} itself.
    */
@@ -79,9 +80,9 @@ public class TaskDeliveryLogResolverProducer {
   Instance<AggregatePersistenceAware<?>> aggregatePersistences;
 
   /**
-   * Builds the resolver of this application: the beans injected above, plus the two switches
-   * the log shares with the outbox, read out of the configuration. What ends up in such a log
-   * is decided in decision 54 in the repository's DECISIONS.md.
+   * Builds the resolver of this application from the beans injected above and the two
+   * switches which the log shares with the outbox, read from the configuration. What ends up
+   * in such a log is decided in decision 54 in the repository's DECISIONS.md.
    *
    * @return The resolver, injectable by extensions and used by the process services
    */

@@ -18,9 +18,9 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * A class carrying the declaration may be a bean itself, next to the subclass inheriting it.
- * Both are then workflow services: both are classes the application can get handlers from,
- * and each serves the BPMN process its own annotation attributes name.
+ * A class which carries the declaration may be a bean itself, next to the subclass which
+ * inherits it. Then both are workflow services. The application can get handlers from both
+ * classes. Each serves the BPMN process which its own annotation attributes name.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AnnotatedBaseWhichIsABeanTest {

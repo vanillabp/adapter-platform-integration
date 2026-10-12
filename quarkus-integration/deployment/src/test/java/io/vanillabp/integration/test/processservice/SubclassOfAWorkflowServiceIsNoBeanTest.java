@@ -17,12 +17,12 @@ import io.vanillabp.integration.test.samples.nobeansubclass.SubclassWhichIsNoBea
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * A class inheriting the declaration is a workflow service of its own, so VanillaBP asks CDI
- * for an instance of THAT class - and a bean of a subclass cannot stand in for it, because a
- * subclass is a different workflow service, serving a BPMN process of its own wherever the
- * process ID follows the class name. A class which never became a bean is therefore reported
- * while the application is built, and the message says what to do about it: annotate the
- * class, or make it abstract where it is only meant to carry the declaration.
+ * A class which inherits the declaration is a workflow service of its own. So VanillaBP asks
+ * CDI for an instance of THAT class. A bean of a subclass cannot stand in for it. A subclass
+ * is a different workflow service. Where the process ID follows the class name, it even
+ * serves a BPMN process of its own. So a class which never became a bean is reported while
+ * the application is built. The message says what to do: annotate the class, or make it
+ * abstract where it should only carry the declaration.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class SubclassOfAWorkflowServiceIsNoBeanTest {

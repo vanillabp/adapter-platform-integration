@@ -26,11 +26,11 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test of <code>&#64;WorkflowTask(version = ...)</code> on Quarkus: the version
- * the adapter reports decides which method serves a delivered task,
- * ranges made of numbers are compared without asking the BPMS, and a range naming a
- * version TAG is resolved through the catalog the adapter registered - including the
- * query for a version this application never deployed itself.
+ * Acceptance test of <code>&#64;WorkflowTask(version = ...)</code> on Quarkus. The version
+ * which the adapter reports decides which method serves a delivered task. Ranges made of
+ * numbers are compared without asking the BPMS. A range which names a version TAG is
+ * resolved through the catalog which the adapter registered. That includes the query for a
+ * version which this application never deployed itself.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ProcessVersionsTest {
@@ -113,20 +113,20 @@ public class ProcessVersionsTest {
     dummyAdapter.invokeTask("test-module", "VersionedProcess", context("4711", "3"));
     assertEquals("three", persistence.stored("4711").getServedBy());
 
-    // the version carrying the tag - and no further BPMS query for it
+    // the version which carries the tag, and no further BPMS query for it
     dummyAdapter.invokeTask("test-module", "VersionedProcess", context("4711", "4"));
     assertEquals("tagged", persistence.stored("4711").getServedBy());
     assertEquals(1, versionSource.getQueries());
 
-    // a BPMS reporting NO version reaches none of these methods: every one of them
-    // names versions, and which of them applies is not something to guess
+    // a BPMS which reports NO version reaches none of these methods. Every one of them
+    // names versions, and nobody should guess which of them applies
     final var unreported = assertThrows(
         IllegalStateException.class,
         () -> dummyAdapter.invokeTask("test-module", "VersionedProcess", context("4711", null)));
     assertTrue(unreported.getMessage().contains("reports no process version"), unreported.getMessage());
     assertEquals("tagged", persistence.stored("4711").getServedBy(), "no method ran");
 
-    // ANOTHER cluster node deploys version 5 and moves the tag to it: this node has
+    // ANOTHER cluster node deploys version 5 and moves the tag to it. This node has
     // never seen that version, so it asks the BPMS while the task is dispatched
     versionSource.deployedElsewhere("5", "release-2026");
     dummyAdapter.invokeTask("test-module", "VersionedProcess", context("4711", "5"));

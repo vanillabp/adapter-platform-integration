@@ -24,10 +24,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * over it, whichever of its own files carries the value.
  *
  * <p>Three sources of the same key meet here: <i>test-module.yaml</i> inside the
- * workflow module's jar, <i>application.yaml</i> on the application's classpath
- * and <i>config/application.properties</i> next to the runner, which this test
- * writes into the working directory of the application before starting it.
- * The Spring Boot counterpart is the class of the same name there.
+ * workflow module's jar, <i>application.yaml</i> on the application's classpath, and
+ * <i>config/application.properties</i> next to the runner. This test writes the last one
+ * into the working directory of the application before it starts it. The Spring Boot
+ * counterpart is the class of the same name there.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowModuleConfigurationIsADefaultTest {
@@ -50,10 +50,9 @@ public class WorkflowModuleConfigurationIsADefaultTest {
   ProdModeTestResults prodModeTestResults;
 
   /**
-   * Puts a configuration file next to the runner and starts the application.
-   * Quarkus reads <code>config/application.properties</code> of the working
-   * directory, and the runner's working directory is the one holding the jar
-   * built for this test.
+   * Puts a configuration file next to the runner and starts the application. Quarkus
+   * reads <code>config/application.properties</code> of the working directory. The
+   * runner's working directory is the one which holds the jar built for this test.
    *
    * @throws Exception Thrown if the file cannot be written
    */

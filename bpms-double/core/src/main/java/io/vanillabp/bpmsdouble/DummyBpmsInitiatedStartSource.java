@@ -5,13 +5,13 @@ import java.util.Collection;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartSpec;
 
 /**
- * Optional hook of the dummy adapter used by integration tests to supply the start
- * events a BPMS would fire on its own (timer, signal, conditional): the dummy
- * adapter has no real BPMN model, so a bean of this type stands in for what a real
- * adapter reads during <code>wireBpmn</code>. If a bean is present, the dummy
- * adapter reports the start events to the core (which validates the application's
- * <code>&#64;WorkflowStartedByBpms</code> methods against them); without a bean
- * nothing is reported.
+ * Optional hook of the dummy adapter. Integration tests use it to supply the start
+ * events a BPMS would fire on its own (timer, signal, conditional). The dummy adapter has
+ * no real BPMN model. So a bean of this type stands in for what a real adapter reads in
+ * <code>wireBpmn</code>. If a bean is present, the dummy adapter reports the start
+ * events to the core. The core checks the application's
+ * <code>&#64;WorkflowStartedByBpms</code> methods against them. Without a bean nothing
+ * is reported.
  */
 @FunctionalInterface
 public interface DummyBpmsInitiatedStartSource {
@@ -32,11 +32,11 @@ public interface DummyBpmsInitiatedStartSource {
 
   /**
    * The plain names of the messages which start the given BPMN process, as a real adapter
-   * would read them from the BPMN model. The dummy reports them to the core, which then
-   * checks <code>ProcessService#startWorkflowByMessage</code> against them.
+   * would read them from the BPMN model. The double reports them to the core. The core
+   * then checks <code>ProcessService#startWorkflowByMessage</code> against them.
    * <p>
-   * The default answers <code>null</code>, and the dummy then reports nothing. That is the shape
-   * of an adapter which cannot name the messages of its model.
+   * The default answers <code>null</code>, and the double then reports nothing. An adapter
+   * which cannot name the messages of its model behaves the same.
    *
    * @param adapterId The adapter ID performing the wiring
    * @param workflowModuleId The workflow module ID

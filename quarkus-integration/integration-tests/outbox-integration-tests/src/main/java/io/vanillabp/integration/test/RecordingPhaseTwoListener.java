@@ -8,8 +8,8 @@ import io.vanillabp.bpmsdouble.DummyPhaseTwoListener;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Records phase-two invocations of the dummy adapter and optionally fails a
- * configurable number of dispatches (to test retry behavior of the outbox).
+ * Records the phase-two calls of the dummy adapter. It can also let a given number of
+ * dispatches fail, to test how the outbox retries.
  */
 @ApplicationScoped
 public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
@@ -17,16 +17,16 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   private final List<Object> invocations = new CopyOnWriteArrayList<>();
 
   /**
-   * Recorded phase-two starts as "adapterId:aggregateId" - the migration-scenario
-   * test asserts WHICH adapter instance started the workflow.
+   * Recorded phase-two starts as "adapterId:aggregateId". The migration test checks WHICH
+   * adapter instance started the workflow.
    */
   private final List<String> startedByAdapter = new CopyOnWriteArrayList<>();
 
   private final AtomicInteger failuresRemaining = new AtomicInteger(0);
 
   /**
-   * Whether the failures this listener raises are the kind the dummy adapter reports
-   * as permanent.
+   * Whether the failures this listener raises are of the kind which the dummy adapter
+   * reports as permanent.
    */
   private volatile boolean failPermanently = false;
 
@@ -58,8 +58,8 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   }
 
   /**
-   * The signals broadcast so far, as "signalName/phase" - a broadcast of a remote
-   * BPMS may only happen in phase two, after the commit.
+   * The signals broadcast so far, as "signalName/phase". A remote BPMS may broadcast only
+   * in phase two, after the commit.
    */
   private final List<String> broadcastSignals = new CopyOnWriteArrayList<>();
 
@@ -245,8 +245,8 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   }
 
   /**
-   * Recorded pushes of a changed aggregate as "aggregateId:taskId:phase" (the task
-   * id may be the literal "null" - that is the workflow's global scope).
+   * Recorded pushes of a changed aggregate as "aggregateId:taskId:phase". The task id may
+   * be the literal "null", which means the workflow's global scope.
    */
   private final List<String> aggregateChanges = new CopyOnWriteArrayList<>();
 
@@ -269,8 +269,8 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   }
 
   /**
-   * Lets the next dispatches fail with a failure the adapter reports as PERMANENT -
-   * the store has to block such an entry right away.
+   * Lets the next dispatches fail with a failure which the adapter reports as PERMANENT.
+   * The store has to block such an entry right away.
    *
    * @param numberOfFailures How many dispatches fail
    */
@@ -315,12 +315,12 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   /**
    * Waits until at least the given number of phase-two invocations were recorded.
    * <p>
-   * This says that the ADAPTER was called, not that the operation is over: the listener
-   * runs inside the dispatch, and the dispatcher marks the outbox entry DONE - which is
-   * what frees its idempotency key - only after the dispatch returned. On return the
-   * entry may still be waiting to be marked, so a repetition of the same operation
-   * planned right here can be discarded as a duplicate. A test which needs the key to
-   * be free has to wait for the ENTRY, in the store.
+   * This says that the ADAPTER was called, not that the operation is over. The listener
+   * runs inside the dispatch. The dispatcher marks the outbox entry DONE only after the
+   * dispatch returned, and only that frees its idempotency key. So on return the entry may
+   * still wait to be marked. A repetition of the same operation planned right here can then
+   * be dropped as a duplicate. A test which needs the key to be free has to wait for the
+   * ENTRY, in the store.
    *
    * @param numberOfInvocations The number of invocations to wait for
    * @param timeoutMillis How long to wait at most

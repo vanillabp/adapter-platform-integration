@@ -39,11 +39,11 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Sizing and observing the election cache on Spring Boot: the bounds are
- * bound from <code>vanillabp.workflow-adapter-cache.*</code> and validated at
- * startup, the statistics are published as Micrometer meters where the application
- * brings Micrometer, and an application-provided cache still replaces the default
- * while its lookups are counted like every other cache's.
+ * The size of the election cache and how to observe it, on Spring Boot. The limits come from
+ * <code>vanillabp.workflow-adapter-cache.*</code> and are checked at startup. If the
+ * application brings Micrometer, the statistics are published as Micrometer meters. A cache
+ * of the application still replaces the default, and its lookups are counted like those of
+ * every other cache.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowAdapterCacheConfigurationTest {
@@ -88,7 +88,7 @@ public class WorkflowAdapterCacheConfigurationTest {
           final var cache = context.getBean(WorkflowAdapterCache.class);
           final var inMemoryCache = Assertions
               .assertInstanceOf(InMemoryWorkflowAdapterCache.class, cache);
-          // what the cache knows about itself is the cache's own, not the election's
+          // the cache keeps its own statistics, apart from those of the election
           final var ownStatistics = inMemoryCache.getStatistics();
 
           cache.put(MODULE, PROCESS, "1", "test");
@@ -228,8 +228,8 @@ public class WorkflowAdapterCacheConfigurationTest {
           Assertions.assertNotNull(
               registry.get(WorkflowAdapterCacheStatistics.METER_MISSES).functionCounter());
 
-          // and the in-memory cache's own numbers, under the prefix of that
-          // implementation, from the binder the platform contributes beside the first
+          // The in-memory cache publishes its own numbers, under the prefix of that
+          // implementation. The platform adds a second binder for them.
           context
               .getBean(
                   io.vanillabp.integration.adapter.migration.processservice.InMemoryWorkflowAdapterCacheMeters.class)
@@ -291,8 +291,8 @@ public class WorkflowAdapterCacheConfigurationTest {
           final var statistics = context.getBean(WorkflowAdapterCacheStatistics.class);
           final var cache = context.getBean(ApplicationCache.class);
 
-          // the process services wrap the application's cache - the election of an
-          // unknown workflow is a miss counted here
+          // The process services wrap the application's cache. The election of an unknown
+          // workflow is a miss, and it is counted here.
           Assertions.assertNotNull(processService);
           org.springframework.transaction.support.TransactionSynchronizationManager
               .setActualTransactionActive(true);
@@ -307,8 +307,8 @@ public class WorkflowAdapterCacheConfigurationTest {
 
           Assertions.assertFalse(cache.gets.isEmpty(), "the election consults the application's cache");
           Assertions.assertTrue(statistics.getMisses() > 0, "its lookups are counted like any other");
-          // and the meters of the in-memory cache are not published at all: a size
-          // which cannot be read is a meter which is absent, not one reporting NaN
+          // The meters of the in-memory cache are not published at all. If the size cannot
+          // be read, the meter is missing. It does not report NaN.
           final var registry = new SimpleMeterRegistry();
           context
               .getBean(
@@ -319,17 +319,16 @@ public class WorkflowAdapterCacheConfigurationTest {
               "an application's own cache has no size and no evictions to report but got: "
                   + registry.getMeters());
 
-          // a cache written before ended workflows were marked keeps working: the mark
-          // falls back to an ordinary hint
+          // A cache written before ended workflows were marked keeps working. The mark falls
+          // back to an ordinary hint.
           cache.putEnded(MODULE, PROCESS, "4711", "test");
           Assertions.assertEquals(
               "test",
               cache.get(MODULE, PROCESS, "4711").orElseThrow(),
               "the default of putEnded stores the hint like put does");
-          // the mark of an ended workflow is counted for every cache as well, but the
-          // call above went straight to the application's bean rather than through the
-          // decorator around it - that counting is held where it happens, in
-          // WorkflowAdapterCacheStatisticsTest
+          // The mark of an ended workflow is counted for every cache as well. But the call
+          // above went straight to the application's bean, not through the decorator around
+          // it. WorkflowAdapterCacheStatisticsTest checks this counting where it happens.
 
         });
 
@@ -381,8 +380,8 @@ public class WorkflowAdapterCacheConfigurationTest {
     }
 
     /**
-     * A persistence reporting a stable aggregate ID - the election caches per
-     * aggregate ID, so an aggregate without one is never cached.
+     * A persistence which reports a stable aggregate ID. The election caches per aggregate
+     * ID, so an aggregate without one is never cached.
      */
     @Bean
     io.vanillabp.integration.spi.AggregatePersistenceAware<Aggregate> testAggregatePersistence() {
@@ -413,7 +412,8 @@ public class WorkflowAdapterCacheConfigurationTest {
   }
 
   /**
-   * An application-provided election cache (e.g. backed by a cluster-shared cache).
+   * An election cache of the application, for example one backed by a cache shared in a
+   * cluster.
    */
   static class ApplicationCache implements WorkflowAdapterCache {
 

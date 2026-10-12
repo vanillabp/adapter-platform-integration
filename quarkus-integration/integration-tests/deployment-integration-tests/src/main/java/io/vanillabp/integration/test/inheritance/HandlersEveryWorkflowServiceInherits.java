@@ -4,12 +4,12 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The declaration, abstract and carrying a handler of its own: a subclass serves the
- * process this base declares, and the handler methods it inherits belong to that service
- * as much as the ones it writes itself.
+ * The declaration. It is abstract and has a handler of its own. A subclass serves the
+ * process which this base declares. The handler methods the subclass inherits belong to
+ * that service just like the ones it writes itself.
  * <p>
- * No <code>bpmnProcess</code> is named, so the process is named after the class serving
- * it, which is the subclass.
+ * No <code>bpmnProcess</code> is named. So the process gets the name of the class which
+ * serves it, and that is the subclass.
  */
 @WorkflowService(workflowAggregateClass = InheritedAggregate.class)
 public abstract class HandlersEveryWorkflowServiceInherits {

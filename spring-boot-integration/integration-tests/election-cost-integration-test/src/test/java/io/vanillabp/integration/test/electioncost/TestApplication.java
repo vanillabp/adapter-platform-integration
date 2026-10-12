@@ -29,8 +29,8 @@ public class TestApplication {
   }
 
   /**
-   * Stands in for what an adapter reads out of the model of this scenario: which BPMN
-   * process the file declares, and that it has no task needing a handler.
+   * Stands in for what an adapter reads out of the model of this scenario. The file
+   * declares one BPMN process, and no task of it needs a handler.
    *
    * @return What this scenario's BPMN file holds
    */

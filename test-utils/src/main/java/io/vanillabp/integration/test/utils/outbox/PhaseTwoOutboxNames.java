@@ -7,11 +7,10 @@ import io.vanillabp.integration.test.utils.ConstantOfAnotherModule;
 /**
  * The names of the phase-two outbox, taken from the classes which declare them.
  * <p>
- * A test which reads the outbox needs the name of a table and the values its state
- * column holds. Writing those names into the test is what this class is here to
- * prevent: each one is read from the class which owns it, so a rename in the platform
- * is followed here and nowhere else. {@link ConstantOfAnotherModule} does the reading
- * and says why it happens by reflection.
+ * A test which reads the outbox needs the name of a table and the values of its state
+ * column. This class keeps those names out of the tests. Each one is read from the
+ * class which owns it. So when the platform renames one, only this class follows.
+ * {@link ConstantOfAnotherModule} does the reading and says why it uses reflection.
  */
 final class PhaseTwoOutboxNames {
 
@@ -34,15 +33,15 @@ final class PhaseTwoOutboxNames {
 
   /**
    * The class every gruelbox-based store needs. It answers whether the application under
-   * test can run that store at all, which is a question about the library and not about
-   * VanillaBP: the store left this repository and lives in an artifact of its own.
+   * test can run that store at all. This is a question about the library, not about
+   * VanillaBP, because the store left this repository and lives in an artifact of its own.
    */
   private static final String GRUELBOX_LIBRARY = "com.gruelbox.transactionoutbox.TransactionOutbox";
 
   /**
-   * The table a gruelbox-based store writes. The name belongs to the library: it is what
-   * gruelbox defaults to and the only table its schema migration ever creates, so it is
-   * written out here rather than read from a class this repository does not carry.
+   * The table a gruelbox-based store writes. The name belongs to the library. It is
+   * gruelbox's default and the only table its schema migration ever creates. So it is
+   * written out here, and not read from a class this repository does not have.
    */
   private static final String GRUELBOX_OUTBOX_TABLE = "TXNO_OUTBOX";
 
@@ -50,8 +49,8 @@ final class PhaseTwoOutboxNames {
   }
 
   /**
-   * @return The table VanillaBP's own JDBC outbox writes, as long as the application
-   *         did not configure a name of its own
+   * @return The table VanillaBP's own JDBC outbox writes when the application did not
+   *         configure a name of its own
    */
   static String vanillaBpOutboxTable() {
 
@@ -69,10 +68,10 @@ final class PhaseTwoOutboxNames {
   }
 
   /**
-   * The same name, asked for by a test which does not know whether the application under
-   * test can run that outbox at all. An application without the library writes no gruelbox
-   * table, so there is no name to ask the database about, and a leftover table of that name
-   * would then belong to somebody else.
+   * The same name, for a test which does not know whether the application under test can
+   * run that outbox at all. An application without the library writes no gruelbox table.
+   * So there is no name to ask the database about. A leftover table of that name would
+   * belong to somebody else.
    *
    * @return The table a gruelbox-based store writes, or nothing where this application
    *         cannot run one
@@ -89,8 +88,7 @@ final class PhaseTwoOutboxNames {
   }
 
   /**
-   * @return The table the payload of a call lies in, which is the same table for both
-   *         outboxes
+   * @return The table the payload of a call lies in. Both outboxes use the same table
    */
   static String payloadTable() {
 

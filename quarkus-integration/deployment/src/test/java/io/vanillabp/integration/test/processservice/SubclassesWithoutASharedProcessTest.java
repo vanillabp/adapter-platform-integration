@@ -17,12 +17,12 @@ import io.vanillabp.integration.test.samples.ambiguoussubclasses.RiskAssessment;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * Two subclasses of a base which names no BPMN process name their processes after
- * themselves, and one workflow aggregate has one {@code ProcessService} - so which of the two
- * processes {@code startWorkflow} starts cannot be decided. The build says so, naming both
- * classes, both processes and the attribute which settles it.
+ * The base names no BPMN process. So its two subclasses name their processes after
+ * themselves. But one workflow aggregate has one {@code ProcessService}. So it cannot be
+ * decided which of the two processes {@code startWorkflow} starts. The build says so. It
+ * names both classes, both processes and the attribute which settles it.
  * <p>
- * This used to be silent, because only the base was a workflow service and the two subclasses
+ * This used to pass silently. Only the base was a workflow service, and the two subclasses
  * were nothing but beans of it.
  */
 @ExtendWith(SuppressOutputExtension.class)

@@ -53,13 +53,13 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * A called process is no workflow of its own, on Spring Boot: its start and its end do not
+ * A called process is not a workflow of its own, on Spring Boot. Its start and its end do not
  * reach the application, and the workflow at the top ends once.
  * <p>
- * The workflow service serves {@code Ordering} and declares {@code Shipping}, which
- * {@code Ordering} calls, as a secondary process. It declares {@code Dispatching} as well,
- * the id a renamed process left behind, and no model arrives for it. The workflows the BPMS
- * still holds under that id were started under it, so they keep their start and their end.
+ * The workflow service serves {@code Ordering}. {@code Ordering} calls {@code Shipping}, and
+ * the service declares it as a secondary process. It also declares {@code Dispatching}, the id
+ * a renamed process left behind. No model arrives for this id. The BPMS still holds workflows
+ * which were started under it, so they keep their start and their end.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ACalledProcessIsNoWorkflowTest {
@@ -279,8 +279,8 @@ public class ACalledProcessIsNoWorkflowTest {
             WorkflowModuleConfiguration.class,
             ScenarioConfiguration.class,
             OrderWorkflowService.class,
-            // after the data source it is conditional on: listed as a plain source, so
-            // its conditions see the bean definitions registered before it
+            // It depends on the data source, so it comes after it. It is listed as a plain
+            // source, so its conditions see the bean definitions registered before it.
             JdbcTaskDeliveryLogAutoConfiguration.class,
             DeploymentTest.TestConfig.class)
         .run();

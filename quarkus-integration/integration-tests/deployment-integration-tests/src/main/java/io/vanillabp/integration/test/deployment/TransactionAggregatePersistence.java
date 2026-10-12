@@ -7,8 +7,9 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * In-memory persistence for the transaction-contract acceptance test's aggregate.
- * Aggregates are copied on save/load so un-saved mutations never leak into the store.
+ * In-memory persistence for the aggregate of the transaction-contract acceptance test.
+ * It copies aggregates on save and on load, so changes which were not saved never reach
+ * the store.
  */
 @ApplicationScoped
 public class TransactionAggregatePersistence implements AggregatePersistenceAware<TransactionAggregate> {
@@ -58,7 +59,7 @@ public class TransactionAggregatePersistence implements AggregatePersistenceAwar
   }
 
   /**
-   * Direct store access for test assertions (only saved state is visible).
+   * Reads the store directly for the checks of a test. Only saved state is visible.
    *
    * @param id The aggregate's ID
    * @return The stored aggregate or <code>null</code>

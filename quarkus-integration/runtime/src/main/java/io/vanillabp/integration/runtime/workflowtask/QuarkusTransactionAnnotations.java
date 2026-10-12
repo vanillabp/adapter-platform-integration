@@ -7,27 +7,27 @@ import java.util.Set;
 import io.vanillabp.integration.adapter.migration.workflowtask.TransactionAnnotationSpec;
 
 /**
- * The transaction annotations Quarkus honors, handed to the core's startup check of
+ * The transaction annotations which Quarkus honors. They go to the core's startup check of
  * <code>&#64;WorkflowTask</code> methods.
  * <p>
  * Quarkus honors {@code jakarta.transaction.Transactional} through Narayana. Spring's
- * annotation works ONLY with the extension {@code quarkus-spring-tx}, whose
- * {@code SpringTransactionalAnnotationsTransformer} maps it onto the JTA annotation at
- * build time, including the rollback rules ({@code noRollbackFor} and
- * {@code noRollbackForClassName} become {@code dontRollbackOn}, {@code rollbackFor} and
- * {@code rollbackForClassName} become {@code rollbackOn}); that extension rejects
- * {@code propagation = NESTED} with a build failure of its own. Without the extension the
- * annotation is inert, exactly like the pre-Jakarta one, so it is reported as not honored
- * rather than as a defect. Whether the extension is present is decided at build time, see
- * the deployment module's {@code TransactionAnnotationsBuildStepProcessor}.
+ * annotation works ONLY with the extension {@code quarkus-spring-tx}. Its
+ * {@code SpringTransactionalAnnotationsTransformer} maps Spring's annotation onto the JTA
+ * annotation at build time. This includes the rollback rules: {@code noRollbackFor} and
+ * {@code noRollbackForClassName} become {@code dontRollbackOn}, and {@code rollbackFor} and
+ * {@code rollbackForClassName} become {@code rollbackOn}. The extension fails the build for
+ * {@code propagation = NESTED} by itself. Without the extension, the annotation does
+ * nothing, just like the old {@code javax} one. So it is reported as not honored, not as a
+ * defect. Whether the extension is there is decided at build time. See the deployment
+ * module's {@code TransactionAnnotationsBuildStepProcessor}.
  * <p>
- * {@code jakarta.ejb.TransactionAttribute} has no meaning on Quarkus at all, there is no
- * EJB container.
+ * {@code jakarta.ejb.TransactionAttribute} means nothing on Quarkus, because there is no EJB
+ * container.
  */
 public final class QuarkusTransactionAnnotations {
 
   /**
-   * Propagations joining a transaction already active, i.e. VanillaBP's.
+   * The propagations which join a transaction that is already active, that is VanillaBP's.
    */
   private static final Set<String> JOINING = Set.of("REQUIRED", "SUPPORTS", "MANDATORY");
 
@@ -35,13 +35,13 @@ public final class QuarkusTransactionAnnotations {
   }
 
   /**
-   * The specs the core checks a <code>&#64;WorkflowTask</code> method against. All four
-   * annotations are listed, the ones without an effect on Quarkus included: a method carrying
-   * one of those is told what it gets instead of being passed over, which is the only way its
-   * author learns about it.
+   * The specs which the core checks a <code>&#64;WorkflowTask</code> method against. All four
+   * annotations are listed, also the ones without an effect on Quarkus. A method which carries
+   * one of those is told what it gets instead of being skipped. Only this way does its author
+   * learn about it.
    *
    * @param springTransactionsHonored Whether the extension {@code quarkus-spring-tx} is
-   *          part of the application, which makes Spring's annotation effective
+   *          part of the application. It makes Spring's annotation work
    * @return The specs of all transaction annotations known on Quarkus
    */
   public static List<TransactionAnnotationSpec> specs(

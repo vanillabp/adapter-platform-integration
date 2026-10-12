@@ -7,8 +7,8 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * In-memory persistence for the inbound-idempotency test's aggregate, copying on
- * save/load so un-saved mutations never leak into the store.
+ * In-memory persistence for the aggregate of the inbound-idempotency test. It copies the
+ * aggregate on save and on load, so changes which were not saved never reach the store.
  */
 @ApplicationScoped
 public class DeliveryAggregatePersistence implements AggregatePersistenceAware<DeliveryAggregate> {

@@ -17,10 +17,10 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The rules which keep a released changeset unchangeable. Liquibase compares checksums of what it
- * applied, so editing a changeset afterwards breaks the next installation of somebody else's
- * database - and getting back from there costs a support case. This is an open-source project, so
- * the rules are enforced here instead of being written down and hoped for:
+ * The rules which keep a released changeset unchanged. Liquibase compares checksums of what it
+ * applied. So a changeset edited later breaks the next update of somebody else's database, and
+ * fixing that costs a support case. This is an open-source project, so the test enforces the
+ * rules instead of only writing them down:
  * <ul>
  * <li>the master changelog holds no changeset of its own, only properties and includes,</li>
  * <li>every included file exists and declares the shared logical path, which is what lets the
@@ -78,9 +78,9 @@ public class ChangelogRulesTest {
     final var master = read(SCHEMA.resolve("changelog.xml"));
 
     assertFalse(master.contains("<changeSet"), "changelog.xml must only define properties and includes");
-    // right after a release pinned it, latest.xml does not exist yet - the next one is opened by
-    // 'schema-version.sh open'. Wherever it exists, it has to be included, or its changesets would
-    // silently do nothing
+    // Right after a release pinned it, latest.xml does not exist. 'schema-version.sh open'
+    // creates the next one. When it exists, it has to be included. Otherwise its changesets
+    // would do nothing, without a word.
     if (Files.exists(SCHEMA.resolve("latest.xml"))) {
       assertTrue(master.contains("<include file=\"vanillabp/schema/latest.xml\"/>"), master);
     }

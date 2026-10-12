@@ -22,11 +22,11 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.inject.Inject;
 
 /**
- * The second store: the MongoDB outbox dispatcher runs phase two on its
- * own thread as well, and the same promise applies there - VanillaBP provides the
- * transaction and the active CDI request context its call back into the application
- * needs. MongoDB itself needs no session, so this test guards the routing rather
- * than a reproduction: both dispatched operations have to arrive.
+ * The second store. The MongoDB outbox dispatcher runs phase two on its own thread as
+ * well, and the same promise holds there. VanillaBP provides the transaction and the active
+ * CDI request context which the call back into the application needs. MongoDB itself needs
+ * no session. So this test does not reproduce a failure. It guards the routing: both
+ * dispatched operations have to arrive.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class PhaseTwoMongoContextTest {

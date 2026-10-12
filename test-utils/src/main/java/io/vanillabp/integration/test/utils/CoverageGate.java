@@ -14,27 +14,27 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * The two questions a repository's coverage gate has to answer, kept out of the
- * repositories so all four of them ask them the same way.
+ * The two questions a repository's coverage gate has to answer. They live here, outside
+ * the repositories, so all four repositories ask them the same way.
  * <p>
- * The gate exists because of what an audit found: seven modules of
- * <code>adapter-platform-integration</code> produced execution data which no
- * aggregated report ever read, so everything covered ONLY by them counted as missed.
- * That is why {@link #modulesMissingFromAggregates} comes first - a threshold checked
- * against an incomplete aggregate fails builds for coverage which exists and is only
- * not counted, and no test can fix that.
+ * The gate exists because of what an audit found. Seven modules of
+ * <code>adapter-platform-integration</code> produced execution data which no aggregated
+ * report ever read. So everything covered ONLY by them counted as missed. That is why
+ * {@link #modulesMissingFromAggregates} comes first. A threshold checked against an
+ * incomplete aggregate fails builds for coverage which exists but is not counted. No
+ * test can fix that.
  * <p>
- * The aggregate was doubted a second time, over what a Quarkus prod-mode test in a
- * forked JVM contributes. That one was measured and refuted, and the numbers are in the
+ * The aggregate was doubted a second time: does it count what a Quarkus prod-mode test in
+ * a forked JVM covers? That was measured, and the doubt was wrong. The numbers are in the
  * javadoc of {@link TestCoverageUtils}.
  */
 public final class CoverageGate {
 
   /**
    * The metric the coverage rule is measured in. VanillaBP measures
-   * {@link #INSTRUCTIONS}: it is JaCoCo's own headline metric, it does not move when
-   * code is only reformatted (line coverage depends on the compiler's line table),
-   * and it is the stricter of the two in this codebase.
+   * {@link #INSTRUCTIONS}. It is JaCoCo's own main metric. It does not change when code is
+   * only reformatted, while line coverage depends on the compiler's line table. And it is
+   * the stricter of the two in this codebase.
    */
   public enum Metric {
 
@@ -102,8 +102,8 @@ public final class CoverageGate {
 
   /**
    * The goals which reach the <code>verify</code> phase, where JaCoCo writes the
-   * aggregated reports. A build asked for anything else stops earlier and leaves the
-   * gate nothing to read.
+   * aggregated reports. A build with any other goal stops earlier and leaves the gate
+   * nothing to read.
    */
   private static final Set<String> GOALS_REACHING_THE_REPORTS = Set
       .of("verify", "install", "deploy");
@@ -159,17 +159,17 @@ public final class CoverageGate {
 
   /**
    * Every module which produced execution data has to be aggregated by one of the
-   * per-platform reports, otherwise what only its tests cover counts as missed.
+   * reports per platform. Otherwise, what only its tests cover counts as missed.
    * <p>
-   * A module is recognised by its <code>target/jacoco.exec</code>, so modules without
-   * tests need no entry anywhere and adding a test to a module which no report
-   * aggregates is what this reports.
+   * A module is recognised by its <code>target/jacoco.exec</code>. So modules without
+   * tests need no entry anywhere. This reports a test added to a module which no report
+   * aggregates.
    *
    * @param repositoryRoot The repository's root directory
    * @param aggregatePoms The POMs of the per-platform reports, whose
    *          <code>&lt;dependency&gt;</code> entries are the aggregated modules
-   * @param deliberatelyNotAggregated Artifact IDs of modules whose execution data
-   *          belongs to no report - each of them a decision, not an oversight
+   * @param deliberatelyNotAggregated Artifact IDs of modules whose execution data belongs
+   *          to no report. Each of them is a decision, not an oversight
    * @return The artifact IDs of the modules nobody aggregates, empty if there are
    *         none
    */
@@ -203,8 +203,8 @@ public final class CoverageGate {
   }
 
   /**
-   * The message the gate fails with - it names what to change instead of only saying
-   * that something is wrong.
+   * The message the gate fails with. It names what to change, not only that something is
+   * wrong.
    *
    * @param missing The artifact IDs {@link #modulesMissingFromAggregates} found
    * @param aggregatePoms The POMs to add them to
@@ -237,23 +237,23 @@ public final class CoverageGate {
   /**
    * Whether this run stops before the aggregated reports are written.
    * <p>
-   * JaCoCo writes them in the <code>verify</code> phase while the gate runs in
-   * <code>test</code>, so a build which stops at <code>package</code> reaches the gate
-   * with no report on disk. Nothing is wrong in that build, and a gate which fails there
-   * sends whoever reads the log looking for a file this run could never have written.
-   * The gate says so instead, which keeps the run green without going quiet.
+   * JaCoCo writes them in the <code>verify</code> phase, but the gate runs in
+   * <code>test</code>. So a build which stops at <code>package</code> reaches the gate with
+   * no report on disk. Nothing is wrong in that build. A gate which failed there would
+   * send the reader of the log looking for a file this run could never have written.
+   * Instead the gate says so. The run stays green, and the gate does not go quiet.
    * <p>
-   * The answer comes from the command line because Maven tells a test nothing about the
-   * phase it is running towards. Its launcher script exports the command line as
+   * The answer comes from the command line, because Maven tells a test nothing about the
+   * phase it runs towards. Its launcher script exports the command line as
    * <code>MAVEN_CMD_LINE_ARGS</code>, and a POM hands that over as a system property.
    *
    * @param mavenCommandLine The command line Maven was started with, for example
    *          <code>--batch-mode install</code>
    * @return true if no word of it is a goal which reaches the <code>verify</code> phase.
-   *         A missing or unresolved command line answers false, and so does a path which
-   *         happens to carry one of those words: the gate then judges as before, because
-   *         a wrong "nothing to check" hides a coverage drop while a wrong failure is
-   *         only read twice
+   *         A missing or unresolved command line answers false. So does a path which
+   *         happens to contain one of those words. The gate then judges as before. A
+   *         wrong "nothing to check" hides a drop in coverage, but a wrong failure only
+   *         costs a second look
    */
   public static boolean stopsBeforeTheReportsAreWritten(
       final String mavenCommandLine) {
@@ -270,9 +270,9 @@ public final class CoverageGate {
 
   /**
    * What the gate says in a run which writes no reports. It names the phase the reports
-   * come from, what this run was started with and the command which does check the
-   * coverage, so the reader can tell this apart from a report which is missing although
-   * it should be there.
+   * come from, what this run was started with, and the command which does check the
+   * coverage. So the reader can tell this apart from a report which should be there and
+   * is missing.
    *
    * @param mavenCommandLine The command line Maven was started with
    * @return The message
@@ -330,8 +330,8 @@ public final class CoverageGate {
   }
 
   /**
-   * Convenience for a gate test: the repository root passed in as a system property
-   * by the module's Surefire configuration.
+   * Helper for a gate test: the repository root, which the module's Surefire
+   * configuration passes in as a system property.
    *
    * @param systemProperty The property's name
    * @return The repository's root directory

@@ -30,8 +30,8 @@ public class RepositoryWorkflowService {
   }
 
   /**
-   * Completes a task of an already started workflow - used by the phase-two test:
-   * on a BPMS needing a two-phase commit this schedules phase two, which calls back
+   * Completes a task of a workflow which is already started. The phase-two test uses it.
+   * On a BPMS which needs a two-phase commit, this schedules phase two. Phase two calls back
    * into this application's persistence from the dispatcher's thread.
    *
    * @param id The aggregate's ID

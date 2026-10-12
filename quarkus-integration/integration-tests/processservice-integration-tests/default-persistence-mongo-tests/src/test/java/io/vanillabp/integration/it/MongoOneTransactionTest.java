@@ -27,18 +27,18 @@ import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
 import jakarta.inject.Inject;
 
 /**
- * Acceptance test on Quarkus: an application storing EVERYTHING in MongoDB - the
- * aggregate through Panache, the phase-two outbox and the log of processed task deliveries
- * through VanillaBP's MongoDB defaults - with no data source anywhere.
+ * Acceptance test on Quarkus: an application stores EVERYTHING in MongoDB, with no data
+ * source anywhere. The aggregate goes through Panache. The phase-two outbox and the log of
+ * processed task deliveries use VanillaBP's MongoDB defaults.
  * <p>
- * What is pinned here is the atomicity the outbox contract promises. MongoDB Panache enlists
- * itself in the JTA transaction VanillaBP opens and starts a MongoDB transaction, and the
- * outbox writes through that very session. So while the transaction runs, a
- * reader outside it sees NOTHING - neither the aggregate nor the outbox entry - and after the
- * commit it sees both. Before the outbox joined the session, the entry was written
- * immediately and this test failed on the very first assertion.
+ * The test pins the atomicity which the outbox contract promises. MongoDB Panache joins the
+ * JTA transaction which VanillaBP opens, and it starts a MongoDB transaction. The outbox
+ * writes through that very session. So while the transaction runs, a reader outside of it
+ * sees NOTHING: neither the aggregate nor the outbox entry. After the commit it sees both.
+ * Before the outbox joined the session, the entry was written at once, and this test failed
+ * on the very first assertion.
  * <p>
- * The Dev Services MongoDB runs as a replica set, which MongoDB transactions require.
+ * The Dev Services MongoDB runs as a replica set, because MongoDB transactions need one.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class MongoOneTransactionTest {
@@ -76,9 +76,9 @@ public class MongoOneTransactionTest {
   MongoClient mongoClient;
 
   /**
-   * The outbox as a reader OUTSIDE the running transaction sees it. Built on the client
-   * rather than on the transaction, which is the point of the test, and asked through the
-   * reader so that neither a collection nor a field is named here.
+   * The outbox as a reader OUTSIDE the running transaction sees it. It is built on the
+   * client and not on the transaction, which is the point of the test. It is asked through
+   * the reader, so this test names neither a collection nor a field.
    */
   private MongoPhaseTwoOutboxReader outboxOutside() {
 

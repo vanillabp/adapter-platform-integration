@@ -9,14 +9,13 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The workflow service of the transaction-contract acceptance test. None
- * of the handlers reaching the nested transactional bean carries a transaction
- * annotation itself: they are the case the startup check cannot cover and the runtime
- * check has to catch.
+ * The workflow service of the acceptance test for the transaction contract. Some handlers
+ * call the nested transactional bean. None of them carries a transaction annotation itself.
+ * The startup check cannot cover this case, so the check at runtime has to catch it.
  * <p>
- * {@link #acceptedAnnotation} carries the annotation a VanillaBP 1 application brings
- * along. It has to boot, in this test as well as in every other test of this module,
- * which is exactly what the startup check promises for it.
+ * {@link #acceptedAnnotation} carries the annotation which a VanillaBP 1 application brings
+ * along. The application has to boot with it, in this test and in every other test of this
+ * module. This is exactly what the startup check promises for it.
  */
 @WorkflowService(
     workflowAggregateClass = TransactionAggregate.class,
@@ -27,9 +26,9 @@ public class TransactionWorkflowService {
   private NestedTransactionalBean nestedTransactionalBean;
 
   /**
-   * The handler lets the {@link TaskException} of the nested bean pass, so VanillaBP
-   * would treat it as a BPMN error and commit the aggregate. The nested bean's
-   * interceptor has marked the transaction rollback-only by then.
+   * The handler lets the {@link TaskException} of the nested bean pass. So VanillaBP would
+   * treat it as a BPMN error and commit the aggregate. But by then, the interceptor of the
+   * nested bean has marked the transaction rollback-only.
    */
   @WorkflowTask
   public void nestedTaskException(
@@ -41,9 +40,9 @@ public class TransactionWorkflowService {
   }
 
   /**
-   * The variant without any {@code TaskException}: the handler swallows the exception
-   * of the nested call and returns normally, which would report the task as completed
-   * while nothing can be persisted.
+   * The variant without any {@code TaskException}. The handler swallows the exception of the
+   * nested call and returns normally. This would report the task as completed, although
+   * nothing can be persisted.
    */
   @WorkflowTask
   public void swallowedNestedFailure(

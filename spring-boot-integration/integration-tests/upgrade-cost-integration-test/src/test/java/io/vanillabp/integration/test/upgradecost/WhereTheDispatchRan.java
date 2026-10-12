@@ -11,14 +11,14 @@ import java.util.concurrent.TimeoutException;
 import io.vanillabp.bpmsdouble.DummyPhaseTwoListener;
 
 /**
- * Stands where the BPMS would stand and writes down which thread brought the call. That is
- * the number this story is about: version 1 progressed a workflow in a thread which was
- * already there, and version 2 brings threads of its own.
+ * Stands where the BPMS would stand and writes down which thread brought the call. This
+ * story is about that number. Version 1 moved a workflow on in a thread which was already
+ * there. Version 2 brings its own threads.
  * <p>
- * It can also hold every call it gets until a given number of them are inside at the same
- * time. Holding is what proves the width: if fewer threads dispatch than the barrier waits
- * for, nobody arrives and the wait runs out, which is a failed measurement and not a slow
- * one.
+ * It can also hold every call until a given number of calls are inside at the same time.
+ * Holding proves the width. If fewer threads dispatch than the barrier waits for, the
+ * missing calls never arrive and the wait runs out. Then the measurement failed, it was
+ * not just slow.
  */
 public class WhereTheDispatchRan implements DummyPhaseTwoListener {
 
@@ -87,8 +87,8 @@ public class WhereTheDispatchRan implements DummyPhaseTwoListener {
     try {
       barrier.await(holdAtMostMillis, TimeUnit.MILLISECONDS);
     } catch (final TimeoutException e) {
-      // the dispatch is narrower than the barrier waits for; the test reads that off the
-      // threads it collected rather than off an exception thrown in somebody else's thread
+      // the dispatch is narrower than the barrier waits for. The test sees that in the
+      // threads it collected, not in an exception thrown in another thread
       barrier.reset();
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();

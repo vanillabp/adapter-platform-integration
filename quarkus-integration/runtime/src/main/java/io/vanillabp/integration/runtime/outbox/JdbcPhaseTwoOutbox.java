@@ -41,16 +41,16 @@ import jakarta.transaction.TransactionSynchronizationRegistry;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * The default {@link PhaseTwoOutbox} of a Quarkus application whose workflow aggregates
- * live in a relational database. What it stores and how it dispatches is the core's
- * {@link JdbcPhaseTwoOutboxStore} with its {@link JdbcPhaseTwoOutboxDispatcher} - the
- * same code a Spring Boot application runs. This bean is the Quarkus half of it: an
- * Agroal connection, which is enlisted in the running JTA transaction when it is
- * acquired, the {@link TransactionSynchronizationRegistry} for the commit, and the
- * {@link StartupEvent} the poller starts on.
+ * The default {@link PhaseTwoOutbox} of a Quarkus application whose workflow aggregates live
+ * in a relational database. What it stores and how it dispatches comes from the core's
+ * {@link JdbcPhaseTwoOutboxStore} and its {@link JdbcPhaseTwoOutboxDispatcher}. A Spring
+ * Boot application runs the same code. This bean is the Quarkus half of it. It gives an
+ * Agroal connection, which joins the running JTA transaction when it is taken. It gives the
+ * {@link TransactionSynchronizationRegistry} for the commit. And it gives the
+ * {@link StartupEvent} which the poller starts on.
  * <p>
- * The observer priority guarantees that the deployment pipeline deployed the BPMN
- * resources and started workflow processing BEFORE any recovered entry is dispatched
+ * The priority of the observer makes sure of the order. The deployment pipeline deploys the
+ * BPMN resources and starts the workflow processing BEFORE any recovered entry is dispatched
  * (see {@link VanillaBpDeploymentRunner#OUTBOX_DISPATCHER_STARTUP_PRIORITY}).
  */
 @ApplicationScoped
@@ -67,9 +67,9 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
   Instance<PhaseTwoRouter> phaseTwoRouter;
 
   /**
-   * What a blocked entry is counted into. Unsatisfied where the application uses no
-   * Micrometer extension, which is why it is resolved through the producer's helper
-   * rather than injected directly.
+   * Where a blocked entry is counted. It is unsatisfied where the application uses no
+   * Micrometer extension. That is why it is resolved through the producer's helper and not
+   * injected directly.
    */
   @Inject
   Instance<VanillaBpMetrics> vanillaBpMetrics;
@@ -83,8 +83,8 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
   private volatile JdbcPhaseTwoPayloadStore payloadStore;
 
   /**
-   * Built by the CDI container. The extension registers this bean whether or not the
-   * application has a datasource, so nothing may be read or opened here -
+   * The CDI container creates it. The extension registers this bean whether or not the
+   * application has a datasource. So nothing may be read or opened here.
    * {@link #isAvailable()} decides later whether the bean is used at all.
    */
   public JdbcPhaseTwoOutbox() {
@@ -98,11 +98,10 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
   }
 
   /**
-   * Whether this default outbox is usable: the extension registers the bean at
-   * build time, but without a configured datasource it cannot store anything - an
-   * unusable default must not be selected for an aggregate (the startup validation
-   * then reports "no outbox available" with the remedies instead of failing at the
-   * first workflow start).
+   * Whether this default outbox can be used. The extension registers the bean at build time.
+   * But without a configured datasource, it cannot store anything. A default which cannot be
+   * used must not be chosen for an aggregate. Then the startup check reports "no outbox
+   * available" with the fixes. It does not wait to fail at the first workflow start.
    *
    * @return Whether a datasource is available
    */
@@ -159,9 +158,9 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
   }
 
   /**
-   * Creates the tables (unless disabled) and starts the poller. The first poll runs
-   * immediately, dispatching committed-but-unprocessed entries of a previously crashed
-   * instance.
+   * Creates the tables (unless this is switched off) and starts the poller. The first poll
+   * runs at once. It dispatches the entries of an instance which crashed before, if they
+   * were committed but not processed.
    *
    * @param event The startup event observed
    */
@@ -194,8 +193,8 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
   }
 
   /**
-   * The store, built on first use: a workflow may be started before the startup event
-   * was observed, and the entry then has to be written already.
+   * The store, created on first use. A workflow may be started before the startup event was
+   * observed, and then the entry has to be written already.
    *
    * @return The store of this outbox
    */
@@ -221,8 +220,8 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
   }
 
   /**
-   * The dispatcher, built on first use like the store, because the store's commit hook
-   * names it before the startup event was observed.
+   * The dispatcher, created on first use like the store. The store's commit hook uses it
+   * before the startup event was observed.
    *
    * @return The dispatcher of this outbox
    */
@@ -243,8 +242,8 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
   }
 
   /**
-   * Where the bytes of a call which carries a payload lie while its entry waits. One
-   * store for the write and for the read, because both name the same table.
+   * Where the bytes of a call with a payload lie while its entry waits. One store serves
+   * the write and the read, because both name the same table.
    *
    * @return The payload store of this outbox
    */
@@ -260,8 +259,8 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
   }
 
   /**
-   * An Agroal connection: acquiring it inside a running JTA transaction enlists it
-   * there, and closing it hands it back to the pool without ending that transaction.
+   * An Agroal connection. Taking it inside a running JTA transaction enlists it there.
+   * Closing it hands it back to the pool and does not end that transaction.
    *
    * @return How this platform hands out connections
    */
@@ -318,8 +317,8 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
   }
 
   /**
-   * The outbox configuration (<code>vanillabp.outbox.*</code>), loaded lazily so the
-   * store can resolve its table name even before the startup event was observed.
+   * The outbox configuration (<code>vanillabp.outbox.*</code>), loaded lazily. So the store
+   * can resolve its table name even before the startup event was observed.
    *
    * @return The outbox configuration
    */

@@ -21,10 +21,10 @@ import io.vanillabp.integration.test.deployment.VersionedProcessWiringSource;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * An extension whose contract asks for a method for the deployed version reports the elements
- * of the model in its <code>wireBpmn</code>, and the start ends where an element has methods but
- * none for the version the BPMS gave the model. The "BPMS" here gave the model version 5, and
- * the note of the test extension serves versions 1 to 4.
+ * The contract of this extension asks for a method for the deployed version. The extension
+ * reports the elements of the model in its <code>wireBpmn</code>. The start ends if an element
+ * has methods, but none for the version which the BPMS gave the model. The "BPMS" here gave
+ * the model version 5, and the note of the test extension serves versions 1 to 4.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ExtensionElementsOfTheDeployedVersionTest {

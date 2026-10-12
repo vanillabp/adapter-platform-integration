@@ -40,12 +40,11 @@ public class MongoPhaseTwoPayloadTest {
 
   /**
    * How long a test waits before it says that nothing more happened. The application
-   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>, which these tests
-   * configure as half a second, so this is three of those windows.
+   * dispatches every <code>vanillabp.outbox.attempt-frequency</code>. These tests configure
+   * it as half a second, so this is three of those windows.
    * <p>
-   * It is a guard and not a measurement of speed: a machine which leaves this JVM without
-   * a turn only makes the wait longer, and what is asserted afterwards is a count which
-   * did not grow.
+   * It is a guard and does not measure speed. A machine which gives this JVM no turn for a
+   * while only makes the wait longer. Afterwards the test asserts a count which did not grow.
    */
   private static final long UNTIL_NOTHING_MORE_CAN_COME = 1500;
 
@@ -79,8 +78,8 @@ public class MongoPhaseTwoPayloadTest {
   MongoClient mongoClient;
 
   /**
-   * The store of the application, asked through the reader so that neither a collection
-   * nor a field is named here.
+   * The store of the application. It is asked through the reader, so this test names
+   * neither a collection nor a field.
    */
   private MongoPhaseTwoOutboxReader store() {
 
@@ -117,8 +116,8 @@ public class MongoPhaseTwoPayloadTest {
   @DisplayName("The younger report replaces the waiting one, and only it is dispatched")
   public void theYoungerReportReplacesTheWaitingOne() throws Exception {
 
-    // both ride ONE transaction on purpose: nothing is dispatched before it commits,
-    // so the second call meets an entry which is certainly still waiting
+    // both are in ONE transaction on purpose. Nothing is dispatched before it commits, so
+    // the second call meets an entry which is certainly still waiting
     userTransaction.begin();
     final var aggregate = workflowService.startWorkflow("replace-mongo");
     final var first = PayloadExtension

@@ -12,7 +12,7 @@ import org.jboss.jandex.WildcardType;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 
 /**
- * A utility class used to figure out the right aggregate persistence for a given aggregate type.
+ * A utility class which finds the right aggregate persistence for a given aggregate type.
  */
 public final class AggregatePersistenceResolver {
 
@@ -113,7 +113,6 @@ public final class AggregatePersistenceResolver {
       return argumentDistance(index, arg, aggregateType);
     }
 
-    // recurse into superclass
     Type superType = implClass.superClassType();
     if (superType != null) {
       ClassInfo superInfo = index.getClassByName(superType.name());

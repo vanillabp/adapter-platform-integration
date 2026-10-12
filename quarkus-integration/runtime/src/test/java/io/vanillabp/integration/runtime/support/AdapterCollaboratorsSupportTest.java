@@ -21,10 +21,10 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import jakarta.enterprise.inject.Instance;
 
 /**
- * What a producer gets handed, and what it is told when a collaborator did not resolve.
- * The Spring Boot side pins the same two cases against its own helper: an adapter
- * supporting both platforms has to be registered completely on both, and neither
- * platform may be the one where a forgotten collaborator stays quiet.
+ * What a producer gets, and what it is told when a collaborator did not resolve. The Spring
+ * Boot side holds the same two cases against its own helper. An adapter which supports both
+ * platforms has to be registered completely on both. And on neither platform may a
+ * forgotten collaborator stay quiet.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AdapterCollaboratorsSupportTest {
@@ -41,7 +41,7 @@ public class AdapterCollaboratorsSupportTest {
   }
 
   /**
-   * An {@code Instance} of a bean nobody produced - what CDI hands a producer whose
+   * An {@code Instance} of a bean which nobody produced. CDI hands this to a producer whose
    * application has no method for the thing.
    */
   @SuppressWarnings("unchecked")
@@ -99,9 +99,9 @@ public class AdapterCollaboratorsSupportTest {
         collaborators.bpmsInitiatedStartInvoker().isEmpty(),
         "the adapter reports no workflow started by the BPMS");
     assertTrue(collaborators.workflowEndedInvoker().isPresent(), "the other one arrived");
-    // that the absence is also reported with the adapter id is pinned where the line is
-    // written, in AdapterCollaboratorsTest of the SPI - the log of this module goes
-    // through the JBoss log manager Quarkus installs, which the capture does not see
+    // That the absence is also reported with the adapter id is tested where the line is
+    // written, in AdapterCollaboratorsTest of the SPI. The log of this module goes through
+    // the JBoss log manager which Quarkus installs, and the capture does not see it.
 
   }
 
@@ -109,8 +109,8 @@ public class AdapterCollaboratorsSupportTest {
   @DisplayName("A producer which passes no Instance at all is treated as an absent bean")
   public void aMissingInstanceIsTreatedAsAbsent() {
 
-    // a producer written without the parameter: CDI hands nothing, and the adapter is
-    // built without the collaborator rather than failing on a null
+    // A producer written without the parameter: CDI hands nothing. The adapter is built
+    // without the collaborator and does not fail on a null.
     final var collaborators = collaborators("dummy", null, null);
 
     assertTrue(collaborators.workflowEndedInvoker().isEmpty());

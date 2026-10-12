@@ -9,7 +9,7 @@ import org.springframework.data.repository.CrudRepository;
 public interface SpringDataUtil {
 
   /**
-   * Determine the repository for the given object.
+   * Determines the repository for the given object.
    * 
    * @param <O> The entity's expected type.
    * @param entity The entity
@@ -19,7 +19,7 @@ public interface SpringDataUtil {
       O entity);
 
   /**
-   * Determine the repository for the given type.
+   * Determines the repository for the given type.
    * 
    * @param <O> The entity's expected type.
    * @param type The given entity's type.
@@ -29,7 +29,7 @@ public interface SpringDataUtil {
       Class<O> type);
 
   /**
-   * Determine the entity's object identifier.
+   * Determines the entity's object identifier.
    * 
    * @param <I> The type the caller expects the identifier to have. The value is cast
    *          unchecked, so a wrong expectation fails where the caller assigns it, not here.
@@ -41,9 +41,9 @@ public interface SpringDataUtil {
       Object entity);
 
   /**
-   * Determine the entity's object identifier's parameter name. The identifier is the one
-   * the persistence itself uses, so an annotation at the field and an annotation at the
-   * getter both count, and the field wins where an entity carries both.
+   * Determines the name of the entity's identifier property. The identifier is the one the
+   * persistence itself uses. So an annotation at the field and an annotation at the getter
+   * both count. Where an entity carries both, the field wins.
    *
    * @param type The given entity's type.
    * @return The entity's object identifier's parameter name.
@@ -54,7 +54,7 @@ public interface SpringDataUtil {
       Class<?> type);
 
   /**
-   * Determine the entity's object identifier's type.
+   * Determines the type of the entity's identifier.
    * 
    * @param type The given entity's type.
    * @return The entity's object identifier's type.
@@ -63,7 +63,8 @@ public interface SpringDataUtil {
       Class<?> type);
 
   /**
-   * Unproxy the entity. This forces to load data if the proxy is not yet initialized. 
+   * Unwraps the entity from its proxy. If the proxy is not initialized yet, this loads the
+   * data.
    * 
    * @param <O> The entity's type
    * @param entity The entity
@@ -73,8 +74,8 @@ public interface SpringDataUtil {
       O entity);
 
   /**
-   * Determines whether the given entity was loaded/persisted from/to DB before
-   * or it is a POJO (e.g. right before persisting).
+   * Determines whether the given entity was loaded from or saved to the database before.
+   * The other case is a plain object, e.g. right before it is saved.
    * 
    * @param <O> the entity's type
    * @param entityClass The entity's class

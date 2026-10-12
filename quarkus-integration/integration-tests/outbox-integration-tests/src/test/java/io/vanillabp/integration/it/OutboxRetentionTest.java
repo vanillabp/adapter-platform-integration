@@ -20,10 +20,10 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Integration test of the retention cleanup of the JDBC/JTA-based phase-two outbox:
- * with a tiny <code>vanillabp.outbox.retention</code> a successfully dispatched
- * (DONE) entry is deleted asynchronously by the poller once the retention period
- * passed.
+ * Integration test of the retention cleanup of the phase-two outbox based on JDBC and JTA.
+ * With a tiny <code>vanillabp.outbox.retention</code>, the poller deletes an entry which
+ * was dispatched successfully (DONE). It does so in the background, once the retention
+ * period has passed.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class OutboxRetentionTest {

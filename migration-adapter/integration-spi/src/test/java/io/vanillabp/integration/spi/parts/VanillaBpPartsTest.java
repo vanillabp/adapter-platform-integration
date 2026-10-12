@@ -12,9 +12,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * The version descriptors this test judges lie in
- * <code>src/test/resources/META-INF/vanillabp</code>. Each of them is one of the cases a
- * boot has to tell apart.
+ * The version descriptors this test judges are in
+ * <code>src/test/resources/META-INF/vanillabp</code>. Each one is a case that a start of
+ * the application has to tell apart from the others.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class VanillaBpPartsTest {

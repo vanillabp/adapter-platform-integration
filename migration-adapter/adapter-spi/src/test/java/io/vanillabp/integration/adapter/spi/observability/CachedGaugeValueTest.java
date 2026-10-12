@@ -19,19 +19,18 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 /**
- * A gauge is read on every collection, so what stands behind it must not be a
- * query. What is pinned here is the promise the class makes - one measurement per
- * window whoever asks, a failure which does not stay, and a way to switch the holding
- * off for a test which needs to see the real value.
+ * A gauge is read on every collection, so a query must not stand behind it. This test
+ * holds the promises of the class: one measurement per window, no matter who asks; a
+ * failure which does not stay; and a way to turn the holding off for a test which needs
+ * to see the real value.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class CachedGaugeValueTest {
 
   /**
-   * How long a wait for collectors goes on before the test gives up. It guards against a
-   * thread which never got its turn and it measures nothing: what the concurrency test
-   * claims is read from the state of the collectors, so a loaded machine makes it slower
-   * rather than red.
+   * How long the test waits for collectors before it gives up. It guards against a thread
+   * which never got its turn. It measures nothing: the concurrency test reads its claim
+   * from the state of the collectors. So a busy machine makes the test slower, not red.
    */
   private static final long UNTIL_A_COLLECTOR_COUNTS_AS_STUCK = 30000;
 
@@ -41,11 +40,11 @@ public class CachedGaugeValueTest {
   private final AtomicLong nanos = new AtomicLong();
 
   /**
-   * Waits until the given number of collectors wait for the measurement one of them is
-   * taking. A thread queued on the lock of the held value is parked, so
-   * {@link Thread.State#WAITING} is how that shows from the outside. The collector
-   * INSIDE the measurement waits with a timeout and is therefore
-   * {@link Thread.State#TIMED_WAITING}, which keeps the two apart.
+   * Waits until the given number of collectors wait for the measurement which one of them
+   * is taking. A thread queued on the lock of the held value is parked. From the outside,
+   * it shows as {@link Thread.State#WAITING}. The collector INSIDE the measurement waits
+   * with a timeout, so it shows as {@link Thread.State#TIMED_WAITING}. This keeps the two
+   * apart.
    *
    * @param collectors The threads which asked the held value
    * @param parked How many of them have to be waiting for the measurement
@@ -208,10 +207,10 @@ public class CachedGaugeValueTest {
               }
             });
       }
-      // the others are concurrent once they are parked on the lock the first one holds,
-      // and that is what the wait below reads. A wait of a fixed length would only guess
-      // at it: on a machine carrying several builds eight threads need longer to get
-      // going than any number somebody writes here
+      // The others are concurrent once they are parked on the lock the first one holds.
+      // The wait below reads exactly that. A wait of fixed length would only guess. On a
+      // machine running several builds, eight threads need longer to start than any
+      // number somebody writes here.
       awaitCollectorsParkedOnTheMeasurement(collectors, howManyCollectors - 1);
       insideTheMeasurement.countDown();
       assertTrue(

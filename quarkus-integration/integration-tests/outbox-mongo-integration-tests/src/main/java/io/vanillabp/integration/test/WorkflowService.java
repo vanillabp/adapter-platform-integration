@@ -21,8 +21,8 @@ public class WorkflowService {
   }
 
   /**
-   * Starts the workflow (again) for an already persisted aggregate - used to test
-   * the idempotency of scheduling phase two.
+   * Starts the workflow (again) for an aggregate which is already stored. It is used to test
+   * that scheduling phase two is idempotent.
    *
    * @param aggregate The aggregate to start the workflow for
    * @return The attached aggregate

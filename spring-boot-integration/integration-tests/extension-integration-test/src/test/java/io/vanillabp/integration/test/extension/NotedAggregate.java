@@ -9,9 +9,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 /**
- * The workflow aggregate of this scenario. Its <code>touched</code> attribute is what a
- * handler method of the extension writes, so a test can tell whether the aggregate was
- * saved after the method ran.
+ * The workflow aggregate of this scenario. A handler method of the extension writes its
+ * <code>touched</code> attribute. So a test can tell whether the aggregate was saved
+ * after the method ran.
  */
 @Entity
 @Table(name = "NOTED_AGGREGATE")

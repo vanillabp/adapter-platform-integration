@@ -7,9 +7,9 @@ import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * In-memory persistence for the task-processing acceptance test's aggregate.
- * Aggregates are copied on save/load so un-saved mutations never leak into the
- * store - mimicking a real persistence where only saved state survives.
+ * In-memory persistence for the aggregate of the task-processing acceptance test. It
+ * copies aggregates on save and on load, so changes which were not saved never reach the
+ * store. A real persistence behaves the same: only saved state survives.
  */
 @ApplicationScoped
 public class TaskAggregatePersistence implements AggregatePersistenceAware<TaskAggregate> {
@@ -59,7 +59,7 @@ public class TaskAggregatePersistence implements AggregatePersistenceAware<TaskA
   }
 
   /**
-   * Direct store access for test assertions (only saved state is visible).
+   * Reads the store directly for the checks of a test. Only saved state is visible.
    *
    * @param id The aggregate's ID
    * @return The stored aggregate or <code>null</code>

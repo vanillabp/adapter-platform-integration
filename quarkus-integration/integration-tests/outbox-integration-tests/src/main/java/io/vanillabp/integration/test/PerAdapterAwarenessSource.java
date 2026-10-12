@@ -10,9 +10,9 @@ import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import jakarta.enterprise.context.ApplicationScoped;
 
 /**
- * Steers the dummy adapters' awareness PER ADAPTER ID (multi-adapter election
- * tests) and records every probe so tests can assert which adapter was
- * probed how often (e.g. that a cached election skips the walk).
+ * Steers the awareness of the dummy adapters PER ADAPTER ID, for the election tests with
+ * several adapters. It records every probe. So tests can check which adapter was probed
+ * how often, for example that a cached election skips the walk over the adapters.
  */
 @ApplicationScoped
 public class PerAdapterAwarenessSource implements DummyTaskAwarenessSource {

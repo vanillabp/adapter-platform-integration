@@ -7,15 +7,14 @@ import java.util.Optional;
  * read by its name.
  * <p>
  * The readers of this module take the names of the tables VanillaBP writes from the
- * classes which declare them. So a test never writes such a name down, and a rename in
- * the platform is followed in one file instead of in every repository which tests against
- * a BPMS.
+ * classes which declare them. So a test never writes down such a name. When the platform
+ * renames one, only one file follows, not every repository which tests against a BPMS.
  * <p>
- * Reflection is what that costs, and it is not a matter of taste. The modules declaring
- * those names use this module in their own tests, so a dependency on them is a cycle
- * Maven refuses. What reflection costs is the moment a rename shows up: not at compile
- * time, but at the first lookup, with a message which names the class, the constant and
- * the file which has to follow the rename.
+ * The price is reflection, and that is not a matter of taste. The modules which declare
+ * those names use this module in their own tests. A dependency on them would be a cycle,
+ * and Maven refuses cycles. With reflection, a rename shows up later: not at compile
+ * time, but at the first lookup. The message then names the class, the constant and the
+ * file which has to follow the rename.
  */
 public final class ConstantOfAnotherModule {
 
@@ -54,10 +53,10 @@ public final class ConstantOfAnotherModule {
   }
 
   /**
-   * Reads a constant of a class which does not have to be there at all. A VanillaBP class
-   * configuring an optional library is such a class: it belongs to a platform integration
-   * and lies on the test classpath of every repository testing against a BPMS, while the
-   * library it needs lies there only where the application under test uses it.
+   * Reads a constant of a class which does not have to be there at all. An example is a
+   * VanillaBP class which configures an optional library. It belongs to a platform
+   * integration and is on the test classpath of every repository which tests against a
+   * BPMS. The library it needs is only there where the application under test uses it.
    *
    * @param namesOfTheReader The class of this module which holds the name, so a failed
    *          lookup can point at the one file which follows a rename
@@ -83,12 +82,11 @@ public final class ConstantOfAnotherModule {
   /**
    * Loads a class of another module.
    * <p>
-   * A class which is there but cannot be linked is reported as a missing one, because it
-   * means the same thing to a caller: the class lies on the test classpath while a
-   * library it needs does not, and the class loader says so with a
-   * {@link NoClassDefFoundError} rather than with a {@link ClassNotFoundException}. Only
-   * that one family is caught. An error of another kind says that something else went
-   * wrong, and the test has to see it.
+   * A class which is there but cannot be linked is reported as missing. For a caller it
+   * means the same thing. The class is on the test classpath, but a library it needs is
+   * not. The class loader says so with a {@link NoClassDefFoundError}, not with a
+   * {@link ClassNotFoundException}. Only that one family is caught. An error of another
+   * kind says that something else went wrong, and the test has to see it.
    *
    * @param className The class to load
    * @return The class
