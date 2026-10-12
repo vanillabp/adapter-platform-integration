@@ -16,9 +16,10 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 
 /**
  * Regression test for the reachability of the guiding message about a missing BPMS
- * adapter: the adapter announcements are collected via an {@code ObjectProvider} (not a
- * required {@code List}), so booting WITHOUT any adapter dependency reaches the
- * transformer and its guiding message instead of failing on unsatisfied injection.
+ * adapter: the adapter configurations are collected via an {@code ObjectProvider} (not a
+ * required {@code List}), so booting WITHOUT any adapter dependency reaches the bean
+ * method {@code migrationAdapterProperties} and its guiding message instead of failing on
+ * unsatisfied injection.
  * <p>
  * This is the case of an application which HAS VanillaBP's Spring Boot integration (as a
  * dependency of its own, or as the leftover of a removed adapter). An application which

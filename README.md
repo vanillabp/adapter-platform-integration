@@ -213,9 +213,9 @@ These conventions are not what the code cites. A comment points at an entry of t
 6. **Never read state back from the BPMS into the aggregate.** The aggregate is the single source of
    truth. The only values read from a BPMS are those which a `@TaskParam` asks for explicitly.
 7. **Tests: acceptance tests first**, per platform, against the published
-   [BPMS double](./bpms-double). Coverage is measured separately per platform (>90% of instructions,
-   enforced by `test-coverage-report/coverage-gate`). The acceptance test proves a story, not unit
-   coverage.
+   [BPMS double](./bpms-double). Coverage is measured separately per platform. The rule is 90% of
+   instructions. `test-coverage-report/coverage-gate` breaks the build below 85% (see module 5
+   above). The acceptance test proves a story, not unit coverage.
 8. **A sentence which promises behavior is part of the behavior.** A javadoc, `README.md` or wiki
    sentence which promises something either has a test which fails when it stops being true, or it
    says that it is an assumption and what would prove it wrong. A story which changes behavior reads

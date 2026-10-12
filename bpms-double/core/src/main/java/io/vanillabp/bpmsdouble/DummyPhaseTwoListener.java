@@ -125,8 +125,8 @@ public interface DummyPhaseTwoListener {
 
 
   /**
-   * Called whenever a signal is broadcast. This happens in phase one for an adapter
-   * without a two-phase commit, and in phase two for an adapter with one.
+   * Called whenever a signal is broadcast. This happens in phase two, after the commit, so
+   * {@code phaseTwo} is always {@code true}.
    *
    * @param signalName The PLAIN BPMN signal name
    * @param phaseTwo Whether this was phase two (after the commit)
@@ -138,8 +138,7 @@ public interface DummyPhaseTwoListener {
 
   /**
    * Called whenever a changed workflow aggregate is pushed to the BPMS. This happens in
-   * phase one for an adapter without a two-phase commit, and in phase two for an adapter
-   * with one.
+   * phase two, after the commit, so {@code phaseTwo} is always {@code true}.
    *
    * @param workflowAggregateId The ID of the workflow aggregate
    * @param taskId The task whose scope received the values, or <code>null</code>

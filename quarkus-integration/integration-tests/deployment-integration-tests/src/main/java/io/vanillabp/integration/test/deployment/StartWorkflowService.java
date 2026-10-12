@@ -13,13 +13,14 @@ import jakarta.inject.Inject;
 
 /**
  * The workflow service of the acceptance test of BPMS-initiated starts. Its process has
- * two start events the BPMS fires on its own, and it serves both: a process which can be
- * started by the BPMS and has no method for one of its start events does not let the
- * application boot.
+ * three start events the BPMS fires on its own (timer, signal and conditional), and it
+ * serves all three: a process which can be started by the BPMS and has no method for one
+ * of its start events does not let the application boot.
  * <p>
- * The two methods also show the two ways an aggregate gets its id. The timer takes the
- * trigger time, which is what makes a repeated notification harmless; the signal has no
- * such value and builds one from what the model set.
+ * The timer and the signal method show two ways an aggregate gets its id. The timer takes
+ * the start time which the model hands over, which is what makes a repeated notification
+ * harmless; the signal has no such value and builds one from what the model set. The
+ * conditional start reports its aggregate as changed while it builds it.
  */
 @ApplicationScoped
 @WorkflowService(

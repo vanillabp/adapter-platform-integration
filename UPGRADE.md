@@ -229,12 +229,13 @@ changelog and generated Flyway scripts per database, and it pulls in no runtime.
 off, the startup checks that the tables are there and names the one which is missing. It also names
 any column which a later version of VanillaBP added to a table you created earlier.
 
-The names are `VANILLABP_PHASE_TWO_OUTBOX`, `VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD` and
-`VANILLABP_TASK_DELIVERY`. If an application renames the outbox through
+The names are `VANILLABP_PHASE_TWO_OUTBOX`, `VANILLABP_PHASE_TWO_OUTBOX_PAYLOAD`,
+`VANILLABP_TASK_DELIVERY` and `VANILLABP_HOUSEKEEPING`. If an application renames the outbox through
 `vanillabp.outbox.jdbc.table`, the payload table is renamed with it. Its name is the outbox name plus
 a suffix, unless `vanillabp.outbox.jdbc.payload-table` says otherwise. The delivery table is a store
-of its own and gets its name from `vanillabp.outbox.jdbc.delivery-table`. On MongoDB the same rules
-apply to the collections.
+of its own and gets its name from `vanillabp.outbox.jdbc.delivery-table`. The claim table does not
+follow the outbox either. Its name comes from `vanillabp.outbox.jdbc.housekeeping-table`. On MongoDB
+the same rules apply to the collections.
 
 The first adapter of the priority list may need the outbox while none can be resolved. Then the
 application does not boot, and the message names what to add. The transaction which carries the

@@ -16,8 +16,9 @@ package io.vanillabp.integration.adapter.spi;
  * <p>
  * {@link #NONE} is for an adapter whose BPMS gets its values in a completely different
  * way. Camunda 7 used it while an EL resolver read the aggregate live. Because of that,
- * models which worked on Camunda 7 failed on every remote BPMS. So the resolver is gone,
- * and the values are pushed like everywhere else.
+ * models which worked on Camunda 7 failed on every remote BPMS. So the values are pushed
+ * now like everywhere else. The live read is left only as a fallback for workflows which
+ * were started before the upgrade and carry no such variables yet.
  * <p>
  * Why the mode an adapter defaults to is the adapter's answer and not the core's is decision 10 in
  * the repository's DECISIONS.md.

@@ -262,7 +262,7 @@ native build works. Locally:
 
 ```shell
 ./mvnw install -DskipTests -am -pl quarkus-integration/deployment,\
-  quarkus-integration/integration-tests/dummy-adapter/deployment,\
+  bpms-double/quarkus/deployment,\
   quarkus-integration/integration-tests/native-image-tests
 ./mvnw package -pl quarkus-integration/integration-tests/native-image-tests -Dnative
 ./quarkus-integration/integration-tests/native-image-tests/target/*-runner

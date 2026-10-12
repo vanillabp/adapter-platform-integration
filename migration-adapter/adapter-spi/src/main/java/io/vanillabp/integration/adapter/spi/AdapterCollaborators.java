@@ -185,8 +185,9 @@ public final class AdapterCollaborators {
    * to cope with an empty answer. So it checks the {@link Optional} and does not just
    * unwrap it. If it is empty, the end is not reported, and nothing else changes.
    *
-   * @return Where a workflow's end is reported, empty if the application has no
-   *         {@code @WorkflowEnded} method
+   * @return Where a workflow's end is reported. Empty only if the registration left it
+   *         out. Both platform integrations always provide it, also for an application
+   *         without a {@code @WorkflowEnded} method
    */
   public Optional<WorkflowEndedInvoker> workflowEndedInvoker() {
 
@@ -199,8 +200,9 @@ public final class AdapterCollaborators {
    * adapter also asks here whether such a start is served at all. Handle an empty answer
    * like the one of {@link #workflowEndedInvoker()}.
    *
-   * @return Where a workflow the BPMS started by itself is reported, empty if the
-   *         application has no method for it
+   * @return Where a workflow the BPMS started by itself is reported. Empty only if the
+   *         registration left it out. Both platform integrations always provide it, also for
+   *         an application without a method for it
    */
   public Optional<BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker() {
 
@@ -317,8 +319,8 @@ public final class AdapterCollaborators {
     /**
      * Hands over where the end of a workflow is reported.
      *
-     * @param workflowEndedInvoker May be null: an application without a
-     *                             {@code @WorkflowEnded} method has none
+     * @param workflowEndedInvoker May be null. Then {@link #build()} warns, because both
+     *                             platform integrations always provide it
      * @return This builder
      */
     public Builder workflowEndedInvoker(
@@ -332,8 +334,8 @@ public final class AdapterCollaborators {
     /**
      * Hands over where a workflow the BPMS started by itself is reported.
      *
-     * @param bpmsInitiatedStartInvoker May be null: an application which never lets the
-     *                                  BPMS start a workflow has none
+     * @param bpmsInitiatedStartInvoker May be null. Then {@link #build()} warns, because
+     *                                  both platform integrations always provide it
      * @return This builder
      */
     public Builder bpmsInitiatedStartInvoker(

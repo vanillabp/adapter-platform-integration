@@ -146,7 +146,7 @@ changelog describes. It reads the tables, their columns and their indexes from t
 itself. So when a changeset adds a column or an index, the test checks it, and nobody has to write
 it into the test. The test holds only the table names, because this README and the wiki name them
 too. The test does not trust them, it compares them with the changelog. So a release which brings
-a fourth table turns the test red, and the new name gets into all three places.
+a fifth table turns the test red, and the new name gets into all three places.
 `GeneratedSqlOnPostgresIT#postgresAcceptsTheGeneratedSql` runs the generated statements against a
 PostgreSQL container and asks the changelog for the same names.
 

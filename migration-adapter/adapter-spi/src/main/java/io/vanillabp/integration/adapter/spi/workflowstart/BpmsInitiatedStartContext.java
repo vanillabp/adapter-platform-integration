@@ -93,7 +93,7 @@ public interface BpmsInitiatedStartContext {
    * <code>&#64;WorkflowStartedByBpms(version = ...)</code>, just like the version of a
    * task is matched against <code>&#64;WorkflowTask(version = ...)</code>. See
    * {@link io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext#getProcessVersion()}.
-   * <code>null</code> matches every method regardless of its version ranges.
+   * <code>null</code> is served only by a method which names no version range.
    *
    * @return The process version or <code>null</code>
    */

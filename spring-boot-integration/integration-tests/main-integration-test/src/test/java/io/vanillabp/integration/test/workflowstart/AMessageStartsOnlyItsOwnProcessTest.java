@@ -56,7 +56,7 @@ public class AMessageStartsOnlyItsOwnProcessTest {
   private static final String NOT_CHECKED = "so ProcessService#startWorkflowByMessage is not checked for it";
 
   /**
-   * The model of 'TimerProcess' as the dummy adapter reports it: the two start events the
+   * The model of 'TimerProcess' as the dummy adapter reports it: the three start events the
    * workflow service of this scenario serves, plus the message which starts the process.
    */
   @Configuration

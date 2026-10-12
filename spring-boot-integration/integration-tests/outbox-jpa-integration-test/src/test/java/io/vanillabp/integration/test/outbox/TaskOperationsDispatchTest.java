@@ -19,6 +19,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
+import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
@@ -27,12 +28,12 @@ import io.vanillabp.spi.process.TaskNotFoundException;
 
 /**
  * The asynchronous-task operations {@code completeTask}/{@code cancelTask} through
- * the phase-two outbox, using the dummy adapter forced to require a
- * two-phase commit:
+ * the phase-two outbox, using the dummy adapter (phase two always goes through the
+ * outbox):
  * <ul>
  * <li>the adapter is elected by probing ({@code awarenessOfTask}), and phase two is
- * dispatched AFTER the commit (task ID and BPMN error code travel in the args of the
- * outbox entry);</li>
+ * dispatched AFTER the commit (task ID and BPMN error code travel with the outbox entry
+ * and arrive at the adapter);</li>
  * <li>a rollback leaves no entry, so phase two never runs;</li>
  * <li>an unknown task raises the guiding {@link TaskNotFoundException};</li>
  * <li>a task reported COMPLETED is an idempotent no-op (no outbox entry).</li>
@@ -488,6 +489,16 @@ public class TaskOperationsDispatchTest {
         .completeTask(aggregate, "task-80"));
 
     assertNotNull(result);
+    assertEquals(
+        0,
+        PhaseTwoOutboxReader
+            .ofTheVanillaBpOutbox(dataSource)
+            .entries()
+            .stream()
+            .filter(entry -> aggregate.getId().toString().equals(entry.aggregateId()))
+            .filter(entry -> PhaseOperation.COMPLETE_TASK.name().equals(entry.operation()))
+            .count(),
+        "an already-completed task must not write an outbox entry");
     Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
     assertTrue(listener.getCompletedTasks().isEmpty(), "an already-completed task must not dispatch");
 

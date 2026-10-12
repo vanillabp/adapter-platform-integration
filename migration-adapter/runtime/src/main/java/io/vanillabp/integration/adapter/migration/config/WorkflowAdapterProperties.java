@@ -114,8 +114,9 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
 
   /**
    * Overrides <code>vanillabp.delivery</code> for this workflow. Only the settings which
-   * belong to a single workflow are read here: the maximum age of an open task. One process
-   * may wait for a partner for weeks, while every other one is done in minutes.
+   * belong to a single workflow are read here: the maximum age of an open task, whether a
+   * delivery looks at the other open tasks of its workflow, and how many of them it probes.
+   * One process may wait for a partner for weeks, while every other one is done in minutes.
    */
   private DeliveryProperties delivery;
 

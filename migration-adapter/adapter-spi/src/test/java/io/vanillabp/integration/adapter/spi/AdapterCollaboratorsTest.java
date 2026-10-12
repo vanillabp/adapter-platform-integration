@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
+import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import io.vanillabp.integration.test.utils.CapturedOutput;
@@ -109,15 +110,31 @@ public class AdapterCollaboratorsTest {
     final var before = output.getAll().length();
     complete()
         .workflowEndedInvoker(mock(WorkflowEndedInvoker.class))
+        .bpmsInitiatedStartInvoker(mock(BpmsInitiatedStartInvoker.class))
+        .build();
+
+    assertFalse(
+        output.getAll().substring(before).contains("was built without"),
+        "nothing is missing, so nothing is reported");
+
+  }
+
+  @Test
+  @DisplayName("A set with one optional collaborator names only the missing one")
+  public void onlyTheMissingCollaboratorIsNamed(
+      final CapturedOutput output) {
+
+    final var before = output.getAll().length();
+    complete()
+        .workflowEndedInvoker(mock(WorkflowEndedInvoker.class))
         .bpmsInitiatedStartInvoker(null)
         .build();
 
-    assertTrue(
-        output.getAll().substring(before).contains("bpmsInitiatedStartInvoker"),
-        "the one which is missing is still named");
-    assertFalse(
-        output.getAll().substring(before).contains("and 'workflowEndedInvoker'"),
-        "the one which arrived is not");
+    final var logged = output.getAll().substring(before);
+    assertTrue(logged.contains("'bpmsInitiatedStartInvoker'"), "the one which is missing is named: "
+        + logged);
+    assertFalse(logged.contains("'workflowEndedInvoker'"), "the one which arrived is not: "
+        + logged);
 
   }
 

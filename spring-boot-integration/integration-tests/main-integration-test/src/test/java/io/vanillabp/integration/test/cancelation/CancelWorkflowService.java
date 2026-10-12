@@ -11,8 +11,8 @@ import io.vanillabp.spi.service.WorkflowService;
 import io.vanillabp.spi.service.WorkflowTask;
 
 /**
- * The workflow service of the derived-cancellation tests: two asynchronous tasks, one of
- * which asks to hear about its cancellation, and a method for the end of the workflow.
+ * The workflow service of the derived-cancellation tests: four asynchronous tasks, three of
+ * which ask to hear about their cancellation, and a method for the end of the workflow.
  * Everything which arrives is written into the aggregate in the order it arrived, so a
  * test reads the order instead of guessing it.
  */

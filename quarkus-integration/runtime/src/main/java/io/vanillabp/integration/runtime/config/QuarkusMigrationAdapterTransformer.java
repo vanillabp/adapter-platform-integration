@@ -16,7 +16,7 @@ import lombok.Builder;
 
 /**
  * Turns {@link QuarkusMigrationAdapterProperties} into
- * {@link MigrationAdapterProperties} using the GENERATED, purely mechanical
+ * {@link MigrationAdapterProperties} using the hand-written, purely mechanical
  * {@link QuarkusMigrationAdapterPropertiesMapper} (zero validation, zero
  * defaulting) and validates what only Quarkus can know: the consistency of the
  * VanillaBP adapter extensions' capabilities. Everything else - defaulting,
@@ -169,7 +169,7 @@ public class QuarkusMigrationAdapterTransformer {
       final List<String> adapterTypesProvidedByExtensions,
       final Map<String, String> adapters) {
 
-    // validate properties of process services against adapters provided by VanillaBP Quarkus adapter extensions
+    // every adapter type which a VanillaBP Quarkus adapter extension brings needs a configured adapter of that type
     final var buildItemsNotConfigured = adaptersFound
         .stream()
         .filter(Predicate.not(adapters::containsValue))

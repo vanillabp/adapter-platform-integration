@@ -70,16 +70,27 @@ public class WorkflowModuleConfigLocationsTest {
   @DisplayName("A properties file is read at the same places")
   public void aPropertiesFileIsReadAtTheSamePlaces() throws Exception {
 
-    write("config/measured-module.properties", "measured-module.a-setting=from-the-file\n");
+    for (final var location : new String[]{
+        "measured-module.properties", "config/measured-module.properties", "measured-module/measured-module.properties", "measured-module/config/measured-module.properties"
+    }) {
 
-    try (final var classLoader = classLoaderOfTheModule()) {
-      Assertions.assertEquals(
-          "from-the-file",
-          new SmallRyeConfigBuilder()
-              .forClassLoader(classLoader)
-              .withSources(new WorkflowModuleSpecificPropertiesConfigSourceProvider(MODULE, ORDINAL))
-              .build()
-              .getValue("measured-module.a-setting", String.class));
+      // one file at a time, so each place has to be found on its own
+      write(location, "measured-module.a-setting=from-the-file\n");
+
+      try (final var classLoader = classLoaderOfTheModule()) {
+        Assertions.assertEquals(
+            "from-the-file",
+            new SmallRyeConfigBuilder()
+                .forClassLoader(classLoader)
+                .withSources(new WorkflowModuleSpecificPropertiesConfigSourceProvider(MODULE, ORDINAL))
+                .build()
+                .getOptionalValue("measured-module.a-setting", String.class)
+                .orElse(null),
+            location);
+      }
+
+      Files.delete(classpath.resolve(location));
+
     }
 
   }

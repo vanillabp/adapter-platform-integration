@@ -10,8 +10,8 @@ import jakarta.enterprise.context.ApplicationScoped;
 
 /**
  * Stands in for the BPMN model of the BPMS-initiated-start acceptance test:
- * 'StartProcess' has a timer and a signal start event, every other process of the
- * module has none.
+ * 'StartProcess' has a timer, a signal and a conditional start event, every other process
+ * of the module has none.
  */
 @ApplicationScoped
 public class StartProcessStartEventSource implements DummyBpmsInitiatedStartSource {

@@ -21,8 +21,8 @@ import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Integration test of the JDBC phase-two outbox on JPA using the dummy adapter
- * forced to require a two-phase commit
+ * Integration test of the JDBC phase-two outbox on JPA using the dummy adapter, which
+ * plays a BPMS that repeats deliveries
  * (<code>dummy-adapter.at-least-once-delivery: true</code>):
  * <ul>
  *   <li>the outbox entry is enlisted in the local transaction persisting the

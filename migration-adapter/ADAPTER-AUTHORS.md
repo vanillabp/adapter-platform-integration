@@ -559,7 +559,7 @@ belongs to somebody else. Leave it as it was modelled:
 - run no check of your own which ends the start or warns because of it.
 
 A process which somebody else deployed into the same BPMS gets nothing at all. The platform decided
-this in decision 120 in the repository's DECISIONS.md, which gets its number when it is merged.
+this in decision 120 in the repository's DECISIONS.md.
 
 The four calls run per workflow module, and their order matters.
 
@@ -1472,7 +1472,8 @@ what the election does with your answers, how the outbox dispatches, what the pl
 why. Read it when you want to know why the SPI looks the way it does.
 
 [`DECISIONS.md`](../DECISIONS.md) of this repository holds the reasons which several places rely on.
-This document points at entries 3, 4, 10, 17, 19, 26, 27, 28, 29, 30, 81 and 93.
+This document points at entries 3, 4, 10, 17, 19, 26, 27, 28, 29, 30, 38, 54, 69, 73, 74, 81, 93, 97,
+113, 120 and 124.
 
 If something here is wrong, or if you need a promise which this SPI does not make, tell us. We
 finished the SPI before any adapter written outside this repository existed. We did that on purpose,

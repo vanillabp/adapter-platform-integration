@@ -59,7 +59,7 @@ import lombok.Setter;
  * The workflow service serves {@code Ordering}. {@code Ordering} calls {@code Shipping}, and
  * the service declares it as a secondary process. It also declares {@code Dispatching}, the id
  * a renamed process left behind. No model arrives for this id. The BPMS still holds workflows
- * which were started under it, so they keep their start and their end.
+ * which were started under it, so they keep their end.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class ACalledProcessIsNoWorkflowTest {
@@ -430,7 +430,7 @@ public class ACalledProcessIsNoWorkflowTest {
   }
 
   @Test
-  @DisplayName("Only the process at the top and the renamed id get a start and an end listener")
+  @DisplayName("Only the process at the top gets a start and an end listener")
   public void aCalledProcessGetsNoListener() throws IOException {
 
     reset();

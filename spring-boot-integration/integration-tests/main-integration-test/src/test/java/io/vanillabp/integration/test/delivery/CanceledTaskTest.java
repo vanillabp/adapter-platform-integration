@@ -43,11 +43,12 @@ import io.vanillabp.spi.service.TaskEvent;
 
 /**
  * Acceptance test on Spring Boot, with the default JDBC-based delivery log: a task the
- * BPMS cancels leaves ONE record and that record is closed.
+ * BPMS cancels leaves no OPEN record. There are two records, one per delivery, and both
+ * are closed.
  * <p>
  * The test reads both halves from the table. The cancelling delivery itself stamps the
- * record which the task left open. That delivery writes no second OPEN record, although the
- * method has a <code>&#64;TaskId</code> parameter. A method which does not subscribe to the
+ * record which the task left open. Its own record is closed as well, although the method
+ * has a <code>&#64;TaskId</code> parameter. A method which does not subscribe to the
  * cancellation must not change: its record stays open, because nothing told it that the
  * task is over.
  */

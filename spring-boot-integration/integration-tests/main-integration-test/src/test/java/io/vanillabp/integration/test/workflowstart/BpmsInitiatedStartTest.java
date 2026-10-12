@@ -40,10 +40,10 @@ import io.vanillabp.spi.service.WorkflowEnd;
 /**
  * Acceptance test of workflows the BPMS starts on its own. The dummy adapter stands in
  * for a BPMS which reports a timer, signal or conditional start. The
- * application's <code>&#64;WorkflowStartedByBpms</code> method builds the aggregate, and
- * the two start events of the process show the two ways it gets an id: the timer takes
- * the trigger time, so a repeated notification creates nothing twice, and the signal
- * builds one from what the model set.
+ * application's <code>&#64;WorkflowStartedByBpms</code> method builds the aggregate. The
+ * process has three start events. The timer and the signal show two ways the aggregate
+ * gets an id: the timer takes the start time which the model hands over, so a repeated
+ * notification creates nothing twice, and the signal builds one from what the model set.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class BpmsInitiatedStartTest {
@@ -144,8 +144,8 @@ public class BpmsInitiatedStartTest {
   }
 
   /**
-   * Stands in for the BPMN model: 'TimerProcess' has a timer and a signal start
-   * event, every other process of the module has none.
+   * Stands in for the BPMN model: 'TimerProcess' has a timer, a signal and a conditional
+   * start event, every other process of the module has none.
    */
   @Configuration
   static class StartEventsConfiguration {

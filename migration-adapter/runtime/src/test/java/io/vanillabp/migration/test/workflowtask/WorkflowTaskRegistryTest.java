@@ -47,9 +47,10 @@ import lombok.Getter;
 
 /**
  * Unit tests of the <code>&#64;WorkflowTask</code> handler model which the core owns. They
- * cover the scan of the methods and the binding of the parameters, and the three outcomes of
- * an invocation (completed, BPMN error, failure). They also cover the matching of version
- * ranges, and the wiring check in both directions with its guiding messages.
+ * cover the scan of the methods and the binding of the parameters, and the outcomes of an
+ * invocation (completed, completion pending, BPMN error, failure). They also cover the
+ * matching of version ranges, and the wiring check in both directions with its guiding
+ * messages.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class WorkflowTaskRegistryTest {
@@ -2073,7 +2074,8 @@ public class WorkflowTaskRegistryTest {
 
   /**
    * The three questions an embedded BPMS asks the registry outside a task invocation:
-   * whether an element is wired at all, and what the aggregate-ID variable is called. Each
+   * whether an element is wired at all, what the aggregate-ID variable is called, and who
+   * builds the aggregate of a workflow which the BPMS started by itself. Each
    * of them can be asked for something unknown. A developer sees the answer when a model and
    * the code drift apart.
    */

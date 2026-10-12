@@ -80,9 +80,9 @@ public class MongoPhaseTwoOutboxAutoConfiguration {
    *          outbox also works in contexts without the full VanillaBP auto-configuration
    * @param metrics Provider of what a blocked entry is counted into. Micrometer is
    *          optional, so the bean may be absent
-   * @return The dispatcher polling the outbox collection (private single-thread
-   *         executor - no {@link org.springframework.scheduling.TaskScheduler}
-   *         involved)
+   * @return The dispatcher polling the outbox collection. It polls on a thread of its own
+   *         and dispatches on its own lanes (<code>vanillabp.outbox.dispatch-threads</code>).
+   *         No {@link org.springframework.scheduling.TaskScheduler} is involved
    */
   @Bean
   public MongoPhaseTwoOutboxDispatcher vanillaBpMongoPhaseTwoOutboxDispatcher(

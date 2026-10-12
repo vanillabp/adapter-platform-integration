@@ -33,10 +33,15 @@ public class WorkflowServiceAnnotationTest {
   }
 
   @Test
-  public void testForAttributeBpmnProcess() {
+  public void testForAttributeBpmnProcess() throws NoSuchMethodException {
 
     final var testAnnotation = getClass().getAnnotation(WorkflowService.class);
     Assertions.assertNotNull(testAnnotation);
+    Assertions.assertNotNull(WorkflowService.class
+        .getDeclaredMethod(ProcessServiceBuildStepProcessor.ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS));
+    Assertions.assertNotNull(BpmnProcess.class
+        .getDeclaredMethod(
+            ProcessServiceBuildStepProcessor.ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_BPMNPROCESS_BPMNPROCESSID));
     final var bpmnProcess = testAnnotation.bpmnProcess();
     Assertions.assertNotNull(bpmnProcess);
     Assertions.assertEquals(BpmnProcess.USE_CLASS_NAME, bpmnProcess.bpmnProcessId());
@@ -49,10 +54,13 @@ public class WorkflowServiceAnnotationTest {
   }
 
   @Test
-  public void testForAttributeSecondaryBpmnProcesses() {
+  public void testForAttributeSecondaryBpmnProcesses() throws NoSuchMethodException {
 
     final var testAnnotation = getClass().getAnnotation(WorkflowService.class);
     Assertions.assertNotNull(testAnnotation);
+    Assertions.assertNotNull(WorkflowService.class
+        .getDeclaredMethod(
+            ProcessServiceBuildStepProcessor.ANNOTATION_WORKFLOWSERVICE_ATTRIBUTE_SECONDARYBPMNPROCESSES));
     final var secondaryBpmnProcesses = testAnnotation.secondaryBpmnProcesses();
     Assertions.assertNotNull(secondaryBpmnProcesses);
     Assertions.assertArrayEquals(new BpmnProcess[0], secondaryBpmnProcesses);

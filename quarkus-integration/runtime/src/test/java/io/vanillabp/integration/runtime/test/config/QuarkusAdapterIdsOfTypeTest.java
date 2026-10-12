@@ -20,7 +20,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * Which adapter ids one adapter TYPE serves, asked of the configuration a QUARKUS
  * application binds. The rule itself is the core's
  * ({@code MigrationAdapterPropertiesTest.AdapterIdsOfType} holds it); what this asks is
- * whether the answer survives the way to it - the config mapping and the generated
+ * whether the answer survives the way to it - the config mapping and the hand-written
  * mapper onto the core model - because an adapter registering its beans per configured
  * engine, and an extension registering one bridge per engine, ask it here.
  * <p>

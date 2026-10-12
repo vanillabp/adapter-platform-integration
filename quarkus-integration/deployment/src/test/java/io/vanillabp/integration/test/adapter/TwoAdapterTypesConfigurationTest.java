@@ -16,13 +16,11 @@ import io.vanillabp.spi.process.ProcessService;
 import jakarta.inject.Inject;
 
 /**
- * Regression test for review finding B1 on Quarkus: two different adapter TYPES
- * ('dummy' serving adapter id 'test' and 'dummy2' serving 'test2') coexist in one
- * application. Both process services are found by the election (the election fails
- * fast on any prioritized adapter without a process service, so resolving the
- * process service proves both are served) and the priorities follow the
- * configuration. (Deployment services are a Spring-only concern until the Quarkus
- * deployment pipeline lands.)
+ * Two different adapter TYPES ('dummy' serving adapter id 'test' and 'dummy2' serving
+ * 'test2') coexist in one application on Quarkus. Both process services are found by
+ * the election (the election fails fast on any prioritized adapter without a process
+ * service, so resolving the process service proves both are served) and the priorities
+ * follow the configuration.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TwoAdapterTypesConfigurationTest {

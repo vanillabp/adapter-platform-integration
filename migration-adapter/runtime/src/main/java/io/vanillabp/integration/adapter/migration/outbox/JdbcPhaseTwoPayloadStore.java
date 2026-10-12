@@ -22,8 +22,8 @@ import lombok.extern.slf4j.Slf4j;
  * There is one row per phase-two call with a payload. It is written in the transaction
  * which writes the outbox entry, and read once per dispatch attempt of that entry. The row
  * is removed when the entry was dispatched, and again together with the dispatched entry
- * itself. {@link #removeOrphansOlderThan(Instant, int)} removes what a crash between the two
- * writes left behind, and only that.
+ * itself. {@link #removeOrphansOlderThan(Instant, int)} removes the old payloads which no
+ * entry names any more, and only those.
  * <p>
  * For that, the store has to know where the ENTRIES are, and how one of them says which
  * payload it has ({@link EntriesNamingTheirPayload}). It is an argument of the constructor
@@ -331,9 +331,10 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
 
   /**
    * Says that bytes were thrown away, at DEBUG and only when there were any. An orphan is a
-   * payload whose outbox entry never reached the table. So nothing was lost by removing it,
-   * and the normal count is zero. Somebody who sees the payloads grow wants to see this
-   * line, and nobody else does.
+   * payload which no outbox entry names: its entry never reached the table, or the entry went
+   * without taking the payload along. No dispatch reads it again. So nothing was lost by
+   * removing it, and the normal count is zero. Somebody who sees the payloads grow wants to
+   * see this line, and nobody else does.
    *
    * @param removed How many payloads went
    */

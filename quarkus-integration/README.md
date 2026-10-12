@@ -13,10 +13,10 @@ There is one main extension, `vanillabp`. This module implements it. It has two 
    (business process management systems).
 
 There are also VanillaBP adapter extensions. You add them next to the `vanillabp` extension, and
-they connect to the supported BPMSs at runtime. There is one
-[dummy adapter](./dummy-adapter). It is a template for new adapters, and its documentation says
-what to think about when you write a new VanillaBP adapter extension. For adapter extensions which
-are ready to use, see [https://www.vanillabp.io](https://www.vanillabp.io).
+they connect to the supported BPMSs at runtime. The [BPMS double](../bpms-double) is an adapter
+which pretends to be a BPMS, and the tests of this module run against it. If you write a new
+adapter, read [ADAPTER-AUTHORS.md](../migration-adapter/ADAPTER-AUTHORS.md). For adapter extensions
+which are ready to use, see [https://www.vanillabp.io](https://www.vanillabp.io).
 
 ## Modules
 
@@ -161,8 +161,8 @@ Spring Boot uses reflection at runtime. The Quarkus integration does as much as 
    validation which guides the user run in the core. The transformer keeps only the capability
    checks.
    Adapter extensions add their own keys to the shared tree through an overlay of their own: a
-   RUN_TIME `@ConfigRoot @ConfigMapping(prefix = "vanillabp")` (for an example, see the dummy
-   adapter's `DummyAdapterOverlayProperties`). On purpose, there is NO general
+   RUN_TIME `@ConfigRoot @ConfigMapping(prefix = "vanillabp")` (for an example, see
+   `DummyAdapterOverlayProperties` of the BPMS double). On purpose, there is NO general
    `withMappingIgnore("vanillabp.**")`. SmallRye's check for unknown keys passes if ANY registered
    mapping knows a key. So the platform mapping and the adapter overlays check the tree together,
    and a typo under `vanillabp.*` fails the startup. Here Quarkus is stricter than Spring Boot,

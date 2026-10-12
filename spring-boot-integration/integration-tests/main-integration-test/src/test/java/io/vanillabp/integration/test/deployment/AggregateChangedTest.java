@@ -30,11 +30,15 @@ import io.vanillabp.integration.workflowmodule.WorkflowModuleAutoConfiguration;
 import io.vanillabp.spi.process.ProcessService;
 
 /**
- * Acceptance test of pushing a changed workflow-aggregate to the BPMS
- * with the dummy adapter standing in for one. What it pins: both overloads reach the
- * adapter, the task id decides the scope and travels unchanged, and a rollback takes
- * the push with it - the dummy is configured without a two-phase commit, so it
- * behaves like an embedded BPMS.
+ * Acceptance test of pushing a changed workflow-aggregate to the BPMS with the dummy
+ * adapter standing in for one. What it pins: both overloads are planned for the BPMS, and
+ * the task id travels unchanged. A push is planned inside the caller's transaction, and
+ * nothing reaches the adapter before that transaction ends.
+ * <p>
+ * The store of these tests remembers what was planned and dispatches nothing. It does not
+ * take part in the transaction either. So these tests cannot show that a rollback removes
+ * the entry, nor that the adapter receives the push. That is the job of a real store, and
+ * the outbox integration tests check it.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AggregateChangedTest {
@@ -221,7 +225,7 @@ public class AggregateChangedTest {
 
   @SuppressWarnings("unchecked")
   @Test
-  public void aRollbackTakesThePushWithIt() throws IOException {
+  public void aPushIsPlannedInsideTheCallersTransaction() throws IOException {
 
     try (var testApp = SpringBootTestApplication
         .builder()
@@ -239,6 +243,7 @@ public class AggregateChangedTest {
 
       final var aggregate = new Aggregate();
 
+      TestPhaseTwoOutboxConfiguration.clear();
       Assertions
           .assertThrows(
               IllegalStateException.class,
@@ -246,12 +251,21 @@ public class AggregateChangedTest {
                   .getBean(org.springframework.transaction.support.TransactionTemplate.class)
                   .executeWithoutResult(status -> {
                     processService.aggregateChanged(aggregate);
+                    // planned while the caller's transaction is still open. A store which
+                    // writes into that transaction loses the entry with the rollback
+                    Assertions
+                        .assertEquals(
+                            List.of(io.vanillabp.integration.spi.PhaseOperation.AGGREGATE_CHANGED.name()),
+                            TestPhaseTwoOutboxConfiguration.PLANNED
+                                .stream()
+                                .map(io.vanillabp.integration.spi.PhaseTwoCall::operation)
+                                .toList(),
+                            "the push has to be planned inside the caller's transaction");
                     throw new IllegalStateException("the caller changed their mind");
                   }));
 
-      // nothing reached the BPMS: the push is planned in the caller's transaction and
-      // written by the store into it, so a rollback takes the entry with it (this
-      // store keeps what it was given, which is why the entry is still visible here)
+      // nothing reached the adapter. This store dispatches nothing, so this only shows
+      // that the push did not go to the adapter directly, past the store
       Assertions
           .assertEquals(
               List.of(),

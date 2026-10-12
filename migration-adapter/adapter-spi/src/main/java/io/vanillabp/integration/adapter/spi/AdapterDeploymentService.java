@@ -10,7 +10,7 @@ import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 /**
  * An implementation reads the BPMN and turns it into the model type. Then it deploys the
  * final model to the target BPMS.
- * The implementation has to be provided by the platform integration adapter.
+ * Each BPMS adapter provides an implementation (for example the Camunda 8 adapter).
  * <p>
  * Think of an adapter as &quot;the wiring service with deployment&quot;. It inherits
  * preparing, wiring, starting and stopping of workflow processing from

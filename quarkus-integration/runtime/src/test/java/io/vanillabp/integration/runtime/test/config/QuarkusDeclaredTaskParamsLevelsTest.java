@@ -21,7 +21,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * the four places wins. The rule is the core's, and a booted Spring Boot application
  * holds it end to end ({@code PortableValuesTest} of the main integration test). What
  * this asks is whether the answer survives the way to it: the config mapping and the
- * generated mapper onto the core model. A level which binds but never arrives looks
+ * hand-written mapper onto the core model. A level which binds but never arrives looks
  * exactly like a level which works.
  */
 @ExtendWith(SuppressOutputExtension.class)

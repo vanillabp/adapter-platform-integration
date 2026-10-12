@@ -174,7 +174,7 @@ public class AdapterBeanRegistrarSupportTest {
 
   /**
    * What a registrar gets handed, and what it is told when a collaborator did not
-   * resolve: the two the platform provides for every application are looked up as
+   * resolve: the five the platform provides for every application are looked up as
    * beans, the two an application may not ask for as providers.
    */
   @org.junit.jupiter.api.Nested

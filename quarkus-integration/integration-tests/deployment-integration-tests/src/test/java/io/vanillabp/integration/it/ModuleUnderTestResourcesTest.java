@@ -1,6 +1,9 @@
 package io.vanillabp.integration.it;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -8,6 +11,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
+import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.test.deployment.Aggregate;
 import io.vanillabp.integration.test.deployment.AggregatePersistence;
 import io.vanillabp.integration.test.deployment.RecordingDeploymentEvents;
@@ -43,6 +47,9 @@ public class ModuleUnderTestResourcesTest {
   @Inject
   RecordingDeploymentEvents events;
 
+  @Inject
+  MigrationAdapterProperties properties;
+
   @Test
   @DisplayName("The module's own location is searched although the module is the main artifact")
   public void resourcesBelowTheModuleIdAreFound() {
@@ -57,6 +64,14 @@ public class ModuleUnderTestResourcesTest {
         recorded.contains("adapter:demo:deployResources:test-module"),
         () -> "the module was not deployed: "
             + recorded);
+    // both places, the module's own one first
+    assertEquals(
+        List.of("classpath*:test-module/processes/demo", "classpath*:processes/demo"),
+        properties
+            .getAdapterResourcesLocationsFor("test-module", "demo")
+            .stream()
+            .map(MigrationAdapterProperties.ResourcesLocation::location)
+            .toList());
 
   }
 

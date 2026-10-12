@@ -8,6 +8,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
+import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
 import io.vanillabp.integration.runtime.processservice.ProcessServiceBaseCdiBean;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import io.vanillabp.integration.test.samples.sample.Aggregate;
@@ -40,6 +42,9 @@ public class UnknownWorkflowModuleConfigurationTest {
       .addBuildChainCustomizer(DummyAdapters.oneDummyAdapter());    // add mocked adapter
 
   @Inject
+  MigrationAdapterProperties properties;
+
+  @Inject
   @SuppressWarnings("CdiUnsatisfiedInjection")
   ProcessService<Aggregate> sampleProcessService;
 
@@ -50,6 +55,15 @@ public class UnknownWorkflowModuleConfigurationTest {
     Assertions.assertNotNull(sampleProcessService);
     Assertions.assertInstanceOf(ProcessServiceBaseCdiBean.class, sampleProcessService);
     Assertions.assertEquals("test-module", sampleProcessService.getWorkflowModuleId());
+
+    final var findings = properties.startupFindings().findings();
+    Assertions.assertTrue(
+        findings
+            .stream()
+            .anyMatch(finding -> (finding.severity() == StartupFindings.Severity.WARNING) && finding.message()
+                .contains("Found properties for workflow modules") && finding.message().contains("my-module")),
+        () -> "expected a WARN about the unknown workflow module but got: "
+            + findings);
 
   }
 

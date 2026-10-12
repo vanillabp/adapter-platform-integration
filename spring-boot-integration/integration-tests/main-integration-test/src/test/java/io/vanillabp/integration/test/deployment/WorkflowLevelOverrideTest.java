@@ -33,7 +33,8 @@ import io.vanillabp.spi.process.ProcessService;
  * 'test', and ONE workflow ('DummyProcess') overrides it with 'test2'. That is the classic
  * migration scenario: a single process moves to a new BPMS, and the rest of the module stays.
  * <ul>
- * <li>Deployment-target union: 'test2' is named at the workflow level only but still
+ * <li>Deployment-target union: 'test2' is prioritized at the workflow level only (the
+ * module configures its resources location, but does not prioritize it), and it still
  * receives the module's {@code deployResources}.</li>
  * <li>Election: starting THAT workflow uses 'test2', other workflows use the
  * module-level 'test'.</li>
@@ -162,7 +163,7 @@ public class WorkflowLevelOverrideTest {
         .hideResource("application.yaml")
         .build(); var context = runTestApplication(testApp)) {
 
-      // deployment-target union: 'test2' is named at the workflow level ONLY but
+      // deployment-target union: 'test2' is prioritized at the workflow level ONLY but
       // still receives the module's resources
       //
       // Everything read below is the output of the running test alone. The sentence

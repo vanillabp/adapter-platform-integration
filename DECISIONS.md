@@ -579,7 +579,7 @@ database.*
 ### 26. There is no switch which lets an adapter act in phase one
 
 `MigratableProcessService` used to ask every adapter whether it needs a two-phase commit for
-starting workflows. Where the answer was `false`, the core skipped the outbox for six operations:
+starting workflows. Where the answer was `false`, the core skipped the outbox for seven operations:
 the start, the start by message, a task completion, a cancellation, a correlated message, a
 broadcast signal and a pushed aggregate. The method was named after starts, but it controlled much
 more than starts. It described a variant which acts in phase one and leaves phase two empty. No
@@ -604,6 +604,9 @@ no code behind it.
 The removal does NOT touch the inbound direction. A BPMS which delivers a task inside its own
 transaction still does so, and `TaskInvocationContext.runInCurrentTransaction()` is where an adapter
 says so.
+
+*The first paragraph said "six operations" and listed seven. The count was corrected on 2026-10-12.
+What was decided did not change.*
 
 ### 27. Phase one asks once, and the waiting happens where no transaction is open
 

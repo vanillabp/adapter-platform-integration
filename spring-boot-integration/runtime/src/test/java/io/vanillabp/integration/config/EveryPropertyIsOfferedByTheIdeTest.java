@@ -44,9 +44,11 @@ public class EveryPropertyIsOfferedByTheIdeTest {
   private static final String METADATA = "META-INF/additional-spring-configuration-metadata.json";
 
   /**
-   * The types a binder writes a value into rather than descending through. A map of
-   * strings onto a configuration class is one of them: what stands below it is an adapter
-   * id or a workflow module id, so the file describes the map and stops there.
+   * The VanillaBP-independent types a binder writes a value into rather than descending
+   * through: strings, numbers, booleans and times. A map is not in this set. It stops the
+   * walk anyway, because it is no type of VanillaBP (see {@code isASection}). What stands
+   * below a map is an adapter id or a workflow module id, so the file describes the map
+   * and stops there.
    */
   private static final Set<Class<?>> VALUE_TYPES = Set.of(
       String.class,

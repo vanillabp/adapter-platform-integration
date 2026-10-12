@@ -26,8 +26,8 @@ import jakarta.inject.Inject;
 import jakarta.transaction.UserTransaction;
 
 /**
- * Integration test of the phase-two outbox based on JDBC and JTA. The dummy adapter is
- * forced to need a two-phase commit
+ * Integration test of the phase-two outbox based on JDBC and JTA. The dummy adapter plays
+ * a BPMS which repeats deliveries
  * (<code>dummy-adapter.at-least-once-delivery: true</code>). The test checks:
  * <ul>
  *   <li>the outbox entry joins the local JTA transaction. It is visible within the

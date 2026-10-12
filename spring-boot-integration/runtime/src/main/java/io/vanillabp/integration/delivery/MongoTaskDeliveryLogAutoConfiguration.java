@@ -112,10 +112,11 @@ public class MongoTaskDeliveryLogAutoConfiguration {
   }
 
   /**
-   * Creates the index the cleanup reads and starts the cleanup once all singletons
-   * exist.
+   * Creates the indexes of the delivery log, or reports the missing ones where the
+   * application manages its own schema. Then it starts the cleanup. All of this happens
+   * once all singletons exist.
    *
-   * @param mongoTemplate The template creating the index
+   * @param mongoTemplate The template creating the indexes
    * @param deliveryLog The delivery log to start
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree
    * @return The startup hook

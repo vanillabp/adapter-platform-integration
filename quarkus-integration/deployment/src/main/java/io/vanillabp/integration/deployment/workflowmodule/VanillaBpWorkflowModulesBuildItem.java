@@ -64,10 +64,11 @@ public final class VanillaBpWorkflowModulesBuildItem extends SimpleBuildItem {
   }
 
   /**
-   * Determines the workflow module ID for a given {@link io.vanillabp.spi.process.ProcessService} class.
+   * Determines the workflow module ID for a given workflow service class, the class annotated
+   * with {@code @WorkflowService}.
    *
    * @param applicationArchivesBuildItem Information about all archives (JARs and directories) of the project
-   * @param serviceClass The {@link io.vanillabp.spi.process.ProcessService} class
+   * @param serviceClass The workflow service class
    * @return The workflow module ID
    */
   public String getWorkflowModuleId(

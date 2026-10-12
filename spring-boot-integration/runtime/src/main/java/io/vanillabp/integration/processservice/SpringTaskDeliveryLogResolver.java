@@ -32,9 +32,8 @@ import io.vanillabp.integration.spi.TaskDeliveryLogAware;
  * </ol>
  * <p>
  * The outbox resolver next to this one walks the same three steps. The two stay apart on
- * purpose: they look up different bean types, an outbox has two JPA default bean names
- * while this one has a single default per technology, and each message names the
- * properties of its own store. A shared step-walker would have to be handed all of that,
+ * purpose: they look up different bean types, and each message names the properties of
+ * its own store. A shared step-walker would have to be handed all of that,
  * and every reader of either resolver would have to open it to see what happens.
  */
 public class SpringTaskDeliveryLogResolver implements TaskDeliveryLogResolver {

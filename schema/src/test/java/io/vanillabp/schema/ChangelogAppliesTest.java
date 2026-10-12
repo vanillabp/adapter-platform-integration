@@ -47,7 +47,7 @@ public class ChangelogAppliesTest {
    * The tables this module promises, and the only place in its test code which names them.
    * <code>README.md</code> names them too, and so do the wiki pages of the two platform
    * integrations. They are compared against the changelog rather than trusted, so the day a
-   * changeset brings a fourth table, {@link #theChangelogDescribesTheTablesThisModulePromises()}
+   * changeset brings a fifth table, {@link #theChangelogDescribesTheTablesThisModulePromises()}
    * fails and whoever takes the new name over writes it into those documents as well.
    */
   private static final Set<String> TABLES_OF_VANILLABP = Set

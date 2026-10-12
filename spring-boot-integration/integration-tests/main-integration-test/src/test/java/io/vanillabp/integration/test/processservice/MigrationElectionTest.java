@@ -226,8 +226,8 @@ public class MigrationElectionTest {
   private static void inFakeTransaction(
       final Runnable operation) {
 
-    // The dummy adapter completes a task completely in phase one, without a two-phase commit.
-    // The process-service bean only needs an ACTIVE transaction.
+    // The process-service bean only needs an ACTIVE transaction to plan the operation.
+    // Phase two runs later, through the outbox.
     TransactionSynchronizationManager.setActualTransactionActive(true);
     try {
       operation.run();

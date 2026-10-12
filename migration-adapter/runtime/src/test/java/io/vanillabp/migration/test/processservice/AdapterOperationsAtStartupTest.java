@@ -1,6 +1,7 @@
 package io.vanillabp.migration.test.processservice;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrowsExactly;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -29,9 +30,8 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * while the application boots. The map which an adapter answers IS its statement about what
  * it serves. So a forgotten operation is caught before a workflow waits for it.
  * <p>
- * An adapter which still runs on the compatibility bridge serves every core operation
- * by definition, which the second test holds: the check must not refuse the three
- * adapters VanillaBP ships today.
+ * An adapter which serves every core operation, the optional ones included, boots as well.
+ * The adapter doubles of the other tests here answer that way.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class AdapterOperationsAtStartupTest {
@@ -144,14 +144,18 @@ public class AdapterOperationsAtStartupTest {
     processService(new HandlerAdapter(everyRequiredOperation()))
         .validateAdapterOperationsAtStartup();
 
+    assertNull(lastProperties.startupFindings().theRefusal(), "the start must not be refused");
+
   }
 
   @Test
-  @DisplayName("An adapter still running on the compatibility bridge boots as well")
-  public void theCompatibilityBridgeCounts() {
+  @DisplayName("An adapter serving every core operation boots as well")
+  public void anAdapterServingEveryOperationBoots() {
 
     processService(new SendSignalTest.RecordingAdapter("first-adapter"))
         .validateAdapterOperationsAtStartup();
+
+    assertNull(lastProperties.startupFindings().theRefusal(), "the start must not be refused");
 
   }
 

@@ -190,8 +190,10 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   private volatile MongoHousekeepingLease housekeepingLease;
 
   /**
-   * Creates the unique index (unless disabled) and starts the fixed-delay poller.
-   * The first run is executed immediately, dispatching committed-but-unprocessed
+   * Creates the indexes (or, where the application manages its own schema, reports the
+   * missing ones), and starts the poller, the dispatch lanes and the housekeeping. The
+   * poller wakes at the next due entry, and waits at most the poll interval. Its first
+   * run is executed immediately, dispatching committed-but-unprocessed
    * entries of a previously crashed instance. The observer priority guarantees that
    * the deployment pipeline deployed the BPMN resources and started workflow
    * processing BEFORE any recovered entry is dispatched (see
@@ -444,8 +446,9 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Claims all due entries and hands each of them to the lane of its aggregate, then deletes
-   * DONE entries whose retention passed. Exceptions are caught to keep the poller alive.
+   * Claims all due entries and hands each of them to the lane of its aggregate. Exceptions
+   * are caught to keep the poller alive. The housekeeping deletes the DONE entries, not this
+   * method.
    * <p>
    * This thread does the claim, and a lane does the dispatch. The order matters. An entry is
    * claimed before it is handed over. So the claim of the next poll, here or on another node,
@@ -581,8 +584,8 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   /**
    * Dispatches a single claimed entry through the core's {@link PhaseTwoRouter}. On
-   * success the entry is marked DONE; on failure it stays claimed and is retried
-   * after the configured backoff, until it is blocked.
+   * success the entry is marked DONE. On failure the attempt is counted, the lease is given
+   * back, and the entry is due again after the configured backoff, until it is blocked.
    *
    * <p>
    * The renewal ends here, before the write which says how the attempt ended. That write needs

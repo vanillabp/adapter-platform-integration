@@ -36,8 +36,9 @@ package io.vanillabp.integration.spi;
 public final class WorkflowStartKey {
 
   /**
-   * What stands in the key where a task delivery carries the lifecycle event. It is not a
-   * valid BPMN process id or adapter id of any BPMS, so it can never collide with one.
+   * What stands in the key where the key of a task delivery carries the BPMN process id. It
+   * is not a valid BPMN process id or adapter id of any BPMS, so it can never collide with
+   * one.
    */
   public static final String MARKER = "(workflow-start)";
 

@@ -60,7 +60,7 @@ public class InheritedWorkflowServiceTest {
   private static final String SHARED_PROCESS = "SharedProcess";
 
   /**
-   * The persistence of the two aggregates plus the transaction infrastructure a handler
+   * The persistence of the aggregate plus the transaction infrastructure a handler
    * invocation needs.
    */
   @Configuration
