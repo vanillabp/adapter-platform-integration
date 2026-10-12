@@ -19,7 +19,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * The walk over the eight positions, asked with a TYPED tree and not with the flat text
  * which VanillaBP binds below <code>vanillabp.extensions</code>. The Business Cockpit hands
  * in this shape. It keeps its own section name and its own types, and only the order of the
- * positions comes from here (decision 53 in the repository's DECISIONS.md).
+ * positions comes from here (decision 7 in the repository's DECISIONS.md).
  * <p>
  * {@code ExtensionSettingsResolutionTest} holds that the own tree of the core gives the same
  * answers.

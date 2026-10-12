@@ -140,7 +140,7 @@ public class AdapterProperties {
    * An extension is configured on every configured adapter separately. So an application which
    * runs two adapters of the same BPMS type may tell them different things. What an adapter is
    * told wins over what the same level says in general. And a more specific level wins over a
-   * less specific one (see decision 53 in the repository's DECISIONS.md and
+   * less specific one (see decision 7 in the repository's DECISIONS.md and
    * {@link MigrationAdapterProperties#resolveForExtension}).
    */
   private Map<String, Map<String, String>> extensions = Map.of();

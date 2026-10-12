@@ -52,7 +52,7 @@ import lombok.extern.slf4j.Slf4j;
  * which holds that row hands it in ({@link RecordedStart}). Where the cache has no hint, the
  * row is the hint. Its adapter is probed first, and an unknown answer means "not visible
  * yet", just as with a cached hint. The cache keeps the first word, because it is free to
- * read, and an election wrote it more recently than the start. See decision 112 in the
+ * read, and an election wrote it more recently than the start. See decision 5 in the
  * repository's DECISIONS.md.
  * <p>
  * <b>What the walk cannot do.</b> It stops at the first {@link WorkflowAwareness#ACTIVE}. So
@@ -84,7 +84,7 @@ import lombok.extern.slf4j.Slf4j;
  * of every caller at once. That is why phase one asks once and never sleeps. At dispatch
  * time no application transaction is open. A repetition costs an entry another attempt, not
  * a connection. So that is where a BPMS gets a second chance, and where a read model gets the
- * moment it needs (decision 27 in the repository's DECISIONS.md). The moment is taken by
+ * moment it needs (decision 5 in the repository's DECISIONS.md). The moment is taken by
  * giving the entry back with a due time, because the lane which carries it also carries the
  * entries of other workflows. Two callers really sleep, both for the same reason. There is
  * no outbox entry behind them which could ask again later. So an answer they do not wait for

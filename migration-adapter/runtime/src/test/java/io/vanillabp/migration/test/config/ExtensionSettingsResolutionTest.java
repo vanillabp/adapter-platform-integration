@@ -23,7 +23,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * What an extension is told, and where it may be told it: the four levels of
  * {@code vanillabp.extensions.<extension>.*}, and the adapter section of each of them. They
  * are resolved by the same rule as an adapter setting (decision 7 in the repository's
- * DECISIONS.md), and by the walk which every plug-in uses (decision 53 in the repository's
+ * DECISIONS.md), and by the walk which every plug-in uses (decision 7 in the repository's
  * DECISIONS.md).
  * <p>
  * This is the half which does not depend on a platform. That both platforms bind all eight

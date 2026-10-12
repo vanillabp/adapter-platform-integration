@@ -37,7 +37,7 @@ import java.util.function.Function;
  * Enums are carried as well, but they are not in the list. There is nothing to write down
  * per enum, because a constant travels as its name.
  * <p>
- * Decision 58 in the repository's DECISIONS.md says why there is a list instead of a check
+ * Decision 57 in the repository's DECISIONS.md says why there is a list instead of a check
  * on the package of a class.
  */
 public final class TextValueTypes {
@@ -224,7 +224,7 @@ public final class TextValueTypes {
    * whose text carries no value back at least writes something a person can read. Those get
    * a word at startup and not a refusal.
    * <p>
-   * Decision 59 in the repository's DECISIONS.md says why this one type is refused and the
+   * Decision 57 in the repository's DECISIONS.md says why this one type is refused and the
    * others are not.
    *
    * @param type The declared type of an attribute, or of an element of one

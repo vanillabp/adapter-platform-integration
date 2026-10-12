@@ -67,7 +67,7 @@ import lombok.extern.slf4j.Slf4j;
  * the adapter named, and <code>ATTEMPTS</code> stays as it was. Time ends that wait. Once
  * <code>vanillabp.outbox.wait-for-visibility-at-most</code> has passed since the entry was
  * written, the entry is blocked (see
- * {@link PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough} and decision 113 in the
+ * {@link PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough} and decision 49 in the
  * repository's DECISIONS.md).
  * <p>
  * <strong><code>ATTEMPTS</code> counts attempts, not claims.</strong> The column is written
@@ -336,7 +336,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * arguments as well, where identifiers travel (decision 62 in the repository's
    * DECISIONS.md). This column holds the same value in a shape which an index can reach. The
    * housekeeping asks the entries whether one of them still names a payload. Inside a column
-   * of text that question is a scan (decision 76).
+   * of text that question is a scan (decision 62).
    */
   public static final String PAYLOAD_REFERENCE_COLUMN = "PAYLOAD_REFERENCE";
 

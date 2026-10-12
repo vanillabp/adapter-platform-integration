@@ -17,7 +17,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * <p>
  * The section here is <code>extension</code>, where the binding declares
  * <code>extensions</code>, below an adapter. That is one of the eight positions which
- * VanillaBP resolves (decision 53 in the repository's DECISIONS.md). So this test says two
+ * VanillaBP resolves (decision 7 in the repository's DECISIONS.md). So this test says two
  * things. A typo in a plug-in's settings is reported. And every position which the
  * resolution offers has to be part of a registered mapping. On Quarkus, an application
  * cannot write to a position which is not bound.

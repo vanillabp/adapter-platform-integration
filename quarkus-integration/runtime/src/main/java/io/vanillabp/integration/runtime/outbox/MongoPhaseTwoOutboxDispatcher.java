@@ -95,7 +95,7 @@ import lombok.extern.slf4j.Slf4j;
  * dispatch with {@link io.vanillabp.integration.spi.PhaseTwoRetryLater}, the entry is written
  * back with the window which the adapter named. <code>attempts</code> stays as it was. Time
  * ends that wait. Once <code>vanillabp.outbox.wait-for-visibility-at-most</code> has passed
- * since the entry was written, the entry is blocked (see decision 113 in the repository's
+ * since the entry was written, the entry is blocked (see decision 49 in the repository's
  * DECISIONS.md).
  * <p>
  * Unless <code>vanillabp.outbox.create-schema</code> is switched off, the indexes of
@@ -218,7 +218,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
     // What each index is read by is described once, in the core, because the Spring Boot
     // integration creates the same ones. For the index over the payload references, see
-    // decision 76 in the repository's DECISIONS.md.
+    // decision 62 in the repository's DECISIONS.md.
     if (properties.isCreateSchema()) {
       MongoIndexes.createOn(outboxCollection(), MongoSchema.OUTBOX_INDEXES);
       MongoIndexes.createOn(payloadCollection(), MongoSchema.PAYLOAD_INDEXES);

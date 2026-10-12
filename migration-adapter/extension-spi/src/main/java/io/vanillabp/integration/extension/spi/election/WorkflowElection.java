@@ -39,7 +39,7 @@ public interface WorkflowElection {
    * asks the BPMS as the javadoc of the type describes.
    * <p>
    * Call this only where you read, never where you report a change: a report must not wait, so
-   * it uses {@link #workflowStartOf} and {@link #openUserTasksOf} (column 4 of decision 27 in the
+   * it uses {@link #workflowStartOf} and {@link #openUserTasksOf} (column 4 of decision 5 in the
    * repository's DECISIONS.md).
    *
    * @param workflowModuleId The workflow module of the workflow
@@ -86,7 +86,7 @@ public interface WorkflowElection {
    * what an implementation written before this method existed answers.
    * <p>
    * Like {@link #adapterIdOfWorkflow}, this is for reading, never for a report (column 4 of
-   * decision 27 in the repository's DECISIONS.md).
+   * decision 5 in the repository's DECISIONS.md).
    *
    * @param workflowModuleId The workflow module of the workflow
    * @param bpmnProcessId The BPMN process of the workflow

@@ -1410,7 +1410,7 @@ public class MigrationProcessService<A> {
    * workflow seconds ago (or got a delivery for it), so it exists. But the read model which
    * the probe searches is a moment behind. Phase one refuses to wait for that inside the
    * caller's transaction. So the operation is planned, and the dispatch asks again. The
-   * dispatch may take the time (decision 27 in the repository's DECISIONS.md).
+   * dispatch may take the time (decision 5 in the repository's DECISIONS.md).
    *
    * @param hintedAdapterId The adapter which should hold the workflow
    * @param subject The workflow the operation is about
@@ -2406,7 +2406,7 @@ public class MigrationProcessService<A> {
    * Then the operation fails in phase one, or is consumed as stale in phase two. With the
    * row, the same answer reads as "not visible yet", just like with a cached hint. A row
    * which names an adapter that is no longer configured for this workflow does not count.
-   * See decision 112 in the repository's DECISIONS.md.
+   * See decision 5 in the repository's DECISIONS.md.
    * <p>
    * The BPMS' own id of the workflow goes to the probe as well. So an adapter can ask its
    * engine by key instead of searching. An operation about a task asks by the task's id, and
@@ -3243,7 +3243,7 @@ public class MigrationProcessService<A> {
    * <p>
    * A BPMS which answers from an eventually consistent read model gets two more, and both are
    * about the same window. VanillaBP does not wait that window out here. Phase one asks once
-   * and never sleeps (decision 27 in the repository's DECISIONS.md). And it only knows that
+   * and never sleeps (decision 5 in the repository's DECISIONS.md). And it only knows that
    * the workflow is worth waiting for where something told it so: it started the workflow
    * itself, or a delivery for it arrived. On a cluster that knowledge stays on the node where
    * it happened, unless the application shares its {@code WorkflowAdapterCache}. That is the

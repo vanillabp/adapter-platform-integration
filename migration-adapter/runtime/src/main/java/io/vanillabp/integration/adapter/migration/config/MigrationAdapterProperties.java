@@ -33,7 +33,7 @@ import io.vanillabp.integration.spi.startup.StartupTopic;
  * else (decision 7 in the repository's DECISIONS.md). {@code resolveForExtension} resolves
  * an EXTENSION setting over the same levels, plus the adapter section of each of them. It
  * walks them with {@link SettingsResolution}, the one implementation which every plug-in
- * uses (decision 53 in the repository's DECISIONS.md).
+ * uses (decision 7 in the repository's DECISIONS.md).
  */
 public class MigrationAdapterProperties extends AdaptersConfigurationProperties {
 
@@ -1073,7 +1073,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * The configuration tree of an extension as VanillaBP binds it: the
    * <code>extensions</code> maps of the four levels, and the ones below the adapter sections
    * of those levels. An extension with a section of its own hands in its own tree instead.
-   * The walk is the same either way (see decision 53 in the repository's DECISIONS.md).
+   * The walk is the same either way (see decision 7 in the repository's DECISIONS.md).
    *
    * @param extension The extension's id
    * @return The most general level of that extension's settings
