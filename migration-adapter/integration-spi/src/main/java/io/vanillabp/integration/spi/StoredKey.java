@@ -29,8 +29,8 @@ import java.util.HexFormat;
  * needs fewer bytes than there are characters. So a key which fits in bytes also fits a
  * database which counts characters, and a store which counts characters (like gruelbox)
  * is still served. The key is never cut. It is kept whole or hashed whole, so two keys
- * which differ anywhere stay different. {@code DECISIONS.pending/968.md} has the
- * reasoning.
+ * which differ anywhere stay different. Decision 128 in the repository's {@code DECISIONS.md}
+ * has the reasoning.
  * <p>
  * <strong>The output is a persisted contract.</strong> Records of a running installation
  * are matched by these strings. So a changed digest, prefix or limit would silently stop
