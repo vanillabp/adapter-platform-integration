@@ -41,9 +41,8 @@ values at dispatch time. Their entry carries no key, and the remaining duplicate
 instead of hidden. A test which called VanillaBP has to wait for the BPMS to catch up. It must not
 read the BPMS state in the next line.
 
-Entry 22 decides what such a key answers, and it supersedes this paragraph in that one point. A key
-deduplicates an operation which is still planned, not one which already reached the BPMS.
-Everything else here stands.
+*Entry 22 decides what such a key answers: it deduplicates an operation which is still planned, not
+one which already reached the BPMS.*
 
 ### 3. Phase one asks, phase two acts
 
@@ -96,6 +95,10 @@ them says something about the same workflow. The own id goes first, because a wa
 elected wrote its answer there. A hint which turns out to be stale is dropped. A hint whose
 workflow ended is marked. Both happen under the id the hint was read from. If they happened under
 the own id, the entry which is read next time would still say the old thing.
+
+*Superseded in part by decision 27: the second paragraph, saying that the core waits out the
+`workflowVisibilityDelay`. Only a read still waits. Phase one asks once and plans the operation, and
+the dispatch gives the entry back with a due time.*
 
 ### 6. A processed delivery is written down, and a redelivery is answered from the record
 
@@ -971,6 +974,10 @@ aggregate. That bean can be injected with the aggregate as its type argument. Th
 election which BPMS holds a workflow, instead of assuming the one with first priority. Fourth, it
 configures itself below `vanillabp.extensions.<extension>`, with an override per workflow module.
 
+*Superseded in part by decisions 48 and 53: the fourth point. A plug-in setting has eight positions
+now, and the plug-in names its own section. `vanillabp.extensions.<id>` is the section of a plug-in
+which names none.*
+
 What ties them together: each is parameterized BY the extension, not shaped after one. That is the
 annotation type, the service interface and the extension id. Nothing in the core knows what a
 user-task detail is, and an application which does not use an extension sees none of it. The sample
@@ -1495,6 +1502,10 @@ The Quarkus half is not a duplicate. It is a wall. SmallRye refuses a key it doe
 mapping root. Before the workflow and the task level were part of the mapping, an application which
 wrote `vanillabp.workflow-modules.<m>.workflows.<p>.extensions.<ext>.*` did not just go unread. It
 did not start.
+
+*Superseded in part by decision 53: the core does not own the location any more. The plug-in names
+its section, the walk has eight positions, and it lives once in `SettingsResolution` of the
+extension SPI.*
 
 ### 49. A dispatch which cannot run yet ends, and nothing waits inside a transaction
 
@@ -4875,10 +4886,11 @@ call of that version finds it. Nobody sees an error. The cockpit just shows the 
 details of the provider.
 
 **An extension asks for it.** A contract says `theDeployedVersionNeedsAMethod()`. "No method" is a
-valid answer for an extension (decision 36). So the core cannot decide for every extension that a
-missed version is a defect. Only the extension knows. The flag also needs
-`callsCarryTheProcessVersion()`, because a call without a version never picks a method by version. A
-contract which has the flag, but not the other one, ends the boot, and the message names both.
+valid answer for an extension, because an extension serves only the elements it cares about. So the
+core cannot decide for every extension that a missed version is a defect. Only the extension knows.
+The flag also needs `callsCarryTheProcessVersion()`, because a call without a version never picks a
+method by version. A contract which has the flag, but not the other one, ends the boot, and the
+message names both.
 
 **The extension names the elements.** The core knows the methods, but not the model. A
 `BpmnTaskSpec` does not say whether a task is a user task. And a workflow details provider belongs to
