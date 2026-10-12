@@ -111,6 +111,10 @@ the log. The old entry STAYS. It is marked as superseded and names the entry whi
 new decision takes the next free number. Numbers are never reused and never renumbered, because a
 citation in an older release still points at them. Never edit an entry until its old text is gone.
 
+This rule had one exception, once, on 2026-10-12 before the 2.0 release. Where one rule was spread
+over several entries, they were merged into the first of them, and the others now say "Merged into
+decision N". From 2.0 on, the rule above holds again with no exception.
+
 The same rule holds for a new entry. A decision gets a number when several places rely on it, and
 a copy of the explanation in each place would go out of date. Anything smaller is a comment in the
 place it belongs. Anything larger is documentation.
