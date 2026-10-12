@@ -263,8 +263,8 @@ you do not want, use its `enabled` flag:
    `idempotencyKey`. It is dropped where it is still there. That field holds the key while the
    entry waits, and the entry's own id once it was sent.
    `MongoPhaseTwoOutboxDispatcher` claims due OPEN entries atomically (find-and-modify with
-   attempts/backoff). It marks them DONE after a successful dispatch, and deletes DONE entries once
-   the retention has passed. Entries which fail again and again are marked BLOCKED. Each of those
+   attempts/backoff). It marks them DONE after a successful dispatch. Once the retention has passed,
+   the housekeeping deletes them in its night window. Entries which fail again and again are marked BLOCKED. Each of those
    writes names `leasedBy` next to the id. So when another node took over an entry while a node
    sent it, that node writes no result over the result of the node which holds the entry now
    (`AMongoDispatchWhichLostItsLeaseTest`).

@@ -183,16 +183,6 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       WHERE STATUS = '%s' AND ATTEMPTS < ?""";
 
   /**
-   * When the oldest dispatched entry may be deleted. It asks for the moment of the dispatch,
-   * so that the retention can be added in Java and not in the date arithmetic of each
-   * database.
-   */
-  private static final String SELECT_OLDEST_DONE = """
-      SELECT MIN(DONE_AT) \
-      FROM %s \
-      WHERE STATUS = '%s'""";
-
-  /**
    * Takes the entry for as long as the lease lasts. The condition is the lease and not the
    * number of attempts. A claim must say "nobody carries this right now". The attempts say
    * something else, because they are written when an attempt ended.
@@ -469,8 +459,6 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   private final String selectNextAttempt;
 
-  private final String selectOldestDone;
-
   private final String claimEntry;
 
   private final String renewLease;
@@ -626,7 +614,6 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     this.storeName = storeName;
     this.selectDueEntries = SELECT_DUE_ENTRIES.formatted(tableName, STATUS_OPEN);
     this.selectNextAttempt = SELECT_NEXT_ATTEMPT.formatted(tableName, STATUS_OPEN);
-    this.selectOldestDone = SELECT_OLDEST_DONE.formatted(tableName, STATUS_DONE);
     this.claimEntry = CLAIM_ENTRY.formatted(tableName, STATUS_OPEN);
     this.renewLease = RENEW_LEASE.formatted(tableName, STATUS_OPEN);
     this.selectClaimedEntry = SELECT_CLAIMED_ENTRY.formatted(tableName);
@@ -710,30 +697,31 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   /**
    * When this store owes something: the due time of the earliest entry which waits for its
-   * dispatch, or the moment the oldest dispatched entry may be deleted, whichever comes
-   * first. These are two aggregate queries over one connection. Each is answered from the
-   * index which this store creates over STATUS and the timestamp of that question.
+   * dispatch. It is one aggregate query, answered from the index which this store creates
+   * over STATUS and NEXT_ATTEMPT_AT.
+   * <p>
+   * The end of the retention of a DONE entry is not a reason to wake up. A wake-up only
+   * dispatches (see decision 42 in the repository's DECISIONS.md). The DONE entries are
+   * deleted in the night window of the housekeeping (see decision 91 in the repository's
+   * DECISIONS.md).
    *
-   * @return The earliest of the two moments, or <code>null</code> where the table holds
-   *         neither
+   * @return The moment, or <code>null</code> where nothing waits for its dispatch
    */
   private Instant earliestDueAt() {
 
     Connection connection = null;
     try {
       connection = connections.acquire();
-      final var nextAttempt = earliest(connection, selectNextAttempt, properties.getBlockAfterAttempts());
-      final var oldestDone = earliest(connection, selectOldestDone, null);
-      final var retentionRunsOut = oldestDone == null
-          ? null
-          : oldestDone.plus(properties.getRetention());
-      if (nextAttempt == null) {
-        return retentionRunsOut;
+      try (var statement = connection.prepareStatement(selectNextAttempt)) {
+        statement.setInt(1, properties.getBlockAfterAttempts());
+        try (var resultSet = statement.executeQuery()) {
+          if (!resultSet.next()) {
+            return null;
+          }
+          final var earliest = resultSet.getTimestamp(1);
+          return earliest == null ? null : earliest.toInstant();
+        }
       }
-      if (retentionRunsOut == null) {
-        return nextAttempt;
-      }
-      return nextAttempt.isBefore(retentionRunsOut) ? nextAttempt : retentionRunsOut;
     } catch (final SQLException e) {
       // the poll which follows reports the same problem with its own message. A poller which
       // stops asking is worse than one which asks at the configured maximum
@@ -741,26 +729,6 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       return null;
     } finally {
       release(connection);
-    }
-
-  }
-
-  private Instant earliest(
-      final Connection connection,
-      final String query,
-      final Integer attemptsBelow) throws SQLException {
-
-    try (var statement = connection.prepareStatement(query)) {
-      if (attemptsBelow != null) {
-        statement.setInt(1, attemptsBelow);
-      }
-      try (var resultSet = statement.executeQuery()) {
-        if (!resultSet.next()) {
-          return null;
-        }
-        final var earliest = resultSet.getTimestamp(1);
-        return earliest == null ? null : earliest.toInstant();
-      }
     }
 
   }
@@ -994,9 +962,9 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Claims all due entries and hands each of them to the lane of its aggregate. Then it
-   * deletes DONE entries whose retention has passed. Exceptions are caught to keep the
-   * poller alive.
+   * Claims all due entries and hands each of them to the lane of its aggregate. It deletes
+   * nothing. The housekeeping removes the DONE entries in its night window. Exceptions are
+   * caught to keep the poller alive.
    * <p>
    * This thread claims, and a lane dispatches. The order matters. An entry is claimed before
    * it is handed over. So the claim of the next poll, here or on another node, finds it
@@ -1623,9 +1591,9 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   }
 
   /**
-   * Ticks the entry off, and tells the poller when the row may be deleted. The poller is told
-   * for the same reason as in {@link #rescheduleAt(Entry, Instant, String, String)}. The
-   * dispatch does not run on the poller, so what this write leaves behind is news to it.
+   * Ticks the entry off. The poller is not told, unlike in
+   * {@link #rescheduleAt(Entry, Instant, String, String)}. A DONE entry owes no dispatch, and
+   * the housekeeping deletes it in its night window, not the poller.
    *
    * @param entry The entry which was dispatched
    * @return Whether the entry says that it is done now. It does where this node still held
@@ -1643,7 +1611,6 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     if (!theEntryNowSays(entry, outcome, "that it is done")) {
       return false;
     }
-    poller.somethingIsDueAt(doneAt.plus(properties.getRetention()));
     return true;
 
   }

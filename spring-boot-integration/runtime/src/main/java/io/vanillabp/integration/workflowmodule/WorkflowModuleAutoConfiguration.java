@@ -167,11 +167,9 @@ public class WorkflowModuleAutoConfiguration {
               return;
             }
 
-            // load workflow module ID from META-INF/workflow-module of the Java module JAR
-            // the workflow service class belongs to
-            // TODO: NOT YET SUPPORTED
-
-            // keep the service class, to register it in the global workflow module later
+            // the artifact of the class has no META-INF/workflow-module. A Java module (JPMS)
+            // is not asked for one either. So the class falls back to the global workflow
+            // module: keep it, to register it there later
             globalWorkflowModuleWorkflowServiceClasses.add(serviceClass);
           } catch (Exception e) {
             throw new IllegalStateException(

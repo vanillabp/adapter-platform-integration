@@ -303,42 +303,28 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
   /**
    * When this store owes something. It is the due time of the earliest entry which waits for
-   * its dispatch, or the moment when the oldest dispatched entry may be deleted, whichever
-   * comes first. A BLOCKED entry is in neither set. It waits for a person and not for a
-   * clock, so it must not keep the poller awake.
+   * its dispatch. A BLOCKED entry is not in that set. It waits for a person and not for a
+   * clock, so it must not keep the poller awake. The end of the retention of a DONE entry is
+   * no reason to wake up either. A wake-up only dispatches (see decision 42 in the
+   * repository's DECISIONS.md). The DONE entries are deleted in the night window of the
+   * housekeeping (see decision 91 in the repository's DECISIONS.md).
    * <p>
    * An entry which is being dispatched right now answers with the end of its lease and not
    * with "due". The claim and every renewal move <code>nextAttemptAt</code> together with
    * <code>leasedUntil</code>. Otherwise the poller would hear "due now" for as long as the
    * dispatch runs, and it would ask again after its shortest sleep.
    *
-   * @return The earliest of the two moments, or <code>null</code> where the collection
-   *         holds neither
+   * @return The moment, or <code>null</code> where nothing waits for its dispatch
    */
   private Instant earliestDueAt() {
 
     try {
-      final var collection = outboxCollection();
-      final var nextAttempt = earliest(
-          collection,
+      return earliest(
+          outboxCollection(),
           Filters.and(
               Filters.eq("status", MongoPhaseTwoOutbox.STATUS_OPEN),
               Filters.lt("attempts", properties.getBlockAfterAttempts())),
           "nextAttemptAt");
-      final var oldestDone = earliest(
-          collection,
-          Filters.eq("status", MongoPhaseTwoOutbox.STATUS_DONE),
-          "doneAt");
-      final var retentionRunsOut = oldestDone == null
-          ? null
-          : oldestDone.plus(properties.getRetention());
-      if (nextAttempt == null) {
-        return retentionRunsOut;
-      }
-      if (retentionRunsOut == null) {
-        return nextAttempt;
-      }
-      return nextAttempt.isBefore(retentionRunsOut) ? nextAttempt : retentionRunsOut;
     } catch (final RuntimeException e) {
       // The next poll reports the same problem with its own message. And a poller which
       // stops asking is worse than one which asks at the configured limit.

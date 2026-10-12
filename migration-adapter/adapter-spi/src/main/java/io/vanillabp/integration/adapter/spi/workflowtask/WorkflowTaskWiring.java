@@ -641,7 +641,11 @@ public interface WorkflowTaskWiring {
    * <p>
    * The default answers with {@link #resolveWorkflowAggregateIdName(String, String)}. Only a
    * claimed process has a workflow aggregate. So a name means claimed, and the exception
-   * means not claimed. The core answers from its registry instead. The reason: the name
+   * means not claimed. The persistence of a claimed process may have no name to give. Its
+   * <code>getAggregateIdName</code> then throws an <code>UnsupportedOperationException</code>,
+   * which an application on a BPMS with a business key is allowed to do. The default answers
+   * <code>true</code> for that exception, because only a claimed process gets as far as its
+   * persistence. The core answers from its registry instead. The reason: the name
    * comes from the persistence of the application, and an application on a BPMS with a
    * business key does not have to answer it. Adapters and extensions ask this, instead of
    * catching the exception themselves. An extension gets this interface the way an adapter
@@ -664,6 +668,8 @@ public interface WorkflowTaskWiring {
       return resolveWorkflowAggregateIdName(workflowModuleId, bpmnProcessId) != null;
     } catch (final IllegalStateException e) {
       return false;
+    } catch (final UnsupportedOperationException e) {
+      return true;
     }
 
   }
