@@ -720,6 +720,13 @@ when somebody else changed the aggregate meanwhile. It does not any more. JPA be
 version 1 already. A write conflict of a handler which does change the aggregate is now reported by
 the same error as a version conflict.
 
+An aggregate which did not change fires no save event either. Some version 1 applications save the
+documents behind `@DBRef` or `@DocumentReference` in a listener or callback of the aggregate's save
+(`onBeforeConvert`, `BeforeConvertCallback`), because Spring Data never does. Those break without a
+word: a change made only to such a document is lost. Save that document in the handler, through its
+own repository. The same holds for any other save event or callback, and on Panache for an
+overridden `persistOrUpdate` of the repository.
+
 #### An expression in your model is named at the start
 
 A version-1 model full of expressions deploys as before. What is new is that the start says what the

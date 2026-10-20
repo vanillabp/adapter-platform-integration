@@ -4772,3 +4772,12 @@ Limits: the comparison costs one more conversion of the aggregate per load and p
 entries in another order count as equal on Spring Data and as different on Panache, which compares the bytes of the
 encoded document. Different means one write too many, never a write too few. A value which a custom converter of the
 application writes as a mutable object may hide a change made in place.
+
+An aggregate which is not written fires no save event. Spring Data MongoDB never saves the documents behind
+`@DBRef` or `@DocumentReference`, so applications often do it in a listener or callback of the aggregate's save,
+for example `onBeforeConvert` or a `BeforeConvertCallback`. On Panache, an overridden `persistOrUpdate` of the
+repository does the same. Such code no longer runs when the aggregate did not change, and a change made only to a
+referenced document is lost. There is no fallback to writing every time when the application has such
+listeners. VanillaBP cannot tell what a listener does. A fallback would bring the write conflict back exactly where
+the application can change nothing about it. So the rule is written down instead, in the wiki and in `UPGRADE.md`:
+save a referenced document explicitly, through its own repository. That keeps the control with the application.
