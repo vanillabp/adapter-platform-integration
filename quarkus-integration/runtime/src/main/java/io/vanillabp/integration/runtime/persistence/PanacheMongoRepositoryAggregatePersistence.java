@@ -10,7 +10,10 @@ import jakarta.enterprise.inject.spi.CDI;
  * {@link io.vanillabp.integration.spi.AggregatePersistenceAware} of its own.
  * <p>
  * MongoDB has no session, so storing means <code>persistOrUpdate</code>. The document is
- * inserted or replaced, whichever applies. The caller keeps its instance.
+ * inserted or replaced, whichever applies. The caller keeps its instance. An aggregate which
+ * was loaded in the running transaction and did not change since is not written again (see
+ * {@link DocumentsAtLoad}). Each write would replace the document, and two parallel tasks
+ * which only read the aggregate would collide.
  *
  * @param <A> The aggregate type
  */
@@ -19,6 +22,8 @@ public class PanacheMongoRepositoryAggregatePersistence<A> extends DefaultAggreg
   private final Class<?> repositoryClass;
 
   private volatile PanacheMongoRepositoryBase<A, Object> repository;
+
+  private final DocumentsAtLoad documentsAtLoad = new DocumentsAtLoad();
 
   /**
    * The no-arg constructor of the subclass which the build generates for one aggregate calls
@@ -37,20 +42,36 @@ public class PanacheMongoRepositoryAggregatePersistence<A> extends DefaultAggreg
 
   }
 
+  /**
+   * Writes the aggregate, unless it was loaded in the running transaction and its document
+   * did not change since.
+   */
   @Override
   public A save(
       final A aggregate) {
 
+    final var collection = repository().mongoCollection();
+    if (documentsAtLoad.isUnchanged(collection, aggregate)) {
+      return aggregate;
+    }
     repository().persistOrUpdate(aggregate);
+    documentsAtLoad.remember(collection, aggregate);
     return aggregate;
 
   }
 
+  /**
+   * Loads the aggregate and remembers its document for the running transaction.
+   */
   @Override
   public A loadById(
       final Object aggregateId) {
 
-    return repository().findById(aggregateId);
+    final var aggregate = repository().findById(aggregateId);
+    if (aggregate != null) {
+      documentsAtLoad.remember(repository().mongoCollection(), aggregate);
+    }
+    return aggregate;
 
   }
 

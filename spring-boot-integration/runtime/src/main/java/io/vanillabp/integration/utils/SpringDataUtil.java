@@ -87,4 +87,27 @@ public interface SpringDataUtil {
       Class<O> entityClass,
       O entity);
 
+  /**
+   * The entity in the form this persistence would write it right now. VanillaBP keeps this
+   * form when it loads a workflow aggregate, and asks again right before it saves. If both
+   * forms are equal, the aggregate did not change, and VanillaBP does not write it. Two forms
+   * are compared with {@link Object#equals(Object)}. So the form has to compare by value,
+   * and it must not change when the entity changes later.
+   * <p>
+   * The default answers <code>null</code>, which means "this persistence cannot tell". Then
+   * every save writes. That is right for JPA, because Hibernate checks itself whether an
+   * entity changed. The MongoDB implementation answers, because a MongoDB repository
+   * replaces the whole document on every save.
+   *
+   * @param entity The entity
+   * @return The entity as it would be written, or <code>null</code> if this persistence
+   *         cannot tell
+   */
+  default Object writtenFormOf(
+      final Object entity) {
+
+    return null;
+
+  }
+
 }

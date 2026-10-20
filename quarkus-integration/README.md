@@ -141,6 +141,10 @@ Spring Boot uses reflection at runtime. The Quarkus integration does as much as 
    `#unknownAggregateIsNotServed`). Everything about the aggregate's ID (name, type, value) comes
    from reflection (`AggregateIdTypes`), not from the persistence framework. It is needed at build
    time and at startup, and there may be no session at that time.
+   The two MongoDB implementations do not write an aggregate which did not change since `loadById`
+   loaded it in the same transaction. `DocumentsAtLoad` encodes the aggregate with the codec of its
+   collection at the load and right before the save, and keeps the first as a resource of the JTA
+   transaction (`MongoParallelMultiInstanceTest`).
 6. **Validation at build time:** `EnsureCollectedClassesAreBeansBuildStepProcessor` fails the build
    if collected classes (workflow services, persistence implementations) are not real CDI beans.
    For a persistence implementation, a bean of a subclass counts, because VanillaBP only needs an

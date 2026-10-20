@@ -12,10 +12,16 @@ import io.quarkus.mongodb.panache.runtime.JavaMongoOperations;
  * Panache generates its own entity methods as static members onto the entity. Those would
  * have to be called by reflection. The operations object behind them is public API, so this
  * class uses it directly.
+ * <p>
+ * An aggregate which was loaded in the running transaction and did not change since is not
+ * written again (see {@link DocumentsAtLoad}). Each write would replace the document, and two
+ * parallel tasks which only read the aggregate would collide.
  *
  * @param <A> The aggregate type
  */
 public class PanacheMongoActiveRecordAggregatePersistence<A> extends DefaultAggregatePersistence<A> {
+
+  private final DocumentsAtLoad documentsAtLoad = new DocumentsAtLoad();
 
   /**
    * The no-arg constructor of the subclass which the build generates for one aggregate calls
@@ -30,21 +36,37 @@ public class PanacheMongoActiveRecordAggregatePersistence<A> extends DefaultAggr
 
   }
 
+  /**
+   * Writes the aggregate, unless it was loaded in the running transaction and its document
+   * did not change since.
+   */
   @Override
   public A save(
       final A aggregate) {
 
+    final var collection = JavaMongoOperations.INSTANCE.mongoCollection(aggregateClass);
+    if (documentsAtLoad.isUnchanged(collection, aggregate)) {
+      return aggregate;
+    }
     JavaMongoOperations.INSTANCE.persistOrUpdate(aggregate);
+    documentsAtLoad.remember(collection, aggregate);
     return aggregate;
 
   }
 
+  /**
+   * Loads the aggregate and remembers its document for the running transaction.
+   */
   @Override
   @SuppressWarnings("unchecked")
   public A loadById(
       final Object aggregateId) {
 
-    return (A) JavaMongoOperations.INSTANCE.findById(aggregateClass, aggregateId);
+    final var aggregate = (A) JavaMongoOperations.INSTANCE.findById(aggregateClass, aggregateId);
+    if (aggregate != null) {
+      documentsAtLoad.remember(JavaMongoOperations.INSTANCE.mongoCollection(aggregateClass), aggregate);
+    }
+    return aggregate;
 
   }
 

@@ -145,6 +145,16 @@ So `SpringDataUtil` is the general Spring Data mechanism *behind* the `Aggregate
 abstraction. A custom `AggregatePersistenceAware` bean is the extension point for any other
 persistence technology.
 
+`SpringDataUtilBasedAggregatePersistenceSupport` does not write an aggregate which did not change
+since `loadById` loaded it in the same transaction. It asks `SpringDataUtil#writtenFormOf` for the
+form the aggregate would be written in, once at the load and once right before the save. The
+MongoDB implementation answers with the document of the `MongoConverter`, copied into values which
+compare by value. The JPA implementation answers nothing, so every save writes, and Hibernate
+decides itself. `FormsAtLoad` keeps the forms as a resource of the running Spring transaction, by
+object identity. `ParallelMultiInstanceTest` and `WhatCountsAsAChangeTest` in
+[outbox-mongo-integration-test](../integration-tests/outbox-mongo-integration-test) show what counts
+as a change.
+
 ### Phase-two outbox
 
 Everything which an application sends to its BPMS (business process management system) leaves

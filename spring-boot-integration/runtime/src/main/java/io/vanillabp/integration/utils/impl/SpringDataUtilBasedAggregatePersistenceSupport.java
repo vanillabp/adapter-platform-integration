@@ -14,6 +14,14 @@ import io.vanillabp.integration.utils.SpringDataUtil;
  * <code>No Spring Data repository defined for ...</code>, with nothing about the workflow
  * it belonged to. Quarkus decides the same question while it builds. So the same
  * application used to fail there and start here.
+ * <p>
+ * A workflow aggregate which did not change since it was loaded is not written again (see
+ * {@code DECISIONS.pending/989.md}). That matters where the repository replaces the whole
+ * document on every save, as MongoDB does. Then each save of an unchanged aggregate would
+ * raise its version, and two parallel tasks which only read it would collide. The
+ * comparison uses {@link SpringDataUtil#writtenFormOf(Object)}. Where that has no answer,
+ * as for JPA, every save writes, and Hibernate decides itself whether there is anything to
+ * write.
  *
  * @param <A> The workflow aggregate this instance persists. There is one instance per
  *          aggregate class, because a repository is searched for by the class
@@ -23,6 +31,8 @@ public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements Aggreg
   private final SpringDataUtil springDataUtil;
 
   private final Class<A> aggregateClass;
+
+  private final FormsAtLoad formsAtLoad = new FormsAtLoad();
 
   /**
    * The workflow module the aggregate belongs to. It is only used for the message, and it
@@ -76,13 +86,26 @@ public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements Aggreg
 
   }
 
+  /**
+   * Writes the aggregate, unless it was loaded in the running transaction and its written
+   * form did not change since. Then the loaded object is returned as it is. The form is
+   * compared BEFORE anything is written, so neither the version attribute nor an auditing
+   * field counts as a change: Spring Data sets both only while it writes.
+   */
   @Override
   public A save(
-      A aggregate) {
+      final A aggregate) {
 
-    return springDataUtil
+    final var formBeforeWriting = springDataUtil.writtenFormOf(aggregate);
+    if (formsAtLoad.isUnchanged(aggregate, formBeforeWriting)) {
+      return aggregate;
+    }
+    final var saved = springDataUtil
         .getRepository(aggregate)
         .save(aggregate);
+    // a second save in the same transaction compares against what is in the database now
+    formsAtLoad.remember(saved, springDataUtil.writtenFormOf(saved));
+    return saved;
 
   }
 
@@ -124,14 +147,22 @@ public class SpringDataUtilBasedAggregatePersistenceSupport<A> implements Aggreg
 
   }
 
+  /**
+   * Loads the aggregate and remembers its written form for the running transaction. So a
+   * later {@link #save(Object)} can tell whether anything changed.
+   */
   @Override
   public A loadById(
       final Object aggregateId) {
 
-    return springDataUtil
+    final var aggregate = springDataUtil
         .getRepository(aggregateClass)
         .findById(aggregateId)
         .orElse(null);
+    if (aggregate != null) {
+      formsAtLoad.remember(aggregate, springDataUtil.writtenFormOf(aggregate));
+    }
+    return aggregate;
 
   }
 

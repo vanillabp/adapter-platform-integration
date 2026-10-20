@@ -147,9 +147,12 @@ public interface TransactionRunner {
   /**
    * Whether the given failure says that another writer changed the workflow aggregate in
    * between. That is an optimistic locking conflict on an aggregate with a version
-   * attribute. Only the owner of the transaction can tell. Spring reports it as
-   * <code>OptimisticLockingFailureException</code> (JPA as well as MongoDB). JTA on Quarkus
-   * wraps <code>jakarta.persistence.OptimisticLockException</code> in a
+   * attribute, or a write conflict which MongoDB reports inside a transaction, with or
+   * without a version attribute. Only the owner of the transaction can tell. Spring reports
+   * the first as <code>OptimisticLockingFailureException</code>, and the second as a
+   * <code>DataIntegrityViolationException</code> caused by a <code>MongoException</code>
+   * with error code 112. JTA on Quarkus wraps
+   * <code>jakarta.persistence.OptimisticLockException</code> in a
    * <code>RollbackException</code>. The own storage of an application knows its own
    * exception. Implementations unwrap the causes, because both platforms wrap.
    * <p>

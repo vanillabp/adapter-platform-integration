@@ -1,11 +1,20 @@
 package io.vanillabp.integration.utils.impl;
 
+import java.nio.ByteBuffer;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import org.bson.Document;
+import org.bson.types.Binary;
 import org.jspecify.annotations.Nullable;
 import org.springframework.context.ApplicationContext;
 import org.springframework.data.mongodb.MongoDatabaseFactory;
@@ -28,6 +37,13 @@ import io.vanillabp.integration.utils.SpringDataUtil;
  * <p>
  * {@link #unproxy(Object)} throws here. MongoDB hands out no proxies. So a document which
  * was read is complete, and there is nothing to initialize.
+ * <p>
+ * {@link #writtenFormOf(Object)} answers with the document the converter writes for an
+ * entity. A reference to a document of another collection (<code>&#64;DBRef</code>,
+ * <code>&#64;DocumentReference</code>) is written as the reference only. A lazy reference
+ * is written without loading it. So a change in the referenced document does not change
+ * the form, while a reference which points elsewhere does. An object which is mapped into
+ * the document is part of the form.
  */
 public class MongoDbSpringDataUtil implements SpringDataUtil {
 
@@ -179,6 +195,59 @@ public class MongoDbSpringDataUtil implements SpringDataUtil {
     final var id = persistentEntity.getIdentifierAccessor(entity).getIdentifier();
     assert (id != null);
     return getRepository(entityClass).existsById(id);
+
+  }
+
+  /**
+   * The document the converter writes for the entity, copied into plain Java values which
+   * compare by value. The version attribute and the auditing fields are written as they are
+   * right now. Spring Data sets them only while it saves, after VanillaBP compared.
+   * <p>
+   * The copy turns every map into a {@link LinkedHashMap}, every collection and array into
+   * an {@link ArrayList}, a byte array into a {@link ByteBuffer} over a copy of its bytes and
+   * a {@link Date} into an {@link Instant}. Arrays and those two types are mutable, or they
+   * compare by identity. A value of any other type is kept as the converter wrote it. A type
+   * which a custom converter of the application writes as something mutable may therefore
+   * hide a change made in place. Then the aggregate is not written although it changed.
+   */
+  @Override
+  public Object writtenFormOf(
+      final Object entity) {
+
+    final var document = new Document();
+    mongoConverter.write(entity, document);
+    return comparableCopyOf(document);
+
+  }
+
+  private static Object comparableCopyOf(
+      final Object value) {
+
+    if (value instanceof Map<?, ?> map) {
+      final var copy = new LinkedHashMap<Object, Object>();
+      map.forEach((
+          key,
+          entry) -> copy.put(key, comparableCopyOf(entry)));
+      return copy;
+    }
+    if (value instanceof Collection<?> collection) {
+      final var copy = new ArrayList<>(collection.size());
+      collection.forEach(element -> copy.add(comparableCopyOf(element)));
+      return copy;
+    }
+    if (value instanceof byte[] bytes) {
+      return ByteBuffer.wrap(bytes.clone());
+    }
+    if (value instanceof Object[] array) {
+      return comparableCopyOf(Arrays.asList(array));
+    }
+    if (value instanceof Binary binary) {
+      return new Binary(binary.getType(), binary.getData().clone());
+    }
+    if (value instanceof Date date) {
+      return Instant.ofEpochMilli(date.getTime());
+    }
+    return value;
 
   }
 

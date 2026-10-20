@@ -706,6 +706,20 @@ and it would hide that anything went wrong. The wiki page
 [Workflow aggregates](https://github.com/vanillabp/adapter-platform-integration/wiki/Workflow-aggregates#two-writers-on-one-aggregate)
 describes the four ways an application can avoid the collision.
 
+#### An aggregate in MongoDB which did not change is not written
+
+Version 1 wrote the workflow aggregate after every `@WorkflowTask` method. On MongoDB that replaced
+the whole document each time, and with `@Version` the version went up each time. So the iterations
+of a parallel multi-instance failed on write conflicts, also when none of them changed the
+aggregate. Version 2 does not write an aggregate in MongoDB which did not change since it was
+loaded, on Spring Data MongoDB as well as on MongoDB Panache. A change in a document which the
+aggregate only references (`@DBRef`, `@DocumentReference`) does not count.
+
+One thing is gone with it. With `@Version`, a handler which only read the aggregate used to fail
+when somebody else changed the aggregate meanwhile. It does not any more. JPA behaved like this in
+version 1 already. A write conflict of a handler which does change the aggregate is now reported by
+the same error as a version conflict.
+
 #### An expression in your model is named at the start
 
 A version-1 model full of expressions deploys as before. What is new is that the start says what the
