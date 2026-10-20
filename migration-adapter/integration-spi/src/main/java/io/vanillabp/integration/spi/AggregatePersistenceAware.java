@@ -61,6 +61,13 @@ public interface AggregatePersistenceAware<A> {
 
   /**
    * Persists the given aggregate.
+   * <p>
+   * VanillaBP calls this after every <code>&#64;WorkflowTask</code> method, also when the method
+   * did not change the aggregate. An implementation may leave out the write of an aggregate which
+   * did not change since {@link #loadById(Object)} loaded it in the same transaction, and return
+   * the loaded object. The MongoDB implementations of the platform do that, because MongoDB writes
+   * the whole document on every save. JPA checks this by itself. See decision 130 in the
+   * repository's DECISIONS.md for why the check lives here and not in the core.
    *
    * @param aggregate The aggregate to persist
    * @return The persisted aggregate. With ORM frameworks, an attached object is returned.

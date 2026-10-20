@@ -13,6 +13,14 @@ vanillabp:
       workflows:
         dummy-process:
           implemented-externally: true
+        ParallelProcess:
+          allow-full-sync-with-bpms: true
+          declared-aggregate-values:
+            - '*'
+        VersionedParallelProcess:
+          allow-full-sync-with-bpms: true
+          declared-aggregate-values:
+            - '*'
         SampleWorkflowService:
           allow-full-sync-with-bpms: true
           declared-aggregate-values:

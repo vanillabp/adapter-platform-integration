@@ -109,6 +109,13 @@ public final class AggregateWrite {
    * JTA, and Hibernate's own <code>org.hibernate.StaleObjectStateException</code> comes
    * along as its cause.
    * <p>
+   * MongoDB reports a second writer inside a transaction as a write conflict, error code 112.
+   * That holds with and without a version attribute, because the conflict comes before the
+   * version is checked. Spring does not translate it into an optimistic locking failure. So
+   * a <code>com.mongodb.MongoException</code> with that code counts as well. Its name alone
+   * says nothing, because the driver uses that type for every error of the server. See
+   * {@code ParallelMultiInstanceTest} of both platforms.
+   * <p>
    * It matches names and not types, because the core is plain Java. It must not depend on
    * JPA, Hibernate or MongoDB just to recognize their exceptions.
    *
@@ -123,7 +130,7 @@ public final class AggregateWrite {
       final var name = candidate
           .getClass()
           .getName();
-      if (OPTIMISTIC_LOCKING_EXCEPTIONS.contains(name)) {
+      if (OPTIMISTIC_LOCKING_EXCEPTIONS.contains(name) || isMongoDbWriteConflict(candidate)) {
         return true;
       }
       candidate = candidate.getCause() == candidate
@@ -141,6 +148,39 @@ public final class AggregateWrite {
           "org.hibernate.StaleObjectStateException",
           "org.hibernate.StaleStateException",
           "io.quarkus.mongodb.panache.common.exception.OptimisticLockException");
+
+  /**
+   * The error code by which MongoDB names a write conflict ("WriteConflict"). A second
+   * transaction wrote the same document after this one started.
+   */
+  private static final int MONGODB_WRITE_CONFLICT = 112;
+
+  private static final String MONGODB_EXCEPTION = "com.mongodb.MongoException";
+
+  /**
+   * Whether the failure is a <code>com.mongodb.MongoException</code>, or a subclass of it,
+   * whose error code says "write conflict". The type and the code are read by reflection,
+   * so the core does not need the MongoDB driver.
+   */
+  private static boolean isMongoDbWriteConflict(
+      final Throwable failure) {
+
+    Class<?> type = failure.getClass();
+    while ((type != null) && !MONGODB_EXCEPTION.equals(type.getName())) {
+      type = type.getSuperclass();
+    }
+    if (type == null) {
+      return false;
+    }
+    try {
+      return Integer.valueOf(MONGODB_WRITE_CONFLICT).equals(type
+          .getMethod("getCode")
+          .invoke(failure));
+    } catch (final ReflectiveOperationException | RuntimeException noCode) {
+      return false;
+    }
+
+  }
 
   private static String capitalized(
       final String operation) {

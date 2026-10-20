@@ -213,7 +213,9 @@ public class SpringTransactionRunner implements TransactionRunner {
           : candidate.getCause();
     }
     // a provider exception which never passed Spring's translation means the same thing,
-    // e.g. one thrown by an application's own repository code
+    // e.g. one thrown by an application's own repository code. And Spring translates the
+    // write conflict of a MongoDB transaction into a DataIntegrityViolationException, which
+    // only its cause tells apart from a real integrity violation
     return AggregateWrite
         .causedByOptimisticLocking(failure);
 

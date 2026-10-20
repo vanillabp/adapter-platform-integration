@@ -237,7 +237,10 @@ public class ConcurrentTokenCheck {
                 your application opens, or an additive relation instead of a mutated attribute. \
                 The wiki page 'Workflow aggregates' compares them. A version attribute turns the \
                 collision into an exception VanillaBP reports and the BPMS retries, which is why \
-                this message is about its absence."""
+                this message is about its absence. On MongoDB inside a transaction, two branches \
+                which both change the aggregate get a write conflict instead, which VanillaBP \
+                reports the same way. With the persistence of the platform, a branch which \
+                changes nothing does not write the aggregate at all."""
                 .formatted(workflowAggregateClass.getName()));
 
   }
