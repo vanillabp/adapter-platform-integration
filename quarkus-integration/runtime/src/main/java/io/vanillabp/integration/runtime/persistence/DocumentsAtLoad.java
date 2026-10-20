@@ -16,7 +16,7 @@ import jakarta.transaction.TransactionSynchronizationRegistry;
  * Remembers in which form a workflow aggregate stored by MongoDB Panache was loaded, for as
  * long as the JTA transaction which loaded it runs. The MongoDB persistence implementations
  * ask before they save. If the document did not change, they do not write it (see
- * {@code DECISIONS.pending/989.md}).
+ * decision 130 in the repository's DECISIONS.md).
  * <p>
  * The form is the document which the codec of the collection writes, the same codec which
  * Panache uses when it saves. It is encoded into bytes at once. So it compares by value, and

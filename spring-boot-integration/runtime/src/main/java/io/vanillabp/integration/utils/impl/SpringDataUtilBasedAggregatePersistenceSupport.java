@@ -15,13 +15,12 @@ import io.vanillabp.integration.utils.SpringDataUtil;
  * it belonged to. Quarkus decides the same question while it builds. So the same
  * application used to fail there and start here.
  * <p>
- * A workflow aggregate which did not change since it was loaded is not written again (see
- * {@code DECISIONS.pending/989.md}). That matters where the repository replaces the whole
- * document on every save, as MongoDB does. Then each save of an unchanged aggregate would
- * raise its version, and two parallel tasks which only read it would collide. The
- * comparison uses {@link SpringDataUtil#writtenFormOf(Object)}. Where that has no answer,
- * as for JPA, every save writes, and Hibernate decides itself whether there is anything to
- * write.
+ * A workflow aggregate which did not change since it was loaded is not written again (see decision
+ * 130 in the repository's DECISIONS.md). That matters where the repository replaces the whole
+ * document on every save, as MongoDB does. Then each save of an unchanged aggregate would raise its
+ * version, and two parallel tasks which only read it would collide. The comparison uses {@link
+ * SpringDataUtil#writtenFormOf(Object)}. Where that has no answer, as for JPA, every save writes,
+ * and Hibernate decides itself whether there is anything to write.
  *
  * @param <A> The workflow aggregate this instance persists. There is one instance per
  *          aggregate class, because a repository is searched for by the class

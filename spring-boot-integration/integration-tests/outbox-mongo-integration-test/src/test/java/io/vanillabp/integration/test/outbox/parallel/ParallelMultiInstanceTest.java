@@ -36,12 +36,12 @@ import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
  * delivery, and all of them arrive at the same time. Each one loads the same document, and
  * none of them goes on before all of them loaded it ({@link Rendezvous}).
  * <p>
- * Iterations which leave the aggregate unchanged get through at the first attempt, with and
- * without a version attribute. That holds for iterations which only read, and for iterations
- * which write their result into a record of another collection. VanillaBP does not write a
- * document which did not change, see {@code DECISIONS.pending/989.md}. Iterations which
- * really change the aggregate still collide. All but one of them fail, and each failure gets
- * the guiding message about a version conflict.
+ * Iterations which leave the aggregate unchanged get through at the first attempt, with and without
+ * a version attribute. That holds for iterations which only read, and for iterations which write
+ * their result into a record of another collection. VanillaBP does not write a document which did
+ * not change, see decision 130 in the repository's DECISIONS.md. Iterations which really change the
+ * aggregate still collide. All but one of them fail, and each failure gets the guiding message
+ * about a version conflict.
  */
 @ExtendWith(SuppressOutputExtension.class)
 @SuppressOutputExtension.SuppressBackgroundOutput

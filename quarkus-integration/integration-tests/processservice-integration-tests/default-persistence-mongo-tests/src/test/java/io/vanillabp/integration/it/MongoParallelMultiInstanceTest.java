@@ -54,11 +54,11 @@ import jakarta.inject.Inject;
  * one task delivery, and all of them arrive at the same time. Each one loads the same
  * document, and none of them goes on before all of them loaded it ({@link Rendezvous}).
  * <p>
- * Iterations which leave the aggregate unchanged get through at the first attempt. That
- * holds for iterations which only read, and for iterations which write their result into a
- * record of another collection. VanillaBP does not write a document which did not change,
- * see {@code DECISIONS.pending/989.md}. Iterations which really change the aggregate still
- * collide, and each failure gets the guiding message about a version conflict.
+ * Iterations which leave the aggregate unchanged get through at the first attempt. That holds for
+ * iterations which only read, and for iterations which write their result into a record of another
+ * collection. VanillaBP does not write a document which did not change, see decision 130 in the
+ * repository's DECISIONS.md. Iterations which really change the aggregate still collide, and each
+ * failure gets the guiding message about a version conflict.
  * <p>
  * MongoDB Panache has no version attribute. So this platform knows only the case without
  * one. It has no reference to a document of another collection either. An aggregate points
