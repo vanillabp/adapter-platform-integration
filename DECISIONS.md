@@ -4781,3 +4781,127 @@ referenced document is lost. There is no fallback to writing every time when the
 listeners. VanillaBP cannot tell what a listener does. A fallback would bring the write conflict back exactly where
 the application can change nothing about it. So the rule is written down instead, in the wiki and in `UPGRADE.md`:
 save a referenced document explicitly, through its own repository. That keeps the control with the application.
+
+### 131. A row which is only a hint has one writer, and a failed insert does not end the transaction
+
+Some rows of the delivery log have to be true together with the workflow aggregate. The row of a
+task delivery is one of them. It decides whether a handler runs a second time. So it is written in the
+transaction of the handler. When two nodes write it at the same time, the transaction of the loser
+ends, and that is wanted. Other rows are only a hint. The start row is one of them. Where it is
+missing, the core asks the BPMS. A hint must not end a transaction which carries other work. This
+entry says how the start row keeps to that, and what changed in the stores so that it holds on every
+database.
+
+**One start, one writer.** The start of a workflow used to reach two writers of its start row. The
+dispatch of the outbox wrote it after phase two. And the start handler wrote it as well, because a
+remote BPMS like Camunda 8 hands the start to it right after the start. It found the aggregate and
+built nothing, but it wrote the row in its own transaction. MongoDB answers the second insert of the
+same document inside a transaction with a write conflict (error code 112), and that ends the
+transaction. Measured on 2026-10-22 against `mongo:8.2` as a replica set, with the test double:
+
+- Spring Boot, 20 starts where nobody waits for anybody: 20 of 20 went wrong. Each time the start
+  handler lost. It logged a WARN that the row "could not be written down", its commit failed with
+  error 251 ("NoSuchTransaction"), and the BPMS got the job back. That is what a user saw with
+  Camunda 8.9: a used retry, ten seconds of backoff, and two WARNs with a stack trace.
+- Where the start handler committed first, the dispatch lost instead. Its commit failed, and the
+  outbox repeated the start.
+- Quarkus showed the WARN in all 22 runs, but no failure. The MongoDB transaction of Panache commits
+  in a synchronization after the JTA transaction, and Narayana only logs a failure there. So the work
+  of the loser was lost without a word. Here that work was the row which the other writer had written
+  anyway.
+
+Now each start has one writer. The dispatch writes the row of a start which the application made.
+The start handler writes it only where the `@WorkflowStartedByBpms` method named the workflow, and for
+a start by message. Where the start handler finds the aggregate of a start which the application
+made, it writes nothing. The same tests now pass on both platforms, in both orders and in 20 starts
+without waiting.
+
+A start by message is the exception, because the answer to a published message may not name the
+instance. Camunda 8 answers with the key of the message, so its dispatch reports no id. There, the
+start handler is the only writer, as it always was. On Camunda 7 the dispatch of a message start
+reports the id, and both write. The start listener of Camunda 7 runs in the transaction of the
+dispatch, so the two writes do not meet in two transactions.
+
+Two other ways were weighed. Writing the start row without a transaction, or in a transaction of its
+own, keeps the start handler alive. But the row which the dispatch writes has to stay in the
+transaction of the dispatch. With Camunda 7, that transaction creates the instance, and a re-dispatch
+trusts the row without asking the BPMS (decision 108). A row which commits without its instance would
+make a start which rolled back look done. So the dispatch would then lose the race instead. Repeating
+the transaction of the start handler at once after a write conflict touches decision 14, and it
+repeats work to write a hint.
+
+**Cases where nobody writes the row now:**
+
+- A workflow which somebody starts past VanillaBP, with the id of an aggregate which exists already.
+  That is the start of Operate or of the REST API of the BPMS. Before, the start handler replaced the
+  row of an earlier workflow of that aggregate. Now the old row stays. It is a hint, and the election
+  probes it. On Camunda 8 the engine says that it does not know the old key, and the search finds the
+  new workflow. That costs a search per operation, until the row passes its period. Such a start is
+  rare, and decision 69 counts it as a start of the application.
+- The first dispatch of a start created the instance and crashed before it wrote the row. Decision
+  108 accepts this gap. The start handler of Camunda 8 used to close it by chance. Now the row found
+  by a search closes it, see below, and otherwise the first open task does.
+
+A second workflow on an aggregate which outlived its first one is not such a case. Where the BPMS
+starts it, the `@WorkflowStartedByBpms` method names the existing aggregate, and the start handler
+replaces the row. Where the application starts it, the dispatch replaces it. A start job which the
+BPMS repeats after the transaction of the start handler committed finds the row it wrote, and writes
+nothing new.
+
+**A lost transaction is said, and passed on.** Where a write of a hint failed, the core logged "could
+not be written down" and went on. That is right where the database goes on as well. On MongoDB after a
+write conflict, and on PostgreSQL after any failed statement, the transaction is gone. Going on then
+means more work which cannot commit, and a message which names the wrong loss. So the core recognizes
+those failures (`TransactionLoss`: MongoDB codes 112 and 251 or the label `TransientTransactionError`,
+SQL states `25P02`, `40001` and `40P01`). It says that the transaction is gone, and passes the failure
+on unchanged. This holds for the start row and for the mark of a closed task, which the dispatch of a
+completion writes.
+
+**A failed insert does not end a transaction on PostgreSQL.** The JDBC store wrote a row with a plain
+`INSERT` and read a violated key as "recorded already". H2, MySQL, Oracle and SQL Server go on after
+that. PostgreSQL ends the transaction. Two cases meet a row of the same key on purpose. A second
+workflow of an aggregate meets the start row of the first one, and then replaces it with an
+`UPDATE`. And two nodes which process the same delivery at the same time both insert its row. So the
+insert now runs behind a savepoint. A violated key rolls back the insert, and nothing else.
+Measured on 2026-10-22 against PostgreSQL 16.15, before the change: the start row of a second
+workflow could not be written at all, because the `UPDATE` after the failed insert was refused
+("current transaction is aborted"). A node which lost the race for a delivery row lost all its other
+work too, although the core reported "recorded already" and went on. And the two writers of a start
+logged the WARN at 22 of 22 starts. The commit of the loser then returned without an error, and
+PostgreSQL rolled back its work without a word. After the change, all of these pass.
+
+The pool of Quarkus (Agroal) refuses `Connection#rollback(Savepoint)` while the connection takes part
+in a JTA transaction. So where that call is refused, the store sends `ROLLBACK TO SAVEPOINT` as a
+statement. H2, PostgreSQL, MySQL, Oracle and DB2 understand it.
+
+A savepoint costs one statement before the insert and one after it. An insert which ignores a
+violated key would cost nothing extra, but every database spells it differently. The savepoint keeps
+one statement for all of them. A driver which offers no savepoint, and a connection without a
+transaction, insert as before.
+
+**A workflow which a search found is written down.** A workflow which version 1 started has no start
+row. A pure service-task workflow has no open task row either. So every operation on it searches the
+BPMS, on Camunda 8 with one more search per level of the parent chain. The election cannot write the
+row, because a probe answers a `WorkflowAwareness` and no id. So `PhaseTwoRequest#reportFoundWorkflow`
+is new. An adapter which had to search in phase two of an operation about a workflow reports what it
+found. The core then writes the start row:
+
+- only where no row exists, and never over a row. A search may answer from a read model which is
+  behind, and a row which is there was written by somebody who knew;
+- in a transaction of its own (`TransactionRunner#requireNew`), not in the transaction of the
+  dispatch. Two dispatches about the same aggregate would otherwise meet on MongoDB, and the loser
+  would repeat its operation in the BPMS. A row which cannot be written costs the next search, and
+  nothing else;
+- without a version, because the search does not say on which version the workflow runs.
+
+The adapter has to call it. Until it does, nothing changes. The Camunda 8 adapter searches where it
+pushes a changed aggregate without a key. That is where it would report. The cost, measured on
+2026-10-22 against the test containers on this machine: the insert in a transaction of its own took
+0.76 ms on MongoDB, against 0.31 ms for the same insert inside the running transaction. Where a row
+existed already, it took 0.44 ms. On PostgreSQL 16.15 the same three took 0.29 ms, 0.22 ms and
+0.33 ms. It happens once per workflow, at the first
+operation which had to search. The JDBC store needs a second connection for that moment.
+
+What this changes in decision 108: that entry says when the start row is written. This one says which
+of the two writers of one start writes it, adds the row found by a search, and makes the JDBC store
+take back a failed insert. Nothing of decision 108 is withdrawn.

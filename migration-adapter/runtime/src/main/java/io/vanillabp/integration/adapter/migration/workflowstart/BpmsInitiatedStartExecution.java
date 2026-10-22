@@ -250,7 +250,7 @@ public final class BpmsInitiatedStartExecution {
                 processService.getBpmnProcessId(),
                 processService.getWorkflowModuleId(),
                 context.getStartEventId());
-        return result(processService, context, existing, false);
+        return result(processService, context, existing, false, true);
       }
     }
 
@@ -270,7 +270,7 @@ public final class BpmsInitiatedStartExecution {
                   context.getStartEventId(),
                   handler.describe()));
     }
-    return result(processService, context, attached, true);
+    return result(processService, context, attached, true, true);
 
   }
 
@@ -311,7 +311,14 @@ public final class BpmsInitiatedStartExecution {
                   describeOrigin(context)));
     }
     // the workflow is already ours. The application started it, or the BPMS reported this
-    // start before (a retried listener job, a replayed engine transaction)
+    // start before (a retried listener job, a replayed engine transaction). The dispatch of
+    // the application's start writes the start row, and a second report of a start finds
+    // the row of the first one. So the row is not written here, because two writers of one
+    // row in two transactions end one of the transactions on MongoDB. A start by message is
+    // the exception. The dispatch of a message may not learn which instance the message
+    // started: Camunda 8 answers a published message with the key of the message. So the
+    // start of such a workflow writes the row, as it always did. See decision 131 in the
+    // repository's DECISIONS.md
     log
         .debug(
             "The workflow of BPMN process '{}' (workflow module '{}') started at start event '{}' is "
@@ -320,7 +327,12 @@ public final class BpmsInitiatedStartExecution {
             processService.getWorkflowModuleId(),
             context.getStartEventId(),
             nameTheBpmsHolds);
-    return result(processService, context, existing, false);
+    return result(
+        processService,
+        context,
+        existing,
+        false,
+        context.getKind() == io.vanillabp.spi.service.BpmsStartTrigger.Kind.MESSAGE);
 
   }
 
@@ -346,33 +358,43 @@ public final class BpmsInitiatedStartExecution {
   }
 
   /**
-   * The aggregate's id and the variables which the adapter writes back. This is also where
-   * the pair "this aggregate, that workflow" is written down.
+   * The aggregate's id and the variables which the adapter writes back. Where the
+   * application's method named the workflow, this is also where the pair "this aggregate,
+   * that workflow" is written down.
    * <p>
    * The id variable travels even where nothing was built. An adapter which completes a
    * listener job writes what it is given. And writing the name which a workflow already has
    * changes nothing about it.
+   *
+   * @param writeTheStartRow Whether this start writes the row about the start. A start which
+   *          the <code>&#64;WorkflowStartedByBpms</code> method named writes it, and so does a
+   *          start by message. See decision 131 in the repository's DECISIONS.md
    */
   private static <A> BpmsInitiatedStartResult result(
       final MigrationProcessService<A> processService,
       final BpmsInitiatedStartContext context,
       final A workflowAggregate,
-      final boolean created) {
+      final boolean created,
+      final boolean writeTheStartRow) {
 
     final var aggregateIdName = aggregateIdNameIfAnswered(processService);
     final var serializedId = String.valueOf(processService.getWorkflowAggregateId(workflowAggregate));
     // the aggregate and the workflow which runs it are both known right here, in the
-    // transaction which persists the aggregate. So this is where the pair is written down.
-    // It happens for every outcome of the decision above, also for the workflow which was
-    // ours already. The row is keyed by the aggregate, so writing it again writes nothing.
-    // The version which the BPMS reported with the start goes with it. That is where an
-    // adapter of a remote BPMS knows the version without asking anybody
-    processService
-        .recordWorkflowStart(
-            context.getAdapterId(),
-            serializedId,
-            context.getNativeInstanceId(),
-            context.getProcessVersion());
+    // transaction which persists the aggregate. Where the method built or named the
+    // aggregate, nobody started this workflow through VanillaBP. So nobody else learns the
+    // pair, and the row is written in this transaction, together with the aggregate. That
+    // also holds for a second workflow on an aggregate which outlived its first one: the
+    // row of the first one is replaced. The version which the BPMS reported with the start
+    // goes with it. That is where an adapter of a remote BPMS knows the version without
+    // asking anybody
+    if (writeTheStartRow) {
+      processService
+          .recordWorkflowStart(
+              context.getAdapterId(),
+              serializedId,
+              context.getNativeInstanceId(),
+              context.getProcessVersion());
+    }
     final Map<String, Object> variables = new LinkedHashMap<>();
     if (aggregateIdName != null) {
       variables.put(aggregateIdName, serializedId);

@@ -20,6 +20,14 @@ public final class ContainerImages {
    */
   public static final String MONGODB = System.getProperty("mongodb.image", "mongo:8.2");
 
+  /**
+   * The PostgreSQL the tests run against, overridable with
+   * {@code -Dpostgresql.image=postgres:17-alpine}. PostgreSQL is the database which ends a
+   * transaction at the first statement that fails. So a test about a failing insert inside a
+   * transaction runs on it, and not on H2.
+   */
+  public static final String POSTGRESQL = System.getProperty("postgresql.image", "postgres:16-alpine");
+
   private ContainerImages() {
   }
 

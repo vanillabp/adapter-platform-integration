@@ -27,6 +27,8 @@ import io.vanillabp.integration.spi.TaskDelivery;
  *        by key
  * @param workflowStartReport Where phase two of a START says which workflow the BPMS created.
  *        Report it through {@link #reportStartedWorkflow(String)}, do not read it from here.
+ *        Phase two of an operation about a workflow, which got no {@link #workflowId()}, says
+ *        here which workflow it found, through {@link #reportFoundWorkflow(String)}.
  *        {@link WorkflowStartReport#NOBODY_LISTENS} for every other operation
  * @param workflowId The BPMS' own id of the workflow the operation is about, if VanillaBP
  *        wrote down that THIS adapter started it, otherwise <code>null</code>. Only an
@@ -181,6 +183,30 @@ public record PhaseTwoRequest<A>(
       final String processVersion) {
 
     workflowStartReport.startedWorkflow(workflowId, processVersion);
+
+  }
+
+  /**
+   * Says which workflow of the BPMS this operation found, where it had to search for it. Then
+   * VanillaBP writes the id down, and the next operation about this workflow gets it as
+   * {@link #workflowId()}. So the adapter can address the workflow by its id and does not
+   * have to search again.
+   * <p>
+   * Call it in phase two of an operation about a workflow, and only where
+   * {@link #workflowId()} is <code>null</code>. That is a workflow which VanillaBP knows no
+   * id of: a workflow started by version 1, or one whose row has passed its period. Report
+   * the id of the workflow this aggregate IS, as for {@link #reportStartedWorkflow(String)}.
+   * On a BPMS with call activities, that is the top-most parent. An adapter which found
+   * nothing, or which does not search at all, does not call it. VanillaBP only adds an id
+   * where none is written down yet. It never replaces one.
+   *
+   * @param workflowId The BPMS' own id of the workflow the operation found, <code>null</code>
+   *          if the adapter names none
+   */
+  public void reportFoundWorkflow(
+      final String workflowId) {
+
+    workflowStartReport.foundWorkflow(workflowId);
 
   }
 

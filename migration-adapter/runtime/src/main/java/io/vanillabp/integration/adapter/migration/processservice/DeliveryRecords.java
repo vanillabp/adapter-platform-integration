@@ -456,6 +456,11 @@ public final class DeliveryRecords {
    * it is the transaction which persists the aggregate. There the notification carries both
    * values at once.
    * <p>
+   * Each start has one writer. A remote BPMS reports the start of the application's own
+   * workflow back to the core, and the core writes nothing there, except for a start by
+   * message. Two writers of the same row in two transactions end one of the two transactions
+   * on MongoDB. See decision 131 in the repository's DECISIONS.md.
+   * <p>
    * Nothing is written where no store serves this aggregate, or where the adapter names no
    * workflow. Then everything stays as it was, and the election probes.
    * <p>
@@ -509,6 +514,22 @@ public final class DeliveryRecords {
               ? "was written down, so nobody has to ask a BPMS which of them holds it"
               : "was written down before - the row names this workflow already and nothing changed");
     } catch (final RuntimeException e) {
+      if (io.vanillabp.integration.adapter.migration.transaction.TransactionLoss.endedTheTransaction(e)) {
+        // the database ended the transaction in which the row was written. Nothing which
+        // runs in it can commit any more, whatever this method does. So the failure is
+        // passed on, and whoever runs the transaction repeats the work
+        log.warn(
+            "The start of workflow '{}' of aggregate '{}' (BPMN process '{}' of workflow module "
+                + "'{}') met another writer of the same row, and the database ended the "
+                + "transaction it was written in. Nothing of that transaction is kept, so the "
+                + "work fails here and is repeated by whoever runs it: {}",
+            workflowId,
+            workflowAggregateId,
+            bpmnProcessId,
+            workflowModuleId,
+            e.toString());
+        throw e;
+      }
       // the workflow runs. A row which nobody could write costs the probing which happened
       // before this row existed. Failing the dispatch here would repeat a start which
       // succeeded
@@ -520,6 +541,100 @@ public final class DeliveryRecords {
           workflowAggregateId,
           bpmnProcessId,
           workflowModuleId,
+          e);
+    }
+
+  }
+
+  /**
+   * Writes down the workflow which an operation found by searching, where no row about the
+   * start of that workflow exists. That is a workflow started by version 1, which wrote no
+   * such row, or a row which passed its period. Without the row, every operation on that
+   * workflow searches for it again. On Camunda 8 that is a search of the read model, plus one
+   * search per level of the chain of parents.
+   * <p>
+   * Three things are different from the row which a start writes:
+   * <ul>
+   * <li>It never replaces a row. A search may answer from a read model which is behind. A row
+   * which is there already was written by somebody who knew the answer for certain.</li>
+   * <li>It is written in a transaction of its own, and not in the transaction of the
+   * dispatch. The row is only a hint. A write conflict on it must not end the dispatch, which
+   * would then repeat the operation in the BPMS. On MongoDB two dispatches about the same
+   * aggregate would meet exactly there.</li>
+   * <li>It carries no version. The search does not say on which version the workflow
+   * runs.</li>
+   * </ul>
+   * A row which cannot be written costs the search it would have saved, and nothing else. So
+   * a failure is said and not passed on. See decision 131 in the repository's DECISIONS.md.
+   *
+   * @param adapterId The ID of the adapter which found the workflow
+   * @param workflowAggregateId The workflow aggregate of that workflow
+   * @param workflowId The BPMS' own id of the workflow
+   * @param transactionRunner The runner of this aggregate, which opens the transaction of the
+   *          row. <code>null</code> writes the row in whatever transaction runs
+   */
+  public void recordFoundWorkflow(
+      final String adapterId,
+      final Object workflowAggregateId,
+      final String workflowId,
+      final io.vanillabp.integration.spi.TransactionRunner transactionRunner) {
+
+    if ((workflowAggregateId == null) || (workflowId == null) || workflowId.isBlank()) {
+      return;
+    }
+    final var deliveryLog = resolveLog();
+    if (deliveryLog == null) {
+      return;
+    }
+    final java.util.function.Supplier<Boolean> insertIfAbsent = () -> deliveryLog
+        .record(
+            TaskDelivery
+                .workflowStart(
+                    adapterId,
+                    workflowModuleId,
+                    bpmnProcessId,
+                    workflowAggregateId.toString(),
+                    workflowId,
+                    null,
+                    Instant.now()));
+    try {
+      final var written = transactionRunner == null
+          ? insertIfAbsent.get()
+          : transactionRunner.requireNew(insertIfAbsent);
+      log.debug(
+          "Workflow '{}' of aggregate '{}' (BPMN process '{}' of workflow module '{}') was found by "
+              + "adapter '{}' and {}",
+          workflowId,
+          workflowAggregateId,
+          bpmnProcessId,
+          workflowModuleId,
+          adapterId,
+          Boolean.TRUE.equals(written)
+              ? "is written down now, so the next operation does not search for it"
+              : "a row about its start is there already - it is left as it is");
+    } catch (final RuntimeException e) {
+      if (io.vanillabp.integration.adapter.migration.transaction.TransactionLoss.endedTheTransaction(e)) {
+        // somebody else writes the same row right now, in a transaction of its own. Either
+        // way there will be a row
+        log.debug(
+            "Workflow '{}' of aggregate '{}' (BPMN process '{}' of workflow module '{}') is written "
+                + "down by somebody else at the same time",
+            workflowId,
+            workflowAggregateId,
+            bpmnProcessId,
+            workflowModuleId,
+            e);
+        return;
+      }
+      log.warn(
+          "Workflow '{}' of aggregate '{}' (BPMN process '{}' of workflow module '{}') was found by "
+              + "adapter '{}', but could not be written down - the next operation on this workflow "
+              + "searches for it again",
+          workflowId,
+          workflowAggregateId,
+          bpmnProcessId,
+          workflowModuleId,
+          adapterId,
           e);
     }
 
@@ -1167,6 +1282,19 @@ public final class DeliveryRecords {
     try {
       markTaskClosedWhereTheRecordSits(deliveryLog, workflowAggregateId.toString(), taskId);
     } catch (final RuntimeException e) {
+      if (io.vanillabp.integration.adapter.migration.transaction.TransactionLoss.endedTheTransaction(e)) {
+        // the database ended the transaction of the dispatch. It cannot commit any more,
+        // whatever this method does. So the failure is passed on, and the outbox repeats
+        // the dispatch
+        log.warn(
+            "Task '{}' of {} was closed in its BPMS, and marking its delivery record met another "
+                + "writer of the same record. The database ended the transaction of the "
+                + "dispatch, so the dispatch fails and the outbox repeats it: {}",
+            taskId,
+            subject,
+            e.toString());
+        throw e;
+      }
       log.warn(
           "Task '{}' of {} was closed in its BPMS, but the delivery record could not be marked "
               + "accordingly - the next operation naming this task asks the configured BPMS again "

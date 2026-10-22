@@ -310,6 +310,45 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
         .all()
         .forEach(listener -> listener.startedWorkflowPhaseTwo(adapterId, request.workflowAggregateId()));
 
+    // a real adapter learns the id of the instance it created, and says so
+    final var workflowId = workflowIdOf(request.workflowAggregateId());
+    if (workflowId != null) {
+      request.reportStartedWorkflow(workflowId);
+    }
+
+  }
+
+  /**
+   * The id which the first listener knows for the workflow of the aggregate, or
+   * <code>null</code> where none knows one.
+   */
+  private String workflowIdOf(
+      final Object workflowAggregateId) {
+
+    return phaseTwoListeners
+        .all()
+        .map(listener -> listener.workflowIdOf(adapterId, workflowAggregateId))
+        .filter(java.util.Objects::nonNull)
+        .findFirst()
+        .orElse(null);
+
+  }
+
+  /**
+   * Where VanillaBP handed over no id of the workflow, a real adapter searches for it. The
+   * double says what a listener knows instead, as if its search had found that.
+   */
+  private void reportTheWorkflowItFound(
+      final PhaseTwoRequest<A> request) {
+
+    if (request.workflowId() != null) {
+      return;
+    }
+    final var workflowId = workflowIdOf(request.workflowAggregateId());
+    if (workflowId != null) {
+      request.reportFoundWorkflow(workflowId);
+    }
+
   }
 
   private void preflightCompleteTask(
@@ -507,6 +546,8 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
         .all()
         .forEach(listener -> listener.aggregateChanged(request.workflowAggregateId(), request.taskId(), true));
 
+    reportTheWorkflowItFound(request);
+
   }
 
   private void preflightCorrelateMessage(
@@ -542,6 +583,8 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
         .all()
         .forEach(listener -> listener.correlatedMessagePhaseTwo(request.workflowAggregateId(), request.messageName(),
             request.correlationId()));
+
+    reportTheWorkflowItFound(request);
 
   }
 
