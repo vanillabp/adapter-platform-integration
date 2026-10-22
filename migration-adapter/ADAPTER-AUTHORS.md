@@ -296,9 +296,17 @@ Call it once, with the id of the instance which the AGGREGATE is. On a BPMS with
 that is the top parent. The instances created below it belong to tasks and travel with those tasks,
 so nothing here walks a chain of parents. Every other operation leaves this alone. An adapter which
 has nothing to report simply does not call it. Then no row is written, and everything stays as it was
-before this call existed. The same holds for a workflow which your BPMS started on its own. There,
-the core writes down `BpmsInitiatedStartContext#getNativeInstanceId`, and that value is no longer
-for messages only.
+before this call existed.
+
+A workflow which your BPMS started on its own is written down by the start handler. There, the core
+writes down `BpmsInitiatedStartContext#getNativeInstanceId`, and that value is no longer for messages
+only. The start handler writes the row only where the `@WorkflowStartedByBpms` method named the
+workflow, and for a start by message. Where it finds the workflow aggregate of a start which the
+application made, it writes nothing. That row belongs to the dispatch, and so to your report above.
+Two writers of the same row in two transactions end one of the two transactions on MongoDB. A start
+by message is the exception, because the answer to a published message may not name the instance.
+Camunda 8 answers with the key of the message. So report the id of a start wherever your BPMS gives
+it to you. Decision 131 in the platform's `DECISIONS.md` has the reasons.
 
 If your BPMS counts the versions of a process, report the version with the id.
 `PhaseTwoRequest#reportStartedWorkflow(String, String)` takes the version of the process definition
@@ -1055,6 +1063,16 @@ workflow by its key, and you would otherwise search for that key. Pushing a chan
 that. The same rule holds. It is a hint, and where your BPMS does not know that key, do what you
 would have done without it. It is `null` for a task operation, for a workflow which another adapter
 started, and wherever no start row exists.
+
+Where `workflowId()` is `null` and your adapter has to search for the workflow, say what you found.
+`PhaseTwoRequest#reportFoundWorkflow(String)` takes the id of the workflow the aggregate IS, the top
+parent on a BPMS with call activities, as for a start. The core then writes the row which was
+missing. So the next operation gets the id and does not search again. That is how a workflow which
+version 1 started, which has no row, gets one. The core writes it in a transaction of its own, only
+where no row exists, and never over a row. A search which answers from a read model which is behind
+may name an instance which ended, and a row which is there was written by somebody who knew. Do not
+report an instance you only guessed, and do not report anything where you did not search. If you do
+not call it, nothing changes, and every operation on such a workflow searches as before.
 
 A push of a changed aggregate into the scope of a task also gets the row of that task, as
 `PhaseTwoRequest#taskRecord()`, where YOUR adapter delivered the task. The row exists only for a task

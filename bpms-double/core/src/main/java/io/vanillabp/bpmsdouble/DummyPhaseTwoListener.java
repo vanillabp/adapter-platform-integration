@@ -35,6 +35,25 @@ public interface DummyPhaseTwoListener {
   }
 
   /**
+   * The id under which the double's BPMS holds the workflow of the given aggregate. A real
+   * adapter learns it when it creates the instance, or when it searches for it. The double
+   * reports it in phase two of a start. It also reports it in phase two of an operation
+   * about the workflow, where VanillaBP handed over no id. The default knows no id, and then
+   * the double reports nothing.
+   *
+   * @param adapterId The dummy adapter's ID
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @return The id of the workflow, or <code>null</code> to report none
+   */
+  default String workflowIdOf(
+      final String adapterId,
+      final Object workflowAggregateId) {
+
+    return null;
+
+  }
+
+  /**
    * Called whenever phase two of completing an asynchronous task is executed.
    *
    * @param workflowAggregateId The ID of the workflow aggregate

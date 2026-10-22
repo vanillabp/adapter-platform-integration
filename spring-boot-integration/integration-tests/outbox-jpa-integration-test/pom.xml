@@ -60,6 +60,23 @@
       <scope>test</scope>
     </dependency>
     <dependency>
+      <!-- PostgreSQL ends a transaction at the first failed statement, which
+           H2 does not. The tests about two writers of one row run on it -->
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>vanillabp-spring-boot-support</artifactId>
       <version>${project.version}</version>

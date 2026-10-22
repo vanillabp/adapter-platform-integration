@@ -2215,11 +2215,24 @@ public class MigrationProcessService<A> {
         final var taskRow = addressesTheWorkflow(operation)
             ? taskRowDeliveredBy(location.adapter(), workflowAggregateId, args)
             : null;
+        // where VanillaBP knows no id of the workflow, the adapter has to search for it. What
+        // it finds is written down, so the next operation does not search again
+        final var foundWorkflow = addressesTheWorkflow(operation) && (workflowId == null)
+            ? new FoundWorkflow()
+            : null;
         runPhaseTwo(
             location.adapter(),
             "%s of %s".formatted(operation.describe(args), subject),
             () -> handlerOf(location.adapter(), operation, args)
-                .phaseTwo(phaseTwoRequestAbout(workflowAggregateId, args, workflowId, taskRow)));
+                .phaseTwo(phaseTwoRequestAbout(workflowAggregateId, args, workflowId, taskRow, foundWorkflow)));
+        if ((foundWorkflow != null) && (foundWorkflow.workflowId.get() != null)) {
+          deliveryRecords
+              .recordFoundWorkflow(
+                  location.adapter().getAdapterId(),
+                  workflowAggregateId,
+                  foundWorkflow.workflowId.get(),
+                  getTransactionRunner(null));
+        }
         deliveryRecords
             .writeDownThatTheTaskIsClosed(operation, workflowAggregateId, args, subject);
       }
@@ -2933,10 +2946,35 @@ public class MigrationProcessService<A> {
       final Object workflowAggregateId,
       final Map<String, String> args,
       final String workflowId,
-      final TaskDelivery taskRow) {
+      final TaskDelivery taskRow,
+      final FoundWorkflow foundWorkflow) {
 
     return new PhaseTwoRequest<>(
-        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, args, null, workflowId, taskRow);
+        workflowModuleId, bpmnProcessId, aggregatePersistenceSupport, workflowAggregateId, args, foundWorkflow, workflowId, taskRow);
+
+  }
+
+  /**
+   * What phase two of an operation about a workflow says about the workflow it found. Only the
+   * found id is kept. An adapter which reports a start here reports something which did not
+   * happen, so that is dropped.
+   */
+  private static final class FoundWorkflow implements io.vanillabp.integration.adapter.spi.workflowstart.WorkflowStartReport {
+
+    private final java.util.concurrent.atomic.AtomicReference<String> workflowId = new java.util.concurrent.atomic.AtomicReference<>();
+
+    @Override
+    public void startedWorkflow(
+        final String workflowId) {
+    }
+
+    @Override
+    public void foundWorkflow(
+        final String workflowId) {
+
+      this.workflowId.set(workflowId);
+
+    }
 
   }
 

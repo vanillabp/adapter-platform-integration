@@ -764,6 +764,16 @@ public class JdbcTaskDeliveryStore {
 
   /**
    * Writes the record within the transaction currently running.
+   * <p>
+   * The insert runs behind a savepoint. Where it meets a row of the same key, only the insert
+   * is rolled back, and the transaction goes on. PostgreSQL needs this. It ends the whole
+   * transaction at the first statement which fails, while H2, MySQL, Oracle and SQL Server go
+   * on after it. Without the savepoint, "recorded already" would be the truth on those and a
+   * lost transaction on PostgreSQL. Two cases meet a row of the same key on purpose. A
+   * second workflow of an aggregate meets the start row of the first one and then replaces
+   * it. And two nodes which process the same delivery at the same time both insert, where
+   * the second one learns from the key that the first one was faster. See decision 131 in
+   * the repository's DECISIONS.md.
    *
    * @param delivery What was processed
    * @return <code>true</code> if written, <code>false</code> if a record of the same
@@ -773,8 +783,10 @@ public class JdbcTaskDeliveryStore {
       final TaskDelivery delivery) {
 
     Connection connection = null;
+    java.sql.Savepoint savepoint = null;
     try {
       connection = connectionAccess.acquire();
+      savepoint = savepointOf(connection);
       try (var statement = connection.prepareStatement(insertDelivery)) {
         statement.setString(1, delivery.deliveryKey());
         statement.setString(2, delivery.adapterId());
@@ -800,9 +812,11 @@ public class JdbcTaskDeliveryStore {
         statement.setString(17, delivery.processVersion());
         statement.executeUpdate();
       }
+      releaseQuietly(connection, savepoint);
       return true;
     } catch (final SQLException e) {
       if (isDuplicateKey(e)) {
+        tookBackTheInsert(connection, savepoint, e);
         // another node processed the same delivery at the same time. It wrote the record,
         // and this transaction has nothing to add
         log.debug(
@@ -1398,6 +1412,89 @@ public class JdbcTaskDeliveryStore {
       connectionAccess.release(connection);
     } catch (final SQLException e) {
       log.warn("Could not release the connection used for the task-delivery table '{}'", tableName, e);
+    }
+
+  }
+
+  /**
+   * The name of the savepoint behind an insert. It has a name, so that it can also be rolled
+   * back by a statement, see {@link #tookBackTheInsert}.
+   */
+  private static final String SAVEPOINT = "VANILLABP_RECORD";
+
+  /**
+   * A savepoint in the transaction of the given connection, so that a failed insert can be
+   * taken back without the rest of the transaction.
+   *
+   * @param connection The connection of the running transaction
+   * @return The savepoint, or <code>null</code> where the connection has no transaction
+   *         (auto-commit) or the driver does not offer savepoints. Then the insert runs as
+   *         it did before
+   */
+  private static java.sql.Savepoint savepointOf(
+      final Connection connection) {
+
+    try {
+      if (connection.getAutoCommit()) {
+        return null;
+      }
+      return connection.setSavepoint(SAVEPOINT);
+    } catch (final SQLException | UnsupportedOperationException e) {
+      return null;
+    }
+
+  }
+
+  /**
+   * Gives the savepoint back after the insert went through. Oracle, for one, does not
+   * support it, and a savepoint which is not given back ends with the transaction anyway.
+   */
+  private static void releaseQuietly(
+      final Connection connection,
+      final java.sql.Savepoint savepoint) {
+
+    if (savepoint == null) {
+      return;
+    }
+    try {
+      connection.releaseSavepoint(savepoint);
+    } catch (final SQLException | UnsupportedOperationException e) {
+      // nothing to do, see above
+    }
+
+  }
+
+  /**
+   * Takes the failed insert back, and nothing else.
+   * <p>
+   * The pool of Quarkus (Agroal) refuses <code>Connection#rollback(Savepoint)</code> while
+   * the connection takes part in a JTA transaction. So where that call is refused, the same
+   * is done by a statement, which the pool does not look at. H2, PostgreSQL, MySQL, Oracle
+   * and DB2 understand <code>ROLLBACK TO SAVEPOINT</code>. Where neither works, the insert
+   * is left as it is, as before the savepoint existed. That only matters on PostgreSQL, and
+   * there the statement works.
+   *
+   * @param failure The failure of the insert, which gets what went wrong here as suppressed
+   */
+  private static void tookBackTheInsert(
+      final Connection connection,
+      final java.sql.Savepoint savepoint,
+      final SQLException failure) {
+
+    if (savepoint == null) {
+      return;
+    }
+    try {
+      connection.rollback(savepoint);
+      return;
+    } catch (final SQLException | UnsupportedOperationException e) {
+      failure.addSuppressed(e);
+    }
+    try (var statement = connection.createStatement()) {
+      statement.execute("ROLLBACK TO SAVEPOINT "
+          + SAVEPOINT);
+    } catch (final SQLException e) {
+      failure.addSuppressed(e);
     }
 
   }

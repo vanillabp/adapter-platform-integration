@@ -4,6 +4,9 @@ package io.vanillabp.integration.adapter.spi.workflowstart;
  * Where an adapter says which workflow its BPMS created. The adapter gets it with phase two of
  * a start (see
  * {@code io.vanillabp.integration.adapter.spi.PhaseTwoRequest#reportStartedWorkflow(String)}).
+ * Phase two of an operation about a workflow gets it as well, where VanillaBP knew no id of
+ * that workflow. There the adapter says which workflow it FOUND (see
+ * {@code io.vanillabp.integration.adapter.spi.PhaseTwoRequest#reportFoundWorkflow(String)}).
  *
  * <strong>Why it is a sink and not a return value</strong>
  *
@@ -55,6 +58,20 @@ public interface WorkflowStartReport {
 
     startedWorkflow(workflowId);
 
+  }
+
+  /**
+   * Says which workflow of the BPMS an operation about a workflow found. It is called at most
+   * once per phase two, from the thread which dispatches it. A <code>null</code> is the same
+   * as not calling it at all.
+   * <p>
+   * The default drops the id. So a sink written before this method existed keeps working, and
+   * this interface stays a functional one.
+   *
+   * @param workflowId The BPMS' own id of the workflow the operation was about
+   */
+  default void foundWorkflow(
+      final String workflowId) {
   }
 
 }
