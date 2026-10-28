@@ -4905,3 +4905,47 @@ operation which had to search. The JDBC store needs a second connection for that
 What this changes in decision 108: that entry says when the start row is written. This one says which
 of the two writers of one start writes it, adds the row found by a search, and makes the JDBC store
 take back a failed insert. Nothing of decision 108 is withdrawn.
+
+### 132. Every map of the Quarkus configuration names its key, with the names all adapters share
+
+Built by story 995 on 2026-10-28.
+
+The module `quarkus-integration/runtime` is a Quarkus extension. Its build writes a description of
+every key into `META-INF/quarkus-config-doc/quarkus-config-model.json`. A map is a level where the
+application chooses the key, for example an adapter id. Quarkus writes such a key as a name in
+quotes. Without help it takes the name of the Java method. So the file showed the key below, and
+nobody could tell from it what to write there:
+
+```text
+vanillabp.workflow-modules."workflow-modules".workflows."workflows".tasks."tasks".adapters."adapters".implemented-externally
+```
+
+Now every map of `QuarkusMigrationAdapterProperties` carries `@ConfigDocMapKey`. The platform and
+every adapter use the same names. The first three are also the names which the platform wiki writes
+in angle brackets, for example `<adapter-id>`:
+
+|        Map        |         Name         |
+|-------------------|----------------------|
+| `adapters`        | `adapter-id`         |
+| `workflowModules` | `workflow-module-id` |
+| `workflows`       | `bpmn-process-id`    |
+| `tasks`           | `task-definition`    |
+| `extensions`      | `extension-id`       |
+
+So the key above now reads:
+
+```text
+vanillabp.workflow-modules."workflow-module-id".workflows."bpmn-process-id".tasks."task-definition".adapters."adapter-id".implemented-externally
+```
+
+The adapters add their own levels below these keys. Two names exist only there: `message-name` for
+the messages of a Camunda 8 workflow, and `plugin-name` with `property-name` for the engine plugins
+of Camunda 7. The test double `bpms-double` uses the names as well.
+
+`EveryMapKeyHasANameTest` reads the file which the build wrote. It fails when a map key has a name
+which is not in this table. So a new map needs the annotation, or the build is red.
+
+The Quarkus Tools plugin for IntelliJ IDEA (by Red Hat, checked in version 2.6.1) does not read this
+file. It finds the keys in the `@ConfigMapping` interfaces themselves and writes every map key as
+`{*}`. So the names help the generated documentation and everybody who reads the file. They do not
+change what this plugin offers while you type.
