@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import io.quarkus.runtime.annotations.ConfigDocMapKey;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.runtime.annotations.StaticInitSafe;
@@ -112,6 +113,7 @@ public interface QuarkusMigrationAdapterProperties {
    *
    * @return All adapters configured.
    */
+  @ConfigDocMapKey("adapter-id")
   Map<String, AdapterConfiguration> adapters();
 
   /**
@@ -121,6 +123,7 @@ public interface QuarkusMigrationAdapterProperties {
    *         The core adds a section for every module which the build found on the
    *         classpath. So a module which needs no configuration needs no section
    */
+  @ConfigDocMapKey("workflow-module-id")
   Map<String, WorkflowModuleProperties> workflowModules();
 
   /**
@@ -135,6 +138,7 @@ public interface QuarkusMigrationAdapterProperties {
    *
    * @return The settings per extension
    */
+  @ConfigDocMapKey("extension-id")
   Map<String, Map<String, String>> extensions();
 
   /**
@@ -298,6 +302,7 @@ public interface QuarkusMigrationAdapterProperties {
      *
      * @return The extension settings of this adapter
      */
+    @ConfigDocMapKey("extension-id")
     Map<String, Map<String, String>> extensions();
 
   }
@@ -399,6 +404,7 @@ public interface QuarkusMigrationAdapterProperties {
      *
      * @return The extension settings of this adapter
      */
+    @ConfigDocMapKey("extension-id")
     Map<String, Map<String, String>> extensions();
 
   }
@@ -760,6 +766,7 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The section per adapter id. It is the second least specific level where an
      *         adapter setting may be written
      */
+    @ConfigDocMapKey("adapter-id")
     Map<String, AdapterProperties> adapters();
 
     /**
@@ -770,6 +777,7 @@ public interface QuarkusMigrationAdapterProperties {
      *         has does not stop the boot. It gives a warning which names the key and the
      *         process IDs which the module does have
      */
+    @ConfigDocMapKey("bpmn-process-id")
     Map<String, WorkflowProperties> workflows();
 
     /**
@@ -834,6 +842,7 @@ public interface QuarkusMigrationAdapterProperties {
      *
      * @return The extension settings of this workflow module
      */
+    @ConfigDocMapKey("extension-id")
     Map<String, Map<String, String>> extensions();
 
   }
@@ -970,6 +979,7 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The section per adapter id. It wins over what the workflow module and the
      *         adapter itself say about the same key
      */
+    @ConfigDocMapKey("adapter-id")
     Map<String, AdapterProperties> adapters();
 
     /**
@@ -983,6 +993,7 @@ public interface QuarkusMigrationAdapterProperties {
      *
      * @return The section per task, keyed by task ID
      */
+    @ConfigDocMapKey("task-definition")
     Map<String, TaskProperties> tasks();
 
     /**
@@ -1043,6 +1054,7 @@ public interface QuarkusMigrationAdapterProperties {
      *
      * @return The extension settings of this workflow
      */
+    @ConfigDocMapKey("extension-id")
     Map<String, Map<String, String>> extensions();
 
   }
@@ -1059,6 +1071,7 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The section per adapter id. It is the most specific place where a setting of
      *         one adapter may be written. So it wins over every other level
      */
+    @ConfigDocMapKey("adapter-id")
     Map<String, AdapterProperties> adapters();
 
     /**
@@ -1095,6 +1108,7 @@ public interface QuarkusMigrationAdapterProperties {
      *
      * @return The extension settings of this task
      */
+    @ConfigDocMapKey("extension-id")
     Map<String, Map<String, String>> extensions();
 
   }
