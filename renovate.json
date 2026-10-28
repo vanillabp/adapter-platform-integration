@@ -1,4 +1,11 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["github>vanillabp/renovate-config"]
+  "extends": ["github>vanillabp/renovate-config"],
+  "packageRules": [
+    {
+      "description": "VanillaBP artifacts follow the framework, not Renovate: their versions are bumped when a release is cut, and while they are snapshots there is nothing to look up. Without this rule every module of this repository is looked up in Maven Central as the parent of another module, and the Dependency Dashboard lists each of them as a failed lookup.",
+      "matchPackageNames": ["/^io\\.vanillabp/"],
+      "enabled": false
+    }
+  ]
 }
