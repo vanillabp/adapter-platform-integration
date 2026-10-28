@@ -4949,3 +4949,34 @@ The Quarkus Tools plugin for IntelliJ IDEA (by Red Hat, checked in version 2.6.1
 file. It finds the keys in the `@ConfigMapping` interfaces themselves and writes every map key as
 `{*}`. So the names help the generated documentation and everybody who reads the file. They do not
 change what this plugin offers while you type.
+
+### 133. The wake-up after a commit comes after the store committed
+
+The outbox wakes its poller after the commit, so an entry goes out at once (decision 42). That only
+works when the entry is visible by then. Otherwise the poll finds nothing, and the entry waits for
+`vanillabp.outbox.poll-interval`, ten seconds by default.
+
+A database which is a resource of the transaction commits before any synchronization hears about
+the commit. That holds for JDBC on both platforms and for MongoDB on Spring Boot. MongoDB Panache on
+Quarkus is different. It is no resource. It commits its MongoDB transaction itself, in the
+`afterCompletion` of an interposed synchronization. Narayana calls the interposed synchronizations
+in the reverse order of their registration, and all of them before the plain ones. The outbox
+registered its wake-up as interposed too, and after Panache. So the poller woke before MongoDB
+committed. Its poll runs on a thread of its own and races the commit. Where the poll is faster, it
+finds nothing. In the blueprint runs of one week, 14 of 16 starts on Quarkus with MongoDB went out
+after 10.1 s. The other stores took 0.1 to 0.2 s.
+
+So the Quarkus MongoDB outbox registers its wake-up as a plain synchronization, through the
+`Transaction`. The JTA specification puts the plain ones after the interposed ones, and Narayana
+does so whatever the order of registration. `MongoDispatchRightAfterTheCommitTest` holds both: the
+order, and a start which goes out within moments of its commit. Measured on 2026-10-28 with the
+default poll interval, before the change: in each of three runs, the first of five starts went
+out after 10.0 s, and the others after 50 to 104 ms, because their poll lost the race. After the
+change, all five went out after 50 to 55 ms. The test looks every 50 ms, so that is its resolution.
+
+A plain synchronization cannot be registered while the transaction runs the `beforeCompletion` of
+the interposed ones. There the outbox falls back to an interposed one. That costs at most one poll
+interval, and nothing is lost.
+
+A new store whose writes commit outside the transaction manager has the same problem. It has to
+wake its poller in a plain synchronization as well, or after its own commit.

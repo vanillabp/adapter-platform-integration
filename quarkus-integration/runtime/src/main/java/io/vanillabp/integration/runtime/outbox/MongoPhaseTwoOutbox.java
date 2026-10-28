@@ -29,6 +29,7 @@ import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 import jakarta.transaction.Status;
 import jakarta.transaction.Synchronization;
+import jakarta.transaction.TransactionManager;
 import jakarta.transaction.TransactionSynchronizationRegistry;
 import lombok.extern.slf4j.Slf4j;
 
@@ -115,6 +116,9 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
 
   @Inject
   TransactionSynchronizationRegistry txRegistry;
+
+  @Inject
+  TransactionManager transactionManager;
 
   @Inject
   MongoPhaseTwoOutboxDispatcher dispatcher;
@@ -393,6 +397,9 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
    * Dispatches right after the commit. On rollback, the entry is deleted as far as possible,
    * where no MongoDB transaction covered the write. See the class Javadoc for the windows
    * which a crash still leaves.
+   * <p>
+   * The wake-up has to come after MongoDB committed, or the poll finds nothing and the entry
+   * waits for the poll interval. See decision 133 in the repository's DECISIONS.md.
    *
    * @param session The session covering the writes, or <code>null</code>
    * @param call The call which was scheduled
@@ -412,7 +419,7 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
       return;
     }
     final var collection = dispatcher.outboxCollection();
-    txRegistry.registerInterposedSynchronization(new Synchronization() {
+    final var afterCompletion = new Synchronization() {
       @Override
       public void beforeCompletion() {
         // nothing to do
@@ -441,7 +448,21 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
           }
         }
       }
-    });
+    };
+    try {
+      // Not interposed on purpose: MongoDB Panache commits in an interposed one, and JTA
+      // calls every interposed synchronization before the others after a commit.
+      transactionManager
+          .getTransaction()
+          .registerSynchronization(afterCompletion);
+    } catch (final Exception refused) {
+      // The transaction takes no such synchronization any more, for example while it runs
+      // the beforeCompletion of the interposed ones. An interposed one still deletes after a
+      // rollback. After a commit, it may wake the poller too early, and then the poll
+      // interval brings the entry.
+      log.debug("Could not register the wake-up of the outbox as a plain synchronization", refused);
+      txRegistry.registerInterposedSynchronization(afterCompletion);
+    }
 
   }
 
