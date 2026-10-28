@@ -3,6 +3,7 @@ package io.vanillabp.bpmsdouble.quarkus;
 import java.util.Map;
 import java.util.Optional;
 
+import io.quarkus.runtime.annotations.ConfigDocMapKey;
 import io.quarkus.runtime.annotations.ConfigPhase;
 import io.quarkus.runtime.annotations.ConfigRoot;
 import io.quarkus.runtime.annotations.StaticInitSafe;
@@ -38,6 +39,7 @@ public interface DummyAdapterOverlayProperties {
    * @return The sections keyed by adapter ID, empty where an application configures
    *         none of them - a lookup map, never the source of the ids
    */
+  @ConfigDocMapKey("adapter-id")
   Map<String, DummyAdapterConfig> adapters();
 
   /**
@@ -50,6 +52,7 @@ public interface DummyAdapterOverlayProperties {
    * @return The sections keyed by workflow module ID, empty where no module sets a key
    *         of this adapter
    */
+  @ConfigDocMapKey("workflow-module-id")
   Map<String, ModuleOverlay> workflowModules();
 
   /**
@@ -131,6 +134,7 @@ public interface DummyAdapterOverlayProperties {
      *
      * @return The adapter sections
      */
+    @ConfigDocMapKey("adapter-id")
     Map<String, DummyAdapterConfig> adapters();
 
     /**
@@ -138,6 +142,7 @@ public interface DummyAdapterOverlayProperties {
      *
      * @return The workflow sections
      */
+    @ConfigDocMapKey("bpmn-process-id")
     Map<String, WorkflowOverlay> workflows();
 
   }
@@ -152,6 +157,7 @@ public interface DummyAdapterOverlayProperties {
      *
      * @return The adapter sections
      */
+    @ConfigDocMapKey("adapter-id")
     Map<String, DummyAdapterConfig> adapters();
 
     /**
@@ -159,6 +165,7 @@ public interface DummyAdapterOverlayProperties {
      *
      * @return The task sections
      */
+    @ConfigDocMapKey("task-definition")
     Map<String, TaskOverlay> tasks();
 
   }
@@ -173,6 +180,7 @@ public interface DummyAdapterOverlayProperties {
      *
      * @return The adapter sections
      */
+    @ConfigDocMapKey("adapter-id")
     Map<String, DummyAdapterConfig> adapters();
 
   }
