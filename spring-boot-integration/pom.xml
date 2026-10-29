@@ -41,7 +41,7 @@
          not carry is gone for the consumer the day the aggregator stops defining it, and
          the import then carries the name of the property as its version. Keep in sync
          with the property of the same name in bpms-double/spring-boot/pom.xml. -->
-    <spring-boot.version>4.1.1</spring-boot.version>
+    <spring-boot.version>4.1.2</spring-boot.version>
   </properties>
 
   <dependencyManagement>
