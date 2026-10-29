@@ -197,7 +197,7 @@
         </plugin>
         <plugin>
           <artifactId>maven-failsafe-plugin</artifactId>
-          <version>3.6.0</version>
+          <version>3.6.1</version>
           <configuration>
             <!-- a time zone, for the reason the surefire configuration below gives one -->
             <argLine>-Duser.timezone=Europe/Vienna</argLine>
@@ -209,7 +209,7 @@
         </plugin>
         <plugin>
           <artifactId>maven-surefire-plugin</artifactId>
-          <version>3.6.0</version>
+          <version>3.6.1</version>
           <configuration>
             <!-- see https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#mockito-instrumentation -->
             <!-- property 'jacoco.agent' is filled by jacoco-maven-plugin blow in this file -->
