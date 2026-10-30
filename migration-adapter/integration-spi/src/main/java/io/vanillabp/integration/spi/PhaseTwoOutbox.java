@@ -241,6 +241,42 @@ public interface PhaseTwoOutbox {
   }
 
   /**
+   * Whether an entry of one workflow still waits for its dispatch. That is every entry of
+   * this BPMN process and workflow aggregate which is not DONE yet, the one a dispatch is
+   * working on right now included. An entry written earlier in the running transaction
+   * counts as well, where the store can see it there.
+   * <p>
+   * The core asks this when phase one of an operation on that workflow refuses. Phase one
+   * asks the BPMS as it is now. But an operation which is still waiting here has not
+   * reached the BPMS. A user task completed a moment ago is an example: the workflow is
+   * not at its next wait state yet. So the refusal may be about a state which is about to
+   * change. Where this store says yes, the core plans the operation anyway and leaves the
+   * answer to phase two. That phase runs after the waiting entry, because the stores
+   * VanillaBP ships dispatch the entries of one workflow in the order they were written.
+   * See {@code DECISIONS.pending/2021.md}.
+   * <p>
+   * The default is {@link java.util.Optional#empty()}, which means "this store cannot say".
+   * Then the refusal of phase one stands, as it did before. That is also the right answer
+   * for a store which does not keep the order of one workflow's entries. There phase two of
+   * the later operation could run first and meet the same state phase one refused.
+   * <p>
+   * A store which implements it answers a cheap query, inside the running transaction.
+   *
+   * @param workflowModuleId The workflow module of the workflow
+   * @param bpmnProcessId The BPMN process of the workflow
+   * @param workflowAggregateId The aggregate ID of the workflow, as a String
+   * @return Whether an entry of that workflow waits, or empty if the store cannot say
+   */
+  default java.util.Optional<Boolean> hasPendingCallsOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId) {
+
+    return java.util.Optional.empty();
+
+  }
+
+  /**
    * How many entries wait to be dispatched right now. This is the number an operator
    * looks at first when a BPMS cannot be reached. A broken connection piles up in phase
    * two, and a rising number says that the application is fine but the BPMS is not.

@@ -96,6 +96,29 @@ public interface DummyTaskAwarenessSource {
   }
 
   /**
+   * Whether the workflow waits for a message right now. The double asks this in phase one of
+   * a correlation and refuses the correlation where the answer is <code>false</code>, as an
+   * embedded engine does. By default nobody answers, and the double accepts every
+   * correlation.
+   *
+   * @param adapterId The dummy adapter's ID
+   * @param workflowAggregateId The ID of the workflow aggregate
+   * @param messageName The message name as the application passed it
+   * @param correlationId The correlation id, or <code>null</code>
+   * @return Whether the workflow waits for it, or <code>null</code> to let another source
+   *         answer
+   */
+  default Boolean waitsForMessage(
+      final String adapterId,
+      final Object workflowAggregateId,
+      final String messageName,
+      final String correlationId) {
+
+    return null;
+
+  }
+
+  /**
    * The visibility window the dummy adapter reports. It says how long the core keeps
    * asking a hinted adapter which answers {@link WorkflowAwareness#UNKNOWN_TO_BPMS}.
    * <code>null</code> means none. An adapter of an immediately consistent BPMS reports

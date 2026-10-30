@@ -174,6 +174,42 @@ public class MongoOutboxDispatchTest {
 
   }
 
+  @Test
+  @DisplayName("The store says whether an entry of one workflow waits, also inside the transaction which wrote it")
+  public void theStoreSaysWhetherAnEntryOfAWorkflowWaits() {
+
+    writeWaitingEntry("waiting", Instant.now());
+
+    assertEquals(java.util.Optional.of(true), outbox.hasPendingCallsOf("test-module", "Test", "4711"));
+    assertEquals(
+        java.util.Optional.of(false),
+        outbox.hasPendingCallsOf("test-module", "Test", "4712"),
+        "an entry of another workflow does not count");
+
+    transactionTemplate.executeWithoutResult(status -> {
+      outbox
+          .schedule(io.vanillabp.integration.spi.PhaseTwoCall
+              .of(
+                  io.vanillabp.integration.spi.PhaseOperation.CORRELATE_MESSAGE,
+                  "test-module",
+                  "Test",
+                  "4712",
+                  null,
+                  java.util.Map.of(io.vanillabp.integration.spi.PhaseTwoCall.ARG_MESSAGE_NAME, "Paid")));
+      assertEquals(
+          java.util.Optional.of(true),
+          outbox.hasPendingCallsOf("test-module", "Test", "4712"),
+          "the entry written a moment ago in this transaction counts");
+      status.setRollbackOnly();
+    });
+
+    assertEquals(
+        java.util.Optional.of(false),
+        outbox.hasPendingCallsOf("test-module", "Test", "4712"),
+        "the rolled back entry is gone");
+
+  }
+
   /**
    * Writes an entry which stays where it is. Its next attempt is an hour ahead, so the
    * poll of the dispatcher does not pick it up.
