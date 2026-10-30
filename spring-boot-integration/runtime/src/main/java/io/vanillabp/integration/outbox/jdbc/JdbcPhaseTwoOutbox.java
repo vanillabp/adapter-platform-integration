@@ -144,6 +144,16 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   @Override
+  public Optional<Boolean> hasPendingCallsOf(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String workflowAggregateId) {
+
+    return store.hasPendingCallsOf(workflowModuleId, bpmnProcessId, workflowAggregateId);
+
+  }
+
+  @Override
   public OptionalLong pendingCalls() {
 
     return store.pendingCalls();
