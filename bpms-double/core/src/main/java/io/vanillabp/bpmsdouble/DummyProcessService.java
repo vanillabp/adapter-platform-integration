@@ -562,27 +562,6 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
         request.bpmnProcessId(),
         request.workflowModuleId());
 
-    // an embedded engine answers this from the caller's transaction and refuses a message
-    // nobody waits for. The double does so only where a test says that nobody waits
-    final var workflowAggregateId = request
-        .aggregatePersistence()
-        .getAggregateId(request.workflowAggregate());
-    final var waits = taskAwarenessSources
-        .all()
-        .map(source -> source.waitsForMessage(adapterId, workflowAggregateId, request.messageName(),
-            request.correlationId()))
-        .filter(java.util.Objects::nonNull)
-        .findFirst()
-        .orElse(Boolean.TRUE);
-    if (!waits) {
-      throw new IllegalStateException(
-          """
-              Dummy-Adapter[%s]: nothing of workflow aggregate '%s' waits for message '%s' (BPMN \
-              process '%s' of workflow module '%s'), as a DummyTaskAwarenessSource said."""
-              .formatted(adapterId, workflowAggregateId, request.messageName(), request.bpmnProcessId(),
-                  request.workflowModuleId()));
-    }
-
   }
 
   private void correlateMessage(

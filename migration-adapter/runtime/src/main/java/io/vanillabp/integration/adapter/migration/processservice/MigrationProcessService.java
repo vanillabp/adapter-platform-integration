@@ -2157,14 +2157,8 @@ public class MigrationProcessService<A> {
 
     final var adapter = location.adapter();
     if (adapter != null) {
-      final var handler = handlerOf(adapter, operation, args);
-      try {
-        handler.phaseOne(phaseOneRequest(attachedAggregate, args));
-      } catch (final PhaseOperationNotSupported notSupported) {
-        throw notSupported;
-      } catch (final RuntimeException refused) {
-        rethrowUnlessTheWorkflowMovesOnFirst(operation, aggregateId, args, subject, adapter, refused);
-      }
+      handlerOf(adapter, operation, args)
+          .phaseOne(phaseOneRequest(attachedAggregate, args));
     }
 
     // NO adapter id is persisted. The BPMS which holds the workflow is asked again at
@@ -2172,57 +2166,6 @@ public class MigrationProcessService<A> {
     schedulePhaseTwo(operation, aggregateId, null, adapterIdOf(location), args);
 
     return attachedAggregate;
-
-  }
-
-  /**
-   * Phase one asks the BPMS as it is right now. An operation of the same workflow which still
-   * waits in the outbox has not reached the BPMS yet. Then the refusal may be about a state
-   * which is about to change. The application completed a user task a moment ago and now
-   * correlates the message the workflow waits for after it. The embedded engine is not at
-   * that message yet, because the completion runs after the commit.
-   * <p>
-   * So a refusal stands only where nothing of the workflow waits. Otherwise the operation is
-   * planned, and phase two decides. It runs after the waiting entries, because the outbox
-   * dispatches the entries of one workflow in the order they were written (decision 100 in
-   * the repository's DECISIONS.md). A store which cannot say keeps the refusal, see
-   * {@code DECISIONS.pending/2021.md}.
-   */
-  private void rethrowUnlessTheWorkflowMovesOnFirst(
-      final PhaseOperation operation,
-      final Object aggregateId,
-      final Map<String, String> args,
-      final String subject,
-      final MigratableProcessService<A> adapter,
-      final RuntimeException refused) {
-
-    final var outbox = resolvePhaseTwoOutbox();
-    if (outbox == null) {
-      throw refused;
-    }
-    final boolean earlierOperationsWait;
-    try {
-      earlierOperationsWait = outbox
-          .hasPendingCallsOf(workflowModuleId, bpmnProcessId, aggregateId.toString())
-          .orElse(false);
-    } catch (final RuntimeException unanswered) {
-      // the refusal is what the caller has to see. Why the store could not answer is a
-      // detail of it
-      refused.addSuppressed(unanswered);
-      throw refused;
-    }
-    if (!earlierOperationsWait) {
-      throw refused;
-    }
-    log
-        .debug(
-            "Planned {} of {} although adapter '{}' refused it in phase one: an earlier operation of "
-                + "this workflow still waits in the outbox, so the BPMS answers about a state which is "
-                + "going to change. Phase two runs after it and decides. The refusal was: {}",
-            operation.describe(args),
-            subject,
-            adapter.getAdapterId(),
-            refused.getMessage());
 
   }
 
