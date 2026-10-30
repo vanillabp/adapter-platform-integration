@@ -124,42 +124,6 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   /**
-   * Whether an OPEN entry of the workflow is in the collection. The template takes part in
-   * the running MongoDB transaction, where there is one. So an entry this transaction wrote
-   * a moment ago is found as well.
-   */
-  @Override
-  public Optional<Boolean> hasPendingCallsOf(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String workflowAggregateId) {
-
-    try {
-      return Optional
-          .of(mongoTemplate
-              .exists(
-                  Query
-                      .query(Criteria
-                          .where("status")
-                          .is(PhaseTwoOutboxEntry.STATUS_OPEN)
-                          .and("workflowModuleId")
-                          .is(workflowModuleId)
-                          .and("bpmnProcessId")
-                          .is(bpmnProcessId)
-                          .and("aggregateId")
-                          .is(workflowAggregateId)),
-                  collection));
-    } catch (final RuntimeException e) {
-      // the caller only asks because phase one refused. Without an answer that refusal
-      // stands, which is what happened before this question existed
-      log.debug("Could not read whether entries of aggregate '{}' wait in the MongoDB phase-two outbox",
-          workflowAggregateId, e);
-      return Optional.empty();
-    }
-
-  }
-
-  /**
    * Counts the entries which wait for their dispatch. It is a single count over the same
    * collection the dispatcher polls.
    */

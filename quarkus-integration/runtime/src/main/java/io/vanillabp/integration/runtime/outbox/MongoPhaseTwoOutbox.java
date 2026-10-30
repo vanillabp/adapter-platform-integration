@@ -180,42 +180,6 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
   }
 
   /**
-   * Whether an OPEN entry of the workflow is in the collection. The read uses the session of
-   * the running transaction, where MongoDB Panache provides one. So an entry this
-   * transaction wrote a moment ago is found as well.
-   */
-  @Override
-  public Optional<Boolean> hasPendingCallsOf(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String workflowAggregateId) {
-
-    if (!mongoClient.isResolvable()) {
-      return Optional.empty();
-    }
-    try {
-      final var collection = dispatcher.outboxCollection();
-      final var filter = new Document("status", STATUS_OPEN)
-          .append("workflowModuleId", workflowModuleId)
-          .append("bpmnProcessId", bpmnProcessId)
-          .append("aggregateId", workflowAggregateId);
-      final var session = MongoSessions
-          .activeSession(txRegistry);
-      final var found = session == null
-          ? collection.find(filter).limit(1).first()
-          : collection.find(session, filter).limit(1).first();
-      return Optional.of(found != null);
-    } catch (final RuntimeException e) {
-      // The caller only asks because phase one refused. Without an answer that refusal
-      // stands, which is what happened before this question existed.
-      log.debug("Could not read whether entries of aggregate '{}' wait in the MongoDB phase-two outbox",
-          workflowAggregateId, e);
-      return Optional.empty();
-    }
-
-  }
-
-  /**
    * Counts the entries which wait for their dispatch. It is a single count over the same
    * collection which the dispatcher polls.
    */

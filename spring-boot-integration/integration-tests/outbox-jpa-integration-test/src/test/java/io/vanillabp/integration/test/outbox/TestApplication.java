@@ -50,13 +50,6 @@ public class TestApplication {
 
   }
 
-  @Bean
-  public MessageAfterUserTaskEngine messageAfterUserTaskEngine() {
-
-    return new MessageAfterUserTaskEngine();
-
-  }
-
   /**
    * Stands in for an extension contributing an operation of its own to the outbox.
    *

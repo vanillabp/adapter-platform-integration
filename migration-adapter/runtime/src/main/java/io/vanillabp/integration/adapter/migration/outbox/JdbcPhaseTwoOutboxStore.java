@@ -95,14 +95,6 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
 
   private static final String COUNT_PENDING_ENTRIES = "SELECT COUNT(*) FROM %s WHERE STATUS = ?";
 
-  /**
-   * The status comes first, so the database reads the index over the status and finds only
-   * the entries which still wait. That is the backlog, not the rows kept for the retention.
-   */
-  private static final String SELECT_PENDING_ENTRY_OF_WORKFLOW = """
-      SELECT ID FROM %s \
-      WHERE STATUS = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND AGGREGATE_ID = ?""";
-
   private static final String SELECT_OLDEST_PENDING_ENTRY = "SELECT MIN(CREATED_AT) FROM %s WHERE STATUS = ?";
 
   /**
@@ -219,8 +211,6 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
 
   private final String countPendingEntries;
 
-  private final String selectPendingEntryOfWorkflow;
-
   private final String selectOldestPendingEntry;
 
   /**
@@ -254,7 +244,6 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
     this.replacePendingEntry = REPLACE_PENDING_ENTRY.formatted(tableName);
     this.selectAdapterIds = SELECT_ADAPTER_IDS.formatted(tableName);
     this.countPendingEntries = COUNT_PENDING_ENTRIES.formatted(tableName);
-    this.selectPendingEntryOfWorkflow = SELECT_PENDING_ENTRY_OF_WORKFLOW.formatted(tableName);
     this.selectOldestPendingEntry = SELECT_OLDEST_PENDING_ENTRY.formatted(tableName);
 
   }
@@ -309,48 +298,6 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
               tableName,
               e);
       return Set.of();
-    } finally {
-      release(connection);
-    }
-
-  }
-
-  /**
-   * Whether an OPEN entry of the workflow is in the table. The connection is the one of the
-   * running transaction. So an entry this transaction wrote a moment ago is found as well.
-   */
-  @Override
-  public Optional<Boolean> hasPendingCallsOf(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String workflowAggregateId) {
-
-    Connection connection = null;
-    try {
-      connection = connections.acquire();
-      try (var statement = connection.prepareStatement(selectPendingEntryOfWorkflow)) {
-        statement.setMaxRows(1);
-        statement.setString(1, JdbcPhaseTwoOutboxDispatcher.STATUS_OPEN);
-        statement.setString(2, workflowModuleId);
-        statement.setString(3, bpmnProcessId);
-        statement.setString(4, workflowAggregateId);
-        try (var resultSet = statement.executeQuery()) {
-          return Optional.of(resultSet.next());
-        }
-      }
-    } catch (final SQLException e) {
-      // the caller only asks because phase one refused. Without an answer that refusal
-      // stands, which is what happened before this question existed
-      log
-          .debug(
-              "Could not read whether entries of aggregate '{}' (BPMN process '{}' of workflow "
-                  + "module '{}') wait in table '{}'",
-              workflowAggregateId,
-              bpmnProcessId,
-              workflowModuleId,
-              tableName,
-              e);
-      return Optional.empty();
     } finally {
       release(connection);
     }

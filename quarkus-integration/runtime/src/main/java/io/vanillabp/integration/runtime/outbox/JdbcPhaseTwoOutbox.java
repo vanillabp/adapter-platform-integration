@@ -140,18 +140,6 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
   }
 
   @Override
-  public Optional<Boolean> hasPendingCallsOf(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String workflowAggregateId) {
-
-    return dataSource.isResolvable()
-        ? store().hasPendingCallsOf(workflowModuleId, bpmnProcessId, workflowAggregateId)
-        : Optional.empty();
-
-  }
-
-  @Override
   public OptionalLong pendingCalls() {
 
     return dataSource.isResolvable()
