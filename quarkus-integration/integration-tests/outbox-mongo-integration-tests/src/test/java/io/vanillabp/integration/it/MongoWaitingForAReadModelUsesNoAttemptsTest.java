@@ -191,4 +191,38 @@ public class MongoWaitingForAReadModelUsesNoAttemptsTest {
 
   }
 
+
+  @Test
+  @DisplayName("A deadline the adapter names replaces wait-for-visibility-at-most, so a longer wait goes on")
+  public void aDeadlineLaterThanTheLimitKeepsTheEntryWaiting() throws Exception {
+
+    listener.answerNotYetUntil(ANSWERS_BEFORE_THE_WORKFLOW_SHOWS_UP, WINDOW, Instant.now().plus(Duration.ofHours(1)));
+    // written two hours ago, so wait-for-visibility-at-most alone would block it at once.
+    // A message time-to-live of three hours is still running
+    final var entry = anEntryWrittenAt("4714", Instant.now().minus(Duration.ofHours(2)));
+
+    waitUntil("the entry was not dispatched although its deadline had not passed",
+        () -> entryOf(entry).wasDispatched());
+
+    assertEquals(
+        ANSWERS_BEFORE_THE_WORKFLOW_SHOWS_UP + 1,
+        listener.getInvocations().size(),
+        "the entry came back after every window until it went through");
+
+  }
+
+  @Test
+  @DisplayName("A deadline which has passed blocks the entry, although wait-for-visibility-at-most has not")
+  public void aDeadlineWhichPassedBlocksTheEntry() throws Exception {
+
+    listener.answerNotYetUntil(Integer.MAX_VALUE, WINDOW, Instant.now().minus(Duration.ofSeconds(1)));
+    final var entry = anEntryWrittenAt("4715", Instant.now());
+
+    waitUntil("the entry whose deadline passed was not blocked", () -> entryOf(entry).isBlocked());
+    Thread.sleep(UNTIL_NOTHING_MORE_CAN_COME);
+
+    assertEquals(1, listener.getInvocations().size(), "the first answer after the deadline blocks the entry");
+
+  }
+
 }

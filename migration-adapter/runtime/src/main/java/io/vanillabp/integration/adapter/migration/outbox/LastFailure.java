@@ -84,6 +84,25 @@ public final class LastFailure {
   }
 
   /**
+   * The reason of an entry whose wait passed the deadline its adapter named.
+   *
+   * @param waited How long the entry waited since it was written
+   * @param deadline The deadline the adapter named
+   * @param lastAnswer The last "not yet" of the adapter
+   * @return The text, at most {@link #MAX_BYTES} bytes long
+   */
+  public static String ofAWaitPastItsDeadline(
+      final Duration waited,
+      final java.time.Instant deadline,
+      final Throwable lastAnswer) {
+
+    return cut(
+        "Waited %s, which passed the deadline %s the adapter named. The last answer was: %s"
+            .formatted(waited, deadline, describe(lastAnswer)));
+
+  }
+
+  /**
    * Class and message of the failure and of its causes. A cause is left out where the text
    * before it already contains it. <code>new RuntimeException(cause)</code> does that,
    * because its message is the cause's own <code>toString()</code>.

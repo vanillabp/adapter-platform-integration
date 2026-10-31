@@ -232,6 +232,38 @@ public class DiscardedScheduleTest {
   }
 
   @Test
+  @DisplayName("A correlation carries the moment it was planned, and the moment is not part of its key")
+  public void aCorrelationCarriesWhenItWasPlanned() throws Exception {
+
+    final var outbox = new PendingKeyOutbox();
+    final var testee = serviceWithDiscardingOutbox(outbox);
+    final var before = java.time.Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MILLIS);
+
+    testee.correlateMessage(new Object(), "ItemShipped", "item-4711");
+    // a millisecond later, so a moment which reached the key would make the keys differ
+    Thread.sleep(2);
+    testee.correlateMessage(new Object(), "ItemShipped", "item-4711");
+
+    assertEquals(1, outbox.planned.size(), "the second correlation is a duplicate of the waiting one");
+    final var call = outbox.planned.getFirst();
+    final var request = new io.vanillabp.integration.adapter.spi.PhaseTwoRequest<Object>(
+        MODULE, PROCESS, null, "4711", call.args());
+    final var plannedAt = request.plannedAt();
+    assertTrue(
+        (plannedAt != null) && !plannedAt.isBefore(before) && !plannedAt.isAfter(java.time.Instant.now()),
+        "an adapter which keeps a message for a while counts from this moment: "
+            + call.args());
+    assertEquals(
+        null,
+        new io.vanillabp.integration.adapter.spi.PhaseTwoRequest<Object>(
+            MODULE, PROCESS, null, "4711", Map.of(io.vanillabp.integration.spi.PhaseTwoCall.ARG_PLANNED_AT,
+                "yesterday"))
+            .plannedAt(),
+        "a value nobody can read counts as none");
+
+  }
+
+  @Test
   @DisplayName("A discarded start is reported the same way")
   public void aDiscardedStartIsReported() {
 

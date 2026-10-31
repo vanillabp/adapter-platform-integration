@@ -66,9 +66,9 @@ import lombok.extern.slf4j.Slf4j;
  * dispatch with {@link PhaseTwoRetryLater}. Then the entry is written back with the window
  * the adapter named, and <code>ATTEMPTS</code> stays as it was. Time ends that wait. Once
  * <code>vanillabp.outbox.wait-for-visibility-at-most</code> has passed since the entry was
- * written, the entry is blocked (see
- * {@link PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough} and decision 49 in the
- * repository's DECISIONS.md).
+ * written, the entry is blocked. A deadline the adapter named replaces that time (see
+ * {@link PhaseTwoOutboxProperties#hasWaitedLongEnough} and decision 49 in the repository's
+ * DECISIONS.md).
  * <p>
  * <strong><code>ATTEMPTS</code> counts attempts, not claims.</strong> The column is written
  * when an attempt ENDED, together with the mark which says how it ended. So a dispatch
@@ -1539,7 +1539,8 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * waits for the window which the adapter named, and not for the configured backoff. The
    * attempt is not counted, because a read model which is behind is no failure of the
    * entry. A wait which never ends is ended by the time since the entry was written:
-   * <code>vanillabp.outbox.wait-for-visibility-at-most</code>.
+   * <code>vanillabp.outbox.wait-for-visibility-at-most</code>, or by the deadline the
+   * adapter named.
    *
    * @param entry The entry whose dispatch was answered with "not yet"
    * @param retryAfter The window the adapter named
@@ -1551,11 +1552,36 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final Exception e) {
 
     final var now = Instant.now();
-    if (properties.hasWaitedForVisibilityLongEnough(entry.createdAt(), now)) {
-      if (!markBlocked(entry, LastFailure.ofAWaitWhichRanOut(Duration.between(entry.createdAt(), now), e))) {
+    // a deadline the adapter named replaces wait-for-visibility-at-most for this entry. See
+    // the addendum to decision 49 in {@code DECISIONS.pending/2060.md}
+    final var deadline = PhaseTwoRetryLater.deadline(e);
+    if (properties.hasWaitedLongEnough(entry.createdAt(), deadline, now)) {
+      final var waited = Duration.between(entry.createdAt(), now);
+      if (!markBlocked(
+          entry,
+          deadline == null
+              ? LastFailure.ofAWaitWhichRanOut(waited, e)
+              : LastFailure.ofAWaitPastItsDeadline(waited, deadline, e))) {
         return;
       }
       countBlockedEntry(entry.operation(), false);
+      if (deadline != null) {
+        log.error(
+            "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' waited {} "
+                + "and passed the deadline {} its adapter named - the outbox entry '{}' is now blocked. "
+                + "How to find it, open it again or delete it: "
+                + PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE
+                + " - the last answer was: {}",
+            entry.operation(),
+            entry.bpmnProcessId(),
+            entry.workflowModuleId(),
+            entry.aggregateId(),
+            waited,
+            deadline,
+            entry.id(),
+            e.getMessage());
+        return;
+      }
       log.error(
           "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' waited {} "
               + "for its BPMS to report the workflow, which is longer than '{}' allows - the outbox "
@@ -1566,7 +1592,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           entry.bpmnProcessId(),
           entry.workflowModuleId(),
           entry.aggregateId(),
-          Duration.between(entry.createdAt(), now),
+          waited,
           PhaseTwoOutboxProperties.WAIT_FOR_VISIBILITY_AT_MOST_PROPERTY,
           entry.id(),
           e.getMessage());
@@ -1585,7 +1611,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         entry.aggregateId(),
         entry.id(),
         retryAfter,
-        entry.createdAt().plus(properties.waitForVisibilityAtMost()),
+        properties.waitEndsAt(entry.createdAt(), deadline),
         e.getMessage());
 
   }

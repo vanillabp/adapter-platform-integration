@@ -1,14 +1,18 @@
 package io.vanillabp.integration.spi;
 
 import java.time.Duration;
+import java.time.Instant;
 
 /**
  * A phase-two operation which cannot run yet, but most probably can in a moment. It
  * says how long that moment is.
  * <p>
- * Today there is one case: a workflow which its BPMS has not made searchable yet. The
- * operation is worth repeating, and the time it needs is the visibility window of the
- * adapter which holds it. A store dispatches an entry on the lane of its workflow
+ * There are two cases. The first is a workflow which its BPMS has not made searchable yet.
+ * The operation is worth repeating, and the time it needs is the visibility window of the
+ * adapter which holds it. The second is a message which nothing waits for yet, while the
+ * message is configured to be kept for a while (a message time-to-live, as Camunda 8 keeps a
+ * published message). Then the adapter of an embedded engine asks again later, until the
+ * time-to-live is over. A store dispatches an entry on the lane of its workflow
  * aggregate. Waiting for that window there would hold every other entry of that lane,
  * whatever workflow it belongs to. So the entry is given back instead. That costs one
  * update instead of a parked thread.
@@ -28,6 +32,15 @@ import java.time.Duration;
  * model which is behind gets as long as a BPMS which is away. When the answers were
  * counted, entries were blocked after fifty windows, which were eight minutes of a
  * stopped Camunda 8 exporter.
+ * <p>
+ * <b>A deadline replaces that limit.</b> An adapter which knows how long the wait may last
+ * passes it as {@link #getDeadline()}. Then the store blocks the entry at that moment, and
+ * <code>wait-for-visibility-at-most</code> does not apply to this entry. A message
+ * time-to-live is such a case: it is configured for the message, so the outbox setting must
+ * neither cut it short nor stretch it. The adapter should still end the wait itself, with a
+ * {@link PhaseTwoPermanentFailure} which names what ran out. The store's block is the net
+ * for a window which ends after the deadline. See the addendum to decision 49 in
+ * {@code DECISIONS.pending/2060.md}.
  * <p>
  * Because the answer is not counted, the store does not remember it either. The next
  * dispatch of the entry looks like its first one. So throw this only before the operation
@@ -62,6 +75,12 @@ public class PhaseTwoRetryLater extends RuntimeException {
   private final Duration retryAfter;
 
   /**
+   * The moment after which waiting makes no sense any more, or <code>null</code> where the
+   * store's own limit <code>vanillabp.outbox.wait-for-visibility-at-most</code> applies.
+   */
+  private final Instant deadline;
+
+  /**
    * Says that the operation is worth repeating, and how long the store should wait before
    * it does.
    *
@@ -73,8 +92,29 @@ public class PhaseTwoRetryLater extends RuntimeException {
       final String message,
       final Duration retryAfter) {
 
+    this(message, retryAfter, null);
+
+  }
+
+  /**
+   * Says that the operation is worth repeating, how long the store should wait before it
+   * does, and until when it may wait at all.
+   *
+   * @param message Why the operation cannot run yet, and what to look at if it stays that
+   *        way
+   * @param retryAfter How long to wait before the next attempt
+   * @param deadline When the store blocks the entry instead of dispatching it again. It
+   *        replaces <code>vanillabp.outbox.wait-for-visibility-at-most</code> for this entry.
+   *        <code>null</code> keeps that limit
+   */
+  public PhaseTwoRetryLater(
+      final String message,
+      final Duration retryAfter,
+      final Instant deadline) {
+
     super(message);
     this.retryAfter = retryAfter;
+    this.deadline = deadline;
 
   }
 
@@ -90,6 +130,35 @@ public class PhaseTwoRetryLater extends RuntimeException {
   }
 
   /**
+   * Until when the store may keep the entry waiting.
+   *
+   * @return The deadline, or <code>null</code> where the store's own limit applies
+   */
+  public Instant getDeadline() {
+
+    return deadline;
+
+  }
+
+  /**
+   * Reads the deadline out of whatever wrapped the failure. A store asks this way, next to
+   * {@link #retryAfter(Throwable)}.
+   *
+   * @param failure The failure a dispatch ended with
+   * @return The deadline the adapter named, or <code>null</code> where it named none and
+   *         <code>vanillabp.outbox.wait-for-visibility-at-most</code> applies
+   */
+  public static Instant deadline(
+      final Throwable failure) {
+
+    final var retryLater = find(failure);
+    return retryLater == null
+        ? null
+        : retryLater.getDeadline();
+
+  }
+
+  /**
    * Reads the waiting time out of whatever wrapped the failure. A store asks this way.
    *
    * @param failure The failure a dispatch ended with
@@ -99,10 +168,20 @@ public class PhaseTwoRetryLater extends RuntimeException {
   public static Duration retryAfter(
       final Throwable failure) {
 
+    final var retryLater = find(failure);
+    return retryLater == null
+        ? null
+        : retryLater.getRetryAfter();
+
+  }
+
+  private static PhaseTwoRetryLater find(
+      final Throwable failure) {
+
     var candidate = failure;
     while (candidate != null) {
       if (candidate instanceof PhaseTwoRetryLater retryLater) {
-        return retryLater.getRetryAfter();
+        return retryLater;
       }
       candidate = candidate.getCause() == candidate
           ? null

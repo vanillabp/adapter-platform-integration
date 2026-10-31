@@ -202,10 +202,53 @@ public class PhaseTwoOutboxProperties {
       final Instant writtenAt,
       final Instant now) {
 
-    if (writtenAt == null) {
-      return false;
+    return hasWaitedLongEnough(writtenAt, null, now);
+
+  }
+
+  /**
+   * When the wait of an entry which was answered with
+   * {@link io.vanillabp.integration.spi.PhaseTwoRetryLater} ends. A deadline the adapter
+   * named replaces <code>vanillabp.outbox.wait-for-visibility-at-most</code> for that entry,
+   * because the adapter knows how long its wait may last. An example is a message
+   * time-to-live, which is configured for the message and not for the outbox.
+   *
+   * @param writtenAt When the entry was written, <code>null</code> where the store does not
+   *          know
+   * @param deadline The deadline the adapter named, or <code>null</code>
+   * @return When the entry is blocked instead of being dispatched again, <code>null</code>
+   *         where neither is known
+   */
+  public Instant waitEndsAt(
+      final Instant writtenAt,
+      final Instant deadline) {
+
+    if (deadline != null) {
+      return deadline;
     }
-    return !now.isBefore(writtenAt.plus(waitForVisibilityAtMost()));
+    return writtenAt == null
+        ? null
+        : writtenAt.plus(waitForVisibilityAtMost());
+
+  }
+
+  /**
+   * Whether an entry has waited long enough to be blocked, with the deadline the adapter
+   * named where it named one. See {@link #waitEndsAt(Instant, Instant)}.
+   *
+   * @param writtenAt When the entry was written, <code>null</code> where the store does not
+   *          know
+   * @param deadline The deadline the adapter named, or <code>null</code>
+   * @param now The moment the dispatch was answered
+   * @return Whether the entry is to be blocked instead of being dispatched again
+   */
+  public boolean hasWaitedLongEnough(
+      final Instant writtenAt,
+      final Instant deadline,
+      final Instant now) {
+
+    final var waitEndsAt = waitEndsAt(writtenAt, deadline);
+    return (waitEndsAt != null) && !now.isBefore(waitEndsAt);
 
   }
 
