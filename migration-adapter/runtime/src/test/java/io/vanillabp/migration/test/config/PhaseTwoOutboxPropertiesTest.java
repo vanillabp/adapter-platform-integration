@@ -118,6 +118,31 @@ public class PhaseTwoOutboxPropertiesTest {
   }
 
   @Test
+  @DisplayName("A deadline the adapter names replaces wait-for-visibility-at-most, in both directions")
+  public void aDeadlineReplacesTheLimit() {
+
+    final var properties = new PhaseTwoOutboxProperties();
+    properties.setWaitForVisibilityAtMost(Duration.ofMinutes(20));
+    final var writtenAt = Instant.parse("2026-10-31T09:00:00Z");
+    final var later = writtenAt.plus(Duration.ofHours(3));
+    final var earlier = writtenAt.plus(Duration.ofMinutes(5));
+
+    assertEquals(writtenAt.plus(Duration.ofMinutes(20)), properties.waitEndsAt(writtenAt, null));
+    assertEquals(later, properties.waitEndsAt(writtenAt, later));
+    assertEquals(later, properties.waitEndsAt(null, later), "the deadline needs no moment of writing");
+    assertNull(properties.waitEndsAt(null, null));
+    assertFalse(
+        properties.hasWaitedLongEnough(writtenAt, later, writtenAt.plus(Duration.ofHours(1))),
+        "a deadline after the limit keeps the entry waiting past the limit");
+    assertTrue(properties.hasWaitedLongEnough(writtenAt, later, later));
+    assertTrue(
+        properties.hasWaitedLongEnough(writtenAt, earlier, earlier),
+        "a deadline before the limit ends the wait at the deadline");
+    assertFalse(properties.hasWaitedLongEnough(null, null, later));
+
+  }
+
+  @Test
   @DisplayName("A time for waiting on a read model which is not longer than zero ends the startup")
   public void aWaitOfZeroEndsTheStartup() {
 

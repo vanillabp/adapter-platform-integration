@@ -92,7 +92,7 @@ public class WaitingForAReadModelUsesNoAttemptsTest {
       IDEMPOTENCY_KEY, DEDUP_KEY, STATUS, CREATED_AT, ATTEMPTS, NEXT_ATTEMPT_AT) \
       VALUES (?, '%s', '%s', ?, '%s', 'dummy', NULL, NULL, ?, '%s', ?, 0, ?)""";
 
-  private static final String SELECT_ENTRY = "SELECT STATUS, ATTEMPTS FROM %s WHERE ID = ?";
+  private static final String SELECT_ENTRY = "SELECT STATUS, ATTEMPTS, LAST_FAILURE FROM %s WHERE ID = ?";
 
   @Mock
   private MigrationProcessService<Object> processService;
@@ -133,13 +133,28 @@ public class WaitingForAReadModelUsesNoAttemptsTest {
   private PhaseTwoRouter aRouterWhoseReadModelCatchesUpAfter(
       final int answersNotYet) {
 
+    return aRouterWhichWaitsUntil(answersNotYet, null);
+
+  }
+
+  /**
+   * A router whose only process service answers "not yet" the given number of times, names
+   * the given deadline with each answer, and accepts the call afterwards.
+   *
+   * @param answersNotYet How many dispatches are answered with the window first
+   * @param deadline The deadline each answer names, <code>null</code> for none
+   */
+  private PhaseTwoRouter aRouterWhichWaitsUntil(
+      final int answersNotYet,
+      final Instant deadline) {
+
     when(processService.getWorkflowModuleId()).thenReturn(MODULE);
     when(processService.getBpmnProcessId()).thenReturn(PROCESS);
     when(processService.convertAggregateId(AGGREGATE)).thenReturn(AGGREGATE);
     Mockito
         .doAnswer(invocation -> {
           if (callsIntoTheAdapter.incrementAndGet() <= answersNotYet) {
-            throw new PhaseTwoRetryLater("the BPMS does not report the workflow yet", WINDOW);
+            throw new PhaseTwoRetryLater("the BPMS does not report the workflow yet", WINDOW, deadline);
           }
           return null;
         })
@@ -203,13 +218,13 @@ public class WaitingForAReadModelUsesNoAttemptsTest {
       statement.setString(1, id);
       try (var resultSet = statement.executeQuery()) {
         assertTrue(resultSet.next(), "the entry is gone");
-        return new Entry(resultSet.getString(1), resultSet.getInt(2));
+        return new Entry(resultSet.getString(1), resultSet.getInt(2), resultSet.getString(3));
       }
     }
 
   }
 
-  private record Entry(String status, int attempts) {
+  private record Entry(String status, int attempts, String lastFailure) {
   }
 
   private static void waitUntil(
@@ -287,6 +302,70 @@ public class WaitingForAReadModelUsesNoAttemptsTest {
         1,
         callsIntoTheAdapter.get(),
         "the first answer 'not yet' after the time ran out blocks the entry, and nothing asks again");
+
+  }
+
+
+  @Test
+  @DisplayName("A deadline the adapter names replaces wait-for-visibility-at-most, so a longer wait goes on")
+  public void aDeadlineLaterThanTheLimitKeepsTheEntryWaiting() throws Exception {
+
+    final var table = "OUTBOX_DEADLINE_KEEPS_WAITING";
+    final var connections = databaseNamed("deadline-keeps-waiting");
+    final var dispatcher = dispatcherOf(
+        connections, allowingTwoAttemptsAndWaiting(Duration.ofHours(1)), aRouterWhichWaitsUntil(
+            ANSWERS_BEFORE_THE_WORKFLOW_SHOWS_UP, Instant.now().plus(Duration.ofHours(1))),
+        table);
+    dispatcher.prepareSchema();
+    // written two hours ago, so wait-for-visibility-at-most alone would block it at once.
+    // A message time-to-live of three hours is still running
+    final var entry = anEntryWrittenAt(connections, table, Instant.now().minus(Duration.ofHours(2)));
+
+    try {
+      dispatcher.start();
+      waitUntil(
+          "the entry was not dispatched although its deadline had not passed",
+          () -> JdbcPhaseTwoOutboxDispatcher.STATUS_DONE.equals(entryOf(connections, table, entry).status()));
+    } finally {
+      dispatcher.stop();
+    }
+
+    assertEquals(
+        ANSWERS_BEFORE_THE_WORKFLOW_SHOWS_UP + 1,
+        callsIntoTheAdapter.get(),
+        "the entry came back after every window until it went through");
+
+  }
+
+  @Test
+  @DisplayName("A deadline which has passed blocks the entry, although wait-for-visibility-at-most has not")
+  public void aDeadlineWhichPassedBlocksTheEntry() throws Exception {
+
+    final var table = "OUTBOX_DEADLINE_PASSED";
+    final var connections = databaseNamed("deadline-passed");
+    final var deadline = Instant.now().minus(Duration.ofSeconds(1));
+    final var dispatcher = dispatcherOf(
+        connections, allowingTwoAttemptsAndWaiting(Duration.ofHours(1)), aRouterWhichWaitsUntil(
+            Integer.MAX_VALUE, deadline),
+        table);
+    dispatcher.prepareSchema();
+    final var entry = anEntryWrittenAt(connections, table, Instant.now());
+
+    try {
+      dispatcher.start();
+      waitUntil(
+          "the entry whose deadline passed was not blocked",
+          () -> JdbcPhaseTwoOutboxDispatcher.STATUS_BLOCKED.equals(entryOf(connections, table, entry).status()));
+      Thread.sleep(5 * WINDOW.toMillis());
+    } finally {
+      dispatcher.stop();
+    }
+
+    assertEquals(1, callsIntoTheAdapter.get(), "the first answer after the deadline blocks the entry");
+    final var lastFailure = entryOf(connections, table, entry).lastFailure();
+    assertTrue(
+        lastFailure.contains("which passed the deadline %s the adapter named".formatted(deadline)),
+        lastFailure);
 
   }
 

@@ -2363,15 +2363,17 @@ public class MigrationProcessService<A> {
   }
 
   /**
-   * Adds the moment when a START is planned to its arguments. Then the dispatch which repeats
-   * it can tell an earlier workflow of the same aggregate from the one this entry starts, see
-   * {@link PhaseTwoCall#ARG_PLANNED_AT}.
+   * Adds the moment when a START or a correlation is planned to its arguments, see
+   * {@link PhaseTwoCall#ARG_PLANNED_AT}. The dispatch which repeats a start can then tell an
+   * earlier workflow of the same aggregate from the one this entry starts. An adapter which
+   * keeps a message for a while counts that time from this moment, so a repeated dispatch
+   * does not make the wait longer.
    */
   private static Map<String, String> withPlannedAt(
       final PhaseOperation operation,
       final Map<String, String> args) {
 
-    if (operation.election() != Election.STARTS_THE_WORKFLOW) {
+    if ((operation.election() != Election.STARTS_THE_WORKFLOW) && (operation != PhaseOperation.CORRELATE_MESSAGE)) {
       return args;
     }
     final var withPlannedAt = new LinkedHashMap<>(args);

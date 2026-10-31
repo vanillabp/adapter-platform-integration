@@ -28,6 +28,11 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
   private volatile java.time.Duration notYetWindow = java.time.Duration.ofSeconds(1);
 
   /**
+   * The deadline each answer "not yet" names, <code>null</code> for none.
+   */
+  private volatile java.time.Instant notYetDeadline;
+
+  /**
    * How long every dispatch stays inside the adapter. It is for a test about a dispatch
    * which takes longer than the lease of its outbox entry. Zero unless a test asked for it,
    * and that test puts it back.
@@ -49,7 +54,7 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
     }
     if (notYetRemaining.getAndUpdate(remaining -> remaining > 0 ? remaining - 1 : 0) > 0) {
       throw new io.vanillabp.integration.spi.PhaseTwoRetryLater(
-          "the BPMS does not report the workflow yet, for testing purposes", notYetWindow);
+          "the BPMS does not report the workflow yet, for testing purposes", notYetWindow, notYetDeadline);
     }
     if (failuresRemaining.getAndUpdate(remaining -> remaining > 0 ? remaining - 1 : 0) > 0) {
       throw new RuntimeException("phase two failed for testing purposes");
@@ -82,7 +87,26 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
       final java.time.Duration window) {
 
     notYetWindow = window;
+    notYetDeadline = null;
     notYetRemaining.set(howMany);
+
+  }
+
+  /**
+   * Answers the next dispatches with "not yet", each naming the given deadline. The
+   * deadline replaces wait-for-visibility-at-most for the entry.
+   *
+   * @param howMany How many dispatches to answer that way
+   * @param window How long each answer asks the outbox to wait
+   * @param deadline The deadline each answer names
+   */
+  public void answerNotYetUntil(
+      final int howMany,
+      final java.time.Duration window,
+      final java.time.Instant deadline) {
+
+    answerNotYet(howMany, window);
+    notYetDeadline = deadline;
 
   }
 
@@ -104,6 +128,7 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
     invocations.clear();
     failuresRemaining.set(0);
     notYetRemaining.set(0);
+    notYetDeadline = null;
     dispatchTakesMillis.set(0);
 
   }

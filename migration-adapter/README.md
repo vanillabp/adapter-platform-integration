@@ -2304,8 +2304,10 @@ answer blocks the entry. If it is not set, it is the time which the attempts of
 `vanillabp.outbox.block-after-attempts` take with the growing backoff, about four hours. Counting
 the answers had blocked entries after fifty windows. That was eight minutes of a stopped Camunda 8
 exporter, while a database which was away for hours blocked nothing (decision 49 in the
-repository's DECISIONS.md). `PhaseTwoOutboxProperties#hasWaitedForVisibilityLongEnough` is the one
-rule which all three stores of this repository ask. `WaitingForAReadModelUsesNoAttemptsTest` holds
+repository's DECISIONS.md). `PhaseTwoOutboxProperties#hasWaitedLongEnough` is the one rule which
+all three stores of this repository ask. An adapter may name a deadline with its answer, and then
+the deadline replaces `wait-for-visibility-at-most` for that entry. The Camunda 7 family does that
+for a message time-to-live (see the addendum to decision 49 in `DECISIONS.pending/2060.md`). `WaitingForAReadModelUsesNoAttemptsTest` holds
 it for the relational store, and `MongoWaitingForAReadModelUsesNoAttemptsTest` for the MongoDB
 store of each platform. The gruelbox store lives in `io.vanillabp:gruelbox-phase-two-outbox` and
 asks the same method. gruelbox counts every failed attempt and schedules it at the one distance it

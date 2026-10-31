@@ -186,9 +186,15 @@ public record PhaseTwoCall(
   public static final String ARG_ACTIVATION_ID = "activationId";
 
   /**
-   * The {@link #args()} key which carries the moment a call which STARTS a workflow was
-   * planned, as an ISO-8601 instant. It is part of the persisted contract, so never change
-   * the literal.
+   * The {@link #args()} key which carries the moment a call which STARTS a workflow, or
+   * which CORRELATES a message, was planned, as an ISO-8601 instant. It is part of the
+   * persisted contract, so never change the literal.
+   * <p>
+   * A correlation carries it for an adapter which keeps a message for a while when nothing
+   * waits for it yet (a message time-to-live). That time counts from the moment the
+   * correlation was planned, not from the attempt which is running. Otherwise every attempt
+   * would make the wait longer. An entry planned before the moment was recorded carries
+   * none.
    * <p>
    * An aggregate may carry a second workflow once its first one ended. If the first attempt to
    * dispatch that second start failed, the dispatch which repeats it has to tell the first

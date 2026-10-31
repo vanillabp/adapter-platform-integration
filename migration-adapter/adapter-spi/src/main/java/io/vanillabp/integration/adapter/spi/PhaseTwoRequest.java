@@ -1,5 +1,7 @@
 package io.vanillabp.integration.adapter.spi;
 
+import java.time.Instant;
+import java.time.format.DateTimeParseException;
 import java.util.Map;
 
 import io.vanillabp.integration.adapter.spi.workflowstart.WorkflowStartReport;
@@ -289,6 +291,34 @@ public record PhaseTwoRequest<A>(
   public String activationId() {
 
     return args.get(PhaseTwoCall.ARG_ACTIVATION_ID);
+
+  }
+
+
+  /**
+   * When the operation was planned, in the transaction of the caller. Only a start and a
+   * correlation carry it ({@link PhaseTwoCall#ARG_PLANNED_AT}).
+   * <p>
+   * An adapter which keeps a message for a while, because nothing waits for it yet, counts
+   * that time from here. The moment stays the same for every attempt of the entry. So
+   * repeating the attempt does not make the wait longer.
+   *
+   * @return The moment, or <code>null</code> where the operation carries none, or where the
+   *         value cannot be read (an entry planned before the moment was recorded)
+   */
+  public Instant plannedAt() {
+
+    final var plannedAt = args.get(PhaseTwoCall.ARG_PLANNED_AT);
+    if (plannedAt == null) {
+      return null;
+    }
+    try {
+      return Instant.parse(plannedAt);
+    } catch (final DateTimeParseException e) {
+      // a value nobody can read counts as no value. The adapter then counts from the attempt
+      // which is running, which is what it did before the moment was recorded
+      return null;
+    }
 
   }
 

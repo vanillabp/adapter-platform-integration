@@ -838,12 +838,37 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         ? null
         : entry.getDate("createdAt").toInstant();
     final var now = Instant.now();
-    if (properties.hasWaitedForVisibilityLongEnough(createdAt, now)) {
-      final var reason = LastFailure.ofAWaitWhichRanOut(Duration.between(createdAt, now), e);
+    // a deadline the adapter named replaces wait-for-visibility-at-most for this entry. See
+    // the addendum to decision 49 in {@code DECISIONS.pending/2060.md}
+    final var deadline = PhaseTwoRetryLater.deadline(e);
+    if (properties.hasWaitedLongEnough(createdAt, deadline, now)) {
+      final var waited = createdAt == null
+          ? null
+          : Duration.between(createdAt, now);
+      final var reason = deadline == null
+          ? LastFailure.ofAWaitWhichRanOut(waited, e)
+          : LastFailure.ofAWaitPastItsDeadline(waited, deadline, e);
       if (!writeAsTheHolder(collection, entry, blockEntry(entryId, reason))) {
         return;
       }
       countBlockedEntry(entry.getString("operation"), false);
+      if (deadline != null) {
+        log.error(
+            "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' waited {} "
+                + "and passed the deadline {} its adapter named - the outbox entry '{}' is now blocked. "
+                + "How to find it, open it again or delete it: "
+                + PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE
+                + " - the last answer was: {}",
+            entry.getString("operation"),
+            entry.getString("bpmnProcessId"),
+            entry.getString("workflowModuleId"),
+            entry.getString("aggregateId"),
+            waited,
+            deadline,
+            entryId,
+            e.getMessage());
+        return;
+      }
       log.error(
           "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' waited {} "
               + "for its BPMS to report the workflow, which is longer than '{}' allows - the outbox "
@@ -854,7 +879,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           entry.getString("bpmnProcessId"),
           entry.getString("workflowModuleId"),
           entry.getString("aggregateId"),
-          Duration.between(createdAt, now),
+          waited,
           PhaseTwoOutboxProperties.WAIT_FOR_VISIBILITY_AT_MOST_PROPERTY,
           entryId,
           e.getMessage());
@@ -873,9 +898,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         entry.getString("aggregateId"),
         entryId,
         retryAfter,
-        createdAt == null
-            ? null
-            : createdAt.plus(properties.waitForVisibilityAtMost()),
+        properties.waitEndsAt(createdAt, deadline),
         e.getMessage());
 
   }
