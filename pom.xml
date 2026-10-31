@@ -74,7 +74,7 @@
          Boot in spring-boot-integration/pom.xml and bpms-double/spring-boot/pom.xml. Keep
          the two of one platform in sync. -->
     <lombok.version>1.18.48</lombok.version>
-    <jacoco.version>0.8.15</jacoco.version>
+    <jacoco.version>0.8.16</jacoco.version>
     <mockito.version>5.24.0</mockito.version>
     <!-- optional: metrics of the election cache are published if the application
          brings Micrometer; compiled against the OLDER of both platforms (Quarkus
