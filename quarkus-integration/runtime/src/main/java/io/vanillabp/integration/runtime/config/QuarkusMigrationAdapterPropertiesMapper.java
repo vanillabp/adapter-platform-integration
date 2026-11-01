@@ -10,6 +10,7 @@ import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties
 import io.vanillabp.integration.adapter.migration.config.AdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.DeliveryProperties;
 import io.vanillabp.integration.adapter.migration.config.ElectionProperties;
+import io.vanillabp.integration.adapter.migration.config.MessageAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.MetricsProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
@@ -391,6 +392,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.deduplicateDeliveries(unwrap(adapterConfiguration.deduplicateDeliveries()));
     core.implementedExternally(unwrap(adapterConfiguration.implementedExternally()));
     core.outfadedVersionsInUse(unwrap(adapterConfiguration.outfadedVersionsInUse()));
+    core.messageTimeToLive(unwrap(adapterConfiguration.messageTimeToLive()));
     final var extensions = adapterConfiguration.extensions();
     if (extensions != null) {
       core.extensions(new LinkedHashMap<>(extensions));
@@ -429,6 +431,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.deduplicateDeliveries(unwrap(adapterProperties.deduplicateDeliveries()));
     core.implementedExternally(unwrap(adapterProperties.implementedExternally()));
     core.outfadedVersionsInUse(unwrap(adapterProperties.outfadedVersionsInUse()));
+    core.messageTimeToLive(unwrap(adapterProperties.messageTimeToLive()));
     final var extensions = adapterProperties.extensions();
     if (extensions != null) {
       core.extensions(new LinkedHashMap<>(extensions));
@@ -502,6 +505,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.implementedExternally(unwrap(workflowProperties.implementedExternally()));
     core.adapters(copyValues(workflowProperties.adapters(), this::toCore));
     core.tasks(copyValues(workflowProperties.tasks(), this::toCore));
+    core.messages(copyValues(workflowProperties.messages(), this::toCore));
     final var extensions = workflowProperties.extensions();
     if (extensions != null) {
       core.extensions(new LinkedHashMap<>(extensions));
@@ -540,6 +544,51 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.delivery(toCore(taskProperties.delivery()));
 
     return core.build();
+
+  }
+
+  /**
+   * Copies the section of one message which a workflow waits for
+   * (<code>...workflows.&lt;bpmnProcessId&gt;.messages.&lt;messageName&gt;.*</code>).
+   *
+   * @param messageProperties What SmallRye bound below the
+   *          <code>messages.&lt;messageName&gt;</code> of a workflow
+   * @return The core's section of that message
+   */
+  public MessageAdapterProperties toCore(
+      final QuarkusMigrationAdapterProperties.MessageProperties messageProperties) {
+
+    if (messageProperties == null) {
+      return null;
+    }
+
+    final var core = new MessageAdapterProperties();
+    final var adapters = copyValues(messageProperties.adapters(), this::toCore);
+    if (adapters != null) {
+      core.setAdapters(adapters);
+    }
+    return core;
+
+  }
+
+  /**
+   * Copies what one message says about ONE adapter
+   * (<code>...messages.&lt;messageName&gt;.adapters.&lt;id&gt;.*</code>).
+   *
+   * @param messageAdapterProperties What SmallRye bound below the
+   *          <code>adapters.&lt;id&gt;</code> of a message
+   * @return What that message says about that adapter
+   */
+  public MessageAdapterProperties.MessageSettings toCore(
+      final QuarkusMigrationAdapterProperties.MessageAdapterProperties messageAdapterProperties) {
+
+    if (messageAdapterProperties == null) {
+      return null;
+    }
+
+    final var core = new MessageAdapterProperties.MessageSettings();
+    core.setMessageTimeToLive(unwrap(messageAdapterProperties.messageTimeToLive()));
+    return core;
 
   }
 

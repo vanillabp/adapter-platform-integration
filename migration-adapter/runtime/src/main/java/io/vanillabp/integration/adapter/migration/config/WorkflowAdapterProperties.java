@@ -59,6 +59,13 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   private Map<String, TaskAdapterProperties> tasks = Map.of();
 
   /**
+   * The messages which this workflow waits for, keyed by message name. A message is the most
+   * specific level of <code>message-time-to-live</code>, see
+   * {@link MigrationAdapterProperties#messageTimeToLive}.
+   */
+  private Map<String, MessageAdapterProperties> messages = Map.of();
+
+  /**
    * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow. That
    * is what an extension is told about ONE BPMN process, the level below the workflow module.
    * The keys are the extension ids. A key about which the workflow says nothing keeps what
@@ -153,6 +160,12 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
      * the field.
      */
     private Map<String, TaskAdapterProperties> tasks = Map.of();
+
+    /**
+     * The messages which this workflow waits for. The builder starts from the same value as
+     * the field.
+     */
+    private Map<String, MessageAdapterProperties> messages = Map.of();
 
     /**
      * Overrides <code>vanillabp.extensions.&lt;extension&gt;.*</code> for this workflow. That
@@ -262,6 +275,20 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
         final Map<String, TaskAdapterProperties> tasks) {
 
       this.tasks = tasks;
+      return self();
+
+    }
+
+    /**
+     * The messages which this workflow waits for.
+     *
+     * @param messages The value of {@link #messages}
+     * @return This builder, so the calls chain
+     */
+    public B messages(
+        final Map<String, MessageAdapterProperties> messages) {
+
+      this.messages = messages;
       return self();
 
     }
@@ -418,6 +445,9 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
           + "tasks="
           + tasks
           + ", "
+          + "messages="
+          + messages
+          + ", "
           + "extensions="
           + extensions
           + ", "
@@ -498,6 +528,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     this.workflowModule = b.workflowModule;
     this.adapters = b.adapters;
     this.tasks = b.tasks;
+    this.messages = b.messages;
     this.extensions = b.extensions;
     this.allowFullSyncWithBpms = b.allowFullSyncWithBpms;
     this.acceptExpressionsInTheModel = b.acceptExpressionsInTheModel;
@@ -563,6 +594,17 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   public Map<String, TaskAdapterProperties> getTasks() {
 
     return tasks;
+
+  }
+
+  /**
+   * The messages which this workflow waits for.
+   *
+   * @return The value of {@link #messages}
+   */
+  public Map<String, MessageAdapterProperties> getMessages() {
+
+    return messages;
 
   }
 
@@ -701,6 +743,18 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
       final Map<String, TaskAdapterProperties> tasks) {
 
     this.tasks = tasks;
+
+  }
+
+  /**
+   * The messages which this workflow waits for.
+   *
+   * @param messages The value of {@link #messages}
+   */
+  public void setMessages(
+      final Map<String, MessageAdapterProperties> messages) {
+
+    this.messages = messages;
 
   }
 

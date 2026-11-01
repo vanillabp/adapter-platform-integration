@@ -442,6 +442,33 @@ public class VanillaBpConfigurationBindingTest {
   }
 
   @Test
+  @DisplayName("The message time-to-live binds at all four levels, the message most specific")
+  public void messageTimeToLiveBindsAtEveryLevel() {
+
+    contextRunner
+        .withPropertyValues(
+            "vanillabp.resources-location=classpath*:vanillabp-processes",
+            "vanillabp.adapters.test.type=dummy",
+            "vanillabp.adapters.test.message-time-to-live=1m",
+            "vanillabp.workflow-modules.test-module.prioritized-adapters=test",
+            "vanillabp.workflow-modules.test-module.adapters.test.message-time-to-live=2m",
+            "vanillabp.workflow-modules.test-module.workflows.TestProcess.adapters.test.message-time-to-live=3m",
+            "vanillabp.workflow-modules.test-module.workflows.TestProcess.messages.ContractSigned.adapters.test.message-time-to-live=4m")
+        .run(context -> {
+
+          final var properties = context.getBean(MigrationAdapterProperties.class);
+          assertEquals(Duration.ofMinutes(1), properties.messageTimeToLive("other-module", "P", "M", "test"));
+          assertEquals(Duration.ofMinutes(2), properties.messageTimeToLive("test-module", "OtherProcess", "M", "test"));
+          assertEquals(Duration.ofMinutes(3), properties.messageTimeToLive("test-module", "TestProcess", "M", "test"));
+          assertEquals(
+              Duration.ofMinutes(4),
+              properties.messageTimeToLive("test-module", "TestProcess", "ContractSigned", "test"));
+
+        });
+
+  }
+
+  @Test
   @DisplayName("The settings of an extension bind at all four levels and merge key by key")
   public void extensionSettingsBindAtEveryLevel() {
 

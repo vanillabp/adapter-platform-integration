@@ -902,6 +902,133 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * How long a correlated message waits for a workflow which does not wait for it yet
+   * (<code>message-time-to-live</code>). The most specific level which configured a value wins,
+   * across four levels:
+   *
+   * <pre>
+   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.messages.&lt;message&gt;.adapters.&lt;id&gt;.message-time-to-live  (most specific)
+   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.adapters.&lt;id&gt;.message-time-to-live
+   * vanillabp.workflow-modules.&lt;module&gt;.adapters.&lt;id&gt;.message-time-to-live
+   * vanillabp.adapters.&lt;id&gt;.message-time-to-live                                                         (least specific)
+   * </pre>
+   *
+   * The most specific level is a message and not a task. Every adapter which knows the key
+   * reads it here, so the keys and their order are the same for every BPMS. What the value
+   * means, and what a message without any value gets, is up to the adapter: a Camunda 8
+   * cluster buffers a published message, an embedded engine asks the outbox to try again.
+   * Which BPMN process a correlation reads it for is decided by
+   * {@link io.vanillabp.integration.adapter.spi.MessageTimeToLiveResolver}.
+   *
+   * @param workflowModuleId The workflow module ID or <code>null</code>
+   * @param bpmnProcessId The plain BPMN process ID or <code>null</code>
+   * @param messageName The message name as the application wrote it, without a prefix, or
+   *          <code>null</code>
+   * @param adapterId The adapter ID
+   * @return The most specific configured time-to-live, or <code>null</code> where no level
+   *         configures one
+   */
+  public Duration messageTimeToLive(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String messageName,
+      final String adapterId) {
+
+    final var workflowModule = workflowModuleId != null
+        ? workflowModules.get(workflowModuleId)
+        : null;
+    final var workflow = (workflowModule != null) && (bpmnProcessId != null)
+        ? workflowModule.getWorkflows().get(bpmnProcessId)
+        : null;
+    final var message = (workflow != null) && (messageName != null)
+        ? workflow.getMessages().get(messageName)
+        : null;
+    final var ofTheMessage = message != null
+        ? message.getAdapters().get(adapterId)
+        : null;
+    if ((ofTheMessage != null) && (ofTheMessage.getMessageTimeToLive() != null)) {
+      return ofTheMessage.getMessageTimeToLive();
+    }
+    // above the message the levels are the ones of every adapter setting. The task is left
+    // out, because a task is not what a message is correlated to
+    return resolveForAdapter(workflowModuleId, bpmnProcessId, null, adapterId, AdapterProperties::getMessageTimeToLive);
+
+  }
+
+  /**
+   * The {@link #messageTimeToLive} of one adapter, in the shape an adapter is handed it.
+   *
+   * @param adapterId The adapter ID
+   * @return The resolver, which reads this configuration on every call
+   */
+  public io.vanillabp.integration.adapter.spi.MessageTimeToLiveResolver messageTimeToLiveResolverFor(
+      final String adapterId) {
+
+    return (
+        workflowModuleId,
+        bpmnProcessId,
+        messageName) -> messageTimeToLive(workflowModuleId, bpmnProcessId, messageName, adapterId);
+
+  }
+
+  /**
+   * Every <code>message-time-to-live</code> written for one adapter, under the full key it was
+   * written at. An adapter checks the values against what its BPMS can do. The rules differ:
+   * zero switches the waiting off on an embedded engine, but drops every message on a
+   * Camunda 8 cluster. So the check and its message stay with the adapter, and the core only
+   * says what was written.
+   *
+   * @param adapterId The adapter ID
+   * @return The values keyed by property key: the adapter first, then each workflow module
+   *         with its workflows and their messages. Empty where nothing is written
+   */
+  public Map<String, Duration> messageTimesToLiveWrittenFor(
+      final String adapterId) {
+
+    final var written = new LinkedHashMap<String, Duration>();
+    final java.util.function.BiConsumer<String, AdapterProperties> ofASection = (
+        key,
+        section) -> {
+      if ((section != null) && (section.getMessageTimeToLive() != null)) {
+        written.put(key, section.getMessageTimeToLive());
+      }
+    };
+    ofASection.accept("%s.adapters.%s.message-time-to-live".formatted(PREFIX, adapterId), adapters.get(adapterId));
+    workflowModules.forEach((
+        moduleId,
+        module) -> {
+      ofASection.accept(
+          "%s.workflow-modules.%s.adapters.%s.message-time-to-live".formatted(PREFIX, moduleId, adapterId),
+          module.getAdapters().get(adapterId));
+      module
+          .getWorkflows()
+          .forEach((
+              processId,
+              workflow) -> {
+            ofASection.accept(
+                "%s.workflow-modules.%s.workflows.%s.adapters.%s.message-time-to-live"
+                    .formatted(PREFIX, moduleId, processId, adapterId),
+                workflow.getAdapters().get(adapterId));
+            workflow
+                .getMessages()
+                .forEach((
+                    messageName,
+                    message) -> {
+                  final var settings = message.getAdapters().get(adapterId);
+                  if ((settings != null) && (settings.getMessageTimeToLive() != null)) {
+                    written.put(
+                        "%s.workflow-modules.%s.workflows.%s.messages.%s.adapters.%s.message-time-to-live"
+                            .formatted(PREFIX, moduleId, processId, messageName, adapterId),
+                        settings.getMessageTimeToLive());
+                  }
+                });
+          });
+    });
+    return written;
+
+  }
+
+  /**
    * The settings of an extension as they apply to a workflow module. That is what
    * {@link #extensionProperties(String, String, String, String, String)} answers for the
    * module alone, without a workflow, a task or an adapter.
@@ -2146,6 +2273,62 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
           "outfaded-versions-in-use", adapter -> adapter.getOutfadedVersionsInUse() != null));
 
   /**
+   * Refuses a <code>message-time-to-live</code> written at a single task. The key binds at all
+   * four levels like every other adapter setting, because one class holds what an adapter may
+   * be told. But {@link #messageTimeToLive} reads a message where the other settings read a
+   * task. A line at a task would do nothing at all. So it gets an answer and is not ignored
+   * (see decision 89 in the repository's DECISIONS.md). It reads like every other misplaced
+   * setting, see {@link MisplacedSettings}.
+   *
+   * @throws IllegalStateException Naming every task at which a time-to-live was written, and
+   *           the four levels at which it may be written
+   */
+  private void refuseMessageTimesToLiveWrittenAtATask() {
+
+    final var misplaced = new LinkedList<String>();
+    workflowModules.forEach((
+        moduleId,
+        module) -> module
+            .getWorkflows()
+            .forEach((
+                processId,
+                workflow) -> workflow
+                    .getTasks()
+                    .forEach((
+                        taskId,
+                        task) -> task
+                            .getAdapters()
+                            .forEach((
+                                adapterId,
+                                adapter) -> {
+                              if (adapter.getMessageTimeToLive() != null) {
+                                misplaced
+                                    .add("%s.workflow-modules.%s.workflows.%s.tasks.%s.adapters.%s.message-time-to-live"
+                                        .formatted(PREFIX, moduleId, processId, taskId, adapterId));
+                              }
+                            }))));
+    if (misplaced.isEmpty()) {
+      return;
+    }
+    throw MisplacedSettings.refuse(
+        "The message time-to-live is read at the message, at the workflow, at the workflow "
+            + "module and at the adapter",
+        misplaced,
+        "the message it is meant for, or to the workflow, its workflow module or the adapter",
+        List.of(
+            "%s.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.messages.<message-name>.adapters.<adapter>.message-time-to-live: 10m"
+                .formatted(PREFIX),
+            "%s.workflow-modules.<workflow-module>.workflows.<bpmn-process-id>.adapters.<adapter>.message-time-to-live: 10m"
+                .formatted(PREFIX),
+            "%s.workflow-modules.<workflow-module>.adapters.<adapter>.message-time-to-live: 10m".formatted(PREFIX),
+            "%s.adapters.<adapter>.message-time-to-live: 10m".formatted(PREFIX)),
+        """
+            A message is correlated to a workflow, not to a task. A receive task waits for a \
+            message as well, and its time-to-live is read under the name of that message.""");
+
+  }
+
+  /**
    * Refuses a setting of a whole BPMN process written at a single task. The keys bind at all
    * four levels like every other adapter setting, because one class holds what an adapter may
    * be told. But nobody reads the task level.
@@ -2763,6 +2946,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     refuseFullSyncPermissionsOutsideAWorkflow();
     refuseResourcesLocationsBelowTheWorkflowModule();
     refuseSettingsOfAWholeProcessWrittenAtATask();
+    refuseMessageTimesToLiveWrittenAtATask();
     refuseDeliveryRetentionsBelowTheApplication();
     refuseDeliveryReleasesBelowTheWorkflowModule();
     reportRetentionSplit();

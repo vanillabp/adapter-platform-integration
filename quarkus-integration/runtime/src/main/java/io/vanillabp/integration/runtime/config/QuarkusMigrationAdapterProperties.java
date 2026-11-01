@@ -295,6 +295,18 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse();
 
     /**
+     * How long a correlated message waits for a workflow which does not wait for it yet. It is
+     * read at the adapter, the workflow module, the workflow and the single message, and the
+     * most specific value wins (see
+     * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#messageTimeToLive}).
+     * Written at a task, the core answers with a message which says where it belongs. What a
+     * message without any value gets is up to the adapter.
+     *
+     * @return The time-to-live which this level sets
+     */
+    Optional<Duration> messageTimeToLive();
+
+    /**
      * The settings of an extension FOR THIS ADAPTER, keyed by extension id. An extension is
      * configured for every configured adapter on its own. So two adapters of the same BPMS
      * type may get different settings. And what an adapter gets wins over what the same
@@ -395,6 +407,18 @@ public interface QuarkusMigrationAdapterProperties {
      * @return The policy
      */
     Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse();
+
+    /**
+     * How long a correlated message waits for a workflow which does not wait for it yet. It is
+     * read at the adapter, the workflow module, the workflow and the single message, and the
+     * most specific value wins (see
+     * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#messageTimeToLive}).
+     * Written at a task, the core answers with a message which says where it belongs. What a
+     * message without any value gets is up to the adapter.
+     *
+     * @return The time-to-live which this level sets
+     */
+    Optional<Duration> messageTimeToLive();
 
     /**
      * The settings of an extension FOR THIS ADAPTER, keyed by extension id. An extension is
@@ -997,6 +1021,17 @@ public interface QuarkusMigrationAdapterProperties {
     Map<String, TaskProperties> tasks();
 
     /**
+     * The messages which this workflow waits for, keyed by message name. A message is the
+     * most specific level of <code>message-time-to-live</code>. It is a map of its own and
+     * not the task level, so a value meant for a message never applies to a task of the same
+     * name.
+     *
+     * @return The section per message, keyed by message name
+     */
+    @ConfigDocMapKey("message-name")
+    Map<String, MessageProperties> messages();
+
+    /**
      * Whether this workflow may hand its ENTIRE workflow aggregate to the BPMS. This is the
      * only level where this permission may be written. It is not inherited from anywhere.
      *
@@ -1110,6 +1145,38 @@ public interface QuarkusMigrationAdapterProperties {
      */
     @ConfigDocMapKey("extension-id")
     Map<String, Map<String, String>> extensions();
+
+  }
+
+
+  /**
+   * What an application says about one message which a workflow waits for. Only the
+   * time-to-live of each adapter is read here.
+   */
+  interface MessageProperties {
+
+    /**
+     * What each adapter is told about this message.
+     *
+     * @return The section per adapter id
+     */
+    @ConfigDocMapKey("adapter-id")
+    Map<String, MessageAdapterProperties> adapters();
+
+  }
+
+  /**
+   * What one adapter is told about one message.
+   */
+  interface MessageAdapterProperties {
+
+    /**
+     * How long a correlation of this message waits for a workflow which does not wait for it
+     * yet. It wins over what the workflow, the workflow module and the adapter say.
+     *
+     * @return The time-to-live of this message
+     */
+    Optional<Duration> messageTimeToLive();
 
   }
 
