@@ -81,6 +81,14 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   private java.util.List<String> declaredTaskParams;
 
   /**
+   * How long a correlated message waits for a workflow of this module which does not wait
+   * for it yet (<code>message-time-to-live</code>). A workflow and a message win over it, see
+   * {@link MigrationAdapterProperties#messageTimeToLive(String, String, String)}.
+   * <code>null</code> means "not configured at this level".
+   */
+  private java.time.Duration messageTimeToLive;
+
+  /**
    * Whether something other than this application serves every task of this workflow
    * module which does not say otherwise (<code>implemented-externally</code>, see
    * {@link MigrationAdapterProperties#implementedExternally}). <code>null</code> means
@@ -162,6 +170,12 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
      * developer declared (<code>declared-task-params</code>).
      */
     private java.util.List<String> declaredTaskParams;
+
+    /**
+     * How long a correlated message waits for a workflow of this module which does not
+     * wait for it yet.
+     */
+    private java.time.Duration messageTimeToLive;
 
     /**
      * Whether something other than this application serves every task of this workflow
@@ -292,6 +306,21 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
     }
 
     /**
+     * How long a correlated message waits for a workflow of this module which does not
+     * wait for it yet.
+     *
+     * @param messageTimeToLive The value of {@link #messageTimeToLive}
+     * @return This builder, so the calls chain
+     */
+    public B messageTimeToLive(
+        final java.time.Duration messageTimeToLive) {
+
+      this.messageTimeToLive = messageTimeToLive;
+      return self();
+
+    }
+
+    /**
      * Whether something other than this application serves every task of this workflow
      * module which does not say otherwise (<code>implemented-externally</code>, see
      * {@link MigrationAdapterProperties#implementedExternally}). <code>null</code> means
@@ -414,6 +443,9 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
           + "declaredTaskParams="
           + declaredTaskParams
           + ", "
+          + "messageTimeToLive="
+          + messageTimeToLive
+          + ", "
           + "implementedExternally="
           + implementedExternally
           + ", "
@@ -490,6 +522,7 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
     this.allowFullSyncWithBpms = b.allowFullSyncWithBpms;
     this.acceptExpressionsInTheModel = b.acceptExpressionsInTheModel;
     this.declaredTaskParams = b.declaredTaskParams;
+    this.messageTimeToLive = b.messageTimeToLive;
     this.implementedExternally = b.implementedExternally;
     this.transactions = b.transactions;
     this.election = b.election;
@@ -578,6 +611,18 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
   public java.util.List<String> getDeclaredTaskParams() {
 
     return declaredTaskParams;
+
+  }
+
+  /**
+   * How long a correlated message waits for a workflow of this module which does not
+   * wait for it yet.
+   *
+   * @return The value of {@link #messageTimeToLive}
+   */
+  public java.time.Duration getMessageTimeToLive() {
+
+    return messageTimeToLive;
 
   }
 
@@ -715,6 +760,19 @@ public class WorkflowModuleAdapterProperties extends AdaptersConfigurationProper
       final java.util.List<String> declaredTaskParams) {
 
     this.declaredTaskParams = declaredTaskParams;
+
+  }
+
+  /**
+   * How long a correlated message waits for a workflow of this module which does not
+   * wait for it yet.
+   *
+   * @param messageTimeToLive The value of {@link #messageTimeToLive}
+   */
+  public void setMessageTimeToLive(
+      final java.time.Duration messageTimeToLive) {
+
+    this.messageTimeToLive = messageTimeToLive;
 
   }
 

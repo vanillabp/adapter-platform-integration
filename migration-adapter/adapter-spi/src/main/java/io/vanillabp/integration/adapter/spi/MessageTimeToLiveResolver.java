@@ -7,21 +7,21 @@ import java.util.Objects;
 import java.util.function.Supplier;
 
 /**
- * Reads the <code>message-time-to-live</code> of one adapter. The platform hands each adapter
- * one of these, and it answers from the four levels of the configuration (message &gt;
- * workflow &gt; workflow-module &gt; adapter):
+ * Reads the <code>message-time-to-live</code>. The platform hands each adapter one of these,
+ * and it answers from the three levels of the configuration (message &gt; workflow &gt;
+ * workflow-module):
  *
  * <pre>
- * vanillabp.adapters.&lt;id&gt;.message-time-to-live
- * vanillabp.workflow-modules.&lt;m&gt;.adapters.&lt;id&gt;.message-time-to-live
- * vanillabp.workflow-modules.&lt;m&gt;.workflows.&lt;w&gt;.adapters.&lt;id&gt;.message-time-to-live
- * vanillabp.workflow-modules.&lt;m&gt;.workflows.&lt;w&gt;.messages.&lt;messageName&gt;.adapters.&lt;id&gt;.message-time-to-live
+ * vanillabp.workflow-modules.&lt;m&gt;.message-time-to-live
+ * vanillabp.workflow-modules.&lt;m&gt;.workflows.&lt;w&gt;.message-time-to-live
+ * vanillabp.workflow-modules.&lt;m&gt;.workflows.&lt;w&gt;.messages.&lt;messageName&gt;.message-time-to-live
  * </pre>
  *
- * The keys, their order and the choice of the process are the same for every BPMS, so they
- * are decided here once. What the number means is not. A Camunda 8 cluster keeps a published
- * message for its time-to-live, and an embedded engine asks the outbox to try again for that
- * long. So the adapter decides what a missing value means and which values it refuses.
+ * The keys carry no adapter ID, because how long a message waits means the same on every
+ * BPMS. The keys, their order and the choice of the process are decided here once. How an
+ * adapter makes a message wait is not. A Camunda 8 cluster keeps a published message for its
+ * time-to-live, and an embedded engine asks the outbox to try again for that long. So the
+ * adapter decides what a missing value means and which values it refuses.
  */
 @FunctionalInterface
 public interface MessageTimeToLiveResolver {
@@ -53,8 +53,7 @@ public interface MessageTimeToLiveResolver {
    * {@link #processWaitingForTheMessage}.
    * <p>
    * The models are read only where the processes of the module would answer differently.
-   * Most applications configure the time-to-live per adapter or per workflow module, or not at
-   * all. Then every process gives the same answer, and reading a model would not change it.
+   * Most applications configure the time-to-live per workflow module, or not at all. Then every process gives the same answer, and reading a model would not change it.
    *
    * @param workflowModuleId The workflow module of the correlation
    * @param bpmnProcessId The plain BPMN process ID which the correlation names

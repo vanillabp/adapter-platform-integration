@@ -210,6 +210,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
     }
 
+    /**
+     * None of these fixtures configures a message time-to-live.
+     * {@code QuarkusMessageTimeToLiveMappingTest} holds the one which does.
+     */
+    @Override
+    public Optional<Duration> messageTimeToLive() {
+
+      return Optional.empty();
+
+    }
+
   }
 
   private record WorkflowProperties(
@@ -311,6 +322,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
     }
 
+    /**
+     * None of these fixtures configures a message time-to-live.
+     * {@code QuarkusMessageTimeToLiveMappingTest} holds the one which does.
+     */
+    @Override
+    public Optional<Duration> messageTimeToLive() {
+
+      return Optional.empty();
+
+    }
+
   }
 
   private record WorkflowModuleProperties(
@@ -407,6 +429,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
      */
     @Override
     public Optional<List<String>> declaredTaskParams() {
+
+      return Optional.empty();
+
+    }
+
+    /**
+     * None of these fixtures configures a message time-to-live.
+     * {@code QuarkusMessageTimeToLiveMappingTest} holds the one which does.
+     */
+    @Override
+    public Optional<Duration> messageTimeToLive() {
 
       return Optional.empty();
 
@@ -648,6 +681,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
      */
     @Override
     public Optional<List<String>> declaredTaskParams() {
+
+      return Optional.empty();
+
+    }
+
+    /**
+     * None of these fixtures configures a message time-to-live.
+     * {@code QuarkusMessageTimeToLiveMappingTest} holds the one which does.
+     */
+    @Override
+    public Optional<Duration> messageTimeToLive() {
 
       return Optional.empty();
 

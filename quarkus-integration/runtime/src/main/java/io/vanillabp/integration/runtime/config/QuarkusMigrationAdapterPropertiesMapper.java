@@ -92,6 +92,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.allowFullSyncWithBpms(unwrap(properties.allowFullSyncWithBpms()));
     core.acceptExpressionsInTheModel(unwrap(properties.acceptExpressionsInTheModel()));
     core.declaredTaskParams(unwrapListOrNull(properties.declaredTaskParams()));
+    core.messageTimeToLive(unwrap(properties.messageTimeToLive()));
     core.implementedExternally(unwrap(properties.implementedExternally()));
     core.adapters(copyValues(properties.adapters(), this::toCore));
     core.resourcesLocation(unwrap(properties.resourcesLocation()));
@@ -463,6 +464,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.allowFullSyncWithBpms(unwrap(workflowModuleProperties.allowFullSyncWithBpms()));
     core.acceptExpressionsInTheModel(unwrap(workflowModuleProperties.acceptExpressionsInTheModel()));
     core.declaredTaskParams(unwrapListOrNull(workflowModuleProperties.declaredTaskParams()));
+    core.messageTimeToLive(unwrap(workflowModuleProperties.messageTimeToLive()));
     core.implementedExternally(unwrap(workflowModuleProperties.implementedExternally()));
     core.adapters(copyValues(workflowModuleProperties.adapters(), this::toCore));
     core.workflows(copyValues(workflowModuleProperties.workflows(), this::toCore));
@@ -502,6 +504,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.acceptExpressionsInTheModel(unwrap(workflowProperties.acceptExpressionsInTheModel()));
     core.declaredAggregateValues(unwrapListOrEmpty(workflowProperties.declaredAggregateValues()));
     core.declaredTaskParams(unwrapListOrNull(workflowProperties.declaredTaskParams()));
+    core.messageTimeToLive(unwrap(workflowProperties.messageTimeToLive()));
     core.implementedExternally(unwrap(workflowProperties.implementedExternally()));
     core.adapters(copyValues(workflowProperties.adapters(), this::toCore));
     core.tasks(copyValues(workflowProperties.tasks(), this::toCore));
@@ -535,6 +538,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     final var core = TaskAdapterProperties.builder();
 
     core.declaredTaskParams(unwrapListOrNull(taskProperties.declaredTaskParams()));
+    core.messageTimeToLive(unwrap(taskProperties.messageTimeToLive()));
     core.implementedExternally(unwrap(taskProperties.implementedExternally()));
     core.adapters(copyValues(taskProperties.adapters(), this::toCore));
     final var extensions = taskProperties.extensions();
@@ -563,6 +567,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     }
 
     final var core = new MessageAdapterProperties();
+    core.setMessageTimeToLive(unwrap(messageProperties.messageTimeToLive()));
     final var adapters = copyValues(messageProperties.adapters(), this::toCore);
     if (adapters != null) {
       core.setAdapters(adapters);

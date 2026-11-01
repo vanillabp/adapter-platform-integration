@@ -159,6 +159,11 @@
       "description": "Bound so that a line here is answered instead of ignored: the permission to hand a whole workflow aggregate to the BPMS belongs to the single workflow, at 'vanillabp.workflow-modules.<module>.workflows.<bpmn-process-id>.allow-full-sync-with-bpms'. Written here it ends the startup with a message naming that key. A permission taken from above would cover the workflow somebody adds next week."
     },
     {
+      "name": "vanillabp.message-time-to-live",
+      "type": "java.time.Duration",
+      "description": "Bound so that a line here is answered instead of ignored: how long a correlated message waits for a workflow is written at a workflow module at the highest, at 'vanillabp.workflow-modules.<module>.message-time-to-live', '...workflows.<bpmn-process-id>.message-time-to-live' or '...workflows.<bpmn-process-id>.messages.<message-name>.message-time-to-live'. Written here, in an adapter section or at a task it ends the startup with a message naming those keys."
+    },
+    {
       "name": "vanillabp.accept-expressions-in-the-model",
       "type": "java.lang.Boolean",
       "description": "Says that the expressions of the BPMN models are meant as they are, which stops the startup from naming the ones reading more than a variable. An expression walking a path or calling something binds the models to the shape of the application's data and to the expression language of one BPMS, so VanillaBP names it once and recommends a getter on the workflow aggregate instead. The least specific of the three levels this may be written at, and the one for a team which decided it for everything they model. Overridable per workflow module and per workflow ('vanillabp.workflow-modules.<module>.workflows.<bpmn-process-id>.accept-expressions-in-the-model')."

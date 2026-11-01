@@ -57,6 +57,14 @@ public class TaskAdapterProperties {
   private java.util.List<String> declaredTaskParams;
 
   /**
+   * Refused here on purpose. A message is correlated to a workflow and not to a task (see
+   * {@link MigrationAdapterProperties#messageTimeToLive(String, String, String)}). It is bound
+   * at this level, so that a line written here gets a message which says where it belongs,
+   * instead of being ignored.
+   */
+  private java.time.Duration messageTimeToLive;
+
+  /**
    * Whether something other than this application serves this task
    * (<code>implemented-externally</code>). Then it needs no <code>&#64;WorkflowTask</code>
    * method. The task is named by its element id or by its task definition. The element id
@@ -101,6 +109,11 @@ public class TaskAdapterProperties {
      * the value.
      */
     private java.util.List<String> declaredTaskParams;
+
+    /**
+     * Refused here on purpose. A message is correlated to a workflow and not to a task.
+     */
+    private java.time.Duration messageTimeToLive;
 
     /**
      * Whether something other than this application serves this task
@@ -166,6 +179,20 @@ public class TaskAdapterProperties {
         final java.util.List<String> declaredTaskParams) {
 
       this.declaredTaskParams = declaredTaskParams;
+      return self();
+
+    }
+
+    /**
+     * Refused here on purpose. A message is correlated to a workflow and not to a task.
+     *
+     * @param messageTimeToLive The value of {@link #messageTimeToLive}
+     * @return This builder, so the calls chain
+     */
+    public B messageTimeToLive(
+        final java.time.Duration messageTimeToLive) {
+
+      this.messageTimeToLive = messageTimeToLive;
       return self();
 
     }
@@ -237,6 +264,9 @@ public class TaskAdapterProperties {
           + "declaredTaskParams="
           + declaredTaskParams
           + ", "
+          + "messageTimeToLive="
+          + messageTimeToLive
+          + ", "
           + "implementedExternally="
           + implementedExternally
           + ", "
@@ -299,6 +329,7 @@ public class TaskAdapterProperties {
     this.adapters = b.adapters;
     this.extensions = b.extensions;
     this.declaredTaskParams = b.declaredTaskParams;
+    this.messageTimeToLive = b.messageTimeToLive;
     this.implementedExternally = b.implementedExternally;
     this.delivery = b.delivery;
 
@@ -348,6 +379,17 @@ public class TaskAdapterProperties {
   public java.util.List<String> getDeclaredTaskParams() {
 
     return declaredTaskParams;
+
+  }
+
+  /**
+   * Refused here on purpose. A message is correlated to a workflow and not to a task.
+   *
+   * @return The value of {@link #messageTimeToLive}
+   */
+  public java.time.Duration getMessageTimeToLive() {
+
+    return messageTimeToLive;
 
   }
 
@@ -414,6 +456,18 @@ public class TaskAdapterProperties {
       final java.util.List<String> declaredTaskParams) {
 
     this.declaredTaskParams = declaredTaskParams;
+
+  }
+
+  /**
+   * Refused here on purpose. A message is correlated to a workflow and not to a task.
+   *
+   * @param messageTimeToLive The value of {@link #messageTimeToLive}
+   */
+  public void setMessageTimeToLive(
+      final java.time.Duration messageTimeToLive) {
+
+    this.messageTimeToLive = messageTimeToLive;
 
   }
 

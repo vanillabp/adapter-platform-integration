@@ -3457,19 +3457,22 @@ flowchart TB
 
 `message-time-to-live` says how long a correlated message waits for a workflow which does not wait
 for it yet. A Camunda 8 cluster keeps the published message for that long. The Camunda 7 family
-keeps the correlation in the outbox and asks again. The key and its levels are the same on both,
-so the core resolves them once and every adapter reads the answer
-(`MigrationAdapterProperties#messageTimeToLive`):
+keeps the correlation in the outbox and asks again. The meaning is the same on both, only the way
+an adapter makes the message wait differs. So the key carries no adapter ID, the core resolves it
+once, and every adapter reads the answer (`MigrationAdapterProperties#messageTimeToLive`):
 
 ```
-vanillabp.adapters.<id>.message-time-to-live                                                     (least specific)
-vanillabp.workflow-modules.<m>.adapters.<id>.message-time-to-live
-vanillabp.workflow-modules.<m>.workflows.<w>.adapters.<id>.message-time-to-live
-vanillabp.workflow-modules.<m>.workflows.<w>.messages.<message-name>.adapters.<id>.message-time-to-live  (most specific)
+vanillabp.workflow-modules.<m>.message-time-to-live                                       (least specific)
+vanillabp.workflow-modules.<m>.workflows.<w>.message-time-to-live
+vanillabp.workflow-modules.<m>.workflows.<w>.messages.<message-name>.message-time-to-live  (most specific)
 ```
 
-The message takes the place of the task. A message is correlated to a workflow, so a line at a
-task would do nothing, and it ends the startup like every other misplaced setting (decision 89).
+There is no value for the whole application. How long a message may wait depends on the business
+of the workflows which wait for it, and the workflow module is the widest scope which shares that
+business. The message takes the place of the task. A message is correlated to a workflow, so a
+line at a task would do nothing. The key is bound at the application, in every adapter section and
+at every task all the same. A line there ends the startup like every other misplaced setting, with
+a message naming the three keys (decision 89).
 
 The process a value is read for is decided here as well. A correlation names the process at the
 top, but the event which waits may sit in a called process. The adapter reads its deployed models
@@ -3480,9 +3483,9 @@ module would give different answers.
 
 What a value means stays with the adapter, because the BPMS differ. Zero switches the waiting off
 on an embedded engine, and drops every message on a Camunda 8 cluster. So each adapter decides what
-a missing value means and which values it refuses. `messageTimesToLiveWrittenFor` lists every
-value with its key for that check. `MessageTimeToLiveResolutionTest` holds the levels, the refusal
-at a task and the choice of the process. See `DECISIONS.pending/2062.md`.
+a missing value means and which values it refuses. `messageTimesToLiveWritten` lists every value
+with its key for that check. `MessageTimeToLiveResolutionTest` holds the levels, every refusal and
+the choice of the process. See `DECISIONS.pending/2062.md`.
 
 ### The transaction the work runs in
 
