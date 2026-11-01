@@ -3483,8 +3483,9 @@ module would give different answers.
 
 What a value means stays with the adapter, because the BPMS differ. Zero switches the waiting off
 on an embedded engine, and drops every message on a Camunda 8 cluster. So each adapter decides what
-a missing value means and which values it refuses. `messageTimesToLiveWritten` lists every value
-with its key for that check. `MessageTimeToLiveResolutionTest` holds the levels, every refusal and
+a missing value means and which values it refuses. `messageTimesToLiveWrittenFor` lists every
+value with its key for that check, for the workflow modules the adapter serves. A module which
+migrates from one BPMS to another is checked by both adapters. `MessageTimeToLiveResolutionTest` holds the levels, every refusal and
 the choice of the process. See `DECISIONS.pending/2062.md`.
 
 ### The transaction the work runs in

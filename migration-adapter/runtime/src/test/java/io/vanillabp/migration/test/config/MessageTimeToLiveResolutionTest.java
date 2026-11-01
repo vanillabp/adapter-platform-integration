@@ -165,8 +165,55 @@ public class MessageTimeToLiveResolutionTest {
         Duration.ofMinutes(5));
 
     // the maps behind the levels keep no order, so the order is not part of the answer
-    assertEquals(expected, Map.copyOf(allLevels().messageTimesToLiveWritten()));
-    assertEquals(Map.of(), new MigrationAdapterProperties().messageTimesToLiveWritten());
+    assertEquals(expected, Map.copyOf(allLevels().messageTimesToLiveWrittenFor(ADAPTER_ID)));
+    assertEquals(Map.of(), new MigrationAdapterProperties().messageTimesToLiveWrittenFor(ADAPTER_ID));
+
+  }
+
+  @Test
+  @DisplayName("An adapter is shown only the values of the workflow modules it serves, and a migrating module is shown to both")
+  public void anAdapterSeesOnlyTheModulesItServes() {
+
+    final var properties = allLevels();
+    properties.setAdapters(Map.of(
+        ADAPTER_ID, AdapterConfigProperties.ofType("camunda7"),
+        "c8", AdapterConfigProperties.ofType("camunda8")));
+    final var modules = new LinkedHashMap<>(properties.getWorkflowModules());
+    // served by c8 alone, through the module's own list
+    modules.put("payments", WorkflowModuleAdapterProperties
+        .builder()
+        .workflowModuleId("payments")
+        .prioritizedAdapters(List.of("c8"))
+        .messageTimeToLive(Duration.ofMinutes(6))
+        .build());
+    // migrating: the module is on c7, one of its workflows on c8 already
+    modules.put("claims", WorkflowModuleAdapterProperties
+        .builder()
+        .workflowModuleId("claims")
+        .messageTimeToLive(Duration.ofMinutes(7))
+        .workflows(Map.of("Claim", WorkflowAdapterProperties
+            .builder()
+            .prioritizedAdapters(List.of("c8", ADAPTER_ID))
+            .build()))
+        .build());
+    properties.setWorkflowModules(modules);
+
+    final var ofC7 = properties.messageTimesToLiveWrittenFor(ADAPTER_ID);
+    final var ofC8 = properties.messageTimesToLiveWrittenFor("c8");
+
+    assertEquals(
+        java.util.Set.of(
+            "vanillabp.workflow-modules.loans.message-time-to-live",
+            "vanillabp.workflow-modules.loans.workflows.LoanApproval.message-time-to-live",
+            "vanillabp.workflow-modules.loans.workflows.LoanApproval.messages.ContractSigned.message-time-to-live",
+            "vanillabp.workflow-modules.loans.workflows.Signing.messages.ContractSigned.message-time-to-live",
+            "vanillabp.workflow-modules.claims.message-time-to-live"),
+        ofC7.keySet());
+    assertEquals(
+        java.util.Set.of(
+            "vanillabp.workflow-modules.payments.message-time-to-live",
+            "vanillabp.workflow-modules.claims.message-time-to-live"),
+        ofC8.keySet());
 
   }
 
