@@ -133,12 +133,11 @@ public class AdapterProperties {
   private OutfadedVersionsInUsePolicy outfadedVersionsInUse;
 
   /**
-   * How long a correlated message waits for a workflow which does not wait for it yet
-   * (<code>message-time-to-live</code>). It is read at the adapter, the workflow module, the
-   * workflow and the single message, and not at a task (see
-   * {@link MigrationAdapterProperties#messageTimeToLive}). <code>null</code> means "not
-   * configured at this level". What a message without any value gets is up to the adapter,
-   * because the BPMS decide that differently.
+   * Refused here on purpose. How long a correlated message waits for a workflow means the
+   * same on every BPMS, so <code>message-time-to-live</code> is written without an adapter
+   * ID (see {@link MigrationAdapterProperties#messageTimeToLive(String, String, String)}). It
+   * is bound in every adapter section, so that a line written there gets a message which says
+   * where it belongs, instead of being ignored.
    */
   private java.time.Duration messageTimeToLive;
 
@@ -221,7 +220,7 @@ public class AdapterProperties {
     private OutfadedVersionsInUsePolicy outfadedVersionsInUse;
 
     /**
-     * How long a correlated message waits for a workflow which does not wait for it yet.
+     * Refused here on purpose: the message time-to-live carries no adapter ID.
      */
     private java.time.Duration messageTimeToLive;
 
@@ -367,7 +366,7 @@ public class AdapterProperties {
     }
 
     /**
-     * How long a correlated message waits for a workflow which does not wait for it yet.
+     * Refused here on purpose: the message time-to-live carries no adapter ID.
      *
      * @param messageTimeToLive The time-to-live, <code>null</code> where this level says
      *          nothing
@@ -631,7 +630,7 @@ public class AdapterProperties {
   }
 
   /**
-   * How long a correlated message waits for a workflow which does not wait for it yet.
+   * Refused here on purpose: the message time-to-live carries no adapter ID.
    *
    * @return The value of {@link #messageTimeToLive}
    */
@@ -764,7 +763,7 @@ public class AdapterProperties {
   }
 
   /**
-   * How long a correlated message waits for a workflow which does not wait for it yet.
+   * Refused here on purpose: the message time-to-live carries no adapter ID.
    *
    * @param messageTimeToLive The value of {@link #messageTimeToLive}
    */

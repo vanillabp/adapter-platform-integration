@@ -85,6 +85,17 @@ public interface QuarkusMigrationAdapterProperties {
   Optional<List<String>> declaredTaskParams();
 
   /**
+   * Refused here on purpose. The message time-to-live is written at a workflow module at the
+   * highest (see
+   * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#messageTimeToLive(String, String, String)}).
+   * The key is mapped, so that the core answers a line written here with a message which says
+   * where it belongs.
+   *
+   * @return The time-to-live written for the whole application
+   */
+  Optional<Duration> messageTimeToLive();
+
+  /**
    * Whether something other than this application serves the tasks which this level covers
    * (<code>implemented-externally</code>). Then they need no <code>&#64;WorkflowTask</code>
    * method. It is resolved over eight positions, and the most specific one wins (see
@@ -295,14 +306,11 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse();
 
     /**
-     * How long a correlated message waits for a workflow which does not wait for it yet. It is
-     * read at the adapter, the workflow module, the workflow and the single message, and the
-     * most specific value wins (see
-     * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#messageTimeToLive}).
-     * Written at a task, the core answers with a message which says where it belongs. What a
-     * message without any value gets is up to the adapter.
+     * Refused here on purpose. The message time-to-live carries no adapter ID, because how
+     * long a message waits means the same on every BPMS. The key is mapped, so that the core
+     * answers a line written here with a message which names the levels at which it is read.
      *
-     * @return The time-to-live which this level sets
+     * @return The time-to-live written in this adapter section
      */
     Optional<Duration> messageTimeToLive();
 
@@ -409,14 +417,11 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse();
 
     /**
-     * How long a correlated message waits for a workflow which does not wait for it yet. It is
-     * read at the adapter, the workflow module, the workflow and the single message, and the
-     * most specific value wins (see
-     * {@link io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties#messageTimeToLive}).
-     * Written at a task, the core answers with a message which says where it belongs. What a
-     * message without any value gets is up to the adapter.
+     * Refused here on purpose. The message time-to-live carries no adapter ID, because how
+     * long a message waits means the same on every BPMS. The key is mapped, so that the core
+     * answers a line written here with a message which names the levels at which it is read.
      *
-     * @return The time-to-live which this level sets
+     * @return The time-to-live written in this adapter section
      */
     Optional<Duration> messageTimeToLive();
 
@@ -830,6 +835,14 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<List<String>> declaredTaskParams();
 
     /**
+     * How long a correlated message waits for a workflow of this module which does not wait
+     * for it yet. A workflow and a single message win over it.
+     *
+     * @return The time-to-live of this workflow module
+     */
+    Optional<Duration> messageTimeToLive();
+
+    /**
      * Whether something other than this application serves the tasks which this level covers
      * (<code>implemented-externally</code>). Then they need no <code>&#64;WorkflowTask</code>
      * method. It is resolved over eight positions, and the most specific one wins (see
@@ -1065,6 +1078,14 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<List<String>> declaredTaskParams();
 
     /**
+     * How long a correlated message waits for this workflow while it does not wait for it
+     * yet. A single message wins over it.
+     *
+     * @return The time-to-live of this workflow
+     */
+    Optional<Duration> messageTimeToLive();
+
+    /**
      * Whether something other than this application serves the tasks which this level covers
      * (<code>implemented-externally</code>). Then they need no <code>&#64;WorkflowTask</code>
      * method. It is resolved over eight positions, and the most specific one wins (see
@@ -1126,6 +1147,15 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<List<String>> declaredTaskParams();
 
     /**
+     * Refused here on purpose. A message is correlated to a workflow and not to a task. The
+     * key is mapped, so that the core answers a line written here with a message which says
+     * where it belongs.
+     *
+     * @return The time-to-live written at this task
+     */
+    Optional<Duration> messageTimeToLive();
+
+    /**
      * Whether something other than this application serves the tasks which this level covers
      * (<code>implemented-externally</code>). Then they need no <code>&#64;WorkflowTask</code>
      * method. It is resolved over eight positions, and the most specific one wins (see
@@ -1151,12 +1181,22 @@ public interface QuarkusMigrationAdapterProperties {
 
   /**
    * What an application says about one message which a workflow waits for. Only the
-   * time-to-live of each adapter is read here.
+   * time-to-live is read here.
    */
   interface MessageProperties {
 
     /**
-     * What each adapter is told about this message.
+     * How long a correlation of this message waits for a workflow which does not wait for it
+     * yet. It wins over what the workflow and the workflow module say.
+     *
+     * @return The time-to-live of this message
+     */
+    Optional<Duration> messageTimeToLive();
+
+    /**
+     * Refused here on purpose. The time-to-live of a message carries no adapter ID. This
+     * section is mapped, so that the core answers a line written here with a message which
+     * says where it belongs.
      *
      * @return The section per adapter id
      */
@@ -1166,15 +1206,14 @@ public interface QuarkusMigrationAdapterProperties {
   }
 
   /**
-   * What one adapter is told about one message.
+   * What an application wrote for one adapter about one message. Nothing here is read.
    */
   interface MessageAdapterProperties {
 
     /**
-     * How long a correlation of this message waits for a workflow which does not wait for it
-     * yet. It wins over what the workflow, the workflow module and the adapter say.
+     * Refused here on purpose, see {@link MessageProperties#adapters()}.
      *
-     * @return The time-to-live of this message
+     * @return The time-to-live written here
      */
     Optional<Duration> messageTimeToLive();
 

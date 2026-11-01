@@ -3,6 +3,7 @@ package io.vanillabp.integration.test.config;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
@@ -442,29 +443,62 @@ public class VanillaBpConfigurationBindingTest {
   }
 
   @Test
-  @DisplayName("The message time-to-live binds at all four levels, the message most specific")
+  @DisplayName("The message time-to-live binds at its three levels without an adapter id, the message most specific")
   public void messageTimeToLiveBindsAtEveryLevel() {
 
     contextRunner
         .withPropertyValues(
             "vanillabp.resources-location=classpath*:vanillabp-processes",
             "vanillabp.adapters.test.type=dummy",
-            "vanillabp.adapters.test.message-time-to-live=1m",
             "vanillabp.workflow-modules.test-module.prioritized-adapters=test",
-            "vanillabp.workflow-modules.test-module.adapters.test.message-time-to-live=2m",
-            "vanillabp.workflow-modules.test-module.workflows.TestProcess.adapters.test.message-time-to-live=3m",
-            "vanillabp.workflow-modules.test-module.workflows.TestProcess.messages.ContractSigned.adapters.test.message-time-to-live=4m")
+            "vanillabp.workflow-modules.test-module.message-time-to-live=2m",
+            "vanillabp.workflow-modules.test-module.workflows.TestProcess.message-time-to-live=3m",
+            "vanillabp.workflow-modules.test-module.workflows.TestProcess.messages.ContractSigned.message-time-to-live=4m")
         .run(context -> {
 
           final var properties = context.getBean(MigrationAdapterProperties.class);
-          assertEquals(Duration.ofMinutes(1), properties.messageTimeToLive("other-module", "P", "M", "test"));
-          assertEquals(Duration.ofMinutes(2), properties.messageTimeToLive("test-module", "OtherProcess", "M", "test"));
-          assertEquals(Duration.ofMinutes(3), properties.messageTimeToLive("test-module", "TestProcess", "M", "test"));
+          assertNull(properties.messageTimeToLive("other-module", "P", "M"));
+          assertEquals(Duration.ofMinutes(2), properties.messageTimeToLive("test-module", "OtherProcess", "M"));
+          assertEquals(Duration.ofMinutes(3), properties.messageTimeToLive("test-module", "TestProcess", "M"));
           assertEquals(
               Duration.ofMinutes(4),
-              properties.messageTimeToLive("test-module", "TestProcess", "ContractSigned", "test"));
+              properties.messageTimeToLive("test-module", "TestProcess", "ContractSigned"));
 
         });
+
+  }
+
+  @Test
+  @DisplayName("A message time-to-live at a misplaced key binds and ends the startup, naming the key")
+  public void aMisplacedMessageTimeToLiveIsBoundAndRefused() {
+
+    for (final var key : List.of(
+        "vanillabp.message-time-to-live",
+        "vanillabp.adapters.test.message-time-to-live",
+        "vanillabp.workflow-modules.test-module.adapters.test.message-time-to-live",
+        "vanillabp.workflow-modules.test-module.workflows.TestProcess.adapters.test.message-time-to-live",
+        "vanillabp.workflow-modules.test-module.workflows.TestProcess.tasks.sign.message-time-to-live",
+        "vanillabp.workflow-modules.test-module.workflows.TestProcess.tasks.sign.adapters.test.message-time-to-live",
+        "vanillabp.workflow-modules.test-module.workflows.TestProcess.messages.ContractSigned.adapters.test.message-time-to-live")) {
+      contextRunner
+          .withPropertyValues(
+              "vanillabp.resources-location=classpath*:vanillabp-processes",
+              "vanillabp.adapters.test.type=dummy",
+              "vanillabp.workflow-modules.test-module.prioritized-adapters=test",
+              key
+                  + "=1m")
+          .run(context -> {
+
+            assertNotNull(context.getStartupFailure(), key);
+            final var message = rootMessage(context.getStartupFailure());
+            assertTrue(message.contains("\n  "
+                + key
+                + "\n"), message);
+            assertTrue(message.contains("vanillabp.workflow-modules.<workflow-module>.message-time-to-live: 10m"),
+                message);
+
+          });
+    }
 
   }
 
