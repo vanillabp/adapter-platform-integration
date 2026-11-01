@@ -977,15 +977,24 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
-   * Every <code>message-time-to-live</code> written, under the full key it was written at. An
-   * adapter checks the values against what its BPMS can do. The rules differ: zero switches
-   * the waiting off on an embedded engine, but drops every message on a Camunda 8 cluster. So
-   * the check and its message stay with the adapter, and the core only says what was written.
+   * Every <code>message-time-to-live</code> written for the workflow modules one adapter
+   * serves, under the full key it was written at. An adapter checks the values against what
+   * its BPMS can do. The rules differ: zero switches the waiting off on an embedded engine, but
+   * drops every message on a Camunda 8 cluster. So the check and its message stay with the
+   * adapter, and the core only says what was written.
+   * <p>
+   * The key names no adapter, so a value would otherwise reach every adapter of the
+   * application. An adapter serves a module where the prioritized adapters of the module, or
+   * of one of its workflows, name it (see {@link #getPrioritizedAdaptersFor(String, String)}).
+   * A module which migrates from one BPMS to another is served by both, and both check its
+   * values.
    *
-   * @return The values keyed by property key: each workflow module with its workflows and
-   *         their messages. Empty where nothing is written
+   * @param adapterId The adapter which checks the values
+   * @return The values keyed by property key: each served workflow module with its workflows
+   *         and their messages. Empty where nothing is written
    */
-  public Map<String, Duration> messageTimesToLiveWritten() {
+  public Map<String, Duration> messageTimesToLiveWrittenFor(
+      final String adapterId) {
 
     final var written = new LinkedHashMap<String, Duration>();
     final java.util.function.BiConsumer<String, Duration> ofALevel = (
@@ -998,6 +1007,9 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
     workflowModules.forEach((
         moduleId,
         module) -> {
+      if (!servesWorkflowModule(adapterId, moduleId, module)) {
+        return;
+      }
       ofALevel.accept(
           "%s.workflow-modules.%s.message-time-to-live".formatted(PREFIX, moduleId),
           module.getMessageTimeToLive());
@@ -1020,6 +1032,28 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
           });
     });
     return written;
+
+  }
+
+  /**
+   * Whether an adapter serves a workflow module: the prioritized adapters of the module, or of
+   * one of its configured workflows, name it.
+   *
+   * @param adapterId The adapter ID
+   * @param moduleId The workflow module ID
+   * @param module The section of the workflow module
+   * @return Whether the adapter runs workflows of the module
+   */
+  private boolean servesWorkflowModule(
+      final String adapterId,
+      final String moduleId,
+      final WorkflowModuleAdapterProperties module) {
+
+    return getPrioritizedAdaptersFor(moduleId).contains(adapterId) || module
+        .getWorkflows()
+        .keySet()
+        .stream()
+        .anyMatch(processId -> getPrioritizedAdaptersFor(moduleId, processId).contains(adapterId));
 
   }
 
