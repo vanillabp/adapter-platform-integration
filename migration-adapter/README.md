@@ -3453,6 +3453,37 @@ flowchart TB
   class BSPI note;
 ```
 
+### A message time-to-live means the same on every BPMS (`MessageTimeToLiveResolver`)
+
+`message-time-to-live` says how long a correlated message waits for a workflow which does not wait
+for it yet. A Camunda 8 cluster keeps the published message for that long. The Camunda 7 family
+keeps the correlation in the outbox and asks again. The key and its levels are the same on both,
+so the core resolves them once and every adapter reads the answer
+(`MigrationAdapterProperties#messageTimeToLive`):
+
+```
+vanillabp.adapters.<id>.message-time-to-live                                                     (least specific)
+vanillabp.workflow-modules.<m>.adapters.<id>.message-time-to-live
+vanillabp.workflow-modules.<m>.workflows.<w>.adapters.<id>.message-time-to-live
+vanillabp.workflow-modules.<m>.workflows.<w>.messages.<message-name>.adapters.<id>.message-time-to-live  (most specific)
+```
+
+The message takes the place of the task. A message is correlated to a workflow, so a line at a
+task would do nothing, and it ends the startup like every other misplaced setting (decision 89).
+
+The process a value is read for is decided here as well. A correlation names the process at the
+top, but the event which waits may sit in a called process. The adapter reads its deployed models
+and says which processes wait for the message. `MessageTimeToLiveResolver#resolveFor` then takes
+the process of the call if its model waits, otherwise the one other process which does, and
+otherwise the process of the call again. The models are read only where the processes of the
+module would give different answers.
+
+What a value means stays with the adapter, because the BPMS differ. Zero switches the waiting off
+on an embedded engine, and drops every message on a Camunda 8 cluster. So each adapter decides what
+a missing value means and which values it refuses. `messageTimesToLiveWrittenFor` lists every
+value with its key for that check. `MessageTimeToLiveResolutionTest` holds the levels, the refusal
+at a task and the choice of the process. See `DECISIONS.pending/2062.md`.
+
 ### The transaction the work runs in
 
 VanillaBP wraps everything it does around one workflow aggregate in ONE transaction. Six steps

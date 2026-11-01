@@ -44,6 +44,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                       Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.AdapterConfiguration {
 
     /**
+     * None of these fixtures configures a message time-to-live.
+     * {@code QuarkusMessageTimeToLiveMappingTest} holds the one which does.
+     */
+    @Override
+    public Optional<Duration> messageTimeToLive() {
+
+      return Optional.empty();
+
+    }
+
+    /**
      * None of these fixtures says that something else serves a task.
      *
      * @return Nothing
@@ -96,6 +107,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                    Optional<List<String>> outfadedVersions,
                                    Optional<OutfadedVersionsInUsePolicy> outfadedVersionsInUse,
                                    Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.AdapterProperties {
+
+    /**
+     * None of these fixtures configures a message time-to-live.
+     * {@code QuarkusMessageTimeToLiveMappingTest} holds the one which does.
+     */
+    @Override
+    public Optional<Duration> messageTimeToLive() {
+
+      return Optional.empty();
+
+    }
 
     /**
      * None of these fixtures says that something else serves a task.
@@ -196,6 +218,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
                                     Map<String, QuarkusMigrationAdapterProperties.TaskProperties> tasks,
                                     QuarkusMigrationAdapterProperties.DeliveryProperties delivery,
                                     Map<String, Map<String, String>> extensions) implements QuarkusMigrationAdapterProperties.WorkflowProperties {
+
+    /**
+     * None of these fixtures configures a message either.
+     * {@code QuarkusMessageTimeToLiveMappingTest} holds the one which does.
+     */
+    @Override
+    public Map<String, QuarkusMigrationAdapterProperties.MessageProperties> messages() {
+
+      return Map.of();
+
+    }
 
     /**
      * None of these fixtures says that something else serves a task.

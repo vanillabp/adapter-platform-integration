@@ -44,6 +44,7 @@ public class EveryMapKeyHasANameTest {
       "workflow-module-id",
       "bpmn-process-id",
       "task-definition",
+      "message-name",
       "extension-id");
 
   private static final Pattern PROPERTY = Pattern.compile("\"property\"\\s*:\\s*\"((?:[^\"\\\\]|\\\\.)*)\"");
@@ -94,6 +95,7 @@ public class EveryMapKeyHasANameTest {
         "vanillabp.workflow-modules.\"workflow-module-id\".adapters.\"adapter-id\".",
         "vanillabp.workflow-modules.\"workflow-module-id\".workflows.\"bpmn-process-id\".adapters.\"adapter-id\".",
         "vanillabp.workflow-modules.\"workflow-module-id\".workflows.\"bpmn-process-id\".tasks.\"task-definition\".adapters.\"adapter-id\".",
+        "vanillabp.workflow-modules.\"workflow-module-id\".workflows.\"bpmn-process-id\".messages.\"message-name\".adapters.\"adapter-id\".",
         "vanillabp.extensions.\"extension-id\"",
         "vanillabp.workflow-modules.\"workflow-module-id\".workflows.\"bpmn-process-id\".tasks.\"task-definition\".extensions.\"extension-id\"",
         "vanillabp.workflow-modules.\"workflow-module-id\".workflows.\"bpmn-process-id\".tasks.\"task-definition\".adapters.\"adapter-id\".extensions.\"extension-id\"")) {

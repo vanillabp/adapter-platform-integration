@@ -133,6 +133,16 @@ public class AdapterProperties {
   private OutfadedVersionsInUsePolicy outfadedVersionsInUse;
 
   /**
+   * How long a correlated message waits for a workflow which does not wait for it yet
+   * (<code>message-time-to-live</code>). It is read at the adapter, the workflow module, the
+   * workflow and the single message, and not at a task (see
+   * {@link MigrationAdapterProperties#messageTimeToLive}). <code>null</code> means "not
+   * configured at this level". What a message without any value gets is up to the adapter,
+   * because the BPMS decide that differently.
+   */
+  private java.time.Duration messageTimeToLive;
+
+  /**
    * What an extension is configured with FOR THIS ADAPTER at this level (properties section
    * <code>...adapters.&lt;id&gt;.extensions.&lt;extension&gt;.*</code>). The keys are the
    * extension ids. The values are what the application wrote below them.
@@ -209,6 +219,11 @@ public class AdapterProperties {
      * {@link OutfadedVersionsInUsePolicy}.
      */
     private OutfadedVersionsInUsePolicy outfadedVersionsInUse;
+
+    /**
+     * How long a correlated message waits for a workflow which does not wait for it yet.
+     */
+    private java.time.Duration messageTimeToLive;
 
     /**
      * What an extension is configured with FOR THIS ADAPTER at this level (properties section
@@ -352,6 +367,21 @@ public class AdapterProperties {
     }
 
     /**
+     * How long a correlated message waits for a workflow which does not wait for it yet.
+     *
+     * @param messageTimeToLive The time-to-live, <code>null</code> where this level says
+     *          nothing
+     * @return This builder, so the calls chain
+     */
+    public B messageTimeToLive(
+        final java.time.Duration messageTimeToLive) {
+
+      this.messageTimeToLive = messageTimeToLive;
+      return self();
+
+    }
+
+    /**
      * What an extension is configured with FOR THIS ADAPTER at this level (properties
      * section <code>...adapters.&lt;id&gt;.extensions.&lt;extension&gt;.*</code>).
      *
@@ -413,6 +443,9 @@ public class AdapterProperties {
           + ", "
           + "outfadedVersionsInUse="
           + outfadedVersionsInUse
+          + ", "
+          + "messageTimeToLive="
+          + messageTimeToLive
           + ", "
           + "extensions="
           + extensions
@@ -478,6 +511,7 @@ public class AdapterProperties {
     this.implementedExternally = b.implementedExternally;
     this.outfadedVersions = b.outfadedVersions;
     this.outfadedVersionsInUse = b.outfadedVersionsInUse;
+    this.messageTimeToLive = b.messageTimeToLive;
     this.extensions = b.extensions;
 
   }
@@ -593,6 +627,17 @@ public class AdapterProperties {
   public OutfadedVersionsInUsePolicy getOutfadedVersionsInUse() {
 
     return outfadedVersionsInUse;
+
+  }
+
+  /**
+   * How long a correlated message waits for a workflow which does not wait for it yet.
+   *
+   * @return The value of {@link #messageTimeToLive}
+   */
+  public java.time.Duration getMessageTimeToLive() {
+
+    return messageTimeToLive;
 
   }
 
@@ -715,6 +760,18 @@ public class AdapterProperties {
       final OutfadedVersionsInUsePolicy outfadedVersionsInUse) {
 
     this.outfadedVersionsInUse = outfadedVersionsInUse;
+
+  }
+
+  /**
+   * How long a correlated message waits for a workflow which does not wait for it yet.
+   *
+   * @param messageTimeToLive The value of {@link #messageTimeToLive}
+   */
+  public void setMessageTimeToLive(
+      final java.time.Duration messageTimeToLive) {
+
+    this.messageTimeToLive = messageTimeToLive;
 
   }
 
