@@ -482,6 +482,17 @@ to report to: `workflowEndedInvoker()` and `bpmsInitiatedStartInvoker()`. Work w
 platform integrations do provide them. So an adapter built without one is nearly always a
 registration which left it out, and the build says so in a warning which names your adapter id.
 
+One collaborator is never empty: `suspendedWorkflowReporter()`. Call it where you really found a
+workflow suspended in your BPMS, just before you throw. In phase one that is before the
+`WorkflowSuspendedException` (`Phase.CALL`). In phase two it is before the `PhaseTwoRetryLater`
+which lets the entry wait (`Phase.WAITING`), on every attempt. Do not call it in a `finally` and do
+not call it for a signal or a message, which you do not refuse. The core tells the extensions of
+your adapter id and catches whatever they throw. So you throw afterwards exactly what you would have
+thrown without the report. Build the `SuspendedWorkflowFound` from what you already hold, without
+another request to your BPMS. An adapter of a BPMS which cannot suspend a workflow calls nothing. A
+set built without the reporter gets one which drops every report, and nothing warns about that
+(decision in [`DECISIONS.pending/2074.md`](../DECISIONS.pending/2074.md)).
+
 Two things are not in the object, and they stay your own constructor arguments. The first is what
 you resolve from your own configuration: a job timeout, a retry backoff, the variables your worker
 fetches. The second is what your own extension contributes.
@@ -1301,7 +1312,9 @@ conventions come with that, and both are part of the contract:
   without arguments, so CDI cannot build a client proxy for it.
 
 Build the collaborators with `AdapterCollaboratorsSupport.collaborators(adapterId, …)` from the
-runtime support module.
+runtime support module. Take the variant with the `Instance<SuspendedWorkflowReporter>` as its last
+parameter where your BPMS can suspend a workflow. The variant without it stays for an adapter which
+has nothing to report.
 
 Your configuration overlay is a runtime `@ConfigRoot @ConfigMapping(prefix = "vanillabp")` in the
 runtime module. Two things about it will cost you a day if you learn them the hard way.

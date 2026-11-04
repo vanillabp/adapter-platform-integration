@@ -51,6 +51,15 @@ import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
  * left it out. The build says so, together with the adapter id. This class was written
  * for exactly that failure: an adapter which deploys, runs tasks and never reports a
  * workflow end, while nothing goes wrong anywhere.
+ * <p>
+ * <b>What an adapter gets where the platform has it:</b>
+ * <ul>
+ * <li>{@link #suspendedWorkflowReporter()}: where a workflow is reported which the adapter
+ * found suspended in its BPMS.</li>
+ * </ul>
+ * It is never empty. An adapter built without it gets a reporter which drops every report.
+ * Nothing warns about that, because an adapter of a BPMS which cannot suspend a workflow has
+ * nothing to report, and an adapter built before the reporter existed still works.
  *
  * @see #forAdapter(String)
  */
@@ -74,6 +83,8 @@ public final class AdapterCollaborators {
 
   private final BpmsInitiatedStartInvoker bpmsInitiatedStartInvoker;
 
+  private final SuspendedWorkflowReporter suspendedWorkflowReporter;
+
   private AdapterCollaborators(
       final Builder builder) {
 
@@ -85,6 +96,9 @@ public final class AdapterCollaborators {
     this.preCommitRegistrar = builder.preCommitRegistrar;
     this.workflowEndedInvoker = builder.workflowEndedInvoker;
     this.bpmsInitiatedStartInvoker = builder.bpmsInitiatedStartInvoker;
+    this.suspendedWorkflowReporter = builder.suspendedWorkflowReporter == null
+        ? SuspendedWorkflowReporter.NOBODY_LISTENS
+        : builder.suspendedWorkflowReporter;
 
   }
 
@@ -211,6 +225,19 @@ public final class AdapterCollaborators {
   }
 
   /**
+   * Where an adapter reports a workflow it found suspended in its BPMS. The core tells the
+   * extensions. See {@link SuspendedWorkflowReporter} for when an adapter calls it.
+   *
+   * @return Where a suspended workflow is reported. Never <code>null</code>. A reporter which
+   *         drops every report where the registration did not hand one over
+   */
+  public SuspendedWorkflowReporter suspendedWorkflowReporter() {
+
+    return suspendedWorkflowReporter;
+
+  }
+
+  /**
    * Collects the collaborators of one adapter id and refuses to build an incomplete
    * set.
    */
@@ -231,6 +258,8 @@ public final class AdapterCollaborators {
     private WorkflowEndedInvoker workflowEndedInvoker;
 
     private BpmsInitiatedStartInvoker bpmsInitiatedStartInvoker;
+
+    private SuspendedWorkflowReporter suspendedWorkflowReporter;
 
     private Builder(
         final String adapterId) {
@@ -342,6 +371,21 @@ public final class AdapterCollaborators {
         final BpmsInitiatedStartInvoker bpmsInitiatedStartInvoker) {
 
       this.bpmsInitiatedStartInvoker = bpmsInitiatedStartInvoker;
+      return this;
+
+    }
+
+    /**
+     * Hands over where a workflow is reported which the adapter found suspended.
+     *
+     * @param suspendedWorkflowReporter May be null. Then the adapter gets a reporter which
+     *                                  drops every report, and nothing warns
+     * @return This builder
+     */
+    public Builder suspendedWorkflowReporter(
+        final SuspendedWorkflowReporter suspendedWorkflowReporter) {
+
+      this.suspendedWorkflowReporter = suspendedWorkflowReporter;
       return this;
 
     }

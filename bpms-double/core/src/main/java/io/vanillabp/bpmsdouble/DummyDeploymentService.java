@@ -164,6 +164,25 @@ public class DummyDeploymentService implements AdapterDeploymentService<Object, 
   }
 
   /**
+   * Reports a workflow found suspended, like a real adapter does just before it refuses a call
+   * or lets an outbox entry wait. The double cannot suspend a workflow itself. Triggered by
+   * integration tests, which check what the extensions hear.
+   *
+   * @param found What a real adapter would have found
+   */
+  public void reportSuspendedWorkflow(
+      final io.vanillabp.integration.extension.spi.runtime.SuspendedWorkflowFound found) {
+
+    log.info("Dummy-Adapter[{}]: Workflow '{}' of {} is suspended", adapterId, found.workflowId(),
+        found.workflowModuleId());
+
+    collaborators
+        .suspendedWorkflowReporter()
+        .found(found);
+
+  }
+
+  /**
    * Builds the deployment service of one configured adapter id. Each platform module
    * calls this once per id. So a test which configures two ids gets two doubles and can
    * play a migration between them.

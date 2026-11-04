@@ -86,19 +86,21 @@ You depend on the two SPI artifacts and on the core, and on no platform integrat
 The sample extension of each platform is built exactly this way, and its POM says so. With a
 dependency on `vanillabp-spring-boot-integration` it would no longer prove anything.
 
-## 2. The six calls of the wiring service
+## 2. The seven calls of the wiring service
 
-`ExtensionWiringService<BPMN, PC>` has six methods. Three of them say who you are. The core uses them
-to decide whether you take part at all. The other three are the calls in which you act.
+`ExtensionWiringService<BPMN, PC>` has seven methods. Three of them say who you are. The core uses
+them to decide whether you take part at all. Three more are the calls of the deployment pipeline in
+which you act. The last one is the only call while workflows run.
 
-|                           Method                            |                 When the core calls it                  |                                   What it is for                                   |
-|-------------------------------------------------------------|---------------------------------------------------------|------------------------------------------------------------------------------------|
-| `getModelType()`                                            | while it matches you against an adapter                 | the BPMN model type you understand, for example Camunda 7's `BpmnModelInstance`    |
-| `getProcessContextType()`                                   | while it matches you against an adapter                 | the adapter's processing-context type you expect                                   |
-| `getOrder()`                                                | once, while the wiring services are sorted              | your position among the EXTENSIONS of that model type, ascending, default `0`      |
-| `wireBpmn(module, filename, bpmnProcessId, model, context)` | per executable BPMN process, after the adapter wired it | inspect the model, find your own annotated methods, add what you need to the model |
-| `startWorkflowProcessing(module, context)`                  | after every adapter of every module was started         | open what consumes your wiring, a listener or a worker of your own                 |
-| `stopWorkflowProcessing(module, context)`                   | on a graceful shutdown, before any adapter is stopped   | close what you opened; the default does nothing                                    |
+|                           Method                            |                  When the core calls it                  |                                   What it is for                                   |
+|-------------------------------------------------------------|----------------------------------------------------------|------------------------------------------------------------------------------------|
+| `getModelType()`                                            | while it matches you against an adapter                  | the BPMN model type you understand, for example Camunda 7's `BpmnModelInstance`    |
+| `getProcessContextType()`                                   | while it matches you against an adapter                  | the adapter's processing-context type you expect                                   |
+| `getOrder()`                                                | once, while the wiring services are sorted               | your position among the EXTENSIONS of that model type, ascending, default `0`      |
+| `wireBpmn(module, filename, bpmnProcessId, model, context)` | per executable BPMN process, after the adapter wired it  | inspect the model, find your own annotated methods, add what you need to the model |
+| `startWorkflowProcessing(module, context)`                  | after every adapter of every module was started          | open what consumes your wiring, a listener or a worker of your own                 |
+| `stopWorkflowProcessing(module, context)`                   | on a graceful shutdown, before any adapter is stopped    | close what you opened; the default does nothing                                    |
+| `workflowFoundSuspended(found, context)`                    | while workflows run, when an adapter found one suspended | hand the news to a thread of your own; the default does nothing                    |
 
 `BPMN` and `PC` are the adapter's types, not yours. You declare which types you can work with. The
 core calls you only where both of your declared types are assignable from the adapter's types. So a
@@ -112,6 +114,29 @@ Matching is all-or-nothing on purpose. Both calls in the pipeline use the same r
 is either wired and started, or neither. `DeploymentServiceTest#extensionWiringServicesAreFilteredAndCalled`
 and `#subtypeExtensionIsNeitherWiredNorStarted` hold this in the core.
 `DeploymentPipelineTest#nonMatchingExtensionUntouched` holds it against a booted application.
+
+### When an adapter finds a workflow suspended
+
+An adapter refuses a call on a workflow which is suspended in its BPMS. In phase one the application
+gets a `WorkflowSuspendedException`. In phase two the outbox entry waits and tries again later. Just
+before that, the adapter tells the core, and the core calls `workflowFoundSuspended` on every
+extension which matches that adapter. It uses the same filter as the start, and you get the same
+processing context as in `startWorkflowProcessing`. The `SuspendedWorkflowFound` names the adapter
+id, the module, the process, the aggregate id, the BPMS' own id of the workflow, the task of the call
+and when the adapter found it. It does not say who suspended the workflow or when. Ask your own BPMS
+for that.
+
+The call runs on the caller's thread, the application's or the outbox's, and maybe inside a
+transaction which rolls back right afterwards. So do three things only: look at the record, hand it
+to a thread of your own, and return. Do not write in that transaction and do not call the BPMS. If
+you throw, the core logs it and goes on, and the application sees exactly what the adapter throws
+anyway (the decision in [`DECISIONS.pending/2074.md`](../DECISIONS.pending/2074.md)).
+
+A waiting outbox entry tries again every few seconds, and each attempt is reported. `phase()` tells
+the refused call (`CALL`) from the waiting entry (`WAITING`). Filter out the repetitions yourself.
+Nothing stores the event, so it is lost if the application stops before you handed it on. If you
+must not miss a suspension, keep a check of your own as well. Signals and messages sent to a
+suspended workflow are not reported, because no adapter refuses them.
 
 ### The order, up and down
 
@@ -719,23 +744,24 @@ build item of its own.
 
 ## 8. What the core promises you
 
-|                                                          Promise                                                          |                                                                              What holds it                                                                               |
-|---------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| The adapter wired a process before you see it, and is started before you are                                              | decision 52, `DeploymentServiceTest#theAdapterIsFirstOnTheWayUp`, `DeploymentPipelineTest#extensionsWiredInOrder`                                                        |
-| You are stopped before the adapter is                                                                                     | `DeploymentServiceTest#extensionWiringServicesAreStoppedBeforeAdapters`, `ShutdownReverseOrderTest`                                                                      |
-| An extension whose types do not match is neither wired nor started                                                        | `DeploymentServiceTest#extensionWiringServicesAreFilteredAndCalled`, `#subtypeExtensionIsNeitherWiredNorStarted`, `DeploymentPipelineTest#nonMatchingExtensionUntouched` |
-| Extensions are sorted by `getOrder()`, and nothing beyond that is promised                                                | decision 52, `DeploymentServiceTest#wiringServicesAreSortedByOrder`                                                                                                      |
-| Eight positions, most specific wins, adapter section beats its own level                                                  | decision 7, `SettingsResolutionTest`, `ExtensionSettingsResolutionTest`, `ExtensionSettingsPositionsTest` per platform                                                   |
-| A value of one adapter never reaches another one                                                                          | `SettingsResolutionTest#anotherAdapterReadsTheGeneralSections`, `ExtensionSettingsPositionsTest#theSecondAdapterReadsItsOwnValues`                                       |
-| A key below `vanillabp` which no mapping declares ends a Quarkus start, naming the key                                    | `UnknownExtensionSettingsKeyTest`                                                                                                                                        |
-| Your annotation is run with the mechanics of `@WorkflowTask`                                                              | `ExtensionHandlerRegistryTest`, `ExtensionHandlerTest` (Spring Boot), `ExtensionEnablementTest` (Quarkus)                                                                |
-| A contract registered after the scan finds the same methods                                                               | decision 36, `ExtensionHandlerRegistryTest#aContractMayArriveAfterTheScan`                                                                                               |
-| The first offered key some method serves wins, and the catch-all stays the fallback                                       | decision 51, `ExtensionHandlerRegistryTest#theFirstKeyServedWins`, `#aNamedKeyAlwaysBeatsTheCatchAll`                                                                    |
-| A contract which never writes is not warned about                                                                         | decision 50, `ExtensionHandlerRegistryTest#aReadingContractDoesNotSaveTheAggregate`                                                                                      |
-| The boot says which method serves which key, and names a method the scan cannot see                                       | `ExtensionHandlerRegistryTest#theBootSaysWhatWasWired`, `#anInvisibleExtensionHandlerIsReported`, `ExtensionHandlerWiringReportTest` per platform                        |
-| The election answers which BPMS holds a workflow, and refuses with a guiding message where it cannot                      | `ExtensionElectionAndConfigurationTest`, `ExtensionEnablementTest`                                                                                                       |
-| An operation of yours reaches your own handler                                                                            | `PhaseOperationRegistryTest`, `ExtensionOperationDispatchTest` per platform                                                                                              |
-| The log of processed task deliveries is resolvable per workflow aggregate, and holds the tasks the application was handed | decision 54, `ExtensionElectionAndConfigurationTest`, `ExtensionEnablementTest`, `OpenTaskRetentionTest` per platform                                                    |
+|                                                          Promise                                                          |                                                                                       What holds it                                                                                       |
+|---------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| The adapter wired a process before you see it, and is started before you are                                              | decision 52, `DeploymentServiceTest#theAdapterIsFirstOnTheWayUp`, `DeploymentPipelineTest#extensionsWiredInOrder`                                                                         |
+| You are stopped before the adapter is                                                                                     | `DeploymentServiceTest#extensionWiringServicesAreStoppedBeforeAdapters`, `ShutdownReverseOrderTest`                                                                                       |
+| An extension whose types do not match is neither wired nor started                                                        | `DeploymentServiceTest#extensionWiringServicesAreFilteredAndCalled`, `#subtypeExtensionIsNeitherWiredNorStarted`, `DeploymentPipelineTest#nonMatchingExtensionUntouched`                  |
+| Extensions are sorted by `getOrder()`, and nothing beyond that is promised                                                | decision 52, `DeploymentServiceTest#wiringServicesAreSortedByOrder`                                                                                                                       |
+| Eight positions, most specific wins, adapter section beats its own level                                                  | decision 7, `SettingsResolutionTest`, `ExtensionSettingsResolutionTest`, `ExtensionSettingsPositionsTest` per platform                                                                    |
+| A value of one adapter never reaches another one                                                                          | `SettingsResolutionTest#anotherAdapterReadsTheGeneralSections`, `ExtensionSettingsPositionsTest#theSecondAdapterReadsItsOwnValues`                                                        |
+| A key below `vanillabp` which no mapping declares ends a Quarkus start, naming the key                                    | `UnknownExtensionSettingsKeyTest`                                                                                                                                                         |
+| Your annotation is run with the mechanics of `@WorkflowTask`                                                              | `ExtensionHandlerRegistryTest`, `ExtensionHandlerTest` (Spring Boot), `ExtensionEnablementTest` (Quarkus)                                                                                 |
+| A contract registered after the scan finds the same methods                                                               | decision 36, `ExtensionHandlerRegistryTest#aContractMayArriveAfterTheScan`                                                                                                                |
+| The first offered key some method serves wins, and the catch-all stays the fallback                                       | decision 51, `ExtensionHandlerRegistryTest#theFirstKeyServedWins`, `#aNamedKeyAlwaysBeatsTheCatchAll`                                                                                     |
+| A contract which never writes is not warned about                                                                         | decision 50, `ExtensionHandlerRegistryTest#aReadingContractDoesNotSaveTheAggregate`                                                                                                       |
+| The boot says which method serves which key, and names a method the scan cannot see                                       | `ExtensionHandlerRegistryTest#theBootSaysWhatWasWired`, `#anInvisibleExtensionHandlerIsReported`, `ExtensionHandlerWiringReportTest` per platform                                         |
+| The election answers which BPMS holds a workflow, and refuses with a guiding message where it cannot                      | `ExtensionElectionAndConfigurationTest`, `ExtensionEnablementTest`                                                                                                                        |
+| An operation of yours reaches your own handler                                                                            | `PhaseOperationRegistryTest`, `ExtensionOperationDispatchTest` per platform                                                                                                               |
+| The log of processed task deliveries is resolvable per workflow aggregate, and holds the tasks the application was handed | decision 54, `ExtensionElectionAndConfigurationTest`, `ExtensionEnablementTest`, `OpenTaskRetentionTest` per platform                                                                     |
+| A workflow an adapter found suspended reaches only the extensions of that adapter, and an exception of yours stays inside | `DeploymentServiceTest$SuspendedWorkflowTests`, `SuspendedWorkflowReachesExtensionsTest` (Spring Boot), `DeploymentPipelineTest#aSuspendedWorkflowReachesTheMatchingExtensions` (Quarkus) |
 
 One statement in this document is an assumption, and no test holds it. You can tell two adapters
 apart by the identity of the processing context. This works because the core builds one context per

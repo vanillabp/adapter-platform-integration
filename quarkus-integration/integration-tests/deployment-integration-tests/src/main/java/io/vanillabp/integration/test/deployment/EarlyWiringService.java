@@ -1,6 +1,7 @@
 package io.vanillabp.integration.test.deployment;
 
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
+import io.vanillabp.integration.extension.spi.runtime.SuspendedWorkflowFound;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -9,6 +10,9 @@ import jakarta.inject.Inject;
  * extension (order 0). A test uses it to check that extensions are wired and started in
  * the order of {@code getOrder()}. Events are recorded as
  * <code>extensionEarly:&lt;method&gt;:&lt;moduleId&gt;</code>.
+ * <p>
+ * It throws when it hears that a workflow is suspended, after it recorded that. So a test sees
+ * that an extension which throws neither stops the ones after it nor reaches the adapter.
  */
 @ApplicationScoped
 public class EarlyWiringService implements ExtensionWiringService<Object, Object> {
@@ -64,6 +68,17 @@ public class EarlyWiringService implements ExtensionWiringService<Object, Object
       final Object bpmsProcessingContext) {
 
     events.record("extensionEarly:stopWorkflowProcessing:%s".formatted(workflowModuleId));
+
+  }
+
+  @Override
+  public void workflowFoundSuspended(
+      final SuspendedWorkflowFound found,
+      final Object bpmsProcessingContext) {
+
+    events
+        .record("extensionEarly:workflowFoundSuspended:%s:%s".formatted(found.workflowModuleId(), found.workflowId()));
+    throw new IllegalStateException("this extension is broken on purpose");
 
   }
 

@@ -4,6 +4,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
+import io.vanillabp.integration.extension.spi.runtime.SuspendedWorkflowFound;
 import jakarta.enterprise.inject.Instance;
 
 /**
@@ -103,6 +104,16 @@ public class DummyWiringService implements ExtensionWiringService<Object, Object
 
     log.info("Dummy-Extension: Stopping workflow processing for {}", workflowModuleId);
     notifyListeners("stopWorkflowProcessing", workflowModuleId, null);
+
+  }
+
+  @Override
+  public void workflowFoundSuspended(
+      final SuspendedWorkflowFound found,
+      final Object bpmsProcessingContext) {
+
+    log.info("Dummy-Extension: Workflow '{}' of {} is suspended", found.workflowId(), found.workflowModuleId());
+    notifyListeners("workflowFoundSuspended", found.workflowModuleId(), found.workflowId());
 
   }
 

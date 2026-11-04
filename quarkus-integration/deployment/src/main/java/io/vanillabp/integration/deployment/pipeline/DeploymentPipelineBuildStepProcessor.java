@@ -22,6 +22,7 @@ import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModul
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import io.vanillabp.integration.runtime.deployment.BpmsResourceIndex;
 import io.vanillabp.integration.runtime.deployment.DeploymentRecorder;
+import io.vanillabp.integration.runtime.deployment.SuspendedWorkflowReportingProducer;
 import io.vanillabp.integration.runtime.deployment.VanillaBpDeploymentRunner;
 import io.vanillabp.integration.runtime.workflowmodule.WorkflowModule;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -97,9 +98,11 @@ public class DeploymentPipelineBuildStepProcessor {
   /**
    * Registers the {@link VanillaBpDeploymentRunner}. It runs the deployment pipeline on
    * {@link io.quarkus.runtime.StartupEvent}. It is marked unremovable, because application
-   * code does not inject it. Lifecycle events drive it.
+   * code does not inject it. Lifecycle events drive it. The producer of the reporter of a
+   * suspended workflow comes along, because the runner connects that reporter to each start.
    *
-   * @return The additional {@link VanillaBpDeploymentRunner} bean
+   * @return The additional {@link VanillaBpDeploymentRunner} bean and the producer of the
+   *         reporter
    */
   @BuildStep
   AdditionalBeanBuildItem buildDeploymentRunner() {
@@ -107,6 +110,7 @@ public class DeploymentPipelineBuildStepProcessor {
     return AdditionalBeanBuildItem
         .builder()
         .addBeanClass(VanillaBpDeploymentRunner.class)
+        .addBeanClass(SuspendedWorkflowReportingProducer.class)
         .setUnremovable() // don't remove, since it is used under the hoods
         .build();
 

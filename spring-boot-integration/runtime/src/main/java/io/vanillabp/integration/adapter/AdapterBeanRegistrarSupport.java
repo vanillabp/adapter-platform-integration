@@ -11,6 +11,7 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.spi.AdapterCollaborators;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
+import io.vanillabp.integration.adapter.spi.SuspendedWorkflowReporter;
 import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
 import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
@@ -88,7 +89,9 @@ public final class AdapterBeanRegistrarSupport {
    * Collects what this platform hands to an adapter. So a registrar asks for the set
    * and does not have to remember the single beans. An application may lack two of the
    * collaborators. These are looked up as providers and stay absent if there is no bean.
-   * {@link AdapterCollaborators} reports that and names the adapter id.
+   * {@link AdapterCollaborators} reports that and names the adapter id. The reporter of a
+   * suspended workflow is looked up the same way. The platform always has it, and an adapter
+   * built without it gets one which drops every report.
    *
    * @param supplierContext The context of the bean being registered
    * @param adapterId The adapter id the beans are registered for
@@ -109,6 +112,7 @@ public final class AdapterBeanRegistrarSupport {
         .workflowEndedInvoker(supplierContext.beanProvider(WorkflowEndedInvoker.class).getIfAvailable())
         .bpmsInitiatedStartInvoker(
             supplierContext.beanProvider(BpmsInitiatedStartInvoker.class).getIfAvailable())
+        .suspendedWorkflowReporter(supplierContext.beanProvider(SuspendedWorkflowReporter.class).getIfAvailable())
         .build();
 
   }

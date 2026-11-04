@@ -2,6 +2,7 @@ package io.vanillabp.integration.runtime.support;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
+import io.vanillabp.integration.adapter.spi.SuspendedWorkflowReporter;
 import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
 import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
@@ -115,6 +117,27 @@ public class AdapterCollaboratorsSupportTest {
 
     assertTrue(collaborators.workflowEndedInvoker().isEmpty());
     assertTrue(collaborators.bpmsInitiatedStartInvoker().isEmpty());
+
+  }
+
+  @Test
+  @DisplayName("The reporter of a suspended workflow arrives where the producer passes it, and drops reports where it does not")
+  public void theSuspendedWorkflowReporterArrivesWherePassed() {
+
+    final var reporter = resolving(SuspendedWorkflowReporter.class);
+    final var withReporter = AdapterCollaboratorsSupport
+        .collaborators(
+            "c8", mock(WorkflowTaskWiring.class), mock(WorkflowTaskInvoker.class),
+            mock(NameClashAvoidanceSupport.class),
+            mock(WorkflowAggregateSync.class), mock(PreCommitRegistrar.class), resolving(WorkflowEndedInvoker.class),
+            resolving(BpmsInitiatedStartInvoker.class), reporter);
+    assertSame(reporter.get(), withReporter.suspendedWorkflowReporter());
+
+    // a producer which uses the method without the reporter, like an adapter of a BPMS which
+    // cannot suspend a workflow
+    final var withoutReporter = collaborators(
+        "pea", resolving(WorkflowEndedInvoker.class), resolving(BpmsInitiatedStartInvoker.class));
+    assertSame(SuspendedWorkflowReporter.NOBODY_LISTENS, withoutReporter.suspendedWorkflowReporter());
 
   }
 
