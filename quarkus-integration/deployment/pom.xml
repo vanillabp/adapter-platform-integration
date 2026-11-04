@@ -47,10 +47,12 @@
       <artifactId>quarkus-config-yaml</artifactId>
       <scope>test</scope>
     </dependency>
+    <!-- The build steps read YAML config at build time. The runtime module brings
+         quarkus-config-yaml only as optional, so it does not arrive here on its own.
+         The Quarkus BOM manages the version. -->
     <dependency>
       <groupId>io.smallrye.config</groupId>
       <artifactId>smallrye-config-source-yaml</artifactId>
-      <version>4.0.0</version>
     </dependency>
     <dependency>
       <groupId>io.quarkus</groupId>
