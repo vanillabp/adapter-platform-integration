@@ -130,7 +130,7 @@ The call runs on the caller's thread, the application's or the outbox's, and may
 transaction which rolls back right afterwards. So do three things only: look at the record, hand it
 to a thread of your own, and return. Do not write in that transaction and do not call the BPMS. If
 you throw, the core logs it and goes on, and the application sees exactly what the adapter throws
-anyway (the decision in [`DECISIONS.pending/2074.md`](../DECISIONS.pending/2074.md)).
+anyway ([decision 134](../DECISIONS.md#134-the-one-runtime-call-to-an-extension-is-synchronous-isolated-and-has-no-outbox)).
 
 A waiting outbox entry tries again every few seconds, and each attempt is reported. `phase()` tells
 the refused call (`CALL`) from the waiting entry (`WAITING`). Filter out the repetitions yourself.

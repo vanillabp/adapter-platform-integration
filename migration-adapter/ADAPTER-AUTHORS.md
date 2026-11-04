@@ -491,7 +491,7 @@ your adapter id and catches whatever they throw. So you throw afterwards exactly
 thrown without the report. Build the `SuspendedWorkflowFound` from what you already hold, without
 another request to your BPMS. An adapter of a BPMS which cannot suspend a workflow calls nothing. A
 set built without the reporter gets one which drops every report, and nothing warns about that
-(decision in [`DECISIONS.pending/2074.md`](../DECISIONS.pending/2074.md)).
+([decision 134](../DECISIONS.md#134-the-one-runtime-call-to-an-extension-is-synchronous-isolated-and-has-no-outbox)).
 
 Two things are not in the object, and they stay your own constructor arguments. The first is what
 you resolve from your own configuration: a job timeout, a retry backoff, the variables your worker

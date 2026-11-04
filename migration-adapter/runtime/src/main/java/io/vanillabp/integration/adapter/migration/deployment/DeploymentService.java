@@ -1374,7 +1374,7 @@ public class DeploymentService {
    * Each extension is called on the caller's thread, one after the other, in the order of the
    * start. An exception of one is logged and the next one is called. Nothing leaves this method.
    * The adapter throws what it would have thrown anyway, so an extension cannot change what the
-   * application sees (see the decision in the repository's DECISIONS.pending/2074.md).
+   * application sees (see decision 134 in the repository's DECISIONS.md).
    * <p>
    * A report about a module or an adapter which this start did not deploy reaches nobody.
    *

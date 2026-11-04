@@ -15,8 +15,8 @@ import lombok.extern.slf4j.Slf4j;
  * <p>
  * Nothing leaves {@link #found(SuspendedWorkflowFound)}. A report which comes before the
  * connection is dropped, and an exception of an extension is logged in
- * {@link DeploymentService#tellExtensionsAbout(SuspendedWorkflowFound)}. See the decision in the
- * repository's DECISIONS.pending/2074.md.
+ * {@link DeploymentService#tellExtensionsAbout(SuspendedWorkflowFound)}. See decision 134 in the
+ * repository's DECISIONS.md.
  */
 @Slf4j
 public class SuspendedWorkflowReporting implements SuspendedWorkflowReporter {

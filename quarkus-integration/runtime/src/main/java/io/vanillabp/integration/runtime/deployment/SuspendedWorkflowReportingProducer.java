@@ -9,8 +9,8 @@ import jakarta.inject.Singleton;
 /**
  * Produces the core's reporter of a suspended workflow. Adapters see it as
  * {@link io.vanillabp.integration.adapter.spi.SuspendedWorkflowReporter}. The
- * {@link VanillaBpDeploymentRunner} connects it to the deployment service of each start. See the
- * decision in the repository's DECISIONS.pending/2074.md.
+ * {@link VanillaBpDeploymentRunner} connects it to the deployment service of each start. See
+ * decision 134 in the repository's DECISIONS.md.
  */
 @ApplicationScoped
 public class SuspendedWorkflowReportingProducer {
