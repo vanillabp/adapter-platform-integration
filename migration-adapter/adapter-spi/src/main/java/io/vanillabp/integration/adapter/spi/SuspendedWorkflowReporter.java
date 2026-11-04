@@ -19,8 +19,8 @@ import io.vanillabp.integration.extension.spi.runtime.SuspendedWorkflowFound;
  * <p>
  * {@link #found(SuspendedWorkflowFound)} never throws and returns at once. Every exception of an
  * extension is caught and logged in the core. So the adapter throws afterwards exactly what it
- * would have thrown without the report (see the decision in the repository's
- * DECISIONS.pending/2074.md).
+ * would have thrown without the report (see decision 134 in the repository's
+ * DECISIONS.md).
  */
 @FunctionalInterface
 public interface SuspendedWorkflowReporter {

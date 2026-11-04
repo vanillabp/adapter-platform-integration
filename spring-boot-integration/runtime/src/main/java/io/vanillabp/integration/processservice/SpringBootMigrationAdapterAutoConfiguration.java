@@ -615,8 +615,8 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   /**
    * Where an adapter reports a workflow it found suspended. Every adapter gets this one
    * object. The deployment service connects to it once it is built, and from then on it
-   * tells the extensions of that adapter. See the decision in the repository's
-   * DECISIONS.pending/2074.md.
+   * tells the extensions of that adapter. See decision 134 in the repository's
+   * DECISIONS.md.
    *
    * @return The core's reporter, not connected yet
    */

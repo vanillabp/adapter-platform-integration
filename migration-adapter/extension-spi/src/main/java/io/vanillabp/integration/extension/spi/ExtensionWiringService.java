@@ -157,7 +157,7 @@ public interface ExtensionWiringService<BPMN, PC> {
    * rolls back right afterwards. So it must not write in that transaction, must not call the
    * BPMS, and must return at once. It hands the work to a thread of its own. The core catches
    * and logs an exception it throws. So an extension never changes what the application or the
-   * outbox entry sees (see the decision in the repository's DECISIONS.pending/2074.md).
+   * outbox entry sees (see decision 134 in the repository's DECISIONS.md).
    * <p>
    * Nothing stores the event. If the application stops before the extension handed it on, it is
    * gone. An extension which must not miss a suspension needs a check of its own as well.

@@ -65,7 +65,7 @@ public final class AdapterCollaboratorsSupport {
    * Builds the collaborators of one adapter id, with the reporter of a suspended workflow.
    * An adapter of a BPMS which can suspend a workflow uses this one. The method above stays for
    * an adapter which has nothing to report. Its adapter gets a reporter which drops every
-   * report (see the decision in the repository's DECISIONS.pending/2074.md).
+   * report (see decision 134 in the repository's DECISIONS.md).
    *
    * @param adapterId The adapter id the producer is building for
    * @param workflowTaskWiring What the adapter asks while it reads a BPMN file
