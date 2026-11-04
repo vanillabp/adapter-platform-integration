@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import java.time.Instant;
 import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
@@ -15,10 +16,12 @@ import org.mockito.Mockito;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
+import io.vanillabp.integration.adapter.migration.deployment.SuspendedWorkflowReporting;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
+import io.vanillabp.integration.extension.spi.runtime.SuspendedWorkflowFound;
 import io.vanillabp.integration.runtime.processservice.ProcessServiceBaseCdiBean;
 import io.vanillabp.integration.runtime.test.InstanceDouble;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
@@ -41,6 +44,8 @@ import io.vanillabp.spi.process.ProcessService;
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class TheOrderOfAStartTest {
+
+  private static final Instant NOW = Instant.parse("2026-11-04T10:00:00Z");
 
   /**
    * A runner whose pipeline is a mock. So the test can read from it the order of the calls
@@ -89,6 +94,7 @@ public class TheOrderOfAStartTest {
         .of(List.<List<AdapterDeploymentService<Object, Object>>>of());
     testee.extensionWiringServices = InstanceDouble.of(List.<ExtensionWiringService<?, ?>>of());
     testee.processServices = InstanceDouble.of(List.<ProcessService<?>>of(processServiceBean));
+    testee.suspendedWorkflowReporting = new SuspendedWorkflowReporting();
 
     testee.deployAndStart();
 
@@ -98,6 +104,12 @@ public class TheOrderOfAStartTest {
     aStart.verify(electionCheck).sayWhereStartMessagesAreNotCheckedAfterDeployment();
     aStart.verify(pipeline).startWorkflowProcessing(eq(List.of("test-module")));
     aStart.verify(pipeline).endOfStartup();
+
+    // the reporter the adapters got now reaches the pipeline of this start
+    final var found = new SuspendedWorkflowFound(
+        "demo", "test-module", "process", "1", "4711", null, NOW, SuspendedWorkflowFound.Phase.CALL);
+    testee.suspendedWorkflowReporting.found(found);
+    Mockito.verify(pipeline).tellExtensionsAbout(found);
 
   }
 
