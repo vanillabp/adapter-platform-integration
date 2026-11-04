@@ -1,8 +1,10 @@
 package io.vanillabp.integration.it;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.time.Instant;
 import java.util.List;
 
 import org.junit.jupiter.api.DisplayName;
@@ -11,6 +13,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
+import io.vanillabp.bpmsdouble.DummyDeploymentService;
+import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
+import io.vanillabp.integration.extension.spi.runtime.SuspendedWorkflowFound;
 import io.vanillabp.integration.test.deployment.Aggregate;
 import io.vanillabp.integration.test.deployment.AggregatePersistence;
 import io.vanillabp.integration.test.deployment.EarlyWiringService;
@@ -18,6 +23,8 @@ import io.vanillabp.integration.test.deployment.NonMatchingWiringService;
 import io.vanillabp.integration.test.deployment.RecordingDeploymentEvents;
 import io.vanillabp.integration.test.deployment.WorkflowService;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
+import jakarta.enterprise.inject.Any;
+import jakarta.enterprise.inject.Instance;
 import jakarta.inject.Inject;
 
 /**
@@ -155,6 +162,40 @@ public class DeploymentPipelineTest {
             .stream()
             .filter(event -> event.startsWith("extensionNonMatching:"))
             .toList());
+
+  }
+
+  @Inject
+  @Any
+  Instance<List<AdapterDeploymentService<Object, Object>>> deploymentServices;
+
+  @Test
+  @DisplayName("A workflow the adapter found suspended reaches the matching extensions, and one which throws changes nothing")
+  public void aSuspendedWorkflowReachesTheMatchingExtensions() {
+
+    final var adapter = deploymentServices
+        .stream()
+        .filter(java.util.Objects::nonNull)
+        .flatMap(List::stream)
+        .filter(DummyDeploymentService.class::isInstance)
+        .map(DummyDeploymentService.class::cast)
+        .filter(service -> "demo".equals(service.getAdapterId()))
+        .findFirst()
+        .orElseThrow();
+    final var found = new SuspendedWorkflowFound(
+        "demo", "test-module", "first", "1", "4711", "task-1", Instant.now(), SuspendedWorkflowFound.Phase.CALL);
+
+    // the early extension throws, and the adapter would throw its own exception next. Nothing
+    // of the extension may come out instead
+    assertDoesNotThrow(() -> adapter.reportSuspendedWorkflow(found));
+
+    final var recorded = events.getEvents();
+    // the early extension runs first and throws, and the dummy extension still hears it
+    assertOrder(recorded, "extensionEarly:workflowFoundSuspended:test-module:4711",
+        "extension:workflowFoundSuspended:test-module:4711");
+    assertTrue(
+        recorded.stream().noneMatch(event -> event.startsWith("extensionNonMatching:workflowFoundSuspended")),
+        "an extension written for another BPMS must not hear it: %s".formatted(recorded));
 
   }
 

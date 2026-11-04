@@ -1,5 +1,6 @@
 package io.vanillabp.migration.test.deployment;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -20,6 +21,7 @@ import static org.mockito.Mockito.when;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -44,9 +46,11 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.migration.config.WorkflowAdapterProperties;
 import io.vanillabp.integration.adapter.migration.config.WorkflowModuleAdapterProperties;
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
+import io.vanillabp.integration.adapter.migration.deployment.SuspendedWorkflowReporting;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.AddressedSystem;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
+import io.vanillabp.integration.extension.spi.runtime.SuspendedWorkflowFound;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
 @ExtendWith(SuppressOutputExtension.class)
@@ -2191,6 +2195,124 @@ public class DeploymentServiceTest {
   private InputStream createDummyBpmnInputStream() {
 
     return new ByteArrayInputStream("<bpmn>dummy</bpmn>".getBytes(StandardCharsets.UTF_8));
+
+  }
+
+  @Nested
+  @DisplayName("An extension hears that an adapter found a workflow suspended")
+  class SuspendedWorkflowTests {
+
+    @Mock
+    private ExtensionWiringService<Integer, Integer> throwingExtension;
+
+    private SuspendedWorkflowFound found(
+        final String adapterId,
+        final String workflowModuleId) {
+
+      return new SuspendedWorkflowFound(
+          adapterId, workflowModuleId, "TestProcess", "aggregate-1", "4711", "task-1", Instant.parse(
+              "2026-11-04T10:00:00Z"), SuspendedWorkflowFound.Phase.CALL);
+
+    }
+
+    private DeploymentService deployedWith(
+        final List<ExtensionWiringService<?, ?>> extensions) {
+
+      final var properties = createPropertiesWithAdapter("adapter-test1");
+      lenient().when(adapter1DeploymentService.getAdapterId()).thenReturn("adapter-test1");
+      when(adapter1DeploymentService.readBpmn(anyString(), anyString(), any(InputStream.class), anyBoolean()))
+          .thenReturn(List.of(Map.entry("TestProcess", 42)));
+      when(adapter1DeploymentService.prepareBpmn(anyString(), any(), anyString(), anyString(), any()))
+          .thenReturn(100);
+
+      final var testee = new DeploymentService(properties, List.of(adapter1DeploymentService), extensions);
+      testee.deployResources(
+          List.of("test-module"), bpmnFilesOnly(location -> Map.of("process.bpmn", createDummyBpmnInputStream())));
+      return testee;
+
+    }
+
+    @Test
+    @DisplayName("Only the matching extension hears it, with the processing context of the adapter")
+    public void onlyTheMatchingExtensionHearsIt() {
+
+      lenient().when(extension1WiringService.getModelType()).thenReturn(Integer.class);
+      lenient().when(extension1WiringService.getProcessContextType()).thenReturn(Integer.class);
+      lenient().when(adapter2WiringService.getModelType()).thenReturn(Long.class);
+      lenient().when(adapter2WiringService.getProcessContextType()).thenReturn(Long.class);
+
+      final var testee = deployedWith(List.of(extension1WiringService, adapter2WiringService));
+      final var found = found("adapter-test1", "test-module");
+
+      testee.tellExtensionsAbout(found);
+
+      verify(extension1WiringService).workflowFoundSuspended(found, 100);
+      verify(adapter2WiringService, never()).workflowFoundSuspended(any(), any());
+
+    }
+
+    @Test
+    @DisplayName("An extension which throws neither stops the next one nor reaches the adapter")
+    public void anExtensionWhichThrowsIsIsolated() {
+
+      when(throwingExtension.getOrder()).thenReturn(-1);
+      lenient().when(throwingExtension.getModelType()).thenReturn(Integer.class);
+      lenient().when(throwingExtension.getProcessContextType()).thenReturn(Integer.class);
+      when(throwingExtension.getExtensionName()).thenReturn("throwing");
+      doThrow(new IllegalStateException("the extension broke"))
+          .when(throwingExtension)
+          .workflowFoundSuspended(any(), any());
+      when(extension1WiringService.getOrder()).thenReturn(1);
+      lenient().when(extension1WiringService.getModelType()).thenReturn(Integer.class);
+      lenient().when(extension1WiringService.getProcessContextType()).thenReturn(Integer.class);
+
+      final var testee = deployedWith(List.of(extension1WiringService, throwingExtension));
+      final var found = found("adapter-test1", "test-module");
+
+      assertDoesNotThrow(() -> testee.tellExtensionsAbout(found));
+
+      verify(throwingExtension).workflowFoundSuspended(found, 100);
+      verify(extension1WiringService).workflowFoundSuspended(found, 100);
+
+    }
+
+    @Test
+    @DisplayName("A report about another adapter or a module this start did not deploy reaches nobody")
+    public void aReportAboutSomethingElseReachesNobody() {
+
+      lenient().when(extension1WiringService.getModelType()).thenReturn(Integer.class);
+      lenient().when(extension1WiringService.getProcessContextType()).thenReturn(Integer.class);
+
+      final var testee = deployedWith(List.of(extension1WiringService));
+
+      testee.tellExtensionsAbout(found("adapter-test2", "test-module"));
+      testee.tellExtensionsAbout(found("adapter-test1", "other-module"));
+
+      verify(extension1WiringService, never()).workflowFoundSuspended(any(), any());
+
+    }
+
+    @Test
+    @DisplayName("The core's reporter drops a report before it is connected, and lets nothing out afterwards")
+    public void theReporterLetsNothingOut() {
+
+      final var reporting = new SuspendedWorkflowReporting();
+      final var found = found("adapter-test1", "test-module");
+
+      // before the start connected it, nothing runs a workflow, but a report must not fail
+      assertDoesNotThrow(() -> reporting.found(found));
+
+      final var deploymentService = org.mockito.Mockito.mock(DeploymentService.class);
+      reporting.connect(deploymentService);
+      reporting.found(found);
+      verify(deploymentService).tellExtensionsAbout(found);
+
+      doThrow(new IllegalStateException("a defect of the core"))
+          .when(deploymentService)
+          .tellExtensionsAbout(any());
+      assertDoesNotThrow(() -> reporting.found(found));
+
+    }
 
   }
 

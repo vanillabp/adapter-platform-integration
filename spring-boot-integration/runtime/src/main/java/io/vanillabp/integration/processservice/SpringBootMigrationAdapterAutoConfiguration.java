@@ -30,6 +30,7 @@ import io.vanillabp.integration.adapter.AdapterConfigurationBase;
 import io.vanillabp.integration.adapter.migration.config.ClasspathFacts;
 import io.vanillabp.integration.adapter.migration.config.DeploymentFailurePolicy;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.migration.deployment.SuspendedWorkflowReporting;
 import io.vanillabp.integration.adapter.migration.health.AdapterHealthReport;
 import io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
@@ -608,6 +609,21 @@ public class SpringBootMigrationAdapterAutoConfiguration {
         properties, () -> deploymentServices
             .stream()
             .toList());
+
+  }
+
+  /**
+   * Where an adapter reports a workflow it found suspended. Every adapter gets this one
+   * object. The deployment service connects to it once it is built, and from then on it
+   * tells the extensions of that adapter. See the decision in the repository's
+   * DECISIONS.pending/2074.md.
+   *
+   * @return The core's reporter, not connected yet
+   */
+  @Bean
+  public SuspendedWorkflowReporting vanillaBpSuspendedWorkflowReporting() {
+
+    return new SuspendedWorkflowReporting();
 
   }
 

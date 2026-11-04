@@ -1,6 +1,7 @@
 package io.vanillabp.integration.test.deployment;
 
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
+import io.vanillabp.integration.extension.spi.runtime.SuspendedWorkflowFound;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 
@@ -56,6 +57,15 @@ public class NonMatchingWiringService implements ExtensionWiringService<String, 
       final String bpmsProcessingContext) {
 
     events.record("extensionNonMatching:stopWorkflowProcessing:%s".formatted(workflowModuleId));
+
+  }
+
+  @Override
+  public void workflowFoundSuspended(
+      final SuspendedWorkflowFound found,
+      final String bpmsProcessingContext) {
+
+    events.record("extensionNonMatching:workflowFoundSuspended:%s".formatted(found.workflowModuleId()));
 
   }
 

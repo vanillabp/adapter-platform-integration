@@ -3,6 +3,7 @@ package io.vanillabp.integration.runtime.support;
 import io.vanillabp.integration.adapter.spi.AdapterCollaborators;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
+import io.vanillabp.integration.adapter.spi.SuspendedWorkflowReporter;
 import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
 import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
@@ -54,6 +55,44 @@ public final class AdapterCollaboratorsSupport {
       final Instance<WorkflowEndedInvoker> workflowEndedInvoker,
       final Instance<BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker) {
 
+    return collaborators(
+        adapterId, workflowTaskWiring, workflowTaskInvoker, scoping, workflowAggregateSync, preCommitRegistrar,
+        workflowEndedInvoker, bpmsInitiatedStartInvoker, null);
+
+  }
+
+  /**
+   * Builds the collaborators of one adapter id, with the reporter of a suspended workflow.
+   * An adapter of a BPMS which can suspend a workflow uses this one. The method above stays for
+   * an adapter which has nothing to report. Its adapter gets a reporter which drops every
+   * report (see the decision in the repository's DECISIONS.pending/2074.md).
+   *
+   * @param adapterId The adapter id the producer is building for
+   * @param workflowTaskWiring What the adapter asks while it reads a BPMN file
+   * @param workflowTaskInvoker Where a delivered task goes
+   * @param scoping How the adapter avoids a name clash between workflow modules
+   * @param workflowAggregateSync Which values of a workflow aggregate the BPMS may see
+   * @param preCommitRegistrar Where to register work which has to run before the caller's
+   *                           transaction commits
+   * @param workflowEndedInvoker Where the end of a workflow is reported. An application
+   *                             without such a method has no bean for it
+   * @param bpmsInitiatedStartInvoker Where a workflow is reported which the BPMS started by
+   *                                  itself. Here too, the bean may be missing
+   * @param suspendedWorkflowReporter Where a workflow is reported which the adapter found
+   *                                  suspended. The platform always has this bean
+   * @return The collaborators, complete
+   */
+  public static AdapterCollaborators collaborators(
+      final String adapterId,
+      final WorkflowTaskWiring workflowTaskWiring,
+      final WorkflowTaskInvoker workflowTaskInvoker,
+      final NameClashAvoidanceSupport scoping,
+      final WorkflowAggregateSync workflowAggregateSync,
+      final PreCommitRegistrar preCommitRegistrar,
+      final Instance<WorkflowEndedInvoker> workflowEndedInvoker,
+      final Instance<BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker,
+      final Instance<SuspendedWorkflowReporter> suspendedWorkflowReporter) {
+
     return AdapterCollaborators
         .forAdapter(adapterId)
         .workflowTaskWiring(workflowTaskWiring)
@@ -63,6 +102,7 @@ public final class AdapterCollaboratorsSupport {
         .preCommitRegistrar(preCommitRegistrar)
         .workflowEndedInvoker(resolved(workflowEndedInvoker))
         .bpmsInitiatedStartInvoker(resolved(bpmsInitiatedStartInvoker))
+        .suspendedWorkflowReporter(resolved(suspendedWorkflowReporter))
         .build();
 
   }

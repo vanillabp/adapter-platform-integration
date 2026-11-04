@@ -1,5 +1,7 @@
 package io.vanillabp.integration.extension.spi;
 
+import io.vanillabp.integration.extension.spi.runtime.SuspendedWorkflowFound;
+
 /**
  * An implementation prepares the BPMN and wires it with the business code. VanillaBP extensions
  * and the adapters of the platform integration provide implementations.
@@ -135,6 +137,41 @@ public interface ExtensionWiringService<BPMN, PC> {
       final String workflowModuleId,
       final PC bpmsProcessingContext) {
     // by default there is nothing to stop
+  }
+
+  /**
+   * Says that an adapter found a workflow suspended in its BPMS. This is the one method of this
+   * interface which is called while workflows run. All the others belong to the start and the
+   * end of the application.
+   * <p>
+   * The adapter calls the core just before it refuses the application's call with a
+   * <code>WorkflowSuspendedException</code>, or before it lets an outbox entry wait. The core
+   * calls every extension which matches that adapter, with the same filter as
+   * {@link #startWorkflowProcessing(String, Object)}, and with the processing context the
+   * extension got there. An outbox entry tries again every few seconds while the workflow stays
+   * suspended, and every attempt is reported. So an extension filters out the repetitions
+   * itself, for example with {@link SuspendedWorkflowFound#phase()}.
+   * <p>
+   * <b>What an implementation must not do.</b> It runs on the thread of the caller. That is the
+   * application's thread or the thread of the outbox. It may run inside a transaction which
+   * rolls back right afterwards. So it must not write in that transaction, must not call the
+   * BPMS, and must return at once. It hands the work to a thread of its own. The core catches
+   * and logs an exception it throws. So an extension never changes what the application or the
+   * outbox entry sees (see the decision in the repository's DECISIONS.pending/2074.md).
+   * <p>
+   * Nothing stores the event. If the application stops before the extension handed it on, it is
+   * gone. An extension which must not miss a suspension needs a check of its own as well.
+   * <p>
+   * The default does nothing, because most extensions do not care.
+   *
+   * @param found What the adapter found
+   * @param bpmsProcessingContext The processing context of the adapter which found it, for the
+   *          workflow module of the call
+   */
+  default void workflowFoundSuspended(
+      final SuspendedWorkflowFound found,
+      final PC bpmsProcessingContext) {
+    // most extensions do not care
   }
 
 }

@@ -19,6 +19,7 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.AddressedSystem;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
+import io.vanillabp.integration.extension.spi.runtime.SuspendedWorkflowFound;
 import io.vanillabp.integration.spi.parts.PartKind;
 import io.vanillabp.integration.spi.parts.VanillaBpParts;
 import io.vanillabp.integration.spi.startup.StartupTopic;
@@ -1362,6 +1363,90 @@ public class DeploymentService {
                         processingContext);
               });
         });
+
+  }
+
+  /**
+   * Tells the extensions that an adapter found a workflow suspended. Only the extensions which
+   * match that adapter hear it, with the same filter as the start uses, and each gets the
+   * processing context of that adapter and workflow module.
+   * <p>
+   * Each extension is called on the caller's thread, one after the other, in the order of the
+   * start. An exception of one is logged and the next one is called. Nothing leaves this method.
+   * The adapter throws what it would have thrown anyway, so an extension cannot change what the
+   * application sees (see the decision in the repository's DECISIONS.pending/2074.md).
+   * <p>
+   * A report about a module or an adapter which this start did not deploy reaches nobody.
+   *
+   * @param found What the adapter found
+   * @param <BPMN> The BPMN model type an extension's wiring service is cast to
+   * @param <PC> The processing context of the adapter which found it
+   */
+  @SuppressWarnings("unchecked")
+  public <BPMN, PC> void tellExtensionsAbout(
+      final SuspendedWorkflowFound found) {
+
+    final var deployed = bpmsProcessingContexts.get(found.workflowModuleId());
+    if (deployed == null) {
+      log
+          .debug(
+              "Adapter '{}' found workflow '{}' suspended, but module '{}' was not deployed by this start. "
+                  + "No extension is told.",
+              found.adapterId(),
+              found.workflowId(),
+              found.workflowModuleId());
+      return;
+    }
+
+    deployed
+        .stream()
+        .filter(toBeStarted -> found.adapterId().equals(toBeStarted.deploymentService.getAdapterId()))
+        .forEach(toBeStarted -> {
+          final var deploymentService = (AdapterDeploymentService<?, PC>) toBeStarted.deploymentService;
+          final var processingContext = (PC) toBeStarted.getBpmsProcessingContext();
+          wiringServices
+              .stream()
+              .filter(wiringService -> wiringService.getModelType()
+                  .isAssignableFrom(deploymentService.getModelType()))
+              .filter(wiringService -> wiringService.getProcessContextType()
+                  .isAssignableFrom(deploymentService.getProcessContextType()))
+              .map(wiringService -> (ExtensionWiringService<BPMN, PC>) wiringService)
+              .forEach(wiringService -> tellOneExtension(wiringService, found, processingContext));
+        });
+
+  }
+
+  private static <BPMN, PC> void tellOneExtension(
+      final ExtensionWiringService<BPMN, PC> wiringService,
+      final SuspendedWorkflowFound found,
+      final PC processingContext) {
+
+    try {
+      wiringService.workflowFoundSuspended(found, processingContext);
+    } catch (RuntimeException e) {
+      // the application gets what the adapter throws next, whatever an extension did here
+      log
+          .warn(
+              "Extension '{}' failed to take the news that adapter '{}' found workflow '{}' of module '{}' "
+                  + "suspended. The call goes on as if the extension had not been asked.",
+              nameOf(wiringService),
+              found.adapterId(),
+              found.workflowId(),
+              found.workflowModuleId(),
+              e);
+    }
+
+  }
+
+  private static String nameOf(
+      final ExtensionWiringService<?, ?> wiringService) {
+
+    final var name = wiringService.getExtensionName();
+    return name != null
+        ? name
+        : wiringService
+            .getClass()
+            .getName();
 
   }
 

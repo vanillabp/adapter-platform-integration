@@ -138,4 +138,37 @@ public class AdapterCollaboratorsTest {
 
   }
 
+  @Test
+  @DisplayName("A suspended-workflow reporter which arrived is handed through")
+  public void theSuspendedWorkflowReporterIsHandedThrough() {
+
+    final SuspendedWorkflowReporter reporter = found -> {
+    };
+
+    assertSame(reporter, complete().suspendedWorkflowReporter(reporter).build().suspendedWorkflowReporter());
+
+  }
+
+  @Test
+  @DisplayName("Without a suspended-workflow reporter the adapter gets one which drops every report, silently")
+  public void aMissingSuspendedWorkflowReporterDropsEveryReport(
+      final CapturedOutput output) {
+
+    final var before = output.getAll().length();
+    final var collaborators = complete()
+        .workflowEndedInvoker(mock(WorkflowEndedInvoker.class))
+        .bpmsInitiatedStartInvoker(mock(BpmsInitiatedStartInvoker.class))
+        .build();
+
+    assertSame(SuspendedWorkflowReporter.NOBODY_LISTENS, collaborators.suspendedWorkflowReporter());
+    // an adapter of a BPMS which cannot suspend a workflow reports nothing, so this is no defect
+    assertFalse(output.getAll().substring(before).contains("suspendedWorkflowReporter"), output::getAll);
+    collaborators
+        .suspendedWorkflowReporter()
+        .found(new io.vanillabp.integration.extension.spi.runtime.SuspendedWorkflowFound(
+            "dummy", "module", "process", "aggregate", "4711", null, java.time.Instant
+                .now(), io.vanillabp.integration.extension.spi.runtime.SuspendedWorkflowFound.Phase.CALL));
+
+  }
+
 }

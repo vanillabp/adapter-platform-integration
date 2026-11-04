@@ -6,6 +6,7 @@ import java.util.stream.Stream;
 import io.quarkus.runtime.StartupEvent;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
+import io.vanillabp.integration.adapter.migration.deployment.SuspendedWorkflowReporting;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
 import io.vanillabp.integration.runtime.processservice.ProcessServiceBaseCdiBean;
@@ -138,6 +139,14 @@ public class VanillaBpDeploymentRunner {
   @Inject
   io.vanillabp.integration.adapter.migration.workflowtask.WorkflowTaskRegistry workflowTaskWiring;
 
+  /**
+   * The core's reporter of a suspended workflow, which the adapters got. Each start connects
+   * it to the deployment service it builds. So a workflow an adapter finds suspended reaches
+   * the extensions of that adapter.
+   */
+  @Inject
+  SuspendedWorkflowReporting suspendedWorkflowReporting;
+
   private DeploymentService deploymentService;
 
   private List<String> workflowModuleIds;
@@ -195,6 +204,7 @@ public class VanillaBpDeploymentRunner {
         .toList();
 
     deploymentService = deploymentServiceOf(deploymentServices, wiringServices);
+    suspendedWorkflowReporting.connect(deploymentService);
 
     // What the BUILD found out about the configuration files of the workflow modules.
     // The recorder which reports it runs before there are beans. So it kept the

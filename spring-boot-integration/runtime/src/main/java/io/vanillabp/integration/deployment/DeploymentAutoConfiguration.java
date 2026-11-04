@@ -10,6 +10,7 @@ import org.springframework.core.io.ResourceLoader;
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.deployment.DeploymentService;
+import io.vanillabp.integration.adapter.migration.deployment.SuspendedWorkflowReporting;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import io.vanillabp.integration.extension.spi.ExtensionWiringService;
@@ -67,6 +68,9 @@ public class DeploymentAutoConfiguration {
    * @param resourceLoader Reads a workflow module's BPMN and DMN files. It also finds a
    *          class which carries <code>&#64;WorkflowService</code> but is no bean, while a
    *          process which nothing claims is reported
+   * @param suspendedWorkflowReporting The core's reporter which the adapters got. It is
+   *          connected to the deployment service built here, so that a workflow an adapter
+   *          finds suspended reaches the extensions of that adapter
    * @return The lifecycle bean which deploys while the context comes up and stops workflow
    *         processing when it goes down
    */
@@ -78,7 +82,8 @@ public class DeploymentAutoConfiguration {
       final ObjectProvider<ExtensionWiringService<?, ?>> wiringServiceProvider,
       final ObjectProvider<ProcessService<?>> processServices,
       final WorkflowTaskWiring workflowTaskWiring,
-      final ResourceLoader resourceLoader) {
+      final ResourceLoader resourceLoader,
+      final ObjectProvider<SuspendedWorkflowReporting> suspendedWorkflowReporting) {
 
     final List<AdapterDeploymentService<?, ?>> deploymentServices = deploymentServiceProvider
         .stream()
@@ -100,6 +105,7 @@ public class DeploymentAutoConfiguration {
     final var deploymentService = new DeploymentService(
         properties, deploymentServices, wiringServices, workflowTaskWiring, new WorkflowServicesWhichAreNoBeans(
             resourceLoader, allWorkflowModules));
+    suspendedWorkflowReporting.ifAvailable(reporting -> reporting.connect(deploymentService));
 
     return new SpringBootDeploymentService(
         deploymentService, allWorkflowModules, processServices);

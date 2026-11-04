@@ -229,6 +229,25 @@ public class AdapterBeanRegistrarSupportTest {
     }
 
     @Test
+    @DisplayName("The reporter of a suspended workflow is the platform's bean, and drops reports without one")
+    public void theSuspendedWorkflowReporterIsLookedUp() {
+
+      final var collaborators = AdapterBeanRegistrarSupport.collaborators(contextWithout(), "c8");
+      org.junit.jupiter.api.Assertions
+          .assertNotSame(
+              io.vanillabp.integration.adapter.spi.SuspendedWorkflowReporter.NOBODY_LISTENS,
+              collaborators.suspendedWorkflowReporter());
+
+      final var withoutReporter = AdapterBeanRegistrarSupport
+          .collaborators(contextWithout(io.vanillabp.integration.adapter.spi.SuspendedWorkflowReporter.class), "c8");
+      org.junit.jupiter.api.Assertions
+          .assertSame(
+              io.vanillabp.integration.adapter.spi.SuspendedWorkflowReporter.NOBODY_LISTENS,
+              withoutReporter.suspendedWorkflowReporter());
+
+    }
+
+    @Test
     @DisplayName("A collaborator which did not resolve is absent and named in the log")
     public void anUnresolvedCollaboratorIsNamed(
         final io.vanillabp.integration.test.utils.CapturedOutput output) {

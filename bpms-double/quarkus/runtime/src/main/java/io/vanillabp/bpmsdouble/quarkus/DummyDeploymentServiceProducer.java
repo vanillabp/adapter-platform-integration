@@ -72,6 +72,8 @@ public class DummyDeploymentServiceProducer {
    *          where the application asks for none
    * @param bpmsInitiatedStartInvoker The core bean reporting a workflow the BPMS started
    *          by itself, absent where the application asks for none
+   * @param suspendedWorkflowReporter The core bean telling the extensions about a workflow
+   *          found suspended
    * @param taskWiringSource The hooks standing in for the BPMN model
    * @param bpmsInitiatedStartSource The hooks standing in for the model's start events
    * @param processVersionSource The hooks standing in for the versions the BPMS deployed
@@ -89,6 +91,7 @@ public class DummyDeploymentServiceProducer {
       final io.vanillabp.integration.adapter.spi.PreCommitRegistrar preCommitRegistrar,
       @Any final Instance<io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker> workflowEndedInvoker,
       @Any final Instance<io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker> bpmsInitiatedStartInvoker,
+      @Any final Instance<io.vanillabp.integration.adapter.spi.SuspendedWorkflowReporter> suspendedWorkflowReporter,
       @Any final Instance<DummyTaskWiringSource> taskWiringSource,
       @Any final Instance<DummyBpmsInitiatedStartSource> bpmsInitiatedStartSource,
       @Any final Instance<DummyProcessVersionSource> processVersionSource,
@@ -103,7 +106,8 @@ public class DummyDeploymentServiceProducer {
                     .collaborators(
                         adapterId, workflowTaskRegistry, workflowTaskRegistry, scoping, workflowAggregateSync,
                         preCommitRegistrar, workflowEndedInvoker,
-                        bpmsInitiatedStartInvoker), taskWiringSource::stream, bpmsInitiatedStartSource::stream, processVersionSource::stream, healthSource::stream))
+                        bpmsInitiatedStartInvoker,
+                        suspendedWorkflowReporter), taskWiringSource::stream, bpmsInitiatedStartSource::stream, processVersionSource::stream, healthSource::stream))
         .toList();
 
   }
