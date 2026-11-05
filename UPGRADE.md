@@ -7,8 +7,8 @@ history. These entries feed the
 for users. The guide tells the same story in a narrative form, and where the two disagree, the guide
 wins. The same file exists for
 [spi-for-java](https://github.com/vanillabp/spi-for-java/blob/main/UPGRADE.md), for the
-[Camunda 7 adapter](https://github.com/camunda-community-hub/vanillabp-camunda7-adapter/blob/main/UPGRADE.md) and for the
-[Camunda 8 adapter](https://github.com/camunda-community-hub/vanillabp-camunda8-adapter/blob/main/UPGRADE.md).
+[Camunda 7 adapter](https://github.com/vanillabp/camunda7-adapter/blob/main/UPGRADE.md) and for the
+[Camunda 8 adapter](https://github.com/vanillabp/camunda8-adapter/blob/main/UPGRADE.md).
 What your BPMS (business process management system) asks of you on top of this is in the file of its
 adapter.
 
@@ -44,6 +44,9 @@ and next to it there is `io.vanillabp:vanillabp-quarkus-support`. Both carry the
 such a module compiles against. Both also bring the integration SPI (service provider interface,
 `io.vanillabp:vanillabp-integration-spi`) along. It holds the interfaces your application may
 implement. The adapter artifacts were renamed as well, and the file of your adapter names them.
+The Camunda 7 and Camunda 8 adapters also changed their groupId: version 1 was published as
+`org.camunda.community.vanillabp`, version 2 is published as `io.vanillabp`, like the rest of
+VanillaBP.
 
 Persistence needs no change of dependencies. Version 1 stored workflow aggregates through Spring
 Data, JPA or MongoDB, and version 2 does that out of the box. On Quarkus the built-in support covers

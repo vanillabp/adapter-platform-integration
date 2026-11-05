@@ -32,7 +32,7 @@ This release is built and tested against Spring Boot **4.1.0**, Quarkus **3.37.1
 A newer patch or minor version of either platform should work, but we do not test it here. A new
 major version needs an upgrade of VanillaBP itself, and `UPGRADE.md` names the minimum an
 application needs. There are no release lines per platform version. The
-[Camunda 8 adapter](https://github.com/camunda-community-hub/vanillabp-camunda8-adapter#release-lines)
+[Camunda 8 adapter](https://github.com/vanillabp/camunda8-adapter#release-lines)
 is different: its artifacts carry the minor version of the cluster. Camunda 8 forces that, because
 the client a build was compiled against is the lowest cluster version it accepts. Spring Boot and
 Quarkus are dependencies of the application, and the application picks their versions itself.
