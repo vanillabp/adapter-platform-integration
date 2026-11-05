@@ -1553,7 +1553,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
     final var now = Instant.now();
     // a deadline the adapter named replaces wait-for-visibility-at-most for this entry. See
-    // the addendum to decision 49 in {@code DECISIONS.pending/2060.md}
+    // the addendum to decision 49 in decision 135 in the repository's DECISIONS.md
     final var deadline = PhaseTwoRetryLater.deadline(e);
     if (properties.hasWaitedLongEnough(entry.createdAt(), deadline, now)) {
       final var waited = Duration.between(entry.createdAt(), now);

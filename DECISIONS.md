@@ -5054,3 +5054,174 @@ application with the BPMS double.
 - decision 93 of `vanillabp-camunda8-adapter`, decision 52 of `vanillabp-camunda7-adapter` and
   decision 37 of `businesscockpit-camunda8-adapter` point here
 
+### 135. Addendum to decision 49: an adapter may name a deadline for its wait, and a correlation carries the moment it was planned
+
+Proposed by story 2060. Decided by the maintainer on 2026-10-31 ("option R").
+
+This is an addendum to decision 49. Decision 49 stays as it is.
+
+**Why.** On Camunda 8 the cluster keeps a published message for its time-to-live. So an application
+may correlate a message before the workflow waits for it. The adapters of the Camunda 7 family get
+the same meaning with the same key, `message-time-to-live`. An embedded engine has no buffer, so
+the adapter asks the outbox again: a correlation which finds no subscription answers
+`PhaseTwoRetryLater`. That is the mechanism decision 49 built for a read model which is behind. It
+fits, because the entry goes back to the store with a due time and no thread waits. An entry which
+is not due yet is passed by the entries of the same workflow after it (decision 75). So a waiting
+correlation holds up nothing.
+
+Two things did not fit, and this addendum adds them.
+
+**A deadline replaces `wait-for-visibility-at-most`.** That setting ends a wait for a read model,
+about four hours by default. A message time-to-live is configured for the message. The outbox
+setting must neither cut it short nor stretch it. So `PhaseTwoRetryLater` takes an optional
+deadline. Where an adapter names one, the store blocks the entry at that moment, and
+`wait-for-visibility-at-most` does not apply to that entry. `PhaseTwoOutboxProperties#waitEndsAt`
+and `#hasWaitedLongEnough` are the one rule, and the relational store and both MongoDB stores ask
+it. The block then names the deadline instead of the setting. The adapter should still end the
+wait itself, with a `PhaseTwoPermanentFailure` which says what ran out. The block of the store is
+the net for a window which ends after the deadline.
+
+**A correlation carries the moment it was planned.** The time-to-live counts from the first
+attempt. Otherwise every attempt would make it longer. The core already wrote
+`PhaseTwoCall.ARG_PLANNED_AT` for a start (decision 116). It now writes it for `CORRELATE_MESSAGE`
+too, and `PhaseTwoRequest#plannedAt()` reads it. No rule which derives an idempotency key reads it,
+so two correlations planned at different moments still share their key. An entry planned before
+the moment was recorded carries none. Then the adapter names no deadline, and
+`wait-for-visibility-at-most` ends the wait.
+
+**What it does not change.** The answer is still not an attempt, and the store still does not
+remember it. The next dispatch looks like a first one. So an adapter throws it only before its
+operation reached the BPMS, as decision 49 says. And a time-to-live is a configured value, not an
+implicit retry. Without it, a correlation nothing waits for is refused in phase one, as in
+version 1.
+
+**Deduplication.** On Camunda 8 the time-to-live is also the window in which a message id removes
+duplicates. The Camunda 7 family needs no such window: the outbox dispatches every entry once.
+
+**The gruelbox store** lives in its own repository (decision 102). It reads the window of
+`PhaseTwoRetryLater` today. It does not read the deadline yet, so there `wait-for-visibility-at-most`
+still ends the wait of such an entry. It can follow with `PhaseTwoRetryLater.deadline(Throwable)`
+and the rule above, `PhaseTwoOutboxProperties#hasWaitedLongEnough`. The Camunda 7 family ends the
+wait itself at the deadline anyway, so on gruelbox only a time-to-live longer than
+`wait-for-visibility-at-most` is cut short.
+
+**Tests.** `PhaseTwoOutboxPropertiesTest#aDeadlineReplacesTheLimit` holds the rule.
+`WaitingForAReadModelUsesNoAttemptsTest` (relational store) and
+`MongoWaitingForAReadModelUsesNoAttemptsTest` (the MongoDB store of each platform) hold both
+directions: a deadline after the limit keeps the entry waiting, and a deadline which has passed
+blocks it. `DiscardedScheduleTest#aCorrelationCarriesWhenItWasPlanned` holds the moment and that it
+is not part of the key.
+
+**Where it is cited.**
+
+- javadoc of `PhaseTwoRetryLater` (`migration-adapter/integration-spi`)
+- comments in `JdbcPhaseTwoOutboxDispatcher#waitForTheReadModel` and in `waitForTheReadModel` of
+  both `MongoPhaseTwoOutboxDispatcher` classes (Spring Boot and Quarkus runtime)
+- `migration-adapter/ADAPTER-AUTHORS.md`, section "About time"
+- `migration-adapter/README.md`, the paragraph "What phase two must not do: wait"
+- the wiki page `Message-correlation` of this repository
+- the Camunda 7 adapter cites this behaviour in its decision 53, and the Operaton and CIB seven
+  adapters through it
+
+### 136. The message time-to-live is resolved once, in the core, and its meaning stays with each adapter
+
+Proposed by story 2062.
+
+**Why.** `message-time-to-live` says how long a correlated message waits for a workflow which does not
+wait for it yet. The Camunda 8 adapter had it first. The Camunda 7 family got it with the same key, the
+same four levels and the same choice of the process. Each adapter resolved it in its own overlay, once on
+Spring Boot and once on Quarkus. That is two copies of one rule, and on two platforms each. They had
+started to differ in small ways already: one read the models every time, the other only where the
+processes of the module answered differently.
+
+**What holds.**
+
+- The key is written at four levels, and the most specific one wins:
+
+  ```text
+  vanillabp.adapters.<id>.message-time-to-live
+  vanillabp.workflow-modules.<m>.adapters.<id>.message-time-to-live
+  vanillabp.workflow-modules.<m>.workflows.<w>.adapters.<id>.message-time-to-live
+  vanillabp.workflow-modules.<m>.workflows.<w>.messages.<message-name>.adapters.<id>.message-time-to-live
+  ```
+
+  The core binds it and resolves it, in `MigrationAdapterProperties#messageTimeToLive`. The message level
+  is a map of its own next to the tasks, `MessageAdapterProperties`. It knows only this one key.
+
+- A correlation names the process at the top, but the event which waits may sit in a called process. The
+  adapter reads its deployed models and says which processes wait for the message.
+  `MessageTimeToLiveResolver#resolveFor` in the adapter SPI picks the process: the process of the call if
+  its own model waits, otherwise the one other process of the module whose model waits, otherwise the
+  process of the call. The models are read only where the processes of the module would give different
+  answers. The answer is the same as before on both BPMS.
+
+- What a value means stays with the adapter. Zero switches the waiting off on an embedded engine. On a
+  Camunda 8 cluster it drops every message. A missing value is zero on the Camunda 7 family, and the
+  default of the client on Camunda 8. So each adapter checks the values itself, with its own message.
+  `messageTimesToLiveWrittenFor` lists every value under the key it was written at, for that check.
+
+- Written at a task, the key ends the startup. It binds there, because one class holds what an adapter
+  may be told at the three levels above the message. Nobody reads it there. So the rule of decision 89
+  applies, and the message says where the line belongs. A receive task waits for a message as well, and
+  its time-to-live is read under the name of that message. This is the one change an application can
+  see: before, a line at a task did nothing.
+
+**A shared map key.** The name `message-name` moves into the table of decision 132. Until now only the
+adapters used it. It now names a map of the platform's own configuration, and `EveryMapKeyHasANameTest`
+knows it.
+
+**What it costs.** An adapter of a BPMS without such a buffer may ignore the key. It is bound for every
+adapter id, whether its BPMS knows the key or not, like every other adapter setting.
+
+**Tests.** `MessageTimeToLiveResolutionTest` holds the four levels, the message which is not a task, the
+listing, the refusal at a task and the choice of the process. `VanillaBpConfigurationBindingTest`
+binds the keys on Spring Boot, `QuarkusMessageTimeToLiveMappingTest` on Quarkus.
+
+**Where it is cited.**
+
+- javadoc of `AdapterProperties`, `MessageAdapterProperties`, `MigrationAdapterProperties` and
+  `MessageTimeToLiveResolver`
+- `migration-adapter/README.md`, section "A message time-to-live means the same on every BPMS"
+- wiki pages `Message-correlation` and `Workflow-modules`
+- the Camunda 8 adapter and the Camunda 7 family read it from here
+
+**Addendum: the key leaves `adapters.<id>`, and the widest level is the workflow module.**
+
+Added by story 2062 after the core resolution above was merged. It replaces the four keys in the list
+"What holds". Everything else above stays.
+
+- How long a message waits for a workflow means the same on every BPMS. Only the way an adapter makes it
+  wait differs. So the key carries no adapter ID, like `allow-full-sync-with-bpms` and `delivery`. And
+  there is no value for the whole application. How long a message may wait depends on the business of
+  the workflows which wait for it. The workflow module is the widest scope which shares that business.
+  Three levels are left, and the most specific one wins:
+
+  ```text
+  vanillabp.workflow-modules.<m>.message-time-to-live
+  vanillabp.workflow-modules.<m>.workflows.<w>.message-time-to-live
+  vanillabp.workflow-modules.<m>.workflows.<w>.messages.<message-name>.message-time-to-live
+  ```
+- The key is still bound at the application, in every adapter section (at every level, the message
+  included) and at every task. A line there ends the startup with `MisplacedSettings`, and the message
+  names the three keys above (decision 89). There is no transition for the old keys, because they were
+  never in a release.
+- What a missing value and zero mean stays with each adapter, and the defaults do not change: the default
+  of the client on Camunda 8, zero on the Camunda 7 family. Without an application-wide key, the
+  Camunda 8 client keeps its own default for every message which no module configures.
+- `messageTimeToLiveResolver()` and `messageTimesToLiveWritten()` take no adapter ID any more. Every
+  adapter gets the same answer. An adapter still checks every written value against its own rules, so
+  in an application with two BPMS both adapters check the same values.
+
+**Tests.** `MessageTimeToLiveResolutionTest` holds the three levels and every refusal.
+`VanillaBpConfigurationBindingTest` and `QuarkusMessageTimeToLiveMappingTest` bind the three keys and
+every misplaced one, on Spring Boot and on Quarkus.
+
+**Second addendum: each adapter checks the values of the workflow modules it serves.**
+
+The key names no adapter, so `messageTimesToLiveWritten()` handed every value to every adapter. In an
+application which migrates from the Camunda 7 family to Camunda 8, `0s` on a module which only the
+Camunda 7 adapter serves switches the waiting off there, and the Camunda 8 adapter refused it all the
+same. So the listing takes the adapter again: `messageTimesToLiveWrittenFor(adapterId)` lists the values
+of the modules whose prioritized adapters, or those of one of their workflows, name that adapter. A module
+served by both is checked by both. `MessageTimeToLiveResolutionTest#anAdapterSeesOnlyTheModulesItServes`
+holds it.

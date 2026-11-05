@@ -2307,7 +2307,7 @@ exporter, while a database which was away for hours blocked nothing (decision 49
 repository's DECISIONS.md). `PhaseTwoOutboxProperties#hasWaitedLongEnough` is the one rule which
 all three stores of this repository ask. An adapter may name a deadline with its answer, and then
 the deadline replaces `wait-for-visibility-at-most` for that entry. The Camunda 7 family does that
-for a message time-to-live (see the addendum to decision 49 in `DECISIONS.pending/2060.md`). `WaitingForAReadModelUsesNoAttemptsTest` holds
+for a message time-to-live (see the addendum to decision 49 in [decision 135](../DECISIONS.md#135-addendum-to-decision-49-an-adapter-may-name-a-deadline-for-its-wait-and-a-correlation-carries-the-moment-it-was-planned)). `WaitingForAReadModelUsesNoAttemptsTest` holds
 it for the relational store, and `MongoWaitingForAReadModelUsesNoAttemptsTest` for the MongoDB
 store of each platform. The gruelbox store lives in `io.vanillabp:gruelbox-phase-two-outbox` and
 asks the same method. gruelbox counts every failed attempt and schedules it at the one distance it
@@ -3486,7 +3486,7 @@ on an embedded engine, and drops every message on a Camunda 8 cluster. So each a
 a missing value means and which values it refuses. `messageTimesToLiveWrittenFor` lists every
 value with its key for that check, for the workflow modules the adapter serves. A module which
 migrates from one BPMS to another is checked by both adapters. `MessageTimeToLiveResolutionTest` holds the levels, every refusal and
-the choice of the process. See `DECISIONS.pending/2062.md`.
+the choice of the process. See [decision 136](../DECISIONS.md#136-the-message-time-to-live-is-resolved-once-in-the-core-and-its-meaning-stays-with-each-adapter).
 
 ### The transaction the work runs in
 

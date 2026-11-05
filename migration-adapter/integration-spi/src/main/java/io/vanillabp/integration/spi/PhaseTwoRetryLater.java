@@ -40,7 +40,7 @@ import java.time.Instant;
  * neither cut it short nor stretch it. The adapter should still end the wait itself, with a
  * {@link PhaseTwoPermanentFailure} which names what ran out. The store's block is the net
  * for a window which ends after the deadline. See the addendum to decision 49 in
- * {@code DECISIONS.pending/2060.md}.
+ * decision 135 in the repository's DECISIONS.md.
  * <p>
  * Because the answer is not counted, the store does not remember it either. The next
  * dispatch of the entry looks like its first one. So throw this only before the operation
