@@ -1249,7 +1249,7 @@ the same for every attempt of the entry. End the wait yourself when the deadline
 a `PhaseTwoPermanentFailure` which says what ran out. The block of the store is only the net for a
 window which ends after the deadline. `WaitingForAReadModelUsesNoAttemptsTest` and
 `MongoWaitingForAReadModelUsesNoAttemptsTest` hold the deadline as well (see the addendum to
-decision 49 in `DECISIONS.pending/2060.md`).
+decision 49 in [decision 135](../DECISIONS.md#135-addendum-to-decision-49-an-adapter-may-name-a-deadline-for-its-wait-and-a-correlation-carries-the-moment-it-was-planned)).
 
 ## 6. Registering your adapter per platform
 
