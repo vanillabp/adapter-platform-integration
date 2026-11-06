@@ -9,7 +9,7 @@
   </parent>
 
   <artifactId>adapter-platform-integration</artifactId>
-  <version>2.0.0-SNAPSHOT</version>
+  <version>2.0.0</version>
   <packaging>pom</packaging>
   <name>VanillaBP adapter platform integration</name>
   <description>Platform integrations for the VanillaBP SPI: the platform-neutral migration adapter plus its Spring Boot and Quarkus integrations.</description>
@@ -61,7 +61,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
     <!-- Keep in sync with the property of the same name in bom/pom.xml. -->
-    <spi-for-java.version>2.0.0-SNAPSHOT</spi-for-java.version>
+    <spi-for-java.version>2.0.0</spi-for-java.version>
     <!-- The oldest BPMS adapter and the oldest extension this platform integration still
          serves. Set it deliberately with every release: raising it stops the boot of every
          application still using an older part (see decision 71 in DECISIONS.md). -->

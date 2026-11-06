@@ -36,8 +36,6 @@
 
   <!-- released versions, oldest first; the release adds a line here and never touches an existing
        one -->
-
-  <!-- the version under development -->
-  <include file="vanillabp/schema/latest.xml"/>
+  <include file="vanillabp/schema/2.0.0.xml"/>
 
 </databaseChangeLog>
