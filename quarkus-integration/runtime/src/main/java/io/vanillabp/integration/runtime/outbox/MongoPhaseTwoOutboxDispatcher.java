@@ -848,8 +848,8 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     // a deadline the adapter named replaces wait-for-visibility-at-most for this entry. An
     // attempt which started before it may have got its answer before it, too. Such an attempt
     // says nothing about the deadline, so the entry gets one more, and the adapter ends the
-    // wait with its own reason. See the addendum to decision 49 in decision 135 in the
-    // repository's DECISIONS.md
+    // wait with its own reason. See the addendum to decision 49 in decision 135, and decision 137,
+    // in the repository's DECISIONS.md
     final var deadline = PhaseTwoRetryLater.deadline(e);
     if (properties.hasWaitedLongEnough(createdAt, deadline, attemptStartedAt)) {
       final var waited = createdAt == null

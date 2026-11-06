@@ -1252,7 +1252,7 @@ never ends the wait, however late its answer arrives, so you always get an attem
 deadline. The block of the store is only the net for an adapter which then still says "not yet".
 `WaitingForAReadModelUsesNoAttemptsTest` and
 `MongoWaitingForAReadModelUsesNoAttemptsTest` hold the deadline as well (see the addendum to
-decision 49 in [decision 135](../DECISIONS.md#135-addendum-to-decision-49-an-adapter-may-name-a-deadline-for-its-wait-and-a-correlation-carries-the-moment-it-was-planned)).
+decision 49 in [decision 135](../DECISIONS.md#135-addendum-to-decision-49-an-adapter-may-name-a-deadline-for-its-wait-and-a-correlation-carries-the-moment-it-was-planned) and [decision 137](../DECISIONS.md#137-addendum-to-decision-135-an-attempt-which-started-before-the-deadline-does-not-end-the-wait)).
 
 ## 6. Registering your adapter per platform
 

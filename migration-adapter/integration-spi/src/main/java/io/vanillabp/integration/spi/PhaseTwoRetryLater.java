@@ -42,8 +42,8 @@ import java.time.Instant;
  * {@link PhaseTwoPermanentFailure} which names what ran out. An attempt which started
  * before the deadline never ends the wait, however late its answer arrives, so the adapter
  * always gets an attempt which sees the deadline. The store's block is the net for an
- * adapter which then still says "not yet". See the addendum to decision 49 in decision 135
- * in the repository's DECISIONS.md.
+ * adapter which then still says "not yet". See the addendum to decision 49 in decision 135,
+ * and decision 137, in the repository's DECISIONS.md.
  * <p>
  * Because the answer is not counted, the store does not remember it either. The next
  * dispatch of the entry looks like its first one. So throw this only before the operation
