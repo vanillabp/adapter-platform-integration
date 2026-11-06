@@ -1241,15 +1241,18 @@ first one. So throw it only before your operation reached the BPMS.
 
 Your adapter may know how long a wait may last. Then pass that moment as the deadline of
 `PhaseTwoRetryLater`. It replaces `wait-for-visibility-at-most` for that entry, in both
-directions: the entry is blocked at the deadline, earlier or later than the outbox setting would
-block it. The Camunda 7 family uses it for a message time-to-live. A correlation which finds no
+directions: the entry is blocked once an attempt which started at the deadline or later still says
+"not yet", earlier or later than the outbox setting would block it. The Camunda 7 family uses it
+for a message time-to-live. A correlation which finds no
 subscription asks for another attempt, and its deadline is the moment the correlation was planned
 plus the time-to-live. That moment reaches phase two as `PhaseTwoRequest#plannedAt()`, and it stays
 the same for every attempt of the entry. End the wait yourself when the deadline has passed, with
-a `PhaseTwoPermanentFailure` which says what ran out. The block of the store is only the net for a
-window which ends after the deadline. `WaitingForAReadModelUsesNoAttemptsTest` and
+a `PhaseTwoPermanentFailure` which says what ran out. An attempt which started before the deadline
+never ends the wait, however late its answer arrives, so you always get an attempt which sees the
+deadline. The block of the store is only the net for an adapter which then still says "not yet".
+`WaitingForAReadModelUsesNoAttemptsTest` and
 `MongoWaitingForAReadModelUsesNoAttemptsTest` hold the deadline as well (see the addendum to
-decision 49 in [decision 135](../DECISIONS.md#135-addendum-to-decision-49-an-adapter-may-name-a-deadline-for-its-wait-and-a-correlation-carries-the-moment-it-was-planned)).
+decision 49 in [decision 135](../DECISIONS.md#135-addendum-to-decision-49-an-adapter-may-name-a-deadline-for-its-wait-and-a-correlation-carries-the-moment-it-was-planned) and [decision 137](../DECISIONS.md#137-addendum-to-decision-135-an-attempt-which-started-before-the-deadline-does-not-end-the-wait)).
 
 ## 6. Registering your adapter per platform
 

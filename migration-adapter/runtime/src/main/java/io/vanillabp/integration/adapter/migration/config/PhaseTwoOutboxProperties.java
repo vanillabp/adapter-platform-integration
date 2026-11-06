@@ -195,14 +195,14 @@ public class PhaseTwoOutboxProperties {
    *
    * @param writtenAt When the entry was written, <code>null</code> where the store does not
    *          know. That never counts as waited long enough
-   * @param now The moment the dispatch was answered
+   * @param attemptStartedAt When the attempt which got the answer started
    * @return Whether the entry is to be blocked instead of being dispatched again
    */
   public boolean hasWaitedForVisibilityLongEnough(
       final Instant writtenAt,
-      final Instant now) {
+      final Instant attemptStartedAt) {
 
-    return hasWaitedLongEnough(writtenAt, null, now);
+    return hasWaitedLongEnough(writtenAt, null, attemptStartedAt);
 
   }
 
@@ -235,20 +235,27 @@ public class PhaseTwoOutboxProperties {
   /**
    * Whether an entry has waited long enough to be blocked, with the deadline the adapter
    * named where it named one. See {@link #waitEndsAt(Instant, Instant)}.
+   * <p>
+   * The moment which counts is the start of the attempt, not its end. An adapter which asks
+   * its BPMS and then compares its own clock with the deadline may answer "not yet" just
+   * before the deadline. The store reads the clock a moment later, and that moment may lie
+   * behind the deadline. Then the answer would end the wait, and the adapter would never get
+   * the last attempt which it planned for that moment. An attempt which started at the
+   * deadline or later has seen the deadline. Only then a "not yet" ends the wait.
    *
    * @param writtenAt When the entry was written, <code>null</code> where the store does not
    *          know
    * @param deadline The deadline the adapter named, or <code>null</code>
-   * @param now The moment the dispatch was answered
+   * @param attemptStartedAt When the attempt which got the answer started
    * @return Whether the entry is to be blocked instead of being dispatched again
    */
   public boolean hasWaitedLongEnough(
       final Instant writtenAt,
       final Instant deadline,
-      final Instant now) {
+      final Instant attemptStartedAt) {
 
     final var waitEndsAt = waitEndsAt(writtenAt, deadline);
-    return (waitEndsAt != null) && !now.isBefore(waitEndsAt);
+    return (waitEndsAt != null) && !attemptStartedAt.isBefore(waitEndsAt);
 
   }
 

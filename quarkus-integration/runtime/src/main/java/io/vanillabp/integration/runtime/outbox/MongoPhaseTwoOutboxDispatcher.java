@@ -588,6 +588,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final Document entry,
       final DispatchLease.Held held) {
 
+    final var attemptStartedAt = Instant.now();
     final var entryId = entry.getString("_id");
     final String payloadReference;
     // Everything which the attempt does is inside, so the renewal is let go whichever way
@@ -621,7 +622,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           wasTakenBefore(entry),
           entry.getDate("createdAt"));
     } catch (final RuntimeException e) {
-      reportFailedDispatch(collection, entry, e);
+      reportFailedDispatch(collection, entry, e, attemptStartedAt);
       return;
     }
     final var markedDone = Updates.combine(
@@ -648,7 +649,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       // at-least-once which the contract names. We report it like a failed dispatch. A
       // mark lost without a word would leave an operation which looks undone, with nobody
       // to ask.
-      reportFailedDispatch(collection, entry, e);
+      reportFailedDispatch(collection, entry, e, attemptStartedAt);
       return;
     }
     // The entry is dispatched, so its bytes have done their work. They are removed AFTER
@@ -673,14 +674,16 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * @param collection The outbox collection
    * @param entry The entry whose dispatch failed
    * @param e What the dispatch threw
+   * @param attemptStartedAt When the attempt which ended this way started
    */
   private void reportFailedDispatch(
       final MongoCollection<Document> collection,
       final Document entry,
-      final RuntimeException e) {
+      final RuntimeException e,
+      final Instant attemptStartedAt) {
 
     try {
-      writeDownTheFailedDispatch(collection, entry, e);
+      writeDownTheFailedDispatch(collection, entry, e, attemptStartedAt);
     } catch (final RuntimeException whileWritingItDown) {
       reportAResultWhichWasNotWritten(entry, whileWritingItDown);
     }
@@ -742,11 +745,13 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * @param collection The outbox collection
    * @param entry The entry whose dispatch failed
    * @param e What the dispatch threw
+   * @param attemptStartedAt When the attempt which ended this way started
    */
   private void writeDownTheFailedDispatch(
       final MongoCollection<Document> collection,
       final Document entry,
-      final RuntimeException e) {
+      final RuntimeException e,
+      final Instant attemptStartedAt) {
 
     final var entryId = entry.getString("_id");
     // The adapter said that repeating cannot help. So the entry is blocked at once, not
@@ -771,7 +776,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     }
     final var retryAfter = PhaseTwoRetryLater.retryAfter(e);
     if (retryAfter != null) {
-      waitForTheReadModel(collection, entry, retryAfter, e);
+      waitForTheReadModel(collection, entry, retryAfter, e, attemptStartedAt);
       return;
     }
     if (entry.getInteger("attempts") + 1 >= properties.getBlockAfterAttempts()) {
@@ -826,22 +831,27 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * @param entry The entry whose dispatch was answered with "not yet"
    * @param retryAfter The window the adapter named
    * @param e What the dispatch threw
+   * @param attemptStartedAt When the attempt which got this answer started
    */
   private void waitForTheReadModel(
       final MongoCollection<Document> collection,
       final Document entry,
       final Duration retryAfter,
-      final RuntimeException e) {
+      final RuntimeException e,
+      final Instant attemptStartedAt) {
 
     final var entryId = entry.getString("_id");
     final var createdAt = entry.getDate("createdAt") == null
         ? null
         : entry.getDate("createdAt").toInstant();
     final var now = Instant.now();
-    // a deadline the adapter named replaces wait-for-visibility-at-most for this entry. See
-    // the addendum to decision 49 in decision 135 in the repository's DECISIONS.md
+    // a deadline the adapter named replaces wait-for-visibility-at-most for this entry. An
+    // attempt which started before it may have got its answer before it, too. Such an attempt
+    // says nothing about the deadline, so the entry gets one more, and the adapter ends the
+    // wait with its own reason. See the addendum to decision 49 in decision 135, and decision 137,
+    // in the repository's DECISIONS.md
     final var deadline = PhaseTwoRetryLater.deadline(e);
-    if (properties.hasWaitedLongEnough(createdAt, deadline, now)) {
+    if (properties.hasWaitedLongEnough(createdAt, deadline, attemptStartedAt)) {
       final var waited = createdAt == null
           ? null
           : Duration.between(createdAt, now);

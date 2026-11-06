@@ -401,6 +401,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final PhaseTwoOutboxEntry entry,
       final DispatchLease.Held held) {
 
+    final var attemptStartedAt = Instant.now();
     final String payloadReference;
     // everything the attempt does is inside, including reading the arguments of the
     // entry. So the renewal is let go, whichever way the attempt ends
@@ -426,7 +427,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           wasTakenBefore(entry),
           entry.getCreatedAt());
     } catch (final Exception e) {
-      reportFailedDispatch(entry, e);
+      reportFailedDispatch(entry, e, attemptStartedAt);
       return;
     }
     final var markedDone = new Update()
@@ -453,7 +454,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       // at-least-once which the contract names. It is said out loud, through the same
       // report a failed dispatch uses. A mark lost in silence leaves an operation which
       // looks undone, with nobody to ask
-      reportFailedDispatch(entry, e);
+      reportFailedDispatch(entry, e, attemptStartedAt);
       return;
     }
     // the entry is dispatched, so its bytes have done their work. They are removed AFTER
@@ -477,13 +478,15 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    *
    * @param entry The entry whose dispatch failed
    * @param e What the dispatch threw
+   * @param attemptStartedAt When the attempt which ended this way started
    */
   private void reportFailedDispatch(
       final PhaseTwoOutboxEntry entry,
-      final Exception e) {
+      final Exception e,
+      final Instant attemptStartedAt) {
 
     try {
-      writeDownTheFailedDispatch(entry, e);
+      writeDownTheFailedDispatch(entry, e, attemptStartedAt);
     } catch (final RuntimeException whileWritingItDown) {
       reportAResultWhichWasNotWritten(entry, whileWritingItDown);
     }
@@ -545,10 +548,12 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    *
    * @param entry The entry whose dispatch failed
    * @param e What the dispatch threw
+   * @param attemptStartedAt When the attempt which ended this way started
    */
   private void writeDownTheFailedDispatch(
       final PhaseTwoOutboxEntry entry,
-      final Exception e) {
+      final Exception e,
+      final Instant attemptStartedAt) {
 
     // the adapter said that repeating cannot help. So the entry is blocked right away,
     // and not after the configured attempts
@@ -572,7 +577,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     }
     final var retryAfter = PhaseTwoRetryLater.retryAfter(e);
     if (retryAfter != null) {
-      waitForTheReadModel(entry, retryAfter, e);
+      waitForTheReadModel(entry, retryAfter, e, attemptStartedAt);
       return;
     }
     if (entry.getAttempts() + 1 >= properties.getBlockAfterAttempts()) {
@@ -626,17 +631,22 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * @param entry The entry whose dispatch was answered with "not yet"
    * @param retryAfter The window the adapter named
    * @param e What the dispatch threw
+   * @param attemptStartedAt When the attempt which got this answer started
    */
   private void waitForTheReadModel(
       final PhaseTwoOutboxEntry entry,
       final Duration retryAfter,
-      final Exception e) {
+      final Exception e,
+      final Instant attemptStartedAt) {
 
     final var now = Instant.now();
-    // a deadline the adapter named replaces wait-for-visibility-at-most for this entry. See
-    // the addendum to decision 49 in decision 135 in the repository's DECISIONS.md
+    // a deadline the adapter named replaces wait-for-visibility-at-most for this entry. An
+    // attempt which started before it may have got its answer before it, too. Such an attempt
+    // says nothing about the deadline, so the entry gets one more, and the adapter ends the
+    // wait with its own reason. See the addendum to decision 49 in decision 135, and decision 137,
+    // in the repository's DECISIONS.md
     final var deadline = PhaseTwoRetryLater.deadline(e);
-    if (properties.hasWaitedLongEnough(entry.getCreatedAt(), deadline, now)) {
+    if (properties.hasWaitedLongEnough(entry.getCreatedAt(), deadline, attemptStartedAt)) {
       final var waited = entry.getCreatedAt() == null
           ? null
           : Duration.between(entry.getCreatedAt(), now);
