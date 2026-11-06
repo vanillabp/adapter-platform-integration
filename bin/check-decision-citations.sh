@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # This is the original. Copies live in spi-for-java, hazelcast-shared-election-cache,
-# gruelbox-phase-two-outbox, process-engine-api-adapter and the two Camunda adapters in the
-# Camunda Community Hub. A change here belongs in all of them.
+# gruelbox-phase-two-outbox, process-engine-api-adapter and the two Camunda adapters. A change
+# here belongs in all of them.
 #
 # Reads every citation of a decision of this repository and says whether it still points at
 # something. Three things go wrong, and all three are silent:
