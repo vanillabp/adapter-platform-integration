@@ -1412,6 +1412,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final Entry entry,
       final DispatchLease.Held held) {
 
+    final var attemptStartedAt = Instant.now();
     final String payloadReference;
     // everything the attempt does is inside, so the renewal is released however the
     // attempt ends, also when reading the arguments of the entry fails
@@ -1437,7 +1438,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           entry.wasTakenBefore(),
           entry.createdAt());
     } catch (final Exception e) {
-      reportFailedDispatch(entry, e);
+      reportFailedDispatch(entry, e, attemptStartedAt);
       return;
     }
     if (!markDone(entry)) {
@@ -1463,10 +1464,12 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    *
    * @param entry The entry whose dispatch failed
    * @param e What the dispatch threw
+   * @param attemptStartedAt When the attempt which ended this way started
    */
   private void reportFailedDispatch(
       final Entry entry,
-      final Exception e) {
+      final Exception e,
+      final Instant attemptStartedAt) {
 
     // the adapter said that repeating cannot help, so block it right away and not after
     // the configured attempts
@@ -1490,7 +1493,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     }
     final var retryAfter = PhaseTwoRetryLater.retryAfter(e);
     if (retryAfter != null) {
-      waitForTheReadModel(entry, retryAfter, e);
+      waitForTheReadModel(entry, retryAfter, e, attemptStartedAt);
       return;
     }
     if (entry.attempts() + 1 >= properties.getBlockAfterAttempts()) {
@@ -1545,17 +1548,22 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
    * @param entry The entry whose dispatch was answered with "not yet"
    * @param retryAfter The window the adapter named
    * @param e What the dispatch threw
+   * @param attemptStartedAt When the attempt which got this answer started
    */
   private void waitForTheReadModel(
       final Entry entry,
       final Duration retryAfter,
-      final Exception e) {
+      final Exception e,
+      final Instant attemptStartedAt) {
 
     final var now = Instant.now();
-    // a deadline the adapter named replaces wait-for-visibility-at-most for this entry. See
-    // the addendum to decision 49 in decision 135 in the repository's DECISIONS.md
+    // a deadline the adapter named replaces wait-for-visibility-at-most for this entry. An
+    // attempt which started before it may have got its answer before it, too. Such an attempt
+    // says nothing about the deadline, so the entry gets one more, and the adapter ends the
+    // wait with its own reason. See the addendum to decision 49 in decision 135 in the
+    // repository's DECISIONS.md
     final var deadline = PhaseTwoRetryLater.deadline(e);
-    if (properties.hasWaitedLongEnough(entry.createdAt(), deadline, now)) {
+    if (properties.hasWaitedLongEnough(entry.createdAt(), deadline, attemptStartedAt)) {
       final var waited = Duration.between(entry.createdAt(), now);
       if (!markBlocked(
           entry,

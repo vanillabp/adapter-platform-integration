@@ -11,6 +11,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStor
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
 import io.vanillabp.integration.spi.PhaseTwoRetryLater;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackgroundOutput;
@@ -148,14 +150,51 @@ public class WaitingForAReadModelUsesNoAttemptsTest {
       final int answersNotYet,
       final Instant deadline) {
 
+    return aRouterAnswering(call -> {
+      if (call <= answersNotYet) {
+        throw new PhaseTwoRetryLater("the BPMS does not report the workflow yet", WINDOW, deadline);
+      }
+    });
+
+  }
+
+  /**
+   * What the adapter does when the store dispatches an entry.
+   */
+  @FunctionalInterface
+  private interface Answer {
+
+    void dispatch(
+        int call) throws Exception;
+
+  }
+
+  /**
+   * An adapter which asks its BPMS before the deadline and whose "not yet" reaches the store
+   * after it. The attempt started in time, and only the clock of the store has passed the
+   * deadline. This is what a slow database or a pause of the JVM does.
+   *
+   * @return The deadline the answer names
+   */
+  private static Instant aDeadlineWhichPassesDuringThisAttempt() {
+
+    final var deadline = Instant.now().plus(Duration.ofMillis(20));
+    while (Instant.now().isBefore(deadline)) {
+      Thread.onSpinWait();
+    }
+    return deadline;
+
+  }
+
+  private PhaseTwoRouter aRouterAnswering(
+      final Answer answer) {
+
     when(processService.getWorkflowModuleId()).thenReturn(MODULE);
     when(processService.getBpmnProcessId()).thenReturn(PROCESS);
     when(processService.convertAggregateId(AGGREGATE)).thenReturn(AGGREGATE);
     Mockito
         .doAnswer(invocation -> {
-          if (callsIntoTheAdapter.incrementAndGet() <= answersNotYet) {
-            throw new PhaseTwoRetryLater("the BPMS does not report the workflow yet", WINDOW, deadline);
-          }
+          answer.dispatch(callsIntoTheAdapter.incrementAndGet());
           return null;
         })
         .when(processService)
@@ -365,6 +404,74 @@ public class WaitingForAReadModelUsesNoAttemptsTest {
     final var lastFailure = entryOf(connections, table, entry).lastFailure();
     assertTrue(
         lastFailure.contains("which passed the deadline %s the adapter named".formatted(deadline)),
+        lastFailure);
+
+  }
+
+  @Test
+  @DisplayName("An attempt which started before the deadline does not end the wait, so the adapter says itself what ran out")
+  public void anAttemptWhichStartedBeforeTheDeadlineDoesNotEndTheWait() throws Exception {
+
+    final var table = "OUTBOX_DEADLINE_DURING_ATTEMPT";
+    final var connections = databaseNamed("deadline-during-attempt");
+    final var dispatcher = dispatcherOf(
+        connections, allowingTwoAttemptsAndWaiting(Duration.ofHours(1)), aRouterAnswering(call -> {
+          if (call == 1) {
+            throw new PhaseTwoRetryLater(
+                "the BPMS does not report the workflow yet", WINDOW, aDeadlineWhichPassesDuringThisAttempt());
+          }
+          throw new PhaseTwoPermanentFailure("nothing waited for the message within its time-to-live", null);
+        }),
+        table);
+    dispatcher.prepareSchema();
+    final var entry = anEntryWrittenAt(connections, table, Instant.now());
+
+    try {
+      dispatcher.start();
+      waitUntil(
+          "the entry was not blocked",
+          () -> JdbcPhaseTwoOutboxDispatcher.STATUS_BLOCKED.equals(entryOf(connections, table, entry).status()));
+    } finally {
+      dispatcher.stop();
+    }
+
+    assertEquals(2, callsIntoTheAdapter.get(), "the adapter got the attempt which sees the deadline");
+    final var lastFailure = entryOf(connections, table, entry).lastFailure();
+    assertTrue(lastFailure.contains("nothing waited for the message within its time-to-live"), lastFailure);
+
+  }
+
+  @Test
+  @DisplayName("An adapter which still says \"not yet\" in an attempt which started after the deadline is ended by the store")
+  public void aNotYetFromAnAttemptAfterTheDeadlineEndsTheWait() throws Exception {
+
+    final var table = "OUTBOX_DEADLINE_DURING_ATTEMPT_NO_END";
+    final var connections = databaseNamed("deadline-during-attempt-no-end");
+    final var named = new AtomicReference<Instant>();
+    final var dispatcher = dispatcherOf(
+        connections, allowingTwoAttemptsAndWaiting(Duration.ofHours(1)), aRouterAnswering(call -> {
+          if (call == 1) {
+            named.set(aDeadlineWhichPassesDuringThisAttempt());
+          }
+          throw new PhaseTwoRetryLater("the BPMS does not report the workflow yet", WINDOW, named.get());
+        }),
+        table);
+    dispatcher.prepareSchema();
+    final var entry = anEntryWrittenAt(connections, table, Instant.now());
+
+    try {
+      dispatcher.start();
+      waitUntil(
+          "the entry was not blocked",
+          () -> JdbcPhaseTwoOutboxDispatcher.STATUS_BLOCKED.equals(entryOf(connections, table, entry).status()));
+    } finally {
+      dispatcher.stop();
+    }
+
+    assertEquals(2, callsIntoTheAdapter.get(), "only the attempt which started after the deadline ended the wait");
+    final var lastFailure = entryOf(connections, table, entry).lastFailure();
+    assertTrue(
+        lastFailure.contains("which passed the deadline %s the adapter named".formatted(named.get())),
         lastFailure);
 
   }

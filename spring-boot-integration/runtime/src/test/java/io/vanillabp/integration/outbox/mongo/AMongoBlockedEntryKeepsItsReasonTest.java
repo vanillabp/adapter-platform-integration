@@ -45,6 +45,7 @@ import io.vanillabp.integration.adapter.migration.processservice.MigrationProces
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
+import io.vanillabp.integration.spi.PhaseTwoRetryLater;
 import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension.SuppressBackgroundOutput;
@@ -261,6 +262,33 @@ public class AMongoBlockedEntryKeepsItsReasonTest {
 
     assertEquals(
         "io.vanillabp.integration.spi.PhaseTwoPermanentFailure: the message 'Order paid' is not modelled",
+        entry.getString("lastFailure"));
+
+  }
+
+  @Test
+  @DisplayName("An attempt which started before the deadline does not end the wait, so the adapter says itself what ran out")
+  public void anAttemptWhichStartedBeforeTheDeadlineDoesNotEndTheWait() throws Exception {
+
+    final var collection = "outbox-reason-deadline-during-attempt";
+    final var dispatcher = dispatcherOf(aRouterAnswering(call -> {
+      if (call == 1) {
+        // the adapter asked in time. Its "not yet" reaches the store after the deadline
+        final var deadline = Instant.now().plus(Duration.ofMillis(20));
+        while (Instant.now().isBefore(deadline)) {
+          Thread.onSpinWait();
+        }
+        throw new PhaseTwoRetryLater("the BPMS does not report the workflow yet", SHORT, deadline);
+      }
+      throw new PhaseTwoPermanentFailure("nothing waited for the message within its time-to-live", null);
+    }), collection);
+    final var id = anEntryDueNow(collection);
+
+    final var entry = dispatchedUntil(PhaseTwoOutboxEntry.STATUS_BLOCKED, dispatcher, collection, id);
+
+    assertEquals(2, callsIntoTheAdapter.get(), "the adapter got the attempt which sees the deadline");
+    assertEquals(
+        "io.vanillabp.integration.spi.PhaseTwoPermanentFailure: nothing waited for the message within its time-to-live",
         entry.getString("lastFailure"));
 
   }
