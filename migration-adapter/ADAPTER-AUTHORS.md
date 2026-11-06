@@ -1242,7 +1242,8 @@ first one. So throw it only before your operation reached the BPMS.
 Your adapter may know how long a wait may last. Then pass that moment as the deadline of
 `PhaseTwoRetryLater`. It replaces `wait-for-visibility-at-most` for that entry, in both
 directions: the entry is blocked once an attempt which started at the deadline or later still says
-"not yet", earlier or later than the outbox setting would block it. The Camunda 7 family uses it for a message time-to-live. A correlation which finds no
+"not yet", earlier or later than the outbox setting would block it. The Camunda 7 family uses it
+for a message time-to-live. A correlation which finds no
 subscription asks for another attempt, and its deadline is the moment the correlation was planned
 plus the time-to-live. That moment reaches phase two as `PhaseTwoRequest#plannedAt()`, and it stays
 the same for every attempt of the entry. End the wait yourself when the deadline has passed, with
