@@ -9,7 +9,7 @@
   </parent>
 
   <artifactId>adapter-platform-integration</artifactId>
-  <version>2.0.0</version>
+  <version>2.0.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>VanillaBP adapter platform integration</name>
   <description>Platform integrations for the VanillaBP SPI: the platform-neutral migration adapter plus its Spring Boot and Quarkus integrations.</description>
