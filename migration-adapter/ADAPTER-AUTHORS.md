@@ -1281,6 +1281,15 @@ configuration-properties beans, and the helper binds the core tree from the envi
 also derives the ids which the core derives by convention. A simple read of the configured sections
 would miss those.
 
+A user may write a section as `{}`, for example `vanillabp.adapters.saas: {}`, and set its keys in
+another property source. Spring Boot reads the `{}` as an empty value at the section's name, and a
+plain binding then loses the keys below it. The platform takes care of your overlay class. It
+registers a bind handler advisor, and that advisor covers every type below `io.vanillabp` which is
+bound under `vanillabp`. So keep your section types in a package below `io.vanillabp`. For a single
+value, use a JDK type or an enum, never a class of your own. If you bind a section with a `Binder`
+yourself, pass `EmptySections.bindHandler()` as its third argument (the decision in
+[`DECISIONS.pending/2126.md`](../DECISIONS.pending/2126.md)).
+
 For each id, register one element bean of your `MigratableProcessService` and one of your
 `AdapterDeploymentService`, named after the id. Take the collaborators from
 `AdapterBeanRegistrarSupport.collaborators(supplierContext, adapterId)`.

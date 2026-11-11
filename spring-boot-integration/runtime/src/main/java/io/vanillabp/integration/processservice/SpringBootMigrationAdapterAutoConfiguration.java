@@ -13,6 +13,7 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.context.properties.ConfigurationPropertiesBindHandlerAdvisor;
 import org.springframework.boot.context.properties.ConfigurationPropertiesBinding;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationContext;
@@ -47,6 +48,7 @@ import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
 import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
+import io.vanillabp.integration.config.EmptySections;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.extension.spi.election.WorkflowElection;
 import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
@@ -99,6 +101,22 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   public static WorkflowServiceDiscovery vanillaBpWorkflowServiceDiscovery() {
 
     return new WorkflowServiceDiscovery();
+
+  }
+
+  /**
+   * Makes a section of the <code>vanillabp</code> tree which is written as <code>{}</code> keep
+   * the keys which other property sources set below it. It covers the core properties and the
+   * overlay classes of adapters and extensions. It is static, so Spring Boot can use it before
+   * this configuration class exists.
+   *
+   * @return The advisor
+   * @see EmptySections
+   */
+  @Bean
+  public static ConfigurationPropertiesBindHandlerAdvisor vanillaBpEmptySectionsKeepTheirKeys() {
+
+    return EmptySections.advisor();
 
   }
 

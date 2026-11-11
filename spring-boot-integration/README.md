@@ -101,6 +101,21 @@ BPMS adapters add their own keys to the same tree (for example
 side, and the JavaBean binding ignores keys which the core view does not know. The set of adapter
 ids always comes from the core properties (`adapterTypes()`), never from an overlay map.
 
+A section written as `{}` needs one more step. Spring Boot reads the empty map of a YAML file as a
+property with an empty value, for example `vanillabp.adapters.saas=`. When Spring Boot binds an
+object, it looks for a value at the object's own name first. It found the empty value and never read
+the keys below it. So `type`, `deployment-failure` or a module's `resources-location` from another
+property source were lost, and the startup said nothing. `EmptySections` fixes this for every
+VanillaBP type below `vanillabp`: the core model and the overlays of adapters and extensions. Where
+keys exist below such a section, it binds the section with `NO_DIRECT_PROPERTY`. Then Spring Boot
+reads the keys and skips the empty value. The auto-configuration registers it as a
+`ConfigurationPropertiesBindHandlerAdvisor`, which reaches every `@ConfigurationProperties` class. A
+`Binder` which binds the tree directly, like the one in `AdapterBeanRegistrarSupport`, passes
+`EmptySections.bindHandler()`. The rule only works if a VanillaBP type below `vanillabp` is always a
+section. A single value is a JDK type or an enum (the decision in
+[`DECISIONS.pending/2126.md`](../DECISIONS.pending/2126.md)). `AnEmptySectionKeepsTheKeysTest` holds
+all of this.
+
 `VanillaBpConfigurationBindingTest` tests the binding onto the core model, the overlay classes side
 by side and the rules for environment variables. The validation which guides the user lives in the
 core, and `MigrationAdapterPropertiesTest` tests it.

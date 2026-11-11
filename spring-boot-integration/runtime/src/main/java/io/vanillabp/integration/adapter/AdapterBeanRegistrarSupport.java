@@ -17,6 +17,7 @@ import io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedInvoker;
 import io.vanillabp.integration.adapter.spi.workflowstart.BpmsInitiatedStartInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskInvoker;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
+import io.vanillabp.integration.config.EmptySections;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 
 /**
@@ -65,7 +66,8 @@ public final class AdapterBeanRegistrarSupport {
    * are. The rule lives in the core because Quarkus has to answer the same question. An
    * extension which bridges to a BPMS also asks it about the same configuration. What is
    * left here is binding the tree from the environment. Only Spring Boot can do that
-   * part.
+   * part. A section written as <code>{}</code> keeps the keys which other property sources
+   * set below it, see {@link EmptySections}.
    *
    * @param environment The Spring environment to bind the core properties from
    * @param adapterType The adapter's type
@@ -78,7 +80,10 @@ public final class AdapterBeanRegistrarSupport {
 
     Binder
         .get(environment)
-        .bind(MigrationAdapterProperties.PREFIX, Bindable.of(VanillaBpConfigurationProperties.class))
+        .bind(
+            MigrationAdapterProperties.PREFIX,
+            Bindable.of(VanillaBpConfigurationProperties.class),
+            EmptySections.bindHandler())
         .orElseGet(VanillaBpConfigurationProperties::new)
         .adapterIdsOfType(adapterType)
         .forEach(adapterIdConsumer);
