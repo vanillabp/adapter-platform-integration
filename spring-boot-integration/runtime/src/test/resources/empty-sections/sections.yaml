@@ -1,0 +1,13 @@
+vanillabp:
+  resources-location: classpath*:vanillabp-processes
+  adapters:
+    saas: {}
+  workflow-modules:
+    test-module:
+      adapters:
+        saas: {}
+---
+vanillabp:
+  adapters:
+    saas:
+      type: dummy
