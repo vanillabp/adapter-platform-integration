@@ -5314,3 +5314,104 @@ check and the lost id of a section of nothing but `{}`.
   `SpringBootMigrationAdapterAutoConfiguration#vanillaBpEmptySectionsKeepTheirKeys` describe the
   rule without citing the decision
 
+### 139. A snapshot names the snapshot repository of Maven Central itself
+
+Proposed by story 2162, 2026-11-13.
+
+The profile `publish-snapshots` sends a snapshot to GitHub Packages and to the snapshot repository
+of Maven Central in one build. The profile sets the snapshot repository of the POM to GitHub
+Packages, because that is where `maven-deploy-plugin` uploads.
+
+`central-publishing-maven-plugin` 0.12.0 reads that same setting. Where its configuration names no
+`centralSnapshotsUrl`, it uploads a snapshot to the snapshot repository of the POM. Only where the
+POM names none, it falls back to Maven Central. So after the profile came in, every snapshot went
+to GitHub Packages twice and never to Maven Central. The build stayed green.
+
+The configuration of the plugin in the profile therefore names
+`https://central.sonatype.com/repository/maven-snapshots/` as `centralSnapshotsUrl`. The root POM
+and `bom/pom.xml` both carry it, because the BOM does not inherit from the root POM.
+
+What was measured on 2026-11-13:
+
+- The main run after the profile came in (run 43429626471) logs nothing between the last module
+  and the end of the build for four and a half minutes. That is the time the plugin spent on its
+  upload.
+- The `maven-metadata.xml` of `vanillabp-integration-spi` in GitHub Packages shows build number 2
+  for one run: build 1 at 13:23 from `maven-deploy-plugin`, build 2 from 13:24 to 13:27 from the
+  Central plugin. Maven Central still showed the snapshot of 09:55.
+- A local build with `-Dcentral.skip.upload=true` writes the list of files to upload into
+  `bom/target/central-deferred/.index`. Before this change, every line there ends in
+  `github-packages:https://maven.pkg.github.com/...`. After it, every line ends in
+  `vanillabp-central:https://central.sonatype.com/repository/maven-snapshots/`.
+
+The order of the modules does not matter. The plugin uploads in the last module which runs its
+goal `publish`, and it does so also where that module is left out with `skipPublishing`. The
+setting only keeps the module's own files out of the upload. Run 43380596291 shows it: its last
+module `coverage-gate` is left out, and the upload of all other modules still ran and failed on a
+429 of Maven Central. So the modules which are not published keep `skip.central.release`, and the
+list of published modules is the same as before.
+
+Where this is referred to: the comments at `centralSnapshotsUrl` and `skipPublishing` in the
+profile `publish-snapshots` of `pom.xml` and `bom/pom.xml`. Nothing cites a number yet.
+
+### 140. A snapshot carries no sources jar and no javadoc jar, and a request Central refuses with 429 or 503 is repeated
+
+Proposed by story 2160, 2026-11-13.
+
+Maven Central sits behind Cloudflare. It answered the GitHub runners with 429 Too Many Requests,
+and the publish of a snapshot failed in the middle, three times on 2026-11-13. Every file a publish
+uploads is one more request. So a snapshot now uploads fewer files, and a refused request is
+repeated instead of failing the build. The adapters of the Business Cockpit made the same change,
+see decision 19 in the DECISIONS.md of `business-cockpit-camunda7-adapter`.
+
+A snapshot carries the jar, the POM and their checksums, and nothing else. The root POM no longer
+binds `maven-source-plugin`. This repository never bound a javadoc jar outside a release. A release
+still carries a sources jar and a javadoc jar for every module it publishes: the release workflow
+runs with the profile `release` of `io.vanillabp:release-parent`, which binds both.
+
+The sources jar is gone from GitHub Packages too, not only from Maven Central. Both get their files
+in one build, and `central-publishing-maven-plugin` can leave out a whole module
+(`excludeArtifacts`, `skipPublishing`) but not one file of a module. Keeping the sources jar for
+GitHub Packages alone would need the sources jar to be attached after the Central plugin has read
+the files of a module and before `maven-deploy-plugin` reads them at the end. That depends on the
+order of plugins within one phase, which nobody sees in the POM. A developer who opens a class of a
+snapshot in the IDE sees decompiled code. A released version has sources and javadoc.
+
+The javadoc check stays in every build. It is the execution `check-javadoc` of the parent, and it
+does not depend on the jar.
+
+Every module which was published is still published, to both repositories. `test-utils` and the
+BPMS double (`bpms-double`, `bpms-double-spring-boot`, `bpms-double-quarkus`,
+`bpms-double-quarkus-deployment`) look internal, but the BPMS adapters read them in test scope. The
+adapters read VanillaBP snapshots from Maven Central until the organization sets the Actions
+variable `VANILLABP_SNAPSHOTS_FROM` to `github-packages`. So they stay on Maven Central. Once every
+repository reads from GitHub Packages, they could leave Maven Central with `excludeArtifacts`.
+
+`.mvn/maven.config` tells the HTTP transport of Maven Resolver 1.9, the one in Maven 3.9, how to
+repeat a request which a server answers with 429 or 503:
+
+|                        property                         |   value   |                             what it means                             |
+|---------------------------------------------------------|-----------|-----------------------------------------------------------------------|
+| `aether.connector.http.retryHandler.count`              | `2`       | how often one request is repeated                                     |
+| `aether.connector.http.retryHandler.interval`           | `15000`   | the pause before repeat n is n times this, in milliseconds            |
+| `aether.connector.http.retryHandler.intervalMax`        | `2100000` | a longer pause, also one asked for by `Retry-After`, ends the repeats |
+| `aether.connector.http.retryHandler.serviceUnavailable` | `429,503` | the answers which are repeated                                        |
+| `aether.connector.basic.parallelPut`                    | `false`   | one upload after the other, not five at once                          |
+
+Maven Central answers a GitHub runner with 429 and a `Retry-After` of about half an hour. Its limit
+counts the requests of the runner's address, which other users share, and a request during the
+block makes the block longer. So the resolver waits as long as the header asks, up to 35 minutes,
+and repeats a request at most twice. A publish which runs into the block takes half an hour longer
+instead of failing. The file applies to every build, on a laptop and in a pull request as well, and
+that is meant.
+
+What the change saves was counted on 2026-11-13. A publish sends 20 modules to Maven Central: 5
+which are only a POM, and 15 with a jar. Before, the plugin uploaded 50 files, each with an MD5 and
+a SHA-1 checksum: 20 POMs, 15 jars and 15 sources jars. Now it uploads 35. The plugin uploads one
+artifact after the other, and each upload reads and writes the `maven-metadata.xml` of the version
+and of the artifact again. Counted against a local stand-in for the repository, a module which is
+only a POM costs 19 requests, a module with a jar costs 22, and its sources jar cost 14 more. So a
+publish sends about 425 requests to Maven Central instead of about 635, a third fewer.
+
+Where this is referred to: the comment in `pom.xml` where `maven-source-plugin` used to be bound,
+and the comments in `.mvn/maven.config`. Nothing cites a number yet.
