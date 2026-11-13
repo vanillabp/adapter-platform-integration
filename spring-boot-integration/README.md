@@ -112,8 +112,8 @@ reads the keys and skips the empty value. The auto-configuration registers it as
 `ConfigurationPropertiesBindHandlerAdvisor`, which reaches every `@ConfigurationProperties` class. A
 `Binder` which binds the tree directly, like the one in `AdapterBeanRegistrarSupport`, passes
 `EmptySections.bindHandler()`. The rule only works if a VanillaBP type below `vanillabp` is always a
-section. A single value is a JDK type or an enum (the decision in
-[`DECISIONS.pending/2126.md`](../DECISIONS.pending/2126.md)). `AnEmptySectionKeepsTheKeysTest` holds
+section. A single value is a JDK type or an enum (decision 138 in the repository's
+[DECISIONS.md](../DECISIONS.md)). `AnEmptySectionKeepsTheKeysTest` holds
 all of this.
 
 `VanillaBpConfigurationBindingTest` tests the binding onto the core model, the overlay classes side

@@ -1287,8 +1287,8 @@ plain binding then loses the keys below it. The platform takes care of your over
 registers a bind handler advisor, and that advisor covers every type below `io.vanillabp` which is
 bound under `vanillabp`. So keep your section types in a package below `io.vanillabp`. For a single
 value, use a JDK type or an enum, never a class of your own. If you bind a section with a `Binder`
-yourself, pass `EmptySections.bindHandler()` as its third argument (the decision in
-[`DECISIONS.pending/2126.md`](../DECISIONS.pending/2126.md)).
+yourself, pass `EmptySections.bindHandler()` as its third argument (decision 138 in the repository's
+[DECISIONS.md](../DECISIONS.md)).
 
 For each id, register one element bean of your `MigratableProcessService` and one of your
 `AdapterDeploymentService`, named after the id. Take the collaborators from
