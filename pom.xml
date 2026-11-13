@@ -335,18 +335,10 @@
           </execution>
         </executions>
       </plugin>
-      <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-source-plugin</artifactId>
-        <executions>
-          <execution>
-            <id>attach-sources</id>
-            <goals>
-              <goal>jar</goal>
-            </goals>
-          </execution>
-        </executions>
-      </plugin>
+      <!-- no maven-source-plugin here: a snapshot carries no sources jar. Every file a
+           snapshot uploads is one more request to Maven Central, and Central answers too many
+           of them with 429. A release still carries a sources jar, because the profile
+           'release' of release-parent binds the plugin -->
       <plugin>
         <groupId>org.jacoco</groupId>
         <artifactId>jacoco-maven-plugin</artifactId>
