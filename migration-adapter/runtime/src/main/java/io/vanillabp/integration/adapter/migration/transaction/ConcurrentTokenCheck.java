@@ -1,6 +1,7 @@
 package io.vanillabp.integration.adapter.migration.transaction;
 
 import java.util.Collection;
+import java.util.function.BiPredicate;
 import java.util.stream.Collectors;
 
 import io.vanillabp.integration.adapter.migration.startup.StartupFindings;
@@ -35,6 +36,12 @@ import io.vanillabp.integration.spi.startup.StartupTopic;
  * Process-Engine-API) silences the hint as well. It reports nothing, and nothing is guessed
  * from that.
  * <p>
+ * The other ways out cannot be seen in the code: one entity per phase, an additive relation,
+ * or <code>&#64;DynamicUpdate</code> where the branches write different attributes. So the
+ * developer says it for the workflow, with <code>concurrent-branches-reviewed</code>, and the
+ * hint is silent for that workflow from then on. See {@code DECISIONS.pending/2152.md} in the
+ * repository.
+ * <p>
  * Decision 14 in the repository's DECISIONS.md says why a model which can produce a second
  * token only gets a warning, and only where the aggregate has no version attribute.
  */
@@ -46,14 +53,24 @@ public class ConcurrentTokenCheck {
   private final StartupFindings findings;
 
   /**
+   * Whether the developer reviewed the branches of a workflow, asked with the workflow
+   * module ID and the BPMN process ID.
+   */
+  private final BiPredicate<String, String> branchesReviewed;
+
+  /**
    * Built by the registry which wires the workflow tasks, once per application.
    *
    * @param findings Where the hint is reported
+   * @param branchesReviewed Whether the developer reviewed the branches of a workflow, asked
+   *          with the workflow module ID and the BPMN process ID
    */
   public ConcurrentTokenCheck(
-      final StartupFindings findings) {
+      final StartupFindings findings,
+      final BiPredicate<String, String> branchesReviewed) {
 
     this.findings = findings;
+    this.branchesReviewed = branchesReviewed;
 
   }
 
@@ -80,6 +97,8 @@ public class ConcurrentTokenCheck {
       return;
     }
     report(
+        workflowModuleId,
+        bpmnProcessId,
         workflowAggregateClass,
         aggregateNoticesASecondWriter,
         "process '%s' of workflow module '%s' (%s)"
@@ -128,6 +147,8 @@ public class ConcurrentTokenCheck {
       return;
     }
     report(
+        workflowModuleId,
+        bpmnProcessId,
         workflowAggregateClass,
         aggregateNoticesASecondWriter,
         "process '%s' of workflow module '%s' (%s)"
@@ -183,6 +204,8 @@ public class ConcurrentTokenCheck {
         .flatMap(version -> version.getValue().stream())
         .toList();
     report(
+        workflowModuleId,
+        bpmnProcessId,
         workflowAggregateClass,
         aggregateNoticesASecondWriter,
         "version(s) %s of process '%s' of workflow module '%s', which the BPMS still holds (%s)"
@@ -206,12 +229,20 @@ public class ConcurrentTokenCheck {
    * names both. The message is about an aggregate which cannot survive two writers. That is
    * one thing to change, however many models lead to it.
    *
+   * The message names the key which ends the hint with placeholders, not with the IDs of
+   * this process. The scope names the process already, and the same text for every process
+   * lets the box fold all processes of one aggregate into one entry.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
    * @param workflowAggregateClass The workflow aggregate's class
    * @param aggregateNoticesASecondWriter What the aggregate's persistence answers about
    *          noticing a concurrent change
    * @param whatCanHoldTwoTokens Which model it was drawn from, as the entry names it
    */
   private void report(
+      final String workflowModuleId,
+      final String bpmnProcessId,
       final Class<?> workflowAggregateClass,
       final boolean aggregateNoticesASecondWriter,
       final String whatCanHoldTwoTokens) {
@@ -222,6 +253,9 @@ public class ConcurrentTokenCheck {
     if (aggregateNoticesASecondWriter) {
       return;
     }
+    if (branchesReviewed.test(workflowModuleId, bpmnProcessId)) {
+      return;
+    }
 
     findings
         .warn(
@@ -229,19 +263,29 @@ public class ConcurrentTokenCheck {
             whatCanHoldTwoTokens,
             """
                 A BPMN process can hold more than one token at a time, but its workflow aggregate \
-                '%s' has no version attribute (@Version): two branches load the aggregate, change \
-                different things and save it - and since the persistence layer writes the whole \
-                record, whatever the branch committing first changed is lost without any error. \
-                Ways out: one entity per phase of the workflow, @DynamicUpdate where the branches \
-                write different attributes, a version attribute plus a retry in the transaction \
-                your application opens, or an additive relation instead of a mutated attribute. \
-                The wiki page 'Workflow aggregates' compares them. A version attribute turns the \
-                collision into an exception VanillaBP reports and the BPMS retries, which is why \
-                this message is about its absence. On MongoDB inside a transaction, two branches \
-                which both change the aggregate get a write conflict instead, which VanillaBP \
-                reports the same way. With the persistence of the platform, a branch which \
-                changes nothing does not write the aggregate at all."""
-                .formatted(workflowAggregateClass.getName()));
+                '%s' has no version attribute (@Version). Two branches may load the aggregate, \
+                change it and save it. The persistence layer writes the whole record, so whatever \
+                the branch committing first changed is lost, without any error. What to do: \
+                (1) Read the section 'Two writers on one aggregate' of the wiki page 'Workflow \
+                aggregates'. It compares the ways out. \
+                (2) Add a version attribute to the aggregate. Then a collision is an exception \
+                which VanillaBP reports and the BPMS retries, and this hint goes away by itself. \
+                (3) Or take one of the other ways out: one entity per phase of the workflow, \
+                @DynamicUpdate where the branches write different attributes, or a relation you \
+                add to instead of an attribute you change. VanillaBP cannot see them in your \
+                code, so this hint stays. \
+                (4) Once you have checked that the branches of the process cannot overwrite each \
+                other, say so for that process: \
+                '%s: true'. \
+                Then this hint is not shown for it again. \
+                On MongoDB inside a transaction, two branches which both change the aggregate get \
+                a write conflict instead, which VanillaBP reports the same way. With the \
+                persistence of the platform, a branch which changes nothing does not write the \
+                aggregate at all."""
+                .formatted(
+                    workflowAggregateClass.getName(),
+                    io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties
+                        .concurrentBranchesReviewedProperty("<workflow-module>", "<bpmn-process-id>")));
 
   }
 

@@ -90,6 +90,15 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   private Boolean acceptExpressionsInTheModel;
 
   /**
+   * Whether a developer looked at the branches of this workflow's BPMN model which run at
+   * the same time, and decided that they cannot overwrite each other in the workflow aggregate
+   * (<code>concurrent-branches-reviewed</code>). It ends the startup hint about two writers of
+   * an aggregate without a version attribute. It is read at the workflow only, see
+   * {@code DECISIONS.pending/2152.md} in the repository.
+   */
+  private Boolean concurrentBranchesReviewed;
+
+  /**
    * The values of the workflow aggregate which this workflow declares for the BPMS
    * (<code>declared-aggregate-values</code>). An entry names a path in the aggregate:
    * <code>amount</code> is the attribute itself, <code>shipping.*</code> is every value below
@@ -195,6 +204,15 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
      * levels at which it may be written, and the level which the startup message names.
      */
     private Boolean acceptExpressionsInTheModel;
+
+    /**
+     * Whether a developer looked at the branches of this workflow's BPMN model which run at
+     * the same time, and decided that they cannot overwrite each other in the workflow aggregate
+     * (<code>concurrent-branches-reviewed</code>). It ends the startup hint about two writers of
+     * an aggregate without a version attribute. It is read at the workflow only, see
+     * {@code DECISIONS.pending/2152.md} in the repository.
+     */
+    private Boolean concurrentBranchesReviewed;
 
     /**
      * The values of the workflow aggregate which this workflow declares for the BPMS
@@ -357,6 +375,24 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     }
 
     /**
+     * Whether a developer looked at the branches of this workflow's BPMN model which run at
+     * the same time, and decided that they cannot overwrite each other in the workflow aggregate
+     * (<code>concurrent-branches-reviewed</code>). It ends the startup hint about two writers of
+     * an aggregate without a version attribute. It is read at the workflow only, see
+     * {@code DECISIONS.pending/2152.md} in the repository.
+     *
+     * @param concurrentBranchesReviewed The value of {@link #concurrentBranchesReviewed}
+     * @return This builder, so the calls chain
+     */
+    public B concurrentBranchesReviewed(
+        final Boolean concurrentBranchesReviewed) {
+
+      this.concurrentBranchesReviewed = concurrentBranchesReviewed;
+      return self();
+
+    }
+
+    /**
      * The values of the workflow aggregate which this workflow declares for the BPMS
      * (<code>declared-aggregate-values</code>).
      *
@@ -486,6 +522,9 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
           + "acceptExpressionsInTheModel="
           + acceptExpressionsInTheModel
           + ", "
+          + "concurrentBranchesReviewed="
+          + concurrentBranchesReviewed
+          + ", "
           + "declaredAggregateValues="
           + declaredAggregateValues
           + ", "
@@ -564,6 +603,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
     this.extensions = b.extensions;
     this.allowFullSyncWithBpms = b.allowFullSyncWithBpms;
     this.acceptExpressionsInTheModel = b.acceptExpressionsInTheModel;
+    this.concurrentBranchesReviewed = b.concurrentBranchesReviewed;
     this.declaredAggregateValues = b.declaredAggregateValues;
     this.declaredTaskParams = b.declaredTaskParams;
     this.messageTimeToLive = b.messageTimeToLive;
@@ -676,6 +716,21 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
   public Boolean getAcceptExpressionsInTheModel() {
 
     return acceptExpressionsInTheModel;
+
+  }
+
+  /**
+   * Whether a developer looked at the branches of this workflow's BPMN model which run at
+   * the same time, and decided that they cannot overwrite each other in the workflow aggregate
+   * (<code>concurrent-branches-reviewed</code>). It ends the startup hint about two writers of
+   * an aggregate without a version attribute. It is read at the workflow only, see
+   * {@code DECISIONS.pending/2152.md} in the repository.
+   *
+   * @return The value of {@link #concurrentBranchesReviewed}
+   */
+  public Boolean getConcurrentBranchesReviewed() {
+
+    return concurrentBranchesReviewed;
 
   }
 
@@ -841,6 +896,22 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
       final Boolean acceptExpressionsInTheModel) {
 
     this.acceptExpressionsInTheModel = acceptExpressionsInTheModel;
+
+  }
+
+  /**
+   * Whether a developer looked at the branches of this workflow's BPMN model which run at
+   * the same time, and decided that they cannot overwrite each other in the workflow aggregate
+   * (<code>concurrent-branches-reviewed</code>). It ends the startup hint about two writers of
+   * an aggregate without a version attribute. It is read at the workflow only, see
+   * {@code DECISIONS.pending/2152.md} in the repository.
+   *
+   * @param concurrentBranchesReviewed The value of {@link #concurrentBranchesReviewed}
+   */
+  public void setConcurrentBranchesReviewed(
+      final Boolean concurrentBranchesReviewed) {
+
+    this.concurrentBranchesReviewed = concurrentBranchesReviewed;
 
   }
 

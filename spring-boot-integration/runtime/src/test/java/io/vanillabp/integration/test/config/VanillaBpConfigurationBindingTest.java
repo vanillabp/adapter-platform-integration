@@ -265,6 +265,25 @@ public class VanillaBpConfigurationBindingTest {
   }
 
   @Test
+  @DisplayName("The review of a workflow's concurrent branches binds at the workflow, and only there")
+  public void reviewedConcurrentBranchesBindAtTheWorkflow() {
+
+    contextRunner
+        .withPropertyValues(
+            "vanillabp.resources-location=classpath*:vanillabp-processes",
+            "vanillabp.adapters.test.type=dummy",
+            "vanillabp.workflow-modules.test-module.workflows.MyProcess.concurrent-branches-reviewed=true")
+        .run(context -> {
+
+          final var properties = context.getBean(MigrationAdapterProperties.class);
+          assertEquals(true, properties.concurrentBranchesReviewed("test-module", "MyProcess"));
+          assertEquals(false, properties.concurrentBranchesReviewed("test-module", "OtherProcess"));
+
+        });
+
+  }
+
+  @Test
   @DisplayName("A resources location below the workflow module ends the startup")
   public void aResourcesLocationBelowTheWorkflowModuleIsRejected() {
 
