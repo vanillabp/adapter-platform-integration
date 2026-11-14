@@ -431,6 +431,27 @@ So every adapter-specific key fails the startup, and the message points at that 
 injection which caused it. Read the mapping instead, through
 `ConfigProvider.getConfig().unwrap(SmallRyeConfig.class).getConfigMapping(...)`.
 
+### A key written at the wrong level
+
+Your typed tree binds the same section at every position. So a key you read only at the adapter
+also binds at a workflow module, and there it does nothing. The application boots, and the setting
+is not there. The core has the same problem with its own keys, and it ends the startup for each of
+them (decision 89).
+
+Do the same, and use the core's words for it. `MisplacedSettings.refuse(...)` in
+`io.vanillabp.integration.extension.spi.settings` builds the exception. You give it five parts:
+
+1. which levels read the setting, as a clause, for example "The suspension check interval is read
+   at the adapter",
+2. the full keys the application wrote,
+3. where each written line has to move, as a noun phrase,
+4. the keys which may carry the setting, spelled out so the developer can copy one,
+5. one closing sentence which says why the written level is never read.
+
+The message prints the written keys sorted, so the same configuration reads the same on every boot.
+Throw the exception at startup, while you validate your settings. `MisplacedSettingsTest` holds the
+shape of the message.
+
 ## 5. What the core offers beyond the pipeline
 
 Decision 35 names four things VanillaBP gives an extension instead of a base class. You have read
@@ -753,6 +774,7 @@ build item of its own.
 | Eight positions, most specific wins, adapter section beats its own level                                                  | decision 7, `SettingsResolutionTest`, `ExtensionSettingsResolutionTest`, `ExtensionSettingsPositionsTest` per platform                                                                    |
 | A value of one adapter never reaches another one                                                                          | `SettingsResolutionTest#anotherAdapterReadsTheGeneralSections`, `ExtensionSettingsPositionsTest#theSecondAdapterReadsItsOwnValues`                                                        |
 | A key below `vanillabp` which no mapping declares ends a Quarkus start, naming the key                                    | `UnknownExtensionSettingsKeyTest`                                                                                                                                                         |
+| A key you refuse at the wrong level reads like a misplaced key of the core                                                | decision 89, `MisplacedSettingsTest`                                                                                                                                                      |
 | Your annotation is run with the mechanics of `@WorkflowTask`                                                              | `ExtensionHandlerRegistryTest`, `ExtensionHandlerTest` (Spring Boot), `ExtensionEnablementTest` (Quarkus)                                                                                 |
 | A contract registered after the scan finds the same methods                                                               | decision 36, `ExtensionHandlerRegistryTest#aContractMayArriveAfterTheScan`                                                                                                                |
 | The first offered key some method serves wins, and the catch-all stays the fallback                                       | decision 51, `ExtensionHandlerRegistryTest#theFirstKeyServedWins`, `#aNamedKeyAlwaysBeatsTheCatchAll`                                                                                     |
@@ -793,7 +815,7 @@ certainty, register per id from `adapterIdsOfType` instead.
 
 The SPI's own javadoc is the reference. Wherever the two overlap, it has more detail than this
 document. Start with `ExtensionWiringService`, whose type javadoc carries the contract about order.
-For the settings, read `SettingsLevel` and `SettingsResolution`.
+For the settings, read `SettingsLevel`, `SettingsResolution` and `MisplacedSettings`.
 
 [`README.md`](./README.md) of this module is the contributor documentation of the core. Its section
 [Extensions](./README.md#extensions) covers the subject of this document from the inside. The

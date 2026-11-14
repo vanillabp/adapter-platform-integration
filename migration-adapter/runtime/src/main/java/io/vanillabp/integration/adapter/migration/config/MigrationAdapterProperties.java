@@ -15,6 +15,7 @@ import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import io.vanillabp.integration.extension.spi.settings.MisplacedSettings;
 import io.vanillabp.integration.extension.spi.settings.SettingsLevel;
 import io.vanillabp.integration.extension.spi.settings.SettingsResolution;
 import io.vanillabp.integration.spi.startup.StartupTopic;
