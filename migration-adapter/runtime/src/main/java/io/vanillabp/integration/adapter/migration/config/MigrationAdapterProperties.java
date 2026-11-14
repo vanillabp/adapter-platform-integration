@@ -1941,6 +1941,56 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   }
 
   /**
+   * Whether a developer reviewed the branches of that workflow which run at the same time
+   * (<code>vanillabp.workflow-modules.&lt;id&gt;.workflows.&lt;bpmn-process-id&gt;.concurrent-branches-reviewed</code>).
+   * Then the startup no longer warns that two branches may overwrite each other in a workflow
+   * aggregate without a version attribute.
+   * <p>
+   * It is read at the workflow and nowhere else. The review is about one model. Written at the
+   * workflow module, it would also cover the workflow which somebody adds next week, and nobody
+   * looked at that one. See decision 141 in the repository's DECISIONS.md.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return Whether the branches of this workflow were reviewed
+   */
+  public boolean concurrentBranchesReviewed(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var module = workflowModuleId != null
+        ? workflowModules.get(workflowModuleId)
+        : null;
+    if (module == null) {
+      return false;
+    }
+    final var workflow = bpmnProcessId != null
+        ? module
+            .getWorkflows()
+            .get(bpmnProcessId)
+        : null;
+    return (workflow != null) && Boolean.TRUE.equals(workflow.getConcurrentBranchesReviewed());
+
+  }
+
+  /**
+   * The property which says what {@link #concurrentBranchesReviewed(String, String)} decides,
+   * for the hint which has to give the developer a line to copy.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @return The property key at the workflow
+   */
+  public static String concurrentBranchesReviewedProperty(
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return "%s.workflow-modules.%s.workflows.%s.concurrent-branches-reviewed"
+        .formatted(PREFIX, workflowModuleId, bpmnProcessId);
+
+  }
+
+  /**
    * Whether the expressions of that workflow's BPMN model are meant as they are
    * (<code>accept-expressions-in-the-model</code>). Then the startup stops naming them.
    * <p>

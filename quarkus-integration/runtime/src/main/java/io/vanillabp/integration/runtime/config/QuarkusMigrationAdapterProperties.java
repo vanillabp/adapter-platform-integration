@@ -1061,6 +1061,16 @@ public interface QuarkusMigrationAdapterProperties {
     Optional<Boolean> acceptExpressionsInTheModel();
 
     /**
+     * Whether a developer looked at the branches of this workflow's BPMN model which run at
+     * the same time, and decided that they cannot overwrite each other in the workflow
+     * aggregate. It ends the startup hint about two writers of an aggregate without a version
+     * attribute. It is read at the workflow only.
+     *
+     * @return The answer, an empty Optional meaning "not reviewed"
+     */
+    Optional<Boolean> concurrentBranchesReviewed();
+
+    /**
      * The values of the workflow aggregate which this workflow declares for the BPMS. An
      * entry names a path in the aggregate. It may also name what is shared while the path
      * does not resolve.

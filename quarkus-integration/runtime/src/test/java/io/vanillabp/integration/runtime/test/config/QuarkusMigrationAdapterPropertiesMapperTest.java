@@ -275,6 +275,17 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
 
     }
 
+    /**
+     * None of these fixtures reviewed the branches of a workflow.
+     * {@code reviewedBranchesTravelToTheCore} holds the one which did.
+     */
+    @Override
+    public Optional<Boolean> concurrentBranchesReviewed() {
+
+      return Optional.empty();
+
+    }
+
 
     /**
      * Without extension settings, which is what most of these fixtures need.
@@ -1040,6 +1051,21 @@ public class QuarkusMigrationAdapterPropertiesMapperTest {
     assertEquals(Duration.ofDays(20), core.maxTaskAge("loan-approval", "OtherProcess", null));
     assertEquals(Duration.ofDays(30), core.maxTaskAge("loan-approval", "LoanApproval", "otherTask"));
     assertEquals(Duration.ofDays(40), core.maxTaskAge("loan-approval", "LoanApproval", "awaitSignature"));
+
+  }
+
+  @Test
+  @DisplayName("The review of a workflow's concurrent branches reaches the core at the workflow")
+  public void reviewedBranchesTravelToTheCore() {
+
+    final var workflow = org.mockito.Mockito
+        .mock(QuarkusMigrationAdapterProperties.WorkflowProperties.class);
+    // every other answer is Mockito's empty one: an empty Optional, an empty map
+    org.mockito.Mockito.when(workflow.concurrentBranchesReviewed()).thenReturn(Optional.of(Boolean.TRUE));
+
+    final var core = QuarkusMigrationAdapterPropertiesMapper.INSTANCE.toCore(workflow);
+
+    assertEquals(Boolean.TRUE, core.getConcurrentBranchesReviewed());
 
   }
 

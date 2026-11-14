@@ -316,7 +316,13 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     this.startMessages = new io.vanillabp.integration.adapter.migration.workflowstart.StartMessages(this);
     this.workflowEndedHandlers = new WorkflowEndedHandlers(processVersions);
     this.concurrentTokenCheck = new io.vanillabp.integration.adapter.migration.transaction.ConcurrentTokenCheck(
-        findings);
+        findings, properties == null
+            // a registry built without a configuration is a test fixture. Nobody reviewed
+            // anything there
+            ? (
+                workflowModuleId,
+                bpmnProcessId) -> false
+            : properties::concurrentBranchesReviewed);
     this.modelExpressionCheck = new io.vanillabp.integration.adapter.migration.expressions.ModelExpressionCheck(
         findings, properties);
     this.extensionHandlers = new io.vanillabp.integration.adapter.migration.handler.ExtensionHandlerRegistry(

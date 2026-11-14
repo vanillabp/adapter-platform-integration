@@ -4311,6 +4311,12 @@ The core answers the part it owns, and only that part:
   through the flat list, because a developer has to read WHICH throw event starts WHICH handlers.
   The text is the same, so both fold into one entry. An aggregate with a version attribute gets no
   warning, because then the collision is the exception above and not a lost write.
+  The other ways out (one entity per phase, `@DynamicUpdate`, an additive relation) cannot be seen
+  in the code. So a developer who took one says so per workflow, with
+  `workflows.<bpmn-process-id>.concurrent-branches-reviewed: true`, and the hint is silent for that
+  workflow (`MigrationAdapterProperties#concurrentBranchesReviewed`). The hint names the key with
+  placeholders. The scope of the entry names the process, and the same text for every process
+  keeps the folding by aggregate.
 - The second writer which a dependency brings gets a hint the same way. `SavingHandlerCheck` warns
   once per BPMN process where an extension has handler methods which VanillaBP may save afterwards,
   and the aggregate has no version attribute. The warning names the extension and its annotation.

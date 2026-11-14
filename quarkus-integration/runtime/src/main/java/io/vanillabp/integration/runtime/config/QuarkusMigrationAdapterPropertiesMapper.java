@@ -502,6 +502,7 @@ public final class QuarkusMigrationAdapterPropertiesMapper {
     core.prioritizedAdapters(unwrapListOrEmpty(workflowProperties.prioritizedAdapters()));
     core.allowFullSyncWithBpms(unwrap(workflowProperties.allowFullSyncWithBpms()));
     core.acceptExpressionsInTheModel(unwrap(workflowProperties.acceptExpressionsInTheModel()));
+    core.concurrentBranchesReviewed(unwrap(workflowProperties.concurrentBranchesReviewed()));
     core.declaredAggregateValues(unwrapListOrEmpty(workflowProperties.declaredAggregateValues()));
     core.declaredTaskParams(unwrapListOrNull(workflowProperties.declaredTaskParams()));
     core.messageTimeToLive(unwrap(workflowProperties.messageTimeToLive()));
