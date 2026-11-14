@@ -1948,7 +1948,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * <p>
    * It is read at the workflow and nowhere else. The review is about one model. Written at the
    * workflow module, it would also cover the workflow which somebody adds next week, and nobody
-   * looked at that one. See {@code DECISIONS.pending/2152.md} in the repository.
+   * looked at that one. See decision 141 in the repository's DECISIONS.md.
    *
    * @param workflowModuleId The workflow module ID
    * @param bpmnProcessId The BPMN process ID

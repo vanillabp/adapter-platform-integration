@@ -5415,3 +5415,50 @@ publish sends about 425 requests to Maven Central instead of about 635, a third 
 
 Where this is referred to: the comment in `pom.xml` where `maven-source-plugin` used to be bound,
 and the comments in `.mvn/maven.config`. Nothing cites a number yet.
+
+### 141. A reviewed workflow silences the hint about two writers, and the review is read at the workflow only
+
+Proposed by story 2152, 2026-11-14.
+
+Decision 14 stays as it is: VanillaBP warns once per process when the model can produce a second
+token and the aggregate has no version attribute. A version attribute is still the only way out
+which VanillaBP can see in the code.
+
+The hint also names ways out which leave no trace in the code: one entity per phase, `@DynamicUpdate`
+where the branches write different attributes, and a relation the branches add to. Before this
+decision, a developer who took one of them saw the same warning on every start and could not tell
+whether something was still wrong. Now the developer says it for the workflow:
+`vanillabp.workflow-modules.<id>.workflows.<bpmn-process-id>.concurrent-branches-reviewed: true`.
+The hint is then silent for that workflow, for the deployed model, for compensation and for the
+versions the BPMS still holds.
+
+The key is read at the workflow and nowhere else. A review is about one model. A line at the
+workflow module or at the application would also cover the workflow which somebody adds next week,
+and nobody looked at that one. This is the reason `allow-full-sync-with-bpms` stays at the workflow
+too (decision 66). Unlike that permission, a line at another level is not refused. It lets nothing
+leave the application and changes no behavior, so it is simply not read, and the warning stays.
+
+The hint names the key with the placeholders `<workflow-module>` and `<bpmn-process-id>`, not with
+the IDs of the process. The scope of the entry names the process already. The same text for every
+process keeps the box folding all processes of one aggregate into one entry.
+
+`@DynamicUpdate` itself is not detected. The core does not depend on Hibernate, and the annotation
+alone does not prove anything: two branches which write the same attribute still overwrite each
+other.
+
+The warning about an extension's handler which may save (`SavingHandlerCheck`) is not touched by the
+key. It is about a different second writer.
+
+Where this is referred to:
+
+- `migration-adapter/runtime/src/main/java/io/vanillabp/integration/adapter/migration/transaction/ConcurrentTokenCheck.java`
+  (class javadoc, the citation)
+- `migration-adapter/runtime/src/main/java/io/vanillabp/integration/adapter/migration/config/MigrationAdapterProperties.java`
+  (`concurrentBranchesReviewed`, the citation)
+- `migration-adapter/runtime/src/main/java/io/vanillabp/integration/adapter/migration/config/WorkflowAdapterProperties.java`
+  (field, builder field, builder method, getter and setter, the citation five times)
+- `migration-adapter/README.md` (section on two writers; no citation, describes the behavior)
+- Wiki `Workflow-aggregates` (What VanillaBP does) and `Workflow-modules` (the levels of a
+  setting); no citation, they link decision 14 as before
+- Test `migration-adapter/runtime/src/test/java/io/vanillabp/migration/test/transaction/ConcurrentBranchesReviewedTest.java`
+

@@ -94,7 +94,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
    * the same time, and decided that they cannot overwrite each other in the workflow aggregate
    * (<code>concurrent-branches-reviewed</code>). It ends the startup hint about two writers of
    * an aggregate without a version attribute. It is read at the workflow only, see
-   * {@code DECISIONS.pending/2152.md} in the repository.
+   * decision 141 in the repository's DECISIONS.md.
    */
   private Boolean concurrentBranchesReviewed;
 
@@ -210,7 +210,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
      * the same time, and decided that they cannot overwrite each other in the workflow aggregate
      * (<code>concurrent-branches-reviewed</code>). It ends the startup hint about two writers of
      * an aggregate without a version attribute. It is read at the workflow only, see
-     * {@code DECISIONS.pending/2152.md} in the repository.
+     * decision 141 in the repository's DECISIONS.md.
      */
     private Boolean concurrentBranchesReviewed;
 
@@ -379,7 +379,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
      * the same time, and decided that they cannot overwrite each other in the workflow aggregate
      * (<code>concurrent-branches-reviewed</code>). It ends the startup hint about two writers of
      * an aggregate without a version attribute. It is read at the workflow only, see
-     * {@code DECISIONS.pending/2152.md} in the repository.
+     * decision 141 in the repository's DECISIONS.md.
      *
      * @param concurrentBranchesReviewed The value of {@link #concurrentBranchesReviewed}
      * @return This builder, so the calls chain
@@ -724,7 +724,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
    * the same time, and decided that they cannot overwrite each other in the workflow aggregate
    * (<code>concurrent-branches-reviewed</code>). It ends the startup hint about two writers of
    * an aggregate without a version attribute. It is read at the workflow only, see
-   * {@code DECISIONS.pending/2152.md} in the repository.
+   * decision 141 in the repository's DECISIONS.md.
    *
    * @return The value of {@link #concurrentBranchesReviewed}
    */
@@ -904,7 +904,7 @@ public class WorkflowAdapterProperties extends AdaptersConfigurationProperties {
    * the same time, and decided that they cannot overwrite each other in the workflow aggregate
    * (<code>concurrent-branches-reviewed</code>). It ends the startup hint about two writers of
    * an aggregate without a version attribute. It is read at the workflow only, see
-   * {@code DECISIONS.pending/2152.md} in the repository.
+   * decision 141 in the repository's DECISIONS.md.
    *
    * @param concurrentBranchesReviewed The value of {@link #concurrentBranchesReviewed}
    */

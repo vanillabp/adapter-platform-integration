@@ -39,7 +39,7 @@ import io.vanillabp.integration.spi.startup.StartupTopic;
  * The other ways out cannot be seen in the code: one entity per phase, an additive relation,
  * or <code>&#64;DynamicUpdate</code> where the branches write different attributes. So the
  * developer says it for the workflow, with <code>concurrent-branches-reviewed</code>, and the
- * hint is silent for that workflow from then on. See {@code DECISIONS.pending/2152.md} in the
+ * hint is silent for that workflow from then on. See decision 141 in the repository's DECISIONS.md in the
  * repository.
  * <p>
  * Decision 14 in the repository's DECISIONS.md says why a model which can produce a second
