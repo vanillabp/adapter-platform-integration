@@ -1,4 +1,4 @@
-package io.vanillabp.integration.adapter.migration.config;
+package io.vanillabp.integration.extension.spi.settings;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -16,10 +16,16 @@ import java.util.stream.Collectors;
  * The keys are printed sorted. The maps behind them come from a binder and keep no order. So
  * the same configuration would otherwise read differently from one boot to the next.
  * <p>
+ * The class is part of the extension SPI, so an extension refuses its own misplaced keys in
+ * the same words as the core. An extension which binds a typed tree at all levels has the
+ * same problem as the core: a key it reads only at the adapter also binds at a workflow
+ * module. With this class the developer gets one kind of message for both, and does not
+ * have to learn a second one.
+ * <p>
  * Decision 89 in the repository's DECISIONS.md says why each of these keys is refused, and
  * not dropped.
  */
-final class MisplacedSettings {
+public final class MisplacedSettings {
 
   private MisplacedSettings() {
 
@@ -40,7 +46,7 @@ final class MisplacedSettings {
    *          does which leaves the written level unread
    * @return The exception to throw
    */
-  static IllegalStateException refuse(
+  public static IllegalStateException refuse(
       final String whereTheSettingIsRead,
       final List<String> writtenAt,
       final String whereEachLineBelongs,
