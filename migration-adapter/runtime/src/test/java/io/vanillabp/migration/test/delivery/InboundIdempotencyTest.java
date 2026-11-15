@@ -419,6 +419,40 @@ public class InboundIdempotencyTest {
   }
 
   @Test
+  @DisplayName("A record of another aggregate under the same key fails the delivery instead of skipping it")
+  public void aRecordOfAnotherAggregateIsNoRepeatedDelivery() {
+
+    final var testee = registry(processService(properties(null, null, null), deliveryLog));
+    storeAggregate("4720");
+    storeAggregate("4721");
+
+    // a BPMS whose database was reset hands out the ids it handed out before. So the record
+    // which the key finds was written for a different workflow aggregate
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4720", "job-1"));
+
+    final var messages = loggedBy(
+        DeliveryRecords.class,
+        () -> assertThrows(
+            IllegalStateException.class,
+            () -> testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4721", "job-1"))));
+
+    assertEquals(1, TestWorkflowService.handlerCalls, "the handler did not run for the second aggregate");
+    assertEquals(1, deliveryLog.recorded.size(), "the failed delivery wrote no record");
+    assertEquals(1, messages.size(), "the collision is said once per delivery: "
+        + messages);
+    final var message = messages.getFirst();
+    assertTrue(message.contains("'4720'") && message.contains("'4721'"), "names both aggregates: "
+        + message);
+    assertTrue(message.contains("test-adapter|test-module|TestProcess|CREATED|job-1"), "names the key: "
+        + message);
+    assertTrue(message.contains("reset"), "names the likely cause: "
+        + message);
+    assertTrue(message.contains("AGGREGATE_ID"), "says how to find the old records: "
+        + message);
+
+  }
+
+  @Test
   @DisplayName("A repeated delivery of a BPMN error reports code and name again")
   public void repeatedDeliveryReportsTheRecordedBpmnError() {
 
