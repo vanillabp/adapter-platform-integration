@@ -10,7 +10,7 @@
 
   <artifactId>native-image-tests</artifactId>
   <name>Quarkus integration - Integration tests - Native image</name>
-  <description>An application with a relational database and no MongoDB anywhere, built as a native image. The build is one half of the test: GraalVM resolves every referenced method while it builds, so a reference to an optional extension nobody asked for ends it. The binary is the other half: it reads the configuration its two workflow modules ship, out of the image and not off a classpath, and its exit code says whether the profile it was started with picked the right file.</description>
+  <description>An application with a relational database and no MongoDB anywhere, built as a native image. The build is one half of the test: GraalVM resolves every referenced method while it builds, so a reference to an optional extension nobody asked for ends it. The binary is the other half: it reads the configuration its two workflow modules ship, out of the image and not off a classpath, and its exit code says whether the profile it was started with picked the right file. The binary also has to carry the version descriptors of the platform integration and of the adapter, which lie in JARs Quarkus does not index.</description>
 
   <dependencies>
     <dependency>

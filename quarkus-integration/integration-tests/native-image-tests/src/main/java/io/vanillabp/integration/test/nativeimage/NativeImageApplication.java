@@ -22,6 +22,10 @@ import jakarta.inject.Inject;
  * binary has no classpath. So they reach it only as registered resources. Started with
  * <code>-Dquarkus.profile=tenant</code>, the same binary has to answer with the values of
  * the profile-specific files.
+ * <p>
+ * The third thing is the version descriptors of the VanillaBP parts, see
+ * {@link VersionDescriptorCheck}. Without them, the boot cannot tell whether the adapter and
+ * the platform integration belong together.
  */
 @QuarkusMain
 public class NativeImageApplication implements QuarkusApplication {
@@ -37,6 +41,9 @@ public class NativeImageApplication implements QuarkusApplication {
   @Inject
   WorkflowModuleConfigurationCheck configuration;
 
+  @Inject
+  VersionDescriptorCheck versionDescriptors;
+
   @Override
   public int run(
       final String... args) {
@@ -50,6 +57,14 @@ public class NativeImageApplication implements QuarkusApplication {
     }
     System.out.println("VanillaBP read the configuration of both workflow modules with the profile(s) '%s' active."
         .formatted(configuration.activeProfiles()));
+
+    final var descriptorComplaints = versionDescriptors.whatTheDescriptorsGotWrong();
+    if (!descriptorComplaints.isEmpty()) {
+      System.err.println("The version descriptors of the VanillaBP parts were not read as expected:%n  %s"
+          .formatted(String.join("\n  ", descriptorComplaints)));
+      return 3;
+    }
+    System.out.println("VanillaBP read the version descriptors of the platform integration and of the adapter.");
 
     final var stored = QuarkusTransaction
         .requiringNew()
