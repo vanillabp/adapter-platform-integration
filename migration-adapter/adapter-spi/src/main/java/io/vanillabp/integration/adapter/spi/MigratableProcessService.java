@@ -584,6 +584,38 @@ public interface MigratableProcessService<A> {
   }
 
   /**
+   * Whether a phase-two operation failed because another transaction changed the same
+   * workflow at the same moment, and the BPMS undid everything the operation did.
+   * <p>
+   * Two operations on one workflow often run at nearly the same time: a message is
+   * correlated while a user task of the same workflow is completed. An embedded engine
+   * which locks optimistically lets one of them win and fails the other one. The loser
+   * goes through a moment later. If the outbox waited its normal backoff for that, a user
+   * would wait thirty seconds for something which needs a few milliseconds. So the core
+   * repeats such an operation at once, a few times, with short pauses. Only when that does
+   * not help does the failure go to the outbox, which counts it as an attempt.
+   * <p>
+   * Say <code>true</code> only where both are true. The failure is the lost race, and not
+   * a database or engine which is away. And the BPMS rolled the operation back
+   * completely, so repeating it cannot do anything twice. On Camunda 7 that is its
+   * <code>OptimisticLockingException</code>. A remote BPMS which orders every command of a
+   * workflow itself has no such failure and keeps the default.
+   * <p>
+   * The answer only matters for a failure which
+   * {@link #isPhaseTwoFailureRepeatable(Throwable)} calls repeatable. The default is
+   * <code>false</code>: the outbox repeats the failure with its normal backoff.
+   *
+   * @param failure What the phase-two operation threw
+   * @return Whether the failure is a lost race which a repetition in a moment wins
+   */
+  default boolean isPhaseTwoFailureACollision(
+      final Throwable failure) {
+
+    return false;
+
+  }
+
+  /**
    * The viewer/history API. It only reads, and it has no phases. The adapter which holds
    * the workflow answers. It is elected by probing
    * {@link #awarenessOfWorkflow(WorkflowScope, AggregatePersistenceAware, Object)}.

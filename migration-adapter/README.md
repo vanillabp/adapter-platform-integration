@@ -2646,6 +2646,7 @@ classDiagram
     +canLocateWorkflows() boolean  «default true · C8 without secondary storage and PEA: false ⇒ the boot refuses a second adapter»
     +deliversTasksAtLeastOnce() boolean  «default false · C8/PEA true · C7 true on an own engine datasource»
     +isPhaseTwoFailureRepeatable(Throwable) boolean  «default true · false ⇒ BLOCKED after one attempt»
+    +isPhaseTwoFailureACollision(Throwable) boolean  «default false · C7 OptimisticLockingException ⇒ repeated at once, no attempt used»
     +workflowVisibilityDelay() WorkflowVisibilityDelay  «default none · C8: 10 s»
     +workflowVisibilityDelay(workflowId) WorkflowVisibilityDelay  «what the core asks · default → the one above»
     +openTaskCount(module, process) Long  «default null»
@@ -2897,6 +2898,8 @@ sequenceDiagram
   opt failure
     DP->>AD: isPhaseTwoFailureRepeatable(e)?
     Note over DP: true → retry with backoff · false → PhaseTwoPermanentFailure → BLOCKED after one attempt
+    DP->>AD: isPhaseTwoFailureACollision(e)?
+    Note over RT: true → the router repeats the dispatch at once, up to 4 times, in a new transaction each · the store hears only of the last failure
   end
 ```
 

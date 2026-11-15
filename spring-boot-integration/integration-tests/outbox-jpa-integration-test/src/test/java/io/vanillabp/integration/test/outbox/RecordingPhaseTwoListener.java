@@ -22,6 +22,12 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
    */
   private volatile boolean failPermanently = false;
 
+  /**
+   * Whether the failures this listener raises are the kind the dummy adapter reports as a
+   * lost race against another change of the same workflow.
+   */
+  private volatile boolean failWithACollision = false;
+
   @Override
   public void startedWorkflowPhaseTwo(
       final Object workflowAggregateId) {
@@ -31,6 +37,10 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
       if (failPermanently) {
         throw new io.vanillabp.bpmsdouble.DummyPermanentFailure(
             "phase two failed permanently for testing purposes");
+      }
+      if (failWithACollision) {
+        throw new io.vanillabp.bpmsdouble.DummyCollision(
+            "phase two lost a race for testing purposes");
       }
       throw new RuntimeException("phase two failed for testing purposes");
     }
@@ -239,6 +249,21 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   }
 
+  /**
+   * Lets the next dispatches fail with a failure the adapter reports as a COLLISION: a race
+   * against another change of the same workflow, lost. The core repeats such a dispatch at
+   * once.
+   *
+   * @param numberOfFailures How many dispatches fail
+   */
+  public void failNextDispatchesWithACollision(
+      final int numberOfFailures) {
+
+    failWithACollision = true;
+    failNextDispatches(numberOfFailures);
+
+  }
+
   public void failNextDispatches(
       final int numberOfFailures) {
 
@@ -263,6 +288,7 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
     startedByMessage.clear();
     failuresRemaining.set(0);
     failPermanently = false;
+    failWithACollision = false;
 
   }
 

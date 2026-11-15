@@ -251,6 +251,25 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
 
   }
 
+  @Override
+  public boolean isPhaseTwoFailureACollision(
+      final Throwable failure) {
+
+    // This double reports exactly one kind as a lost race. So a test can prove that the core
+    // repeats such an operation at once, and not after the backoff of the outbox
+    var candidate = failure;
+    while (candidate != null) {
+      if (candidate instanceof DummyCollision) {
+        return true;
+      }
+      candidate = candidate.getCause() == candidate
+          ? null
+          : candidate.getCause();
+    }
+    return false;
+
+  }
+
   /**
    * Whether the double plays a BPMS which repeats a task when it did not learn its
    * outcome. Switched on by {@link DummyAdapter#PROPERTY_AT_LEAST_ONCE_DELIVERY}.

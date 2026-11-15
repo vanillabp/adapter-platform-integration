@@ -9,6 +9,7 @@ import io.vanillabp.integration.spi.PhaseOperationRegistry;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.TransactionRunner;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * The router, owned by the core, which hands {@link PhaseTwoCall}s planned in the
@@ -41,12 +42,26 @@ import io.vanillabp.integration.spi.TransactionRunner;
  */
 // see decision 1 in the repository's DECISIONS.md
 @SuppressWarnings("LombokGetterMayBeUsed")
+@Slf4j
 public final class PhaseTwoRouter {
 
   private record RegistrationKey(
                                  String workflowModuleId,
                                  String bpmnProcessId) {
   }
+
+  /**
+   * The pauses before each repetition of a dispatch which lost a race against another change
+   * of the same workflow. Together, with the jitter, they last between 0.75 and 2.25 seconds.
+   * A race on Camunda 7 is over in milliseconds. A conflict which lasts longer than that is
+   * no race any more, and the backoff of the outbox is the better answer to it.
+   */
+  public static final java.util.List<java.time.Duration> PAUSES_BEFORE_REPEATING_A_COLLISION = java.util.List
+      .of(
+          java.time.Duration.ofMillis(100),
+          java.time.Duration.ofMillis(200),
+          java.time.Duration.ofMillis(400),
+          java.time.Duration.ofMillis(800));
 
   private final Map<RegistrationKey, MigrationProcessService<?>> registrations = new ConcurrentHashMap<>();
 
@@ -278,14 +293,7 @@ public final class PhaseTwoRouter {
             call.workflowModuleId(),
             call.bpmnProcessId(),
             call.workflowAggregateId())) {
-      if (runner == null) {
-        dispatch.dispatch(call, previouslyAttempted);
-        return;
-      }
-      runner.requireTransaction(() -> {
-        dispatch.dispatch(call, previouslyAttempted);
-        return null;
-      });
+      dispatchRepeatingACollision(dispatch, call, previouslyAttempted, runner);
     } catch (final RuntimeException e) {
       metrics
           .outboxDispatchFailed(
@@ -293,6 +301,102 @@ public final class PhaseTwoRouter {
               io.vanillabp.integration.spi.PhaseTwoPermanentFailure.isPermanent(e));
       throw e;
     }
+
+  }
+
+  /**
+   * Dispatches the call, and repeats it a few times at once where it lost a race against
+   * another change of the same workflow ({@link PhaseTwoCollision}). Such a race is over in
+   * milliseconds. The backoff of the outbox starts at <code>vanillabp.outbox.attempt-frequency</code>,
+   * thirty seconds by default, and a user waits for it. Every other failure goes to the store
+   * at once, as before.
+   * <p>
+   * The repetitions happen here, and not in a store, for three reasons. Every store VanillaBP
+   * ships dispatches through this method, so all of them behave the same. The store still holds
+   * its lease on the entry, which its own renewal keeps alive, so no other node takes the entry
+   * in between. And the repetitions use no attempt of the entry, because the store never hears
+   * of them.
+   * <p>
+   * A repetition needs a transaction of its own, because the failed attempt rolled its
+   * transaction back. This method can give it one only where it opened the transaction
+   * itself. A store
+   * which dispatches inside a transaction it opened itself gets the failure at once. Its
+   * transaction is rollback-only now and can never commit what a repetition would do. See
+   * decision 49 in the repository's DECISIONS.md. When the repetitions do not help, the store
+   * gets the failure of the adapter, unwrapped, and counts it as an attempt. Why the pauses are
+   * fixed and not configured is said in {@code DECISIONS.pending/2172.md}.
+   *
+   * @param dispatch The dispatch of the call's operation
+   * @param call The call to dispatch
+   * @param previouslyAttempted Whether the outbox entry was dispatched before. A repetition
+   *        passes the same value: the attempt before it left nothing behind
+   * @param runner The runner which provides the transaction, or <code>null</code>
+   */
+  private void dispatchRepeatingACollision(
+      final PhaseOperationDispatch dispatch,
+      final PhaseTwoCall call,
+      final boolean previouslyAttempted,
+      final TransactionRunner runner) {
+
+    final var eachAttemptGetsATransactionOfItsOwn = (runner == null) || !runner.isTransactionActive();
+    var repetitions = 0;
+    while (true) {
+      try {
+        dispatchOnce(dispatch, call, previouslyAttempted, runner);
+        return;
+      } catch (final RuntimeException e) {
+        final var collision = PhaseTwoCollision.find(e);
+        if (collision == null) {
+          throw e;
+        }
+        if (!eachAttemptGetsATransactionOfItsOwn || (repetitions == PAUSES_BEFORE_REPEATING_A_COLLISION.size())) {
+          throw collision.failureOfTheAdapter();
+        }
+        final var pause = withJitter(PAUSES_BEFORE_REPEATING_A_COLLISION.get(repetitions));
+        repetitions += 1;
+        log.debug("{} - repeating it in {} ms ({} of {})", collision.getMessage(), pause.toMillis(),
+            repetitions, PAUSES_BEFORE_REPEATING_A_COLLISION.size());
+        try {
+          Thread.sleep(pause);
+        } catch (final InterruptedException interrupted) {
+          // the node is stopping. The store plans the entry again, as for any failure
+          Thread.currentThread().interrupt();
+          throw collision.failureOfTheAdapter();
+        }
+      }
+    }
+
+  }
+
+  /**
+   * Runs the dispatch once, in the transaction of the runner where there is one.
+   */
+  private static void dispatchOnce(
+      final PhaseOperationDispatch dispatch,
+      final PhaseTwoCall call,
+      final boolean previouslyAttempted,
+      final TransactionRunner runner) {
+
+    if (runner == null) {
+      dispatch.dispatch(call, previouslyAttempted);
+      return;
+    }
+    runner.requireTransaction(() -> {
+      dispatch.dispatch(call, previouslyAttempted);
+      return null;
+    });
+
+  }
+
+  /**
+   * Spreads the pause between half and one and a half of its planned length. Two nodes which
+   * lost against each other should not meet again at the same moment.
+   */
+  private static java.time.Duration withJitter(
+      final java.time.Duration pause) {
+
+    final var factor = 0.5 + java.util.concurrent.ThreadLocalRandom.current().nextDouble();
+    return java.time.Duration.ofMillis(Math.round(pause.toMillis() * factor));
 
   }
 
