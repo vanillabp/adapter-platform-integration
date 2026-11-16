@@ -3,6 +3,7 @@ package io.vanillabp.integration.deployment.parts;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.LinkedList;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.TreeMap;
@@ -13,6 +14,8 @@ import io.quarkus.deployment.annotations.BuildProducer;
 import io.quarkus.deployment.annotations.BuildStep;
 import io.quarkus.deployment.builditem.ApplicationArchivesBuildItem;
 import io.quarkus.deployment.builditem.nativeimage.NativeImageResourceBuildItem;
+import io.quarkus.deployment.pkg.builditem.CurateOutcomeBuildItem;
+import io.quarkus.paths.PathTree;
 import io.quarkus.paths.PathVisit;
 import io.vanillabp.integration.spi.parts.PartKind;
 import io.vanillabp.integration.spi.parts.VanillaBpParts;
@@ -31,6 +34,13 @@ import io.vanillabp.integration.spi.parts.VanillaBpParts;
  * Registering the descriptors matters as much as the check. A native image only carries the
  * resources it was told about. A descriptor left out of the image turns every pair into an
  * unknown one.
+ * <p>
+ * The descriptors are searched in the application and in every JAR of its runtime classpath.
+ * The archives which Quarkus indexes are not enough. A BPMS adapter is usually an ordinary
+ * JAR, and so is the JAR holding the platform's own descriptor. Without their descriptors, a
+ * native binary warns that the adapter does not say which platform integration it was built
+ * against. Each descriptor found is judged and registered, so the image carries exactly the
+ * files the build has checked (see <code>VersionDescriptorsInTheNativeImageTest</code>).
  *
  * @see VanillaBpParts
  */
@@ -38,7 +48,9 @@ public class PartVersionsBuildStepProcessor {
 
   private static final Logger log = Logger.getLogger(PartVersionsBuildStepProcessor.class);
 
-  private static final String DESCRIPTOR_FOLDER = "META-INF/vanillabp/";
+  private static final String DESCRIPTOR_DIRECTORY = "META-INF/vanillabp";
+
+  private static final String DESCRIPTOR_FOLDER = DESCRIPTOR_DIRECTORY + '/';
 
   private static final String DESCRIPTOR_SUFFIX = ".properties";
 
@@ -50,28 +62,36 @@ public class PartVersionsBuildStepProcessor {
   }
 
   /**
-   * @param applicationArchives The archives of this Quarkus build
+   * @param applicationArchives The archives of this Quarkus build, used for the application
+   *        itself
+   * @param curateOutcome The model of this application, used for the JARs of its runtime
+   *        classpath, whether Quarkus indexes them or not
    * @param nativeImageResources Producer putting the descriptors into the native image
    * @return The sign that the parts were checked. The deployment pipeline waits for it.
    */
   @BuildStep
   PartsCheckedBuildItem checkPartsBelongTogether(
       final ApplicationArchivesBuildItem applicationArchives,
+      final CurateOutcomeBuildItem curateOutcome,
       final BuildProducer<NativeImageResourceBuildItem> nativeImageResources) {
 
-    // sorted + deduplicated: the same descriptor may show up in more than one archive
+    // sorted + deduplicated: the same descriptor may show up in more than one place. The
+    // application comes first and wins, as it does on the classpath at runtime.
     final var descriptors = new TreeMap<String, Properties>();
     applicationArchives
-        .getAllArchives()
-        .forEach(archive -> archive
-            .accept(openPathTree -> openPathTree
-                .walk(visit -> Optional
-                    .ofNullable(visit.getRelativePath("/"))
-                    .filter(PartVersionsBuildStepProcessor::isVersionDescriptor)
-                    .ifPresent(path -> {
-                      nativeImageResources.produce(new NativeImageResourceBuildItem(path));
-                      read(visit).ifPresent(descriptor -> descriptors.put(path, descriptor));
-                    }))));
+        .getRootArchive()
+        .accept(application -> collectDescriptors(application, descriptors));
+    curateOutcome
+        .getApplicationModel()
+        .getRuntimeDependencies()
+        .forEach(dependency -> collectDescriptors(dependency.getContentTree(), descriptors));
+
+    if (!descriptors.isEmpty()) {
+      nativeImageResources.produce(new NativeImageResourceBuildItem(descriptors
+          .keySet()
+          .stream()
+          .toList()));
+    }
 
     final var reasonsNotToBuild = new LinkedList<String>();
     descriptors
@@ -96,7 +116,26 @@ public class PartVersionsBuildStepProcessor {
   }
 
   /**
-   * @param path The relative path of a file found in an application archive
+   * Reads the descriptors of one archive. A descriptor already read from an earlier archive
+   * is kept.
+   *
+   * @param archive The content of the application or of one JAR of its classpath
+   * @param descriptors The descriptors read so far, by their relative path
+   */
+  private static void collectDescriptors(
+      final PathTree archive,
+      final Map<String, Properties> descriptors) {
+
+    archive.walkIfContains(DESCRIPTOR_DIRECTORY, visit -> Optional
+        .ofNullable(visit.getRelativePath("/"))
+        .filter(PartVersionsBuildStepProcessor::isVersionDescriptor)
+        .filter(path -> !descriptors.containsKey(path))
+        .ifPresent(path -> read(visit).ifPresent(descriptor -> descriptors.put(path, descriptor))));
+
+  }
+
+  /**
+   * @param path The relative path of a file found in an archive
    * @return Whether the file is a VanillaBP version descriptor
    */
   private static boolean isVersionDescriptor(

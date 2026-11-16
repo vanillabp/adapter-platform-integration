@@ -10,7 +10,9 @@ Integration tests which make sure that things work as they should.
    An application with a relational database and no MongoDB anywhere. It has no test class.
    The test is that it builds: in JVM mode on every build, and as a native image when the
    profile `native-image` is active (`-Dnative`). Its main method starts a workflow and reads the
-   aggregate back. So running the binary also checks that the application starts. See the section
+   aggregate back. So running the binary also checks that the application starts. Before that, it
+   checks that the version descriptors of the platform integration and of the dummy adapter reached
+   it (`VersionDescriptorCheck`). Both lie in JARs which Quarkus does not index. See the section
    about optional extensions in the [runtime module's README](../runtime/README.md).
 2. **[sample-extension](./sample-extension):**<br>
    A small extension, built like the VanillaBP Business Cockpit. It is the Quarkus half of the
