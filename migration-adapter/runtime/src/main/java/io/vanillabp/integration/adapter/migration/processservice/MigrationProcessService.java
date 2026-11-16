@@ -1080,12 +1080,12 @@ public class MigrationProcessService<A> {
    * <p>
    * One more question compares the identity of each BPMS with the one written down at an
    * earlier start. Unlike the others it ends the start, see
-   * {@link DeliveryRecords#compareTheIdentityOfEachBpms(List)}.
+   * {@link DeliveryRecords#compareTheIdentityOfEachBpms(List, TransactionRunner)}.
    */
   public void validatePersistedAdapterIdsAtStartup() {
 
     deliveryRecords.reportOpenTasksNobodyRemembers(adapterProcessServices);
-    deliveryRecords.compareTheIdentityOfEachBpms(adapterProcessServices);
+    deliveryRecords.compareTheIdentityOfEachBpms(adapterProcessServices, getTransactionRunner(null));
     reportUnconfiguredAdapterIds(
         phaseTwoOutbox == null
             ? Set.<String>of()
