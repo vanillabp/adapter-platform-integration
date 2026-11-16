@@ -3372,7 +3372,9 @@ public class MigrationProcessService<A> {
   /**
    * Runs a phase-two operation, and lets the adapter classify a failure. The outbox repeats
    * what may succeed on the next attempt. A concurrency conflict is the case this exists for.
-   * A failure which repeating cannot fix blocks the entry right away.
+   * A failure which repeating cannot fix blocks the entry right away. A conflict which the
+   * adapter calls a collision is marked, so the router repeats it at once instead of
+   * leaving it to the backoff of the outbox.
    *
    * @param adapter The adapter executing the operation
    * @param operationDescription What was attempted, for the message
@@ -3387,6 +3389,11 @@ public class MigrationProcessService<A> {
       operation.run();
     } catch (final RuntimeException e) {
       if (adapter.isPhaseTwoFailureRepeatable(e)) {
+        if (adapter.isPhaseTwoFailureACollision(e)) {
+          throw new PhaseTwoCollision(
+              "Phase two of %s lost a race against another change of the same workflow at adapter '%s'"
+                  .formatted(operationDescription, adapter.getAdapterId()), e);
+        }
         throw e;
       }
       throw new PhaseTwoPermanentFailure(

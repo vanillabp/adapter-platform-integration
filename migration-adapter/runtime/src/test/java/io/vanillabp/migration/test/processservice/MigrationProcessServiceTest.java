@@ -747,6 +747,37 @@ public class MigrationProcessServiceTest {
   }
 
   @Test
+  @DisplayName("A phase-two failure the adapter calls a collision is marked, so the router repeats it at once")
+  public void collisionsInPhaseTwoAreMarked() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    final var lostRace = new IllegalStateException("another transaction changed the same workflow");
+    org.mockito.Mockito
+        .lenient()
+        .when(processService.phaseOperations())
+        .thenReturn(
+            io.vanillabp.migration.test.TestPhaseOperations
+                .failingInPhaseTwo(PhaseOperation.START_WORKFLOW, lostRace));
+    when(processService.isPhaseTwoFailureRepeatable(lostRace)).thenReturn(true);
+    when(processService.isPhaseTwoFailureACollision(lostRace)).thenReturn(true);
+
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
+
+    final var collision = assertThrowsExactly(
+        io.vanillabp.integration.adapter.migration.processservice.PhaseTwoCollision.class,
+        () -> testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false));
+    assertEquals(lostRace, collision.getCause());
+
+  }
+
+  @Test
   @DisplayName("Phase two of a start records which adapter holds the workflow - no probing needed")
   public void phaseTwoOfAStartFillsTheAdapterCache() {
 
