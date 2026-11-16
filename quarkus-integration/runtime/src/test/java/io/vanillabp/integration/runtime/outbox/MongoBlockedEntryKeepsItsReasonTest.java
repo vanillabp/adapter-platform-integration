@@ -48,6 +48,7 @@ import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.test.InstanceDouble;
 import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.PhaseTwoBpmsBusy;
 import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
 import io.vanillabp.integration.spi.PhaseTwoRetryLater;
 import io.vanillabp.integration.test.utils.ContainerImages;
@@ -285,6 +286,24 @@ public class MongoBlockedEntryKeepsItsReasonTest {
     assertEquals(
         "io.vanillabp.integration.spi.PhaseTwoPermanentFailure: nothing waited for the message within its time-to-live",
         entry.getString("lastFailure"));
+
+  }
+
+  @Test
+  @DisplayName("Refusals of a busy BPMS use no attempt, so an entry which allows two goes through after four of them")
+  public void refusalsOfABusyBpmsUseNoAttempt() throws Exception {
+
+    final var dispatcher = dispatcherOf(aRouterAnswering(call -> {
+      if (call <= 4) {
+        throw new PhaseTwoBpmsBusy("refused by adapter 'dummy', because its BPMS reports backpressure", null);
+      }
+    }));
+    final var id = anEntryDueNow();
+
+    final var entry = dispatchedUntil(MongoPhaseTwoOutbox.STATUS_DONE, dispatcher, id);
+
+    assertEquals(5, callsIntoTheAdapter.get(), "the entry came back after every refusal");
+    assertEquals(1, entry.getInteger("attempts"), "only the attempt which went through is counted");
 
   }
 

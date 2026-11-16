@@ -759,7 +759,8 @@ public class MigrationProcessServiceTest {
             io.vanillabp.migration.test.TestPhaseOperations
                 .failingInPhaseTwo(PhaseOperation.START_WORKFLOW, lostRace));
     when(processService.isPhaseTwoFailureRepeatable(lostRace)).thenReturn(true);
-    when(processService.isPhaseTwoFailureACollision(lostRace)).thenReturn(true);
+    when(processService.kindOfPhaseTwoFailure(lostRace))
+        .thenReturn(io.vanillabp.integration.adapter.spi.PhaseTwoFailureKind.COLLISION);
 
     final var testee = MigrationProcessService
         .forBpmnProcess("test-module", "TestProcess", Object.class)
@@ -774,6 +775,41 @@ public class MigrationProcessServiceTest {
         io.vanillabp.integration.adapter.migration.processservice.PhaseTwoCollision.class,
         () -> testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false));
     assertEquals(lostRace, collision.getCause());
+
+  }
+
+  @Test
+  @DisplayName("A phase-two failure the adapter calls busy is marked, so the store plans it again without counting an attempt")
+  public void busyAnswersInPhaseTwoAreMarked() {
+
+    when(processService.getAdapterId()).thenReturn("test-adapter");
+    final var backpressure = new IllegalStateException("RESOURCE_EXHAUSTED");
+    org.mockito.Mockito
+        .lenient()
+        .when(processService.phaseOperations())
+        .thenReturn(
+            io.vanillabp.migration.test.TestPhaseOperations
+                .failingInPhaseTwo(PhaseOperation.START_WORKFLOW, backpressure));
+    when(processService.isPhaseTwoFailureRepeatable(backpressure)).thenReturn(true);
+    when(processService.kindOfPhaseTwoFailure(backpressure))
+        .thenReturn(io.vanillabp.integration.adapter.spi.PhaseTwoFailureKind.BUSY);
+
+    final var testee = MigrationProcessService
+        .forBpmnProcess("test-module", "TestProcess", Object.class)
+        .properties(createProperties())
+        .aggregatePersistence(aggregatePersistence)
+        .processServices(List
+            .of(processService))
+        .phaseTwoOutboxResolver(phaseTwoOutboxResolver)
+        .build();
+
+    final var busy = assertThrowsExactly(
+        io.vanillabp.integration.spi.PhaseTwoBpmsBusy.class,
+        () -> testee.executePhaseTwo(PhaseOperation.START_WORKFLOW, 42L, "test-adapter", Map.of(), false));
+    assertEquals(backpressure, busy.getCause());
+    // the store writes this message into its WARN line, and the entry does not know the adapter
+    assertTrue(busy.getMessage().contains("adapter 'test-adapter'"), busy.getMessage());
+    assertTrue(busy.getMessage().contains("RESOURCE_EXHAUSTED"), busy.getMessage());
 
   }
 
