@@ -163,10 +163,10 @@ This repository holds the following VanillaBP functions:
       comes, and the two platforms say it in different ways (see the javadoc of `endOfStartup()`).
       `TheOrderOfAStartTest` of each platform pins the order.
    5. Finding services annotated with
-      [@WorkflowService](https://github.com/vanillabp/spi-for-java#wire-up-a-process).
-   6. Building a [ProcessService](https://github.com/vanillabp/spi-for-java#start-a-workflow) for each
+      [@WorkflowService](https://github.com/vanillabp/spi-for-java/wiki/Wiring-a-process).
+   6. Building a [ProcessService](https://github.com/vanillabp/spi-for-java/wiki/The-process-service) for each
       deployed process. Workflow services use it.
-   7. Running [@WorkflowTask](https://github.com/vanillabp/spi-for-java#wire-up-a-task) methods for the
+   7. Running [@WorkflowTask](https://github.com/vanillabp/spi-for-java/wiki/Wiring-a-task) methods for the
       adapters. This means: find the handler, load the workflow aggregate, bind the parameters, run
       the method in a transaction, save the aggregate, and map the outcome (completed / BPMN error /
       left open).
