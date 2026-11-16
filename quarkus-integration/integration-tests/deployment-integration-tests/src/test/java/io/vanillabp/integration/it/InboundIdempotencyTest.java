@@ -244,7 +244,7 @@ public class InboundIdempotencyTest {
 
   private static final Handler COLLECTING_WHAT_IS_LOGGED = new Handler() {
 
-    private final PatternFormatter asItReads = new PatternFormatter("%s");
+    private final PatternFormatter asItReads = new PatternFormatter("%p %s");
 
     @Override
     public void publish(
@@ -265,6 +265,51 @@ public class InboundIdempotencyTest {
     }
 
   };
+
+  @Test
+  @DisplayName("A record of another aggregate under the same key fails the delivery instead of skipping it")
+  public void aRecordOfAnotherAggregateFailsTheDelivery() throws SQLException {
+
+    final var dummyAdapter = dummyAdapter();
+
+    // a BPMS which was reset hands out the delivery ids of its first life again. The record
+    // which such an id finds belongs to another workflow aggregate
+    persistence.store("4716");
+    persistence.store("4717");
+    dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4716", "job-7"));
+
+    LOGGED_WHILE_THE_TEST_RAN.clear();
+    LogManager
+        .getLogManager()
+        .getLogger("")
+        .addHandler(COLLECTING_WHAT_IS_LOGGED);
+    try {
+      assertThrows(
+          IllegalStateException.class,
+          () -> dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4717", "job-7")));
+    } finally {
+      LogManager
+          .getLogManager()
+          .getLogger("")
+          .removeHandler(COLLECTING_WHAT_IS_LOGGED);
+    }
+
+    assertEquals(0, persistence.get("4717").getInvocations(), "no handler ran");
+    assertEquals(0, recordCount("4717"), "nothing was written for the new aggregate");
+    assertEquals(1, recordCount("4716"), "the old record is not deleted");
+    assertTrue(
+        LOGGED_WHILE_THE_TEST_RAN
+            .stream()
+            .anyMatch(line -> line.startsWith("ERROR") && line.contains("ANOTHER workflow aggregate '4716'")),
+        () -> "the collision is logged as an ERROR: "
+            + LOGGED_WHILE_THE_TEST_RAN);
+
+    // the repeated delivery of the old aggregate is still answered from its record
+    final var repeated = dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4716", "job-7"));
+    assertEquals(WorkflowTaskOutcome.Kind.COMPLETED, repeated.kind());
+    assertEquals(1, persistence.get("4716").getInvocations());
+
+  }
 
   @Test
   @DisplayName("Two deliveries at the same time run the handler twice, which is said and counted")

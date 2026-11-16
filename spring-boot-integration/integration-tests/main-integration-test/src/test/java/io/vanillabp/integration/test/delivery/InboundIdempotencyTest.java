@@ -363,6 +363,45 @@ public class InboundIdempotencyTest {
   }
 
   /**
+   * A BPMS which was reset hands out the delivery ids of its first life again. The record
+   * which such an id finds belongs to another workflow aggregate. The delivery fails, so the
+   * task stays open at the BPMS, and the old record stays where it is.
+   */
+  @Test
+  public void aRecordOfAnotherAggregateFailsTheDelivery(
+      final io.vanillabp.integration.test.utils.CapturedOutput captured) throws IOException {
+
+    DeliveryConfiguration.AGGREGATES.clear();
+
+    try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
+
+      final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
+
+      storeAggregate("4716");
+      storeAggregate("4717");
+      dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4716", "job-7"));
+
+      Assertions.assertThrows(
+          IllegalStateException.class,
+          () -> dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4717", "job-7")));
+      Assertions.assertEquals(0, DeliveryConfiguration.AGGREGATES.get("4717").getInvocations(), "no handler ran");
+      Assertions.assertEquals(0, recordCount(context, "4717"), "nothing was written for the new aggregate");
+      Assertions.assertEquals(1, recordCount(context, "4716"), "the old record is not deleted");
+      Assertions.assertTrue(
+          captured.getAll().contains("ERROR") && captured.getAll().contains("ANOTHER workflow aggregate '4716'"),
+          () -> "the collision is logged as an ERROR: "
+              + captured.getAll());
+
+      // the repeated delivery of the old aggregate is still answered from its record
+      final var repeated = dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4716", "job-7"));
+      Assertions.assertEquals(WorkflowTaskOutcome.Kind.COMPLETED, repeated.kind());
+      Assertions.assertEquals(1, DeliveryConfiguration.AGGREGATES.get("4716").getInvocations());
+
+    }
+
+  }
+
+  /**
    * The case which the record cannot catch. The BPMS hands out the task again while the
    * first handler is still running. So neither delivery finds a record, and the
    * <code>&#64;WorkflowTask</code> method runs twice. One record is written. The delivery

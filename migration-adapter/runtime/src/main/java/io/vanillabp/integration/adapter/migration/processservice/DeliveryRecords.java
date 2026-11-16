@@ -356,11 +356,20 @@ public final class DeliveryRecords {
   /**
    * The outcome with which a repeated delivery is answered, so that the
    * <code>&#64;WorkflowTask</code> method does not run a second time.
+   * <p>
+   * A record found under the key is a repetition only where it names the same workflow
+   * aggregate. A record of another aggregate means that the BPMS handed out an id which it
+   * had handed out before. A new or reset BPMS does that, while the delivery log still holds
+   * the records of the old one. Answering such a delivery from the record would skip the
+   * handler of a task which never ran. So the delivery fails, and the BPMS keeps the task
+   * open, and an ERROR says how to clean up the delivery log.
    *
    * @param deliveryLog The store to ask
    * @param deliveryKey The identity of the delivery
    * @param context The invocation context of the repeated delivery
    * @return The recorded outcome, empty where this delivery was not processed before
+   * @throws IllegalStateException If the record under this key belongs to another workflow
+   *           aggregate
    */
   public Optional<WorkflowTaskOutcome> answerToARepeatedDelivery(
       final TaskDeliveryLog deliveryLog,
@@ -369,6 +378,7 @@ public final class DeliveryRecords {
 
     final var recorded = deliveryLog
         .recordedDelivery(deliveryKey)
+        .map(delivery -> refuseTheDeliveryOfAnotherAggregate(delivery, context))
         .flatMap(delivery -> recordedOutcomeOf(deliveryLog, delivery, context));
     if (recorded.isEmpty()) {
       return recorded;
@@ -389,6 +399,89 @@ public final class DeliveryRecords {
             bpmnProcessId,
             context.getTaskDefinition());
     return recorded;
+
+  }
+
+  /**
+   * Passes the record on where it belongs to the aggregate of this delivery, and fails the
+   * delivery where it belongs to another one.
+   * <p>
+   * The delivery id only has to be unique within one BPMS, and only for as long as the BPMS
+   * keeps its own database. A new Camunda 8 cluster counts its job keys from the same start
+   * value again. A restored backup sets the counter back. A Camunda 7 engine whose database
+   * was emptied does the same with its ids. The delivery log of the application keeps its
+   * records through all of that. So a key can find a record which another task wrote.
+   * <p>
+   * The aggregate tells the two cases apart. A real repetition is a delivery of the same task
+   * of the same workflow, and so of the same aggregate. Nothing else in the row can say that
+   * as reliably: an adapter may name no workflow, and a task id can be reused the same way as
+   * the delivery id.
+   * <p>
+   * The delivery fails instead of running the handler, and the old records are not deleted.
+   * {@code DECISIONS.pending/2169.md} says why. A record without an aggregate gives nothing to
+   * compare, so it is passed on as before.
+   *
+   * @param delivery The record found under the key of this delivery
+   * @param context The invocation context of this delivery
+   * @return The record, if it names the aggregate of this delivery
+   * @throws IllegalStateException If the record names another workflow aggregate
+   */
+  private TaskDelivery refuseTheDeliveryOfAnotherAggregate(
+      final TaskDelivery delivery,
+      final TaskInvocationContext context) {
+
+    final var recordedAggregateId = delivery.workflowAggregateId();
+    final var deliveredAggregateId = context.getWorkflowAggregateId();
+    if ((recordedAggregateId == null) || (deliveredAggregateId == null) || recordedAggregateId
+        .equals(deliveredAggregateId)) {
+      return delivery;
+    }
+    final var message = """
+        The delivery of task '%s' (BPMN process '%s' of workflow module '%s') for workflow \
+        aggregate '%s' failed: adapter '%s' handed out a delivery id which this application \
+        processed before for ANOTHER workflow aggregate '%s', at %s (delivery key '%s'). This \
+        is not a repeated delivery, so the @WorkflowTask method did not run and the task stays \
+        open in the BPMS (an incident, once its retries are used up). Most likely the BPMS \
+        behind adapter '%s' is a new one or was reset - a new cluster, a restored backup or an \
+        emptied engine database - and hands out ids again which the old one handed out, while \
+        the delivery log of this application still holds the records of the old one. To solve \
+        this:
+        1. Find the old records in the delivery log of the workflow aggregate class '%s'. In the JDBC \
+        store these are the rows of table '%s' (or of the table set by \
+        'vanillabp.outbox.jdbc.delivery-table') with ADAPTER_ID '%s' and a RECORDED_AT before \
+        the BPMS was reset. In the MongoDB store these are the documents of collection '%s' \
+        (or of the collection set by 'vanillabp.outbox.mongo.delivery-collection') with the \
+        same 'adapterId' and an earlier 'recordedAt'. The record found here has the AGGREGATE_ID \
+        '%s'. Where the application brings its own TaskDeliveryLog, look wherever it keeps them.
+        2. Check that the BPMS no longer runs any workflow those records belong to. A record \
+        is what keeps a repeated delivery of such a workflow from running its @WorkflowTask \
+        method a second time.
+        3. Delete those records. VanillaBP deletes nothing here, because it cannot tell a \
+        reset BPMS from two BPMS which write into the same delivery log by mistake, for \
+        example two environments which share one database.
+        4. Retry the failed task in the BPMS (for example resolve the incident). The \
+        @WorkflowTask method then runs as usual.
+        Until you do, every delivery which meets an old record fails like this one. The old \
+        records go away on their own only once 'vanillabp.delivery.retention' has passed."""
+        .formatted(
+            context.getTaskDefinition(),
+            bpmnProcessId,
+            workflowModuleId,
+            deliveredAggregateId,
+            context.getAdapterId(),
+            recordedAggregateId,
+            delivery.recordedAt(),
+            delivery.deliveryKey(),
+            context.getAdapterId(),
+            workflowAggregateClass.getName(),
+            io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME,
+            delivery.adapterId(),
+            io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.MongoOutboxProperties.DEFAULT_DELIVERY_COLLECTION,
+            recordedAggregateId);
+    // the stack trace says nothing about the cause, so it is left out. The message names the
+    // task, both aggregates and what to do
+    log.error(message);
+    throw new IllegalStateException(message);
 
   }
 
