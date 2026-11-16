@@ -3,7 +3,8 @@ package io.vanillabp.integration.adapter.migration.processservice;
 /**
  * Phase two lost a race against another change of the same workflow, and the BPMS undid
  * everything the operation did. The adapter said so through
- * {@link io.vanillabp.integration.adapter.spi.MigratableProcessService#isPhaseTwoFailureACollision(Throwable)}.
+ * {@link io.vanillabp.integration.adapter.spi.MigratableProcessService#kindOfPhaseTwoFailure(Throwable)},
+ * which answered {@link io.vanillabp.integration.adapter.spi.PhaseTwoFailureKind#COLLISION}.
  * <p>
  * It never leaves the core. The {@link PhaseTwoRouter} repeats the dispatch a few times at
  * once. If that does not help, it hands the failure of the adapter to the store, unwrapped.

@@ -584,34 +584,43 @@ public interface MigratableProcessService<A> {
   }
 
   /**
-   * Whether a phase-two operation failed because another transaction changed the same
-   * workflow at the same moment, and the BPMS undid everything the operation did.
-   * <p>
-   * Two operations on one workflow often run at nearly the same time: a message is
-   * correlated while a user task of the same workflow is completed. An embedded engine
-   * which locks optimistically lets one of them win and fails the other one. The loser
-   * goes through a moment later. If the outbox waited its normal backoff for that, a user
-   * would wait thirty seconds for something which needs a few milliseconds. So the core
-   * repeats such an operation at once, a few times, with short pauses. Only when that does
-   * not help does the failure go to the outbox, which counts it as an attempt.
-   * <p>
-   * Say <code>true</code> only where both are true. The failure is the lost race, and not
-   * a database or engine which is away. And the BPMS rolled the operation back
-   * completely, so repeating it cannot do anything twice. On Camunda 7 that is its
-   * <code>OptimisticLockingException</code>. A remote BPMS which orders every command of a
-   * workflow itself has no such failure and keeps the default.
-   * <p>
+   * What kind of failure a phase-two operation ended with. The core decides what each kind
+   * means for the outbox entry. The adapter only says what its BPMS answered.
+   * <ul>
+   * <li>{@link PhaseTwoFailureKind#COLLISION}: another transaction changed the same workflow
+   * at the same moment, and the BPMS undid everything the operation did. Two operations on
+   * one workflow often run at nearly the same time: a message is correlated while a user
+   * task of the same workflow is completed. An embedded engine which locks optimistically
+   * lets one of them win and fails the other one. The loser goes through a moment later. So
+   * the core repeats such an operation at once, a few times, with short pauses. Only when
+   * that does not help does the failure go to the outbox, which counts it as an attempt.
+   * Answer it only where the failure is the lost race, not a database or engine which is
+   * away, and where the BPMS rolled the operation back completely, so repeating it cannot
+   * do anything twice. On Camunda 7 that is its <code>OptimisticLockingException</code>. A
+   * remote BPMS which orders every command of a workflow itself has no such failure.</li>
+   * <li>{@link PhaseTwoFailureKind#BUSY}: the BPMS refused the operation because it is
+   * overloaded right now, and it did nothing of it. A busy BPMS needs seconds, not
+   * milliseconds, to have room again. So the core does not repeat the operation inside the
+   * dispatch. The outbox plans it again after <code>vanillabp.outbox.attempt-frequency</code>,
+   * and that uses no attempt of the entry, as often as the BPMS keeps saying so. Each such
+   * answer writes a WARN line, which is how an overloaded BPMS becomes visible. Answer it
+   * only for a refusal which says "come back later", such as the backpressure of Camunda 8.
+   * A BPMS which cannot be reached is an outage, not a busy BPMS: an outage keeps the
+   * counted attempts, so an entry which can never be sent ends up blocked.</li>
+   * <li>{@link PhaseTwoFailureKind#OTHER}: everything else. The outbox counts an attempt and
+   * repeats the operation with its growing backoff.</li>
+   * </ul>
    * The answer only matters for a failure which
    * {@link #isPhaseTwoFailureRepeatable(Throwable)} calls repeatable. The default is
-   * <code>false</code>: the outbox repeats the failure with its normal backoff.
+   * {@link PhaseTwoFailureKind#OTHER}: the outbox repeats the failure with its normal backoff.
    *
    * @param failure What the phase-two operation threw
-   * @return Whether the failure is a lost race which a repetition in a moment wins
+   * @return The kind of the failure, never <code>null</code>
    */
-  default boolean isPhaseTwoFailureACollision(
+  default PhaseTwoFailureKind kindOfPhaseTwoFailure(
       final Throwable failure) {
 
-    return false;
+    return PhaseTwoFailureKind.OTHER;
 
   }
 
