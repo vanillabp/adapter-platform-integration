@@ -170,6 +170,32 @@ public record TaskDelivery(
   }
 
   /**
+   * The row which says which installation of a BPMS the records of one adapter come from. The
+   * identity is kept in {@link #workflowId()}, the place where a workflow start keeps the
+   * BPMS' own id of a workflow. Everything about a task stays empty.
+   *
+   * @param adapterId The ID of the adapter whose BPMS the identity is of
+   * @param workflowModuleId The ID of the workflow module of the startup check which wrote it
+   * @param bpmnProcessId The BPMN process ID of the startup check which wrote it
+   * @param identity What the adapter reported as the identity of its BPMS
+   * @param recordedAt When it was written down
+   * @return The row to hand to {@link TaskDeliveryLog#record(TaskDelivery)}
+   */
+  public static TaskDelivery bpmsIdentity(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String identity,
+      final Instant recordedAt) {
+
+    return new TaskDelivery(
+        BpmsIdentityKey.of(adapterId, workflowModuleId,
+            bpmnProcessId), adapterId, workflowModuleId, bpmnProcessId, null, identity, null, null, null, null, null, null, recordedAt, null, null, DeliveryRecordKind.BPMS_IDENTITY
+                .name(), null);
+
+  }
+
+  /**
    * The row about the START of a workflow without a version. Every caller wrote this before
    * the version existed.
    *

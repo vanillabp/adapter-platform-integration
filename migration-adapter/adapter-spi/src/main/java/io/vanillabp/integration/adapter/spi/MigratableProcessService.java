@@ -559,6 +559,40 @@ public interface MigratableProcessService<A> {
   }
 
   /**
+   * An identity of the BPMS installation behind this adapter. The core compares it at
+   * startup with the identity it wrote down at an earlier start, and ends the start where
+   * the two differ while the delivery log still holds records of this adapter.
+   * <p>
+   * The records of the delivery log are keyed by ids which the BPMS hands out. Those ids are
+   * unique only within one installation of the BPMS. A new installation, for example a new
+   * Camunda 8 cluster, hands out the same ids again, and a record of the old installation
+   * would then answer a delivery of the new one. Ending the start is cheaper than the
+   * incident a single delivery runs into much later.
+   *
+   * <h4>What the identity has to be</h4>
+   *
+   * It stays the same for as long as the BPMS keeps its own state. So it survives a restart
+   * of the BPMS and of the application. It is part of that state, so a restored backup of the
+   * same installation keeps it too. A new installation has a different one. The value is
+   * opaque to the core, which only compares it.
+   * <p>
+   * The default is <code>null</code>, which means "this BPMS cannot say". Then nothing is
+   * compared and nothing is written down. An adapter answers <code>null</code> as well if the
+   * BPMS cannot be reached at startup or if the installation lacks what the identity needs.
+   * It says so in its own log line, because the core cannot tell why.
+   * <p>
+   * The core asks once per BPMN process at startup, so an adapter which has to ask the BPMS
+   * for it asks once and remembers the answer.
+   *
+   * @return The identity, or <code>null</code> if this BPMS cannot say
+   */
+  default String identityOfTheBpms() {
+
+    return null;
+
+  }
+
+  /**
    * Whether a phase-two operation which failed with the given exception is worth
    * repeating.
    * <p>

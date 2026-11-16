@@ -1205,6 +1205,157 @@ public final class DeliveryRecords {
   }
 
   /**
+   * Compares AT STARTUP the identity of each BPMS with the identity written down at an
+   * earlier start, and ends the start where the BPMS changed while the delivery log still
+   * holds records of its adapter.
+   *
+   * <h4>Why it ends the start</h4>
+   *
+   * The records are keyed by ids which the BPMS hands out, and a new installation of the
+   * BPMS hands out the same ids again. A record of the old installation would answer a
+   * delivery of the new one. The check of each delivery catches that, but only when it
+   * happens, as an incident on some task in production. A start which ends tells the
+   * operator before the first task is delivered.
+   *
+   * <h4>When it goes on</h4>
+   *
+   * <ul>
+   * <li>The adapter cannot say who its BPMS is (the SPI default, an unreachable BPMS, an
+   * installation which lacks what the identity needs). Nothing is compared.</li>
+   * <li>No identity was written down yet. That is the first start with this check, or a new
+   * delivery log. The identity met now is written down and taken as the right one.</li>
+   * <li>The identity changed, but the log holds no record of that adapter for this BPMN
+   * process. Nothing can collide, so the new identity replaces the old one.</li>
+   * </ul>
+   * A restored backup of the same installation keeps its identity, so it goes on as well.
+   * <p>
+   * It asks only a store which the startup check of the delivery log resolved. An
+   * application which needs no delivery log is not made to create one for this question.
+   *
+   * @param <A> The workflow-aggregate type which the adapters' process services serve
+   * @param adapterProcessServices The prioritized adapters of this BPMN process
+   * @throws IllegalStateException If the BPMS of an adapter changed while the delivery log
+   *           still holds records of that adapter
+   */
+  public <A> void compareTheIdentityOfEachBpms(
+      final List<MigratableProcessService<A>> adapterProcessServices) {
+
+    final var deliveryLog = taskDeliveryLog;
+    if (deliveryLog == null) {
+      return;
+    }
+    for (final var adapter : adapterProcessServices) {
+      final var identity = adapter.identityOfTheBpms();
+      if ((identity == null) || identity.isBlank()) {
+        continue;
+      }
+      final var adapterId = adapter.getAdapterId();
+      final var known = deliveryLog
+          .bpmsIdentityOf(adapterId, workflowModuleId, bpmnProcessId)
+          .orElse(null);
+      final var newIdentity = TaskDelivery
+          .bpmsIdentity(adapterId, workflowModuleId, bpmnProcessId, identity, Instant.now());
+      if (known == null) {
+        deliveryLog.record(newIdentity);
+        log.debug(
+            "The BPMS of adapter '{}' has the identity '{}', which is written down for BPMN "
+                + "process '{}' of workflow module '{}'",
+            adapterId,
+            identity,
+            bpmnProcessId,
+            workflowModuleId);
+        continue;
+      }
+      if (identity.equals(known.workflowId())) {
+        continue;
+      }
+      final var holdsRecords = deliveryLog.holdsRecordsOf(adapterId, workflowModuleId, bpmnProcessId);
+      if (Boolean.FALSE.equals(holdsRecords)) {
+        takeOverTheNewBpms(deliveryLog, newIdentity, known);
+        continue;
+      }
+      final var message = """
+          The BPMS behind adapter '%s' is not the one this application met before: it has the \
+          identity '%s', while the delivery log of the workflow aggregate class '%s' wrote down \
+          '%s' at %s for BPMN process '%s' of workflow module '%s'. The delivery log still holds \
+          records of this adapter, and a new BPMS hands out the ids of those records again. A \
+          record would then answer a delivery of the new BPMS, so the start ends here, before \
+          the first task is delivered. A restored backup of the same BPMS keeps its identity, \
+          so this is a new installation (for example a new cluster), or the application points \
+          at the BPMS of another environment. To go on, choose one of these:
+          1. Wrong BPMS: correct the address of adapter '%s' in 'vanillabp.adapters.%s.*' and \
+          start again.
+          2. New BPMS, and the old one is gone for good: check that no workflow of the old BPMS \
+          has to go on, then delete the records of adapter '%s' from the delivery log. In the \
+          JDBC store these are the rows of table '%s' (or of the table set by \
+          'vanillabp.outbox.jdbc.delivery-table') with ADAPTER_ID '%s'. In the MongoDB store \
+          these are the documents of collection '%s' (or of the collection set by \
+          'vanillabp.outbox.mongo.delivery-collection') with that 'adapterId'. The rows with \
+          RECORD_KIND (or 'recordKind') '%s' go with them. Where the application brings its own \
+          TaskDeliveryLog, look wherever it keeps them. The next start writes down the new \
+          identity.
+          3. New BPMS, and you know that none of its ids can meet an old record: delete only the \
+          row with DELIVERY_KEY (or '_id') '%s'. The next start writes down the new identity \
+          and keeps the records."""
+          .formatted(
+              adapterId,
+              identity,
+              workflowAggregateClass.getName(),
+              known.workflowId(),
+              known.recordedAt(),
+              bpmnProcessId,
+              workflowModuleId,
+              adapterId,
+              adapterId,
+              adapterId,
+              io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME,
+              adapterId,
+              io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.MongoOutboxProperties.DEFAULT_DELIVERY_COLLECTION,
+              io.vanillabp.integration.spi.DeliveryRecordKind.BPMS_IDENTITY.name(),
+              known.deliveryKey());
+      log.error(message);
+      throw new IllegalStateException(message);
+    }
+
+  }
+
+  /**
+   * Writes down the identity of a BPMS which replaced the one written down before, where the
+   * delivery log holds nothing that the new BPMS could meet.
+   */
+  private void takeOverTheNewBpms(
+      final TaskDeliveryLog deliveryLog,
+      final TaskDelivery newIdentity,
+      final TaskDelivery known) {
+
+    if (deliveryLog.replaceBpmsIdentity(newIdentity)) {
+      log.info(
+          "The BPMS behind adapter '{}' changed from identity '{}' to '{}'. The delivery log holds "
+              + "no records of this adapter for BPMN process '{}' of workflow module '{}', so "
+              + "nothing can collide and the new identity is written down",
+          newIdentity.adapterId(),
+          known.workflowId(),
+          newIdentity.workflowId(),
+          bpmnProcessId,
+          workflowModuleId);
+      return;
+    }
+    log.warn(
+        "The BPMS behind adapter '{}' changed from identity '{}' to '{}', and the delivery log "
+            + "of BPMN process '{}' of workflow module '{}' holds no records of it. The store "
+            + "could not write the new identity down, so the next start which finds records of "
+            + "this adapter ends. Delete the row with the key '{}' from the delivery log to "
+            + "prevent that",
+        newIdentity.adapterId(),
+        known.workflowId(),
+        newIdentity.workflowId(),
+        bpmnProcessId,
+        workflowModuleId,
+        known.deliveryKey());
+
+  }
+
+  /**
    * Answers from the record of this aggregate which adapter holds the task that THIS CALL
    * names. So no BPMS has to be asked for it.
    * <p>

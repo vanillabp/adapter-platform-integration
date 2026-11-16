@@ -205,6 +205,24 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   }
 
+  @Override
+  public Boolean holdsRecordsOf(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return store.holdsRecordsOf(adapterId, workflowModuleId, bpmnProcessId);
+
+  }
+
+  @Override
+  public boolean replaceBpmsIdentity(
+      final TaskDelivery identity) {
+
+    return store.replaceBpmsIdentity(identity);
+
+  }
+
   /**
    * The record which left one task open. It is read within the caller's transaction,
    * through the connection bound to it. So it sees what that transaction has written

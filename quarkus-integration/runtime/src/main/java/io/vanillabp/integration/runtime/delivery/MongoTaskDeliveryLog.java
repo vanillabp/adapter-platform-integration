@@ -88,6 +88,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
   private static final String WORKFLOW_START = io.vanillabp.integration.spi.DeliveryRecordKind.WORKFLOW_START
       .name();
 
+  private static final String BPMS_IDENTITY = io.vanillabp.integration.spi.DeliveryRecordKind.BPMS_IDENTITY
+      .name();
+
   /**
    * How many documents about started workflows one run with the sieve looks at. The sieve costs
    * one read of the application's own database per document. So a run has an upper limit. The
@@ -279,7 +282,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
             new Document(
                 "lastSeenAt", new Document("$lt", Date
                     .from(Instant.now().minus(getDeliveryRetention()))))
-                .append("recordKind", new Document("$ne", WORKFLOW_START)))
+                // A workflow start has a period of its own, and the identity of a BPMS has
+                // to outlive every record it vouches for.
+                .append("recordKind", new Document("$nin", java.util.List.of(WORKFLOW_START, BPMS_IDENTITY))))
         .getDeletedCount();
     return expiredDeliveries + cleanUpExpiredWorkflowStarts();
 
@@ -837,6 +842,44 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
         .append("recordKind", new Document("$ne", WORKFLOW_START))
         .append("outcome", COMPLETION_PENDING);
     return deliveryCollection().countDocuments(filter) > 0;
+
+  }
+
+  /**
+   * Whether this collection holds any document of one adapter and one BPMN process, apart
+   * from the identity of its BPMS (see {@link TaskDeliveryLog#holdsRecordsOf}). It is asked
+   * only when that identity changed, so no index is needed for it.
+   */
+  @Override
+  public Boolean holdsRecordsOf(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    final var filter = new Document("adapterId", adapterId)
+        .append("workflowModuleId", workflowModuleId)
+        .append("bpmnProcessId", bpmnProcessId)
+        .append("recordKind", new Document("$ne", BPMS_IDENTITY));
+    return deliveryCollection().find(filter).limit(1).first() != null;
+
+  }
+
+  @Override
+  public boolean replaceBpmsIdentity(
+      final TaskDelivery identity) {
+
+    final var recordedAt = Date.from(identity.recordedAt() == null
+        ? Instant.now()
+        : identity.recordedAt());
+    return deliveryCollection()
+        .updateOne(
+            new Document("_id", identity.deliveryKey())
+                .append("recordKind", BPMS_IDENTITY),
+            new Document(
+                "$set", new Document("workflowId", identity.workflowId())
+                    .append("recordedAt", recordedAt)
+                    .append("lastSeenAt", recordedAt)))
+        .getModifiedCount() > 0;
 
   }
 
