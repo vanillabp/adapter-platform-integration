@@ -467,6 +467,146 @@ public class OtherOpenTasksOfAWakeUpTest {
 
   }
 
+  /**
+   * The open record of a task which another aggregate left behind under the same workflow id.
+   * A BPMS which was reset hands out the ids of its old workflows again, while the delivery
+   * log still holds their records.
+   */
+  private void recordAnOpenTaskOfAnotherAggregateUnderTheSameWorkflowId() {
+
+    deliveryLog
+        .record(
+            new TaskDelivery(
+                "%s|%s|%s|CREATED|job-of-old-task".formatted(ADAPTER, MODULE,
+                    PROCESS), ADAPTER, MODULE, PROCESS, "4799", WORKFLOW, "awaitSignature", null, "old-task", "COMPLETION_PENDING", null, null, Instant
+                        .now().minusSeconds(3600), null));
+
+  }
+
+  @Test
+  @DisplayName("A wake-up leaves the open task of another aggregate under the same workflow id alone and says so")
+  public void aWakeUpLeavesTheTaskOfAnotherAggregateAlone() {
+
+    final var properties = properties(null, null);
+    final var registry = registry(properties);
+    final var aggregate = storeAggregate();
+    final var otherAggregate = new Aggregate();
+    otherAggregate.id = "4799";
+    persistence.aggregates.put("4799", otherAggregate);
+
+    recordAnOpenTaskOfAnotherAggregateUnderTheSameWorkflowId();
+    registry.invokeWorkflowTask(MODULE, PROCESS, delivery(PROCESS, "awaitSignature", "task-1"));
+    registry.invokeWorkflowTask(MODULE, PROCESS, delivery(PROCESS, "awaitSignature", "task-2"));
+
+    final var messages = loggedBy(
+        WorkflowTaskRegistry.class,
+        () -> registry
+            .reportTasksTheBpmsNoLongerHas(
+                MODULE,
+                PROCESS,
+                delivery(PROCESS, "awaitSignature", "task-2"),
+                probeAnswering(Map.of("task-1", TaskExistence.GONE, "old-task", TaskExistence.GONE))));
+
+    assertEquals(List.of("task-1"), probedTasks, "the task of the other aggregate is not even probed");
+    assertEquals("task-1", aggregate.canceled, "the own task is reported as before");
+    assertEquals(null, otherAggregate.canceled, "the other aggregate is not told anything");
+    assertEquals(2, openRecords(), "the record of the other aggregate stays open, as the wake-up's does");
+    assertEquals(1, messages.size(), "the old record is named once: "
+        + messages);
+    final var message = messages.getFirst();
+    assertTrue(
+        message.contains("ANOTHER workflow aggregate: task 'awaitSignature' (task id 'old-task') of aggregate '4799'"),
+        "names the record: "
+            + message);
+    assertTrue(message.contains("reset"), "names the likely cause: "
+        + message);
+    assertTrue(message.contains("WORKFLOW_ID '%s'".formatted(WORKFLOW)), "says how to find the old records: "
+        + message);
+
+  }
+
+  @Test
+  @DisplayName("The end of a workflow leaves the open task of another aggregate under the same workflow id alone")
+  public void anEndLeavesTheTaskOfAnotherAggregateAlone() {
+
+    final var properties = properties(null, null);
+    final var registry = registry(properties);
+    final var aggregate = storeAggregate();
+    final var otherAggregate = new Aggregate();
+    otherAggregate.id = "4799";
+    persistence.aggregates.put("4799", otherAggregate);
+
+    recordAnOpenTaskOfAnotherAggregateUnderTheSameWorkflowId();
+    registry.invokeWorkflowTask(MODULE, PROCESS, delivery(PROCESS, "awaitSignature", "task-1"));
+
+    final var messages = loggedBy(
+        WorkflowTaskRegistry.class,
+        () -> registry
+            .workflowEnded(
+                MODULE,
+                PROCESS,
+                new io.vanillabp.integration.adapter.spi.workflowend.WorkflowEndedContext() {
+
+                  @Override
+                  public String getWorkflowAggregateId() {
+                    return "4711";
+                  }
+
+                  @Override
+                  public String getAdapterId() {
+                    return ADAPTER;
+                  }
+
+                  @Override
+                  public String getWorkflowId() {
+                    return WORKFLOW;
+                  }
+
+                  @Override
+                  public io.vanillabp.spi.service.WorkflowEnd.Kind getKind() {
+                    return io.vanillabp.spi.service.WorkflowEnd.Kind.COMPLETED;
+                  }
+
+                  @Override
+                  public Instant getEndTime() {
+                    return Instant.now();
+                  }
+
+                }));
+
+    assertEquals("task-1", aggregate.canceled, "the own task is reported as canceled as before");
+    assertEquals(null, otherAggregate.canceled, "the other aggregate is not told anything");
+    assertEquals(1, openRecords(), "the record of the other aggregate stays open");
+    assertTrue(
+        messages
+            .stream()
+            .anyMatch(message -> message.contains("task 'awaitSignature' (task id 'old-task') of aggregate '4799'")),
+        () -> "the old record is named: "
+            + messages);
+
+  }
+
+  private List<String> loggedBy(
+      final Class<?> loggingClass,
+      final Runnable work) {
+
+    final var logWatcher = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    logWatcher.start();
+    final var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(loggingClass);
+    logger.addAppender(logWatcher);
+    try {
+      work.run();
+    } finally {
+      logger.detachAppender(logWatcher);
+    }
+    return logWatcher.list
+        .stream()
+        .filter(event -> event.getLevel().isGreaterOrEqual(ch.qos.logback.classic.Level.ERROR))
+        .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+        .toList();
+
+  }
+
   @Test
   @DisplayName("A task which is still there and one the probe cannot answer for are both left alone")
   public void whatIsNotGoneIsUntouched() {

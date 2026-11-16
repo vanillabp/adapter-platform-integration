@@ -358,8 +358,8 @@ public final class DeliveryRecords {
    * <code>&#64;WorkflowTask</code> method does not run a second time.
    * <p>
    * A record found under the key is a repetition only where it names the same workflow
-   * aggregate. A record of another aggregate means that the BPMS handed out an id which it
-   * had handed out before. A new or reset BPMS does that, while the delivery log still holds
+   * aggregate and, where both name one, the same workflow. A record of another aggregate or
+   * another workflow means that the BPMS handed out an id which it had handed out before. A new or reset BPMS does that, while the delivery log still holds
    * the records of the old one. Answering such a delivery from the record would skip the
    * handler of a task which never ran. So the delivery fails, and the BPMS keeps the task
    * open, and an ERROR says how to clean up the delivery log.
@@ -369,7 +369,7 @@ public final class DeliveryRecords {
    * @param context The invocation context of the repeated delivery
    * @return The recorded outcome, empty where this delivery was not processed before
    * @throws IllegalStateException If the record under this key belongs to another workflow
-   *           aggregate
+   *           aggregate or another workflow
    */
   public Optional<WorkflowTaskOutcome> answerToARepeatedDelivery(
       final TaskDeliveryLog deliveryLog,
@@ -378,7 +378,7 @@ public final class DeliveryRecords {
 
     final var recorded = deliveryLog
         .recordedDelivery(deliveryKey)
-        .map(delivery -> refuseTheDeliveryOfAnotherAggregate(delivery, context))
+        .map(delivery -> refuseTheDeliveryOfAnotherWorkflow(delivery, context))
         .flatMap(delivery -> recordedOutcomeOf(deliveryLog, delivery, context));
     if (recorded.isEmpty()) {
       return recorded;
@@ -403,7 +403,7 @@ public final class DeliveryRecords {
   }
 
   /**
-   * Passes the record on where it belongs to the aggregate of this delivery, and fails the
+   * Passes the record on where it belongs to the workflow of this delivery, and fails the
    * delivery where it belongs to another one.
    * <p>
    * The delivery id only has to be unique within one BPMS, and only for as long as the BPMS
@@ -412,34 +412,76 @@ public final class DeliveryRecords {
    * was emptied does the same with its ids. The delivery log of the application keeps its
    * records through all of that. So a key can find a record which another task wrote.
    * <p>
-   * The aggregate tells the two cases apart. A real repetition is a delivery of the same task
-   * of the same workflow, and so of the same aggregate. Nothing else in the row can say that
-   * as reliably: an adapter may name no workflow, and a task id can be reused the same way as
-   * the delivery id.
+   * A real repetition is a delivery of the same task of the same workflow. So the record
+   * names the same aggregate, and it names the same workflow id where the adapter reports
+   * one. The aggregate is compared first, because every adapter names it. The workflow id
+   * catches what the aggregate cannot: a second workflow of the same aggregate, started
+   * after the BPMS was reset while the records of the first one are still there. An adapter
+   * which names no workflow leaves that case open.
    * <p>
    * The delivery fails instead of running the handler, and the old records are not deleted.
-   * {@code DECISIONS.pending/2169.md} says why. A record without an aggregate gives nothing to
-   * compare, so it is passed on as before.
+   * {@code DECISIONS.pending/2169.md} says why. A record without an aggregate or without a
+   * workflow id gives nothing to compare for that value, so it passes that check as before.
    *
    * @param delivery The record found under the key of this delivery
    * @param context The invocation context of this delivery
-   * @return The record, if it names the aggregate of this delivery
-   * @throws IllegalStateException If the record names another workflow aggregate
+   * @return The record, if it names the aggregate and the workflow of this delivery
+   * @throws IllegalStateException If the record names another workflow aggregate or another
+   *           workflow
    */
-  private TaskDelivery refuseTheDeliveryOfAnotherAggregate(
+  private TaskDelivery refuseTheDeliveryOfAnotherWorkflow(
       final TaskDelivery delivery,
       final TaskInvocationContext context) {
 
     final var recordedAggregateId = delivery.workflowAggregateId();
-    final var deliveredAggregateId = context.getWorkflowAggregateId();
-    if ((recordedAggregateId == null) || (deliveredAggregateId == null) || recordedAggregateId
-        .equals(deliveredAggregateId)) {
-      return delivery;
+    if (bothNameADifferentValue(recordedAggregateId, context.getWorkflowAggregateId())) {
+      failTheDeliveryWhichMetAnOldRecord(
+          delivery,
+          context,
+          "ANOTHER workflow aggregate '%s'".formatted(recordedAggregateId));
     }
+    final var recordedWorkflowId = delivery.workflowId();
+    if (bothNameADifferentValue(recordedWorkflowId, context.getWorkflowId())) {
+      failTheDeliveryWhichMetAnOldRecord(
+          delivery,
+          context,
+          "ANOTHER workflow '%s' of the same workflow aggregate (this delivery belongs to workflow '%s')"
+              .formatted(recordedWorkflowId, context.getWorkflowId()));
+    }
+    return delivery;
+
+  }
+
+  /**
+   * Whether two values say something different. A missing value says nothing, so it never
+   * differs.
+   */
+  private static boolean bothNameADifferentValue(
+      final String recorded,
+      final String delivered) {
+
+    return (recorded != null) && (delivered != null) && !recorded.equals(delivered);
+
+  }
+
+  /**
+   * Logs why a delivery whose key found the record of another workflow fails, and fails it.
+   *
+   * @param delivery The record found under the key of this delivery
+   * @param context The invocation context of this delivery
+   * @param whatTheRecordBelongsTo The workflow aggregate or the workflow the record names, as
+   *          the message says it
+   * @throws IllegalStateException Always
+   */
+  private void failTheDeliveryWhichMetAnOldRecord(
+      final TaskDelivery delivery,
+      final TaskInvocationContext context,
+      final String whatTheRecordBelongsTo) {
+
     final var message = """
         The delivery of task '%s' (BPMN process '%s' of workflow module '%s') for workflow \
         aggregate '%s' failed: adapter '%s' handed out a delivery id which this application \
-        processed before for ANOTHER workflow aggregate '%s', at %s (delivery key '%s'). This \
+        processed before for %s, at %s (delivery key '%s'). This \
         is not a repeated delivery, so the @WorkflowTask method did not run and the task stays \
         open in the BPMS (an incident, once its retries are used up). Most likely the BPMS \
         behind adapter '%s' is a new one or was reset - a new cluster, a restored backup or an \
@@ -452,7 +494,7 @@ public final class DeliveryRecords {
         the BPMS was reset. In the MongoDB store these are the documents of collection '%s' \
         (or of the collection set by 'vanillabp.outbox.mongo.delivery-collection') with the \
         same 'adapterId' and an earlier 'recordedAt'. The record found here has the AGGREGATE_ID \
-        '%s'. Where the application brings its own TaskDeliveryLog, look wherever it keeps them.
+        '%s'%s. Where the application brings its own TaskDeliveryLog, look wherever it keeps them.
         2. Check that the BPMS no longer runs any workflow those records belong to. A record \
         is what keeps a repeated delivery of such a workflow from running its @WorkflowTask \
         method a second time.
@@ -467,9 +509,9 @@ public final class DeliveryRecords {
             context.getTaskDefinition(),
             bpmnProcessId,
             workflowModuleId,
-            deliveredAggregateId,
+            context.getWorkflowAggregateId(),
             context.getAdapterId(),
-            recordedAggregateId,
+            whatTheRecordBelongsTo,
             delivery.recordedAt(),
             delivery.deliveryKey(),
             context.getAdapterId(),
@@ -477,9 +519,12 @@ public final class DeliveryRecords {
             io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME,
             delivery.adapterId(),
             io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.MongoOutboxProperties.DEFAULT_DELIVERY_COLLECTION,
-            recordedAggregateId);
+            delivery.workflowAggregateId(),
+            delivery.workflowId() == null
+                ? ""
+                : " and the WORKFLOW_ID '%s'".formatted(delivery.workflowId()));
     // the stack trace says nothing about the cause, so it is left out. The message names the
-    // task, both aggregates and what to do
+    // task, both workflows and what to do
     log.error(message);
     throw new IllegalStateException(message);
 
@@ -1311,6 +1356,20 @@ public final class DeliveryRecords {
           record.taskClosedAt());
       return null;
     }
+    if (!taskIsOpen && belongsToAnEarlierWorkflow(deliveryLog, workflowAggregateId, record)) {
+      // the aggregate runs a newer workflow than the one which wrote this record. After a
+      // BPMS was reset, that newer workflow may have a task with the same id, and the
+      // closed record would turn its completion into a no-op. Asking the BPMS costs one
+      // round trip and gives the answer of the BPMS which really holds the task
+      log.debug(
+          "Task '{}' of aggregate '{}' was closed at {} in a record of workflow '{}', which is "
+              + "older than the workflow this aggregate runs now - probing instead",
+          taskId,
+          workflowAggregateId,
+          record.taskClosedAt(),
+          record.workflowId());
+      return null;
+    }
     metrics
         .taskElectionAnsweredFromRecord(record.adapterId(), workflowModuleId, bpmnProcessId, operation.name());
     log.debug(
@@ -1326,6 +1385,50 @@ public final class DeliveryRecords {
         taskIsOpen
             ? WorkflowAwareness.ACTIVE
             : WorkflowAwareness.COMPLETED, adapter, null);
+
+  }
+
+  /**
+   * Whether a record was written for an earlier workflow of this aggregate than the one which
+   * runs now.
+   * <p>
+   * The row about the start of a workflow moves to the newer workflow when the aggregate
+   * starts a second one, and its moment moves with it. A task record which is older than that
+   * row, and names another workflow, therefore belongs to the workflow before. Usually that
+   * workflow ended, and its records were released with it. They are still there only where
+   * the BPMS lost the workflow without telling anybody, which a reset BPMS does. Such a BPMS
+   * may hand out the id of the old task again, to a task of the new workflow.
+   * <p>
+   * It only answers <code>true</code> where it is sure. Without a start row, without a
+   * moment, or for the same workflow it answers <code>false</code>, and the record answers as
+   * before. A start row which cannot be read counts as <code>true</code>. Then the election
+   * asks the BPMS, which is what it did before the record existed.
+   *
+   * @param deliveryLog The store to ask
+   * @param workflowAggregateId The workflow aggregate the operation is about
+   * @param record The record of the task the call names
+   * @return Whether the record belongs to an earlier workflow
+   */
+  private boolean belongsToAnEarlierWorkflow(
+      final TaskDeliveryLog deliveryLog,
+      final Object workflowAggregateId,
+      final TaskDelivery record) {
+
+    final TaskDelivery started;
+    try {
+      started = startRowOf(deliveryLog, workflowAggregateId);
+    } catch (final RuntimeException e) {
+      log.debug(
+          "Could not read the start of the workflow of aggregate '{}' (BPMN process '{}' of "
+              + "workflow module '{}')",
+          workflowAggregateId,
+          bpmnProcessId,
+          workflowModuleId,
+          e);
+      return true;
+    }
+    return (started != null) && (started.recordedAt() != null) && (record.recordedAt() != null) && record.recordedAt()
+        .isBefore(started.recordedAt()) && !java.util.Objects.equals(started.workflowId(), record.workflowId());
 
   }
 

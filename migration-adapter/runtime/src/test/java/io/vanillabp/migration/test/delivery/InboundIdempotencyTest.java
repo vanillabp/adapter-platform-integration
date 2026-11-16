@@ -371,7 +371,22 @@ public class InboundIdempotencyTest {
       final String aggregateId,
       final String deliveryId) {
 
+    return delivery(taskDefinition, aggregateId, deliveryId, null);
+
+  }
+
+  private TaskInvocationContext delivery(
+      final String taskDefinition,
+      final String aggregateId,
+      final String deliveryId,
+      final String workflowId) {
+
     return new TaskInvocationContext() {
+
+      @Override
+      public String getWorkflowId() {
+        return workflowId;
+      }
 
       @Override
       public String getAdapterId() {
@@ -449,6 +464,57 @@ public class InboundIdempotencyTest {
         + message);
     assertTrue(message.contains("AGGREGATE_ID"), "says how to find the old records: "
         + message);
+
+  }
+
+  @Test
+  @DisplayName("A record of another workflow of the same aggregate under the same key fails the delivery")
+  public void aRecordOfAnotherWorkflowOfTheSameAggregateIsNoRepeatedDelivery() {
+
+    final var testee = registry(processService(properties(null, null, null), deliveryLog));
+    storeAggregate("4722");
+
+    // the aggregate started a second workflow after the BPMS was reset, and the new BPMS
+    // handed the old job key to a task of that second workflow. Only the workflow id tells
+    // the two deliveries apart
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4722", "job-1", "workflow-1"));
+    final var repeated = testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4722", "job-1", "workflow-1"));
+    assertEquals(WorkflowTaskOutcome.Kind.COMPLETED, repeated.kind());
+    assertEquals(1, TestWorkflowService.handlerCalls, "a repetition of the same workflow is still skipped");
+
+    final var messages = loggedBy(
+        DeliveryRecords.class,
+        () -> assertThrows(
+            IllegalStateException.class,
+            () -> testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4722", "job-1", "workflow-2"))));
+
+    assertEquals(1, TestWorkflowService.handlerCalls, "the handler did not run for the second workflow");
+    assertEquals(1, deliveryLog.recorded.size(), "the failed delivery wrote no record");
+    assertEquals(1, messages.size(), "the collision is said once per delivery: "
+        + messages);
+    final var message = messages.getFirst();
+    assertTrue(message.contains("ANOTHER workflow 'workflow-1' of the same workflow aggregate"),
+        "names the old workflow: "
+            + message);
+    assertTrue(message.contains("belongs to workflow 'workflow-2'"), "names the new workflow: "
+        + message);
+    assertTrue(message.contains("WORKFLOW_ID 'workflow-1'"), "says how to find the old records: "
+        + message);
+
+  }
+
+  @Test
+  @DisplayName("A delivery which names no workflow is compared by its aggregate only")
+  public void aDeliveryWithoutAWorkflowIdIsComparedByItsAggregateOnly() {
+
+    final var testee = registry(processService(properties(null, null, null), deliveryLog));
+    storeAggregate("4723");
+
+    testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4723", "job-1", "workflow-1"));
+    final var repeated = testee.invokeWorkflowTask(MODULE, PROCESS, delivery(TASK, "4723", "job-1", null));
+
+    assertEquals(WorkflowTaskOutcome.Kind.COMPLETED, repeated.kind());
+    assertEquals(1, TestWorkflowService.handlerCalls, "a missing workflow id says nothing, so this is a repetition");
 
   }
 

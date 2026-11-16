@@ -582,6 +582,74 @@ public class TaskElectionFromDeliveryRecordTest {
 
   }
 
+  /**
+   * A store holding a closed record of task {@link #TASK} for workflow
+   * <code>old-workflow</code> and the start row of a workflow <code>new-workflow</code> of the
+   * same aggregate, started at the given moment.
+   */
+  private static InMemoryDeliveryLog aClosedRecordAndAStartRowFrom(
+      final Instant workflowStartedAt) {
+
+    final var log = new InMemoryDeliveryLog() {
+
+      @Override
+      public Optional<TaskDelivery> workflowStartOf(
+          final String workflowModuleId,
+          final String bpmnProcessId,
+          final String workflowAggregateId) {
+
+        return Optional
+            .of(
+                TaskDelivery
+                    .workflowStart(ADAPTER, MODULE, PROCESS, AGGREGATE, "new-workflow", null, workflowStartedAt));
+
+      }
+
+    };
+    final var recordedAt = Instant.now().minusSeconds(3600);
+    log
+        .record(
+            new TaskDelivery("%s|%s|%s|CREATED|%s".formatted(ADAPTER, MODULE, PROCESS,
+                TASK), ADAPTER, MODULE, PROCESS, AGGREGATE, "old-workflow", "awaitCompletion", null, TASK, "COMPLETION_PENDING", null, null, recordedAt, recordedAt
+                    .plusSeconds(60)));
+    return log;
+
+  }
+
+  @Test
+  @DisplayName("A closed record older than the workflow the aggregate runs now does not answer, the BPMS is asked")
+  public void aClosedRecordOfAnEarlierWorkflowIsNoAnswer() {
+
+    // the aggregate started a second workflow after the BPMS was reset. The new BPMS handed
+    // the id of the old, closed task to a task of the new workflow
+    final var adapter = new ProbeAdapter(ADAPTER);
+    final var service = serviceWith(adapter, aClosedRecordAndAStartRowFrom(Instant.now()));
+
+    service.completeTask(new Object(), TASK);
+
+    assertEquals(1, adapter.probes.get(), "the BPMS is asked about the task of the new workflow");
+    assertEquals(1, outbox.scheduled.size(), "and the completion is planned instead of being a no-op");
+
+  }
+
+  @Test
+  @DisplayName("A closed record younger than the start of the workflow still answers without asking any BPMS")
+  public void aClosedRecordOfTheCurrentWorkflowStillAnswers() {
+
+    final var adapter = new ProbeAdapter(ADAPTER);
+    final var service = serviceWith(adapter, aClosedRecordAndAStartRowFrom(Instant.now().minusSeconds(7200)));
+
+    final var messages = loggedBy(() -> service.completeTask(new Object(), TASK));
+
+    assertEquals(0, adapter.probes.get(), "nobody is asked about a task VanillaBP closed itself");
+    assertEquals(0, outbox.scheduled.size(), "a second completion is a no-op");
+    assertTrue(
+        messages.stream().anyMatch(message -> message.contains("already completed")),
+        "the caller hears the same warning as before: "
+            + messages);
+
+  }
+
   @Test
   @DisplayName("A second completion of a closed task is the warned no-op, without asking any BPMS")
   public void aClosedTaskIsTheWarnedNoOpWithoutAnyProbe() {
