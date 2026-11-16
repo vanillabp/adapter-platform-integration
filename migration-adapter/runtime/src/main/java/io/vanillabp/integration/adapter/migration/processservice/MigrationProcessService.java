@@ -25,6 +25,7 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseOneRequest;
 import io.vanillabp.integration.adapter.spi.PhaseOperationHandler;
 import io.vanillabp.integration.adapter.spi.PhaseOperationNotSupported;
+import io.vanillabp.integration.adapter.spi.PhaseTwoFailureKind;
 import io.vanillabp.integration.adapter.spi.PhaseTwoRequest;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.adapter.spi.WorkflowScope;
@@ -36,6 +37,7 @@ import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.Election;
 import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.PhaseTwoBpmsBusy;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
@@ -3374,7 +3376,8 @@ public class MigrationProcessService<A> {
    * what may succeed on the next attempt. A concurrency conflict is the case this exists for.
    * A failure which repeating cannot fix blocks the entry right away. A conflict which the
    * adapter calls a collision is marked, so the router repeats it at once instead of
-   * leaving it to the backoff of the outbox.
+   * leaving it to the backoff of the outbox. A refusal of a busy BPMS is marked as well, so
+   * the store plans it again without counting an attempt.
    *
    * @param adapter The adapter executing the operation
    * @param operationDescription What was attempted, for the message
@@ -3389,12 +3392,7 @@ public class MigrationProcessService<A> {
       operation.run();
     } catch (final RuntimeException e) {
       if (adapter.isPhaseTwoFailureRepeatable(e)) {
-        if (adapter.isPhaseTwoFailureACollision(e)) {
-          throw new PhaseTwoCollision(
-              "Phase two of %s lost a race against another change of the same workflow at adapter '%s'"
-                  .formatted(operationDescription, adapter.getAdapterId()), e);
-        }
-        throw e;
+        throw markedWithItsKind(adapter, operationDescription, e);
       }
       throw new PhaseTwoPermanentFailure(
           """
@@ -3403,6 +3401,38 @@ public class MigrationProcessService<A> {
               names, and remove the entry."""
               .formatted(operationDescription, adapter.getAdapterId()), e);
     }
+
+  }
+
+  /**
+   * Marks a repeatable failure with the kind the adapter gives it. The router reads a
+   * {@link PhaseTwoCollision}, the stores read a {@link PhaseTwoBpmsBusy}. Any other failure
+   * stays what the adapter threw, so a store sees it as it always did.
+   *
+   * @param adapter The adapter which executed the operation
+   * @param operationDescription What was attempted, for the message
+   * @param failure What the adapter threw
+   * @return The failure to throw
+   */
+  private RuntimeException markedWithItsKind(
+      final MigratableProcessService<A> adapter,
+      final String operationDescription,
+      final RuntimeException failure) {
+
+    final var kind = adapter.kindOfPhaseTwoFailure(failure);
+    if (kind == PhaseTwoFailureKind.COLLISION) {
+      return new PhaseTwoCollision(
+          "Phase two of %s lost a race against another change of the same workflow at adapter '%s'"
+              .formatted(operationDescription, adapter.getAdapterId()), failure);
+    }
+    if (kind == PhaseTwoFailureKind.BUSY) {
+      // the store writes this message into its WARN line. It names the adapter, because an
+      // entry of most operations does not know it, and it keeps the answer of the BPMS
+      return new PhaseTwoBpmsBusy(
+          "Phase two of %s was refused by adapter '%s', because its BPMS reports backpressure: %s"
+              .formatted(operationDescription, adapter.getAdapterId(), failure.getMessage()), failure);
+    }
+    return failure;
 
   }
 

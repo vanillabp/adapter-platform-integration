@@ -4,6 +4,7 @@ import java.util.Map;
 
 import io.vanillabp.integration.adapter.spi.PhaseOneRequest;
 import io.vanillabp.integration.adapter.spi.PhaseOperationHandler;
+import io.vanillabp.integration.adapter.spi.PhaseTwoFailureKind;
 import io.vanillabp.integration.adapter.spi.PhaseTwoRequest;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
@@ -252,21 +253,25 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
   }
 
   @Override
-  public boolean isPhaseTwoFailureACollision(
+  public PhaseTwoFailureKind kindOfPhaseTwoFailure(
       final Throwable failure) {
 
-    // This double reports exactly one kind as a lost race. So a test can prove that the core
-    // repeats such an operation at once, and not after the backoff of the outbox
+    // This double reports exactly one failure as a lost race and one as a busy BPMS. So a
+    // test can prove that the core repeats a lost race at once, and that a busy BPMS costs
+    // the outbox entry no attempt
     var candidate = failure;
     while (candidate != null) {
       if (candidate instanceof DummyCollision) {
-        return true;
+        return PhaseTwoFailureKind.COLLISION;
+      }
+      if (candidate instanceof DummyBusy) {
+        return PhaseTwoFailureKind.BUSY;
       }
       candidate = candidate.getCause() == candidate
           ? null
           : candidate.getCause();
     }
-    return false;
+    return PhaseTwoFailureKind.OTHER;
 
   }
 
