@@ -5,9 +5,10 @@ package io.vanillabp.integration.spi;
  * result of anything. {@link TaskDelivery#outcome()} keeps saying what a delivery reported,
  * and a row which reports nothing says so here.
  * <p>
- * There are two kinds today. A task delivery is what the log was built for. A workflow start
+ * There are three kinds today. A task delivery is what the log was built for. A workflow start
  * is the row written when a workflow of an aggregate begins. With it, the BPMS' own id of that
- * workflow can be read back without asking a BPMS. The two are told apart by this field and
+ * workflow can be read back without asking a BPMS. A BPMS identity is the row which says which
+ * installation of a BPMS wrote the other rows. The two are told apart by this field and
  * not by a value borrowed from the outcome. Every question about open work filters on it, and
  * a borrowed value would make a start look like a delivery to each of those questions.
  * Why the row says its kind in a field of its own is decision 108 in the repository's
@@ -27,7 +28,16 @@ public enum DeliveryRecordKind {
    * outlives the workflow it names. See
    * {@link TaskDeliveryLog#workflowStartOf(String, String, String)}.
    */
-  WORKFLOW_START;
+  WORKFLOW_START,
+
+  /**
+   * The identity of the BPMS installation behind one adapter, written down at the first start
+   * which could ask for it. It carries the identity where a workflow start carries the id of
+   * the workflow, and nothing else. No question about open work counts it, and no retention
+   * deletes it: it has to outlive every record it vouches for. See
+   * {@link TaskDeliveryLog#bpmsIdentityOf(String, String, String)}.
+   */
+  BPMS_IDENTITY;
 
   /**
    * The kind a row names, read back from a store.

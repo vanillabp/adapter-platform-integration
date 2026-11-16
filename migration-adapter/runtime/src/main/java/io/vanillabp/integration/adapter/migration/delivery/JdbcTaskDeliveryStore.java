@@ -217,6 +217,25 @@ public class JdbcTaskDeliveryStore {
       WHERE RECORD_KIND = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND OUTCOME = ?""";
 
   /**
+   * Whether ANY record of one adapter and one BPMN process exists, apart from the row with the
+   * identity of its BPMS. Asked only when that identity changed, so no index is needed for
+   * it, and the row limit stops it at the first hit.
+   */
+  private static final String SELECT_ANY_RECORD_OF_ADAPTER = """
+      SELECT DELIVERY_KEY \
+      FROM %s \
+      WHERE ADAPTER_ID = ? AND WORKFLOW_MODULE_ID = ? AND BPMN_PROCESS_ID = ? AND RECORD_KIND <> ?""";
+
+  /**
+   * Moves the identity row of one adapter and BPMN process to a new BPMS. It only touches a
+   * row of that kind, so a key which by some mistake names a delivery is left alone.
+   */
+  private static final String REPLACE_BPMS_IDENTITY = """
+      UPDATE %s \
+      SET WORKFLOW_ID = ?, RECORDED_AT = ?, LAST_SEEN_AT = ? \
+      WHERE DELIVERY_KEY = ? AND RECORD_KIND = ?""";
+
+  /**
    * How many rows a question about EXISTENCE fetches.
    * <p>
    * Reading the first row of a result set is not the same as asking for one row. A driver
@@ -409,6 +428,10 @@ public class JdbcTaskDeliveryStore {
 
   private final String selectAnyOpenRecord;
 
+  private final String selectAnyRecordOfAdapter;
+
+  private final String replaceBpmsIdentity;
+
   private final String selectOpenTasksOfAggregate;
 
   private final String selectOpenTasksOfWorkflow;
@@ -447,6 +470,8 @@ public class JdbcTaskDeliveryStore {
     this.deleteDeliveriesOfWorkflow = DELETE_DELIVERIES_OF_WORKFLOW.formatted(tableName);
     this.selectAdapterIdsOfOpenTasks = SELECT_ADAPTER_IDS_OF_OPEN_TASKS.formatted(tableName);
     this.selectAnyOpenRecord = SELECT_ANY_OPEN_RECORD.formatted(tableName);
+    this.selectAnyRecordOfAdapter = SELECT_ANY_RECORD_OF_ADAPTER.formatted(tableName);
+    this.replaceBpmsIdentity = REPLACE_BPMS_IDENTITY.formatted(tableName);
     this.selectOpenTasksOfAggregate = SELECT_OPEN_TASKS_OF_AGGREGATE.formatted(tableName);
     this.selectOpenTasksOfWorkflow = SELECT_OPEN_TASKS_OF_WORKFLOW.formatted(tableName);
     this.touches = new OpenTaskTouches(tableName, this::refreshLastSeen);
@@ -1605,6 +1630,88 @@ public class JdbcTaskDeliveryStore {
               tableName,
               e);
       return null;
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * Whether this table holds any record of one adapter and one BPMN process, apart from the
+   * identity row (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#holdsRecordsOf(String, String, String)}).
+   * A failing query answers <code>null</code>, and the startup check then assumes that there
+   * are records.
+   *
+   * @param adapterId The adapter to ask about
+   * @param workflowModuleId The workflow module to ask about
+   * @param bpmnProcessId The BPMN process to ask about
+   * @return Whether such a record exists, <code>null</code> where the table could not be read
+   */
+  public Boolean holdsRecordsOf(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(selectAnyRecordOfAdapter)) {
+        statement.setMaxRows(ROWS_OF_AN_EXISTENCE_QUESTION);
+        statement.setString(1, adapterId);
+        statement.setString(2, workflowModuleId);
+        statement.setString(3, bpmnProcessId);
+        statement.setString(4, io.vanillabp.integration.spi.DeliveryRecordKind.BPMS_IDENTITY.name());
+        try (var resultSet = statement.executeQuery()) {
+          return resultSet.next();
+        }
+      }
+    } catch (final SQLException e) {
+      log
+          .debug(
+              "Could not read whether records of adapter '{}' and BPMN process '{}' (workflow "
+                  + "module '{}') exist in table '{}'",
+              adapterId,
+              bpmnProcessId,
+              workflowModuleId,
+              tableName,
+              e);
+      return null;
+    } finally {
+      release(connection);
+    }
+
+  }
+
+  /**
+   * Replaces the identity in the identity row of one adapter and BPMN process (see
+   * {@link io.vanillabp.integration.spi.TaskDeliveryLog#replaceBpmsIdentity}). It runs in the
+   * transaction of whoever calls it.
+   *
+   * @param identity The row with the new identity
+   * @return Whether a row was replaced
+   */
+  public boolean replaceBpmsIdentity(
+      final TaskDelivery identity) {
+
+    Connection connection = null;
+    try {
+      connection = connectionAccess.acquire();
+      try (var statement = connection.prepareStatement(replaceBpmsIdentity)) {
+        final var recordedAt = Timestamp.from(identity.recordedAt() == null
+            ? Instant.now()
+            : identity.recordedAt());
+        statement.setString(1, identity.workflowId());
+        statement.setTimestamp(2, recordedAt);
+        statement.setTimestamp(3, recordedAt);
+        statement.setString(4, identity.deliveryKey());
+        statement.setString(5, io.vanillabp.integration.spi.DeliveryRecordKind.BPMS_IDENTITY.name());
+        return statement.executeUpdate() > 0;
+      }
+    } catch (final SQLException e) {
+      throw new RuntimeException(
+          "Could not replace the identity of the BPMS of adapter '%s' in table '%s'!"
+              .formatted(identity.adapterId(), tableName), e);
     } finally {
       release(connection);
     }

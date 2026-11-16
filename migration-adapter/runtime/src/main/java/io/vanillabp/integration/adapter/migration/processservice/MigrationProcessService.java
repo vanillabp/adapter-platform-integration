@@ -1079,10 +1079,15 @@ public class MigrationProcessService<A> {
    * number, or a set of adapter ids which the database reduced. It is never the entries
    * themselves. Decision 19 in the repository's DECISIONS.md says why a start must not grow
    * with what an application has been through.
+   * <p>
+   * One more question compares the identity of each BPMS with the one written down at an
+   * earlier start. Unlike the others it ends the start, see
+   * {@link DeliveryRecords#compareTheIdentityOfEachBpms(List, TransactionRunner)}.
    */
   public void validatePersistedAdapterIdsAtStartup() {
 
     deliveryRecords.reportOpenTasksNobodyRemembers(adapterProcessServices);
+    deliveryRecords.compareTheIdentityOfEachBpms(adapterProcessServices, getTransactionRunner(null));
     reportUnconfiguredAdapterIds(
         phaseTwoOutbox == null
             ? Set.<String>of()

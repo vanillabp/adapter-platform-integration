@@ -366,6 +366,26 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
 
   }
 
+  @Override
+  public Boolean holdsRecordsOf(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return isAvailable()
+        ? getStore().holdsRecordsOf(adapterId, workflowModuleId, bpmnProcessId)
+        : null;
+
+  }
+
+  @Override
+  public boolean replaceBpmsIdentity(
+      final TaskDelivery identity) {
+
+    return isAvailable() && getStore().replaceBpmsIdentity(identity);
+
+  }
+
   /**
    * The record which left one task open. It is read inside the caller's JTA transaction,
    * through a connection which Agroal enlists there. So it sees what that transaction has

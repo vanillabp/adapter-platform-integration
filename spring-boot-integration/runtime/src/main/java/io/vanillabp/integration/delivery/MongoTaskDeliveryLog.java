@@ -66,6 +66,9 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
   private static final String WORKFLOW_START = io.vanillabp.integration.spi.DeliveryRecordKind.WORKFLOW_START
       .name();
 
+  private static final String BPMS_IDENTITY = io.vanillabp.integration.spi.DeliveryRecordKind.BPMS_IDENTITY
+      .name();
+
   private final MongoTemplate mongoTemplate;
 
   private final String collection;
@@ -487,6 +490,60 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
 
   }
 
+  /**
+   * Whether this collection holds any document of one adapter and one BPMN process, apart
+   * from the identity of its BPMS (see {@link TaskDeliveryLog#holdsRecordsOf}). It is asked
+   * only when that identity changed, so no index is needed for it.
+   */
+  @Override
+  public Boolean holdsRecordsOf(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return mongoTemplate
+        .exists(
+            Query
+                .query(
+                    Criteria
+                        .where("adapterId")
+                        .is(adapterId)
+                        .and("workflowModuleId")
+                        .is(workflowModuleId)
+                        .and("bpmnProcessId")
+                        .is(bpmnProcessId)
+                        .and("recordKind")
+                        .ne(BPMS_IDENTITY)),
+            collection);
+
+  }
+
+  @Override
+  public boolean replaceBpmsIdentity(
+      final TaskDelivery identity) {
+
+    final var recordedAt = identity.recordedAt() == null
+        ? Instant.now()
+        : identity.recordedAt();
+    return mongoTemplate
+        .updateFirst(
+            Query
+                .query(
+                    Criteria
+                        .where("_id")
+                        .is(identity.deliveryKey())
+                        .and("recordKind")
+                        .is(BPMS_IDENTITY)),
+            Update
+                .update("workflowId", identity.workflowId())
+                .set("recordedAt", recordedAt)
+                .set("lastSeenAt", recordedAt),
+            TaskDeliveryDocument.class,
+            collection)
+        .getModifiedCount() > 0;
+
+  }
+
   @Override
   public int releaseRecordsOf(
       final String workflowModuleId,
@@ -592,8 +649,10 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog {
                     Criteria
                         .where("lastSeenAt")
                         .lt(Instant.now().minus(retention))
+                        // a workflow start has a period of its own, and the identity of a
+                        // BPMS has to outlive every record it vouches for
                         .and("recordKind")
-                        .ne(WORKFLOW_START)),
+                        .nin(WORKFLOW_START, BPMS_IDENTITY)),
             TaskDeliveryDocument.class,
             collection)
         .getDeletedCount();

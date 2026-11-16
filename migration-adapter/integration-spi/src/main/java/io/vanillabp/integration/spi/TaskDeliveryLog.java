@@ -504,6 +504,80 @@ public interface TaskDeliveryLog {
   }
 
   /**
+   * The row with the identity of the BPMS behind one adapter, as an earlier start wrote it
+   * down for this BPMN process (see {@link TaskDelivery#bpmsIdentity}). The identity is in
+   * {@link TaskDelivery#workflowId()}.
+   * <p>
+   * The default reads the row by its key, through {@link #recordedDelivery(String)}, so every
+   * store which can read a delivery by its key can answer this. A store has to make sure that
+   * its retention does not delete such a row: it vouches for every record of that adapter,
+   * and a start which finds none takes the BPMS it meets as the right one.
+   *
+   * @param adapterId The adapter whose BPMS is asked about
+   * @param workflowModuleId The workflow module of the check
+   * @param bpmnProcessId The BPMN process of the check
+   * @return The row, or {@link Optional#empty()} if no identity was written down yet
+   */
+  default Optional<TaskDelivery> bpmsIdentityOf(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return recordedDelivery(
+        BpmsIdentityKey.of(adapterId, workflowModuleId, bpmnProcessId))
+        .filter(row -> DeliveryRecordKind.of(row.recordKind()) == DeliveryRecordKind.BPMS_IDENTITY);
+
+  }
+
+  /**
+   * Replaces the identity in the row which an earlier start wrote for this adapter and BPMN
+   * process (see {@link #bpmsIdentityOf(String, String, String)}). The startup check calls it
+   * when the BPMS changed and the store holds no record of that adapter which the new BPMS
+   * could meet. A row which is not there is not written: {@link #record(TaskDelivery)} writes
+   * the first one.
+   * <p>
+   * The default replaces nothing and answers <code>false</code>. The startup check then says
+   * that it could not write the new identity down, and which row to delete by hand.
+   *
+   * @param identity The row with the new identity, built by {@link TaskDelivery#bpmsIdentity}
+   * @return Whether a row was replaced
+   */
+  default boolean replaceBpmsIdentity(
+      final TaskDelivery identity) {
+
+    return false;
+
+  }
+
+  /**
+   * Whether this store holds any record of a task delivery or a workflow start which the
+   * given adapter wrote for the given BPMN process, open or not. The identity row itself does
+   * not count.
+   * <p>
+   * The startup check asks this only when the identity of a BPMS changed. A store without
+   * such records loses nothing to a new BPMS, so the start goes on and the new identity is
+   * written down. A store with such records would answer deliveries of the new BPMS from
+   * them, so the start ends.
+   * <p>
+   * It is asked once per BPMN process, and only in that case. So a store may answer it with a
+   * query which stops at the first row it finds, even where no index serves it.
+   *
+   * @param adapterId The adapter to ask about
+   * @param workflowModuleId The workflow module to ask about
+   * @param bpmnProcessId The BPMN process to ask about
+   * @return <code>true</code> or <code>false</code>, or <code>null</code> if this store
+   *         cannot say, which is the default. The check then assumes that there are records
+   */
+  default Boolean holdsRecordsOf(
+      final String adapterId,
+      final String workflowModuleId,
+      final String bpmnProcessId) {
+
+    return null;
+
+  }
+
+  /**
    * Whether this store holds any OPEN record for the given BPMN process. An open record has
    * the outcome <code>COMPLETION_PENDING</code>.
    *
