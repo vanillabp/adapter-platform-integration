@@ -1318,7 +1318,7 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
       return;
     }
 
-    final var candidates = deliveryLog
+    final var ofThisAdapter = deliveryLog
         .openTasksOfWorkflow(workflowModuleId, workflowId)
         .stream()
         // the task being worked on right now is not a candidate. It is open because this
@@ -1328,13 +1328,21 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
         // about its tasks
         .filter(record -> (wakeUp.getAdapterId() == null) || wakeUp.getAdapterId().equals(record.adapterId()))
         .filter(record -> record.taskId() != null)
+        .toList();
+    final var ofThisAggregate = leaveOutTheRecordsOfAnotherAggregate(
+        ofThisAdapter,
+        workflowModuleId,
+        workflowId,
+        wakeUp.getAdapterId(),
+        wakeUp.getWorkflowAggregateId())
+        .stream()
         .limit(howMany)
         .toList();
-    if (candidates.isEmpty()) {
+    if (ofThisAggregate.isEmpty()) {
       return;
     }
 
-    final var gone = candidates
+    final var gone = ofThisAggregate
         .stream()
         .filter(record -> theBpmsNoLongerHas(record, probe))
         .toList();
@@ -1349,6 +1357,96 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
             workflowModuleId,
             this,
             "is gone in its BPMS");
+
+  }
+
+  /**
+   * The open records of a workflow which belong to the workflow aggregate of that workflow.
+   * The others are left out, and an ERROR names them.
+   * <p>
+   * The records are found by the BPMS' id of the workflow, and that id is unique only while
+   * the BPMS keeps its own database. A new Camunda 8 cluster counts its keys from the same
+   * start value again, a restored backup sets the counter back, and a Camunda 7 engine whose
+   * database was emptied hands out its ids again. The delivery log keeps the records of the
+   * old workflows through all of that. So a workflow of one aggregate can find the open tasks
+   * of a workflow of another aggregate, which the old BPMS had under the same id.
+   * <p>
+   * Every task of a workflow, including the tasks of the processes it calls, carries the
+   * aggregate of that workflow. So a record of another aggregate is never a task of this
+   * workflow. Reporting it as canceled would call the method of another aggregate, for a
+   * task this BPMS never had. VanillaBP cannot tell a reset BPMS from two BPMS which write
+   * into one delivery log by mistake, and in the second case that task may still run. So the
+   * record stays as it is, and the ERROR says how to clean up. The work of the caller goes on,
+   * because a workflow which ended or a job which woke the application up is worth more than
+   * the cleanup. A record or a context without an aggregate gives nothing to compare, so it is
+   * kept as before.
+   *
+   * @param records The open records found under the workflow id
+   * @param workflowModuleId The workflow module of the workflow
+   * @param workflowId The BPMS' id of the workflow
+   * @param adapterId The adapter which reported the workflow
+   * @param workflowAggregateId The workflow aggregate of the workflow, or <code>null</code>
+   * @return The records of this aggregate, in their order
+   */
+  private List<TaskDelivery> leaveOutTheRecordsOfAnotherAggregate(
+      final List<TaskDelivery> records,
+      final String workflowModuleId,
+      final String workflowId,
+      final String adapterId,
+      final String workflowAggregateId) {
+
+    if (workflowAggregateId == null) {
+      return records;
+    }
+    final var ofAnotherAggregate = records
+        .stream()
+        .filter(record -> (record.workflowAggregateId() != null) && !workflowAggregateId.equals(record
+            .workflowAggregateId()))
+        .toList();
+    if (ofAnotherAggregate.isEmpty()) {
+      return records;
+    }
+    log.error(
+        """
+            Workflow '{}' of adapter '{}' (workflow module '{}') belongs to workflow aggregate \
+            '{}', but the delivery log holds open tasks under the same workflow id for ANOTHER \
+            workflow aggregate: {}. Most likely the BPMS behind adapter '{}' is a new one or was \
+            reset - a new cluster, a restored backup or an emptied engine database - and hands \
+            out ids again which the old one handed out, while the delivery log of this \
+            application still holds the records of the old one. Those records are NOT reported \
+            as canceled, and nothing of the work of this workflow is lost. To solve this:
+            1. Check that the BPMS no longer runs the workflows those records belong to. If two \
+            environments write into the same delivery log by mistake, separate them instead.
+            2. Delete those records from the delivery log: in the JDBC store the rows of table \
+            '{}' (or of the table set by 'vanillabp.outbox.jdbc.delivery-table') with \
+            WORKFLOW_ID '{}' and the AGGREGATE_IDs named above, in the MongoDB store the \
+            documents of collection '{}' (or of the collection set by \
+            'vanillabp.outbox.mongo.delivery-collection') with the same 'workflowId' and \
+            'aggregateId'. Where the application brings its own TaskDeliveryLog, look wherever \
+            it keeps them.
+            Until you do, each look at this workflow says this again. The records go away on \
+            their own only once 'vanillabp.delivery.retention' has passed.""",
+        workflowId,
+        adapterId,
+        workflowModuleId,
+        workflowAggregateId,
+        ofAnotherAggregate
+            .stream()
+            .map(record -> "task '%s' (task id '%s') of aggregate '%s', recorded at %s"
+                .formatted(
+                    record.taskDefinition(),
+                    record.taskId(),
+                    record.workflowAggregateId(),
+                    record.recordedAt()))
+            .collect(Collectors.joining(", ")),
+        adapterId,
+        io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME,
+        workflowId,
+        io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.MongoOutboxProperties.DEFAULT_DELIVERY_COLLECTION);
+    return records
+        .stream()
+        .filter(record -> !ofAnotherAggregate.contains(record))
+        .toList();
 
   }
 
@@ -1726,11 +1824,16 @@ public class WorkflowTaskRegistry implements WorkflowTaskWiring, WorkflowTaskInv
     if (deliveryLog == null) {
       return;
     }
-    final var openRecords = deliveryLog
-        .openTasksOfWorkflow(workflowModuleId, workflowId)
-        .stream()
-        .filter(record -> (context.getAdapterId() == null) || context.getAdapterId().equals(record.adapterId()))
-        .toList();
+    final var openRecords = leaveOutTheRecordsOfAnotherAggregate(
+        deliveryLog
+            .openTasksOfWorkflow(workflowModuleId, workflowId)
+            .stream()
+            .filter(record -> (context.getAdapterId() == null) || context.getAdapterId().equals(record.adapterId()))
+            .toList(),
+        workflowModuleId,
+        workflowId,
+        context.getAdapterId(),
+        context.getWorkflowAggregateId());
     if (openRecords.isEmpty()) {
       return;
     }
