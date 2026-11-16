@@ -437,7 +437,8 @@ public class InboundIdempotencyTest {
       Assertions.assertThrows(
           IllegalStateException.class,
           () -> dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4718", "job-8", "workflow-2")));
-      Assertions.assertEquals(1, DeliveryConfiguration.AGGREGATES.get("4718").getInvocations(), "the handler ran once only");
+      Assertions.assertEquals(1, DeliveryConfiguration.AGGREGATES.get("4718").getInvocations(),
+          "the handler ran once only");
       Assertions.assertEquals(1, recordCount(context, "4718"), "the failed delivery wrote no record");
       Assertions.assertTrue(
           captured.getAll().contains("ANOTHER workflow 'workflow-1' of the same workflow aggregate"),

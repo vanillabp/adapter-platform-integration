@@ -358,8 +358,8 @@ public class InboundIdempotencyTest {
     assertTrue(
         LOGGED_WHILE_THE_TEST_RAN
             .stream()
-            .anyMatch(line -> line.startsWith("ERROR")
-                && line.contains("ANOTHER workflow 'workflow-1' of the same workflow aggregate")),
+            .anyMatch(line -> line.startsWith("ERROR") && line
+                .contains("ANOTHER workflow 'workflow-1' of the same workflow aggregate")),
         () -> "the collision is logged as an ERROR: "
             + LOGGED_WHILE_THE_TEST_RAN);
 
