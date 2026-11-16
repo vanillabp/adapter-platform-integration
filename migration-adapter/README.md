@@ -2320,6 +2320,19 @@ workflow which can be found is dispatched while the other one waits, and the win
 every repetition. `ARejectedDispatchIsPlannedAgainTest` holds the same on Spring Boot. There a store
 used to ask again on the dispatching thread instead, and decision 49 says what that cost.
 
+**A busy BPMS waits in the store, too.** An adapter may call a repeatable failure `BUSY`
+(`MigratableProcessService#kindOfPhaseTwoFailure`): the BPMS is overloaded and refused the
+operation before it did anything, as Camunda 8 does with backpressure. `MigrationProcessService`
+wraps such a failure into a `PhaseTwoBpmsBusy`. Every store asks `PhaseTwoBpmsBusy#isBusy` right
+after the check for a permanent failure. It plans the entry again after
+`PhaseTwoOutboxProperties#delayForABusyBpms`, which is `vanillabp.outbox.attempt-frequency` spread by
+a fifth in both directions, counts no attempt, and writes one WARN line. No time limit applies,
+unlike for `PhaseTwoRetryLater`, because a busy BPMS answers every time. Nothing is repeated inside
+the dispatch, unlike for a collision: a full BPMS needs seconds, and the lane would wait with it. See
+`DECISIONS.pending/2174.md`. `ABusyBpmsUsesNoAttemptsTest` holds the relational store, the MongoDB
+store tests of both platforms hold theirs, and `ABusyBpmsCostsNoAttemptTest` holds the effect on an
+entry on both platforms.
+
 **Several entries leave at the same time, and the workflow aggregate says on which thread.** Every
 store VanillaBP writes itself dispatches on `vanillabp.outbox.dispatch-threads` threads, four of
 them by default. `DispatchLanes` picks the thread for an entry from the workflow module, the BPMN
@@ -2646,7 +2659,7 @@ classDiagram
     +canLocateWorkflows() boolean  «default true · C8 without secondary storage and PEA: false ⇒ the boot refuses a second adapter»
     +deliversTasksAtLeastOnce() boolean  «default false · C8/PEA true · C7 true on an own engine datasource»
     +isPhaseTwoFailureRepeatable(Throwable) boolean  «default true · false ⇒ BLOCKED after one attempt»
-    +isPhaseTwoFailureACollision(Throwable) boolean  «default false · C7 OptimisticLockingException ⇒ repeated at once, no attempt used»
+    +kindOfPhaseTwoFailure(Throwable) PhaseTwoFailureKind  «default OTHER · C7 OptimisticLockingException: COLLISION ⇒ repeated at once · C8 backpressure: BUSY ⇒ due again after attempt-frequency, no attempt used, WARN»
     +workflowVisibilityDelay() WorkflowVisibilityDelay  «default none · C8: 10 s»
     +workflowVisibilityDelay(workflowId) WorkflowVisibilityDelay  «what the core asks · default → the one above»
     +openTaskCount(module, process) Long  «default null»
@@ -2898,8 +2911,9 @@ sequenceDiagram
   opt failure
     DP->>AD: isPhaseTwoFailureRepeatable(e)?
     Note over DP: true → retry with backoff · false → PhaseTwoPermanentFailure → BLOCKED after one attempt
-    DP->>AD: isPhaseTwoFailureACollision(e)?
-    Note over RT: true → the router repeats the dispatch at once, up to 4 times, in a new transaction each · the store hears only of the last failure
+    DP->>AD: kindOfPhaseTwoFailure(e)?
+    Note over RT: COLLISION → the router repeats the dispatch at once, up to 4 times, in a new transaction each · the store hears only of the last failure
+    Note over DP: BUSY → PhaseTwoBpmsBusy → the store plans the entry again after attempt-frequency (spread by a fifth), counts no attempt, writes a WARN
   end
 ```
 

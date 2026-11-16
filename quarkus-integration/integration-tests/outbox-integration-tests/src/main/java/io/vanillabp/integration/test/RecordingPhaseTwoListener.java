@@ -36,6 +36,12 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
    */
   private volatile boolean failWithACollision = false;
 
+  /**
+   * Whether the failures this listener raises are of the kind which the dummy adapter
+   * reports as a busy BPMS.
+   */
+  private volatile boolean failWithABusyBpms = false;
+
   @Override
   public void startedWorkflowPhaseTwo(
       final Object workflowAggregateId) {
@@ -49,6 +55,10 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
       if (failWithACollision) {
         throw new io.vanillabp.bpmsdouble.DummyCollision(
             "phase two lost a race for testing purposes");
+      }
+      if (failWithABusyBpms) {
+        throw new io.vanillabp.bpmsdouble.DummyBusy(
+            "the BPMS is busy for testing purposes");
       }
       throw new RuntimeException("phase two failed for testing purposes");
     }
@@ -307,6 +317,21 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
 
   }
 
+  /**
+   * Lets the next dispatches fail with a failure which the adapter reports as BUSY: the BPMS
+   * refused the operation because it is overloaded. The outbox plans such a dispatch again
+   * without counting an attempt.
+   *
+   * @param numberOfFailures How many dispatches fail
+   */
+  public void failNextDispatchesWithABusyBpms(
+      final int numberOfFailures) {
+
+    failWithABusyBpms = true;
+    failNextDispatches(numberOfFailures);
+
+  }
+
   public void failNextDispatches(
       final int numberOfFailures) {
 
@@ -335,6 +360,7 @@ public class RecordingPhaseTwoListener implements DummyPhaseTwoListener {
     failuresRemaining.set(0);
     failPermanently = false;
     failWithACollision = false;
+    failWithABusyBpms = false;
 
   }
 

@@ -237,7 +237,22 @@ public class InboundIdempotencyTest {
       final String aggregateId,
       final String deliveryId) {
 
+    return delivery(taskDefinition, aggregateId, deliveryId, null);
+
+  }
+
+  private TaskInvocationContext delivery(
+      final String taskDefinition,
+      final String aggregateId,
+      final String deliveryId,
+      final String workflowId) {
+
     return new TaskInvocationContext() {
+
+      @Override
+      public String getWorkflowId() {
+        return workflowId;
+      }
 
       @Override
       public String getAdapterId() {
@@ -396,6 +411,39 @@ public class InboundIdempotencyTest {
       final var repeated = dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4716", "job-7"));
       Assertions.assertEquals(WorkflowTaskOutcome.Kind.COMPLETED, repeated.kind());
       Assertions.assertEquals(1, DeliveryConfiguration.AGGREGATES.get("4716").getInvocations());
+
+    }
+
+  }
+
+  /**
+   * A second workflow of the same aggregate, started after the BPMS was reset, got the delivery
+   * id of a task of the first one. Only the workflow id tells the two apart. The delivery fails
+   * the same way as for another aggregate.
+   */
+  @Test
+  public void aRecordOfAnotherWorkflowOfTheSameAggregateFailsTheDelivery(
+      final io.vanillabp.integration.test.utils.CapturedOutput captured) throws IOException {
+
+    DeliveryConfiguration.AGGREGATES.clear();
+
+    try (var testApp = buildTestApp(); var context = runTestApplication(testApp)) {
+
+      final var dummyAdapter = context.getBean("DummyAdapter_DeploymentService_test", DummyDeploymentService.class);
+
+      storeAggregate("4718");
+      dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4718", "job-8", "workflow-1"));
+
+      Assertions.assertThrows(
+          IllegalStateException.class,
+          () -> dummyAdapter.invokeTask(MODULE, PROCESS, delivery("processTask", "4718", "job-8", "workflow-2")));
+      Assertions.assertEquals(1, DeliveryConfiguration.AGGREGATES.get("4718").getInvocations(),
+          "the handler ran once only");
+      Assertions.assertEquals(1, recordCount(context, "4718"), "the failed delivery wrote no record");
+      Assertions.assertTrue(
+          captured.getAll().contains("ANOTHER workflow 'workflow-1' of the same workflow aggregate"),
+          () -> "the collision is logged: "
+              + captured.getAll());
 
     }
 

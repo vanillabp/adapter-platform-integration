@@ -26,6 +26,7 @@ import io.vanillabp.integration.adapter.migration.outbox.OutboxHousekeeping;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.deployment.SpringBootDeploymentService;
 import io.vanillabp.integration.processservice.SpringBootMigrationAdapterAutoConfiguration;
+import io.vanillabp.integration.spi.PhaseTwoBpmsBusy;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoPermanentFailure;
@@ -76,6 +77,12 @@ import lombok.extern.slf4j.Slf4j;
  * wait. Once <code>vanillabp.outbox.wait-for-visibility-at-most</code> passed since the
  * entry was written, the entry is blocked (see decision 49 in the repository's
  * DECISIONS.md).
+ * <p>
+ * <strong>A busy BPMS is not an attempt either.</strong> Where the BPMS refused a dispatch
+ * because it is overloaded ({@link io.vanillabp.integration.spi.PhaseTwoBpmsBusy}), the entry
+ * is due again after about <code>vanillabp.outbox.attempt-frequency</code>,
+ * <code>attempts</code> stays as it was, and no time limit applies. Each such answer writes a
+ * WARN line, which is how an overloaded BPMS becomes visible.
  * <p>
  * <strong><code>attempts</code> counts attempts, not claims.</strong> The field is written
  * when an attempt ENDED, together with what became of the entry. So a dispatch which takes
@@ -575,6 +582,10 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           e);
       return;
     }
+    if (PhaseTwoBpmsBusy.isBusy(e)) {
+      waitForTheBusyBpms(entry, e);
+      return;
+    }
     final var retryAfter = PhaseTwoRetryLater.retryAfter(e);
     if (retryAfter != null) {
       waitForTheReadModel(entry, retryAfter, e, attemptStartedAt);
@@ -618,6 +629,38 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
         entry.getAttempts() + 1,
         properties.getBlockAfterAttempts(),
         e);
+
+  }
+
+  /**
+   * Writes down that the BPMS of the entry refused the dispatch because it is busy. The entry
+   * is due again after about <code>vanillabp.outbox.attempt-frequency</code>, and the attempt
+   * is not counted. A full BPMS is no failure of the entry, so it must not use up
+   * <code>vanillabp.outbox.block-after-attempts</code>, however long it lasts. The WARN line
+   * is written for each refusal, because it is where an overloaded BPMS shows up in the log.
+   *
+   * @param entry The entry whose dispatch was refused
+   * @param e What the dispatch threw
+   */
+  private void waitForTheBusyBpms(
+      final PhaseTwoOutboxEntry entry,
+      final Exception e) {
+
+    final var retryIn = properties.delayForABusyBpms();
+    if (!writeAsTheHolder(entry, dueAgainWithoutCountingAt(Instant.now().plus(retryIn), LastFailure.of(e)))) {
+      return;
+    }
+    log.warn(
+        "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' met a busy "
+            + "BPMS - the outbox entry '{}' is dispatched again in {} and this uses none of its "
+            + "attempts: {}",
+        entry.getOperation(),
+        entry.getBpmnProcessId(),
+        entry.getWorkflowModuleId(),
+        entry.getAggregateId(),
+        entry.getId(),
+        retryIn,
+        PhaseTwoBpmsBusy.messageOf(e));
 
   }
 

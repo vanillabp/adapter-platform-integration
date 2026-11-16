@@ -8,6 +8,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.UnaryOperator;
 
 import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore;
@@ -309,6 +310,33 @@ public class PhaseTwoOutboxProperties {
     }
     final var doubled = attemptFrequency.multipliedBy(1L << attemptsSoFar);
     return doubled.compareTo(maxAttemptFrequency) > 0 ? maxAttemptFrequency : doubled;
+
+  }
+
+  /**
+   * How much the wait for a busy BPMS is spread around
+   * {@link #attemptFrequency}, in both directions: a fifth.
+   */
+  public static final double BUSY_BPMS_JITTER = 0.2;
+
+  /**
+   * The time to the next attempt after the BPMS refused a dispatch because it is busy (see
+   * {@link io.vanillabp.integration.spi.PhaseTwoBpmsBusy}). It is {@link #attemptFrequency},
+   * spread by {@link #BUSY_BPMS_JITTER} in both directions. It never grows, because the
+   * attempt is not counted, and an overloaded BPMS should be asked again as soon as it may
+   * have room. The spread is there because a busy BPMS refuses many entries at nearly the
+   * same moment. Without it, they would all come back at the same moment and meet a full BPMS
+   * again.
+   * <p>
+   * Every store VanillaBP ships asks this method, so a busy BPMS is waited for the same way on
+   * every platform and on every persistence.
+   *
+   * @return The distance to the next attempt
+   */
+  public Duration delayForABusyBpms() {
+
+    final var spread = 1.0 + (BUSY_BPMS_JITTER * ((2.0 * ThreadLocalRandom.current().nextDouble()) - 1.0));
+    return Duration.ofMillis(Math.round(attemptFrequency.toMillis() * spread));
 
   }
 
