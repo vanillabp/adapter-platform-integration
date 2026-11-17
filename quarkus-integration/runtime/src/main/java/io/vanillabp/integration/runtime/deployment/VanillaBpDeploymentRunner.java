@@ -63,6 +63,16 @@ public class VanillaBpDeploymentRunner {
   }
 
   /**
+   * Priority of the {@link StartupEvent} observers of the default delivery logs. They create
+   * or check their table or indexes and start the cleanup. They run BEFORE the observers with
+   * default priority, because the startup checks of the process services read the delivery
+   * log. They compare the identity of each BPMS with the one written down at an earlier
+   * start. Observers with the same priority run in no defined order, and a table which was
+   * not created yet would end the start.
+   */
+  public static final int DELIVERY_LOG_STARTUP_PRIORITY = Interceptor.Priority.APPLICATION + 400;
+
+  /**
    * Priority of the deployment runner's {@link StartupEvent} observer. It runs AFTER the
    * observers with default priority. These are the startup checks of the process services,
    * e.g. the checks for a prioritized adapter which nothing serves and for the phase-two

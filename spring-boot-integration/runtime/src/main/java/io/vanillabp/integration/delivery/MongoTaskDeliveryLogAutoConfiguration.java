@@ -1,7 +1,6 @@
 package io.vanillabp.integration.delivery;
 
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -114,7 +113,8 @@ public class MongoTaskDeliveryLogAutoConfiguration {
   /**
    * Creates the indexes of the delivery log, or reports the missing ones where the
    * application manages its own schema. Then it starts the cleanup. All of this happens
-   * once all singletons exist.
+   * once all singletons exist. The startup checks of the process services read the
+   * collection, so they run this hook before they ask, see {@link TaskDeliveryLogStartup}.
    *
    * @param mongoTemplate The template creating the indexes
    * @param deliveryLog The delivery log to start
@@ -122,12 +122,12 @@ public class MongoTaskDeliveryLogAutoConfiguration {
    * @return The startup hook
    */
   @Bean
-  public SmartInitializingSingleton vanillaBpMongoTaskDeliveryLogStartup(
+  public TaskDeliveryLogStartup vanillaBpMongoTaskDeliveryLogStartup(
       final MongoTemplate mongoTemplate,
       final MongoTaskDeliveryLog deliveryLog,
       final VanillaBpConfigurationProperties vanillaBpProperties) {
 
-    return () -> {
+    return new TaskDeliveryLogStartup(() -> {
       // what each index is read by is described once, in the core, because the Quarkus
       // extension creates the same ones
       if (vanillaBpProperties.getOutbox().isCreateSchema()) {
@@ -140,7 +140,7 @@ public class MongoTaskDeliveryLogAutoConfiguration {
             .reportMissingOn(mongoTemplate, collectionOf(vanillaBpProperties), MongoSchema.DELIVERY_INDEXES);
       }
       deliveryLog.start();
-    };
+    });
 
   }
 

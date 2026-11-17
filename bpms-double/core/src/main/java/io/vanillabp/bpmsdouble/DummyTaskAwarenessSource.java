@@ -96,6 +96,22 @@ public interface DummyTaskAwarenessSource {
   }
 
   /**
+   * The identity of the BPMS installation which the dummy adapter of the given ID reports.
+   * The core writes it down at the first start and compares it at every later start. A real
+   * adapter of a remote BPMS reports one, for example the id of its Camunda 8 cluster. By
+   * default the double cannot say, like an adapter whose BPMS has no such identity.
+   *
+   * @param adapterId The dummy adapter's ID
+   * @return The identity or <code>null</code> to let another source answer
+   */
+  default String identityOfTheBpms(
+      final String adapterId) {
+
+    return null;
+
+  }
+
+  /**
    * The visibility window the dummy adapter reports. It says how long the core keeps
    * asking a hinted adapter which answers {@link WorkflowAwareness#UNKNOWN_TO_BPMS}.
    * <code>null</code> means none. An adapter of an immediately consistent BPMS reports

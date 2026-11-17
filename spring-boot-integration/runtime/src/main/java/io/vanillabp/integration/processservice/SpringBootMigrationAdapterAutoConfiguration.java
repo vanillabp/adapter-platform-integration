@@ -50,6 +50,7 @@ import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
 import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
 import io.vanillabp.integration.config.EmptySections;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
+import io.vanillabp.integration.delivery.TaskDeliveryLogStartup;
 import io.vanillabp.integration.extension.spi.election.WorkflowElection;
 import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
 import io.vanillabp.integration.health.VanillaBpHealthIndicator;
@@ -811,6 +812,9 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * does not wait until the first workflow start. The log of processed task deliveries is
    * looked up in the same pass. A BPMS which repeats deliveries without a log to remember
    * them is reported at startup, not at the first redelivery.
+   * <p>
+   * The last check reads the delivery logs. So the default delivery logs are made ready
+   * first, see {@link TaskDeliveryLogStartup}.
    *
    * @param beanFactory Used to iterate all process-service beans
    * @return The startup validation hook
@@ -819,7 +823,27 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   public SmartInitializingSingleton vanillaBpProcessServiceStartupValidation(
       final ConfigurableListableBeanFactory beanFactory) {
 
-    return () -> beanFactory
+    return () -> {
+      // Spring calls this hook and the one of a delivery log in the order of their bean
+      // definitions. Nothing makes that the right order. A table which was not created yet
+      // would end the start
+      beanFactory
+          .getBeanProvider(TaskDeliveryLogStartup.class)
+          .orderedStream()
+          .forEach(TaskDeliveryLogStartup::afterSingletonsInstantiated);
+      validateTheProcessServices(beanFactory);
+    };
+
+  }
+
+  /**
+   * The checks of {@link #vanillaBpProcessServiceStartupValidation}, once the delivery logs
+   * are ready.
+   */
+  private static void validateTheProcessServices(
+      final ConfigurableListableBeanFactory beanFactory) {
+
+    beanFactory
         .getBeanProvider(ProcessService.class)
         .stream()
         .filter(ProcessServiceSpringBean.class::isInstance)

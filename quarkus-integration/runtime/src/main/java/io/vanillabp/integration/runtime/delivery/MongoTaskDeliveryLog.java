@@ -31,6 +31,7 @@ import io.vanillabp.integration.adapter.migration.mongo.MongoSchema;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
+import io.vanillabp.integration.runtime.deployment.VanillaBpDeploymentRunner;
 import io.vanillabp.integration.runtime.mongo.MongoIndexes;
 import io.vanillabp.integration.runtime.mongo.MongoSessions;
 import io.vanillabp.integration.runtime.processservice.PlatformDefaultStore;
@@ -38,6 +39,7 @@ import io.vanillabp.integration.runtime.processservice.QuarkusPersistenceTechnol
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 import jakarta.annotation.PreDestroy;
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
@@ -235,12 +237,15 @@ public class MongoTaskDeliveryLog implements TaskDeliveryLog, PlatformDefaultSto
 
   /**
    * Creates the indexes which this log reads by. Where the application manages its schema
-   * itself, it names the missing ones instead. Then it starts the cleanup.
+   * itself, it names the missing ones instead. Then it starts the cleanup. It runs before the
+   * startup checks of the process services, because they read the collection, see
+   * {@link VanillaBpDeploymentRunner#DELIVERY_LOG_STARTUP_PRIORITY}.
    *
    * @param event The startup event observed
    */
   void onStart(
-      @Observes final StartupEvent event) {
+      @Observes
+      @Priority(VanillaBpDeploymentRunner.DELIVERY_LOG_STARTUP_PRIORITY) final StartupEvent event) {
 
     if (!isAvailable()) {
       log.debug("No MongoDB client available - the MongoDB-based task delivery log stays inactive");

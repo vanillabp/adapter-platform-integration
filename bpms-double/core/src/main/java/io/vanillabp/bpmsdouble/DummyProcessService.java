@@ -233,6 +233,18 @@ public class DummyProcessService<A> implements io.vanillabp.integration.adapter.
   }
 
   @Override
+  public String identityOfTheBpms() {
+
+    return taskAwarenessSources
+        .all()
+        .map(source -> source.identityOfTheBpms(adapterId))
+        .filter(identity -> (identity != null) && !identity.isBlank())
+        .findFirst()
+        .orElse(null);
+
+  }
+
+  @Override
   public boolean isPhaseTwoFailureRepeatable(
       final Throwable failure) {
 
