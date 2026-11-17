@@ -3,7 +3,6 @@ package io.vanillabp.integration.delivery;
 import javax.sql.DataSource;
 
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBooleanProperty;
@@ -100,21 +99,23 @@ public class JdbcTaskDeliveryLogAutoConfiguration {
   /**
    * Creates the table and starts the retention cleanup once all singletons exist. The DDL
    * must not run while beans are still being built. It would create the data source before
-   * the application's own configuration is complete.
+   * the application's own configuration is complete. The startup checks of the process
+   * services read the table, so they run this hook before they ask, see
+   * {@link TaskDeliveryLogStartup}.
    *
    * @param deliveryLog The delivery log to start
    * @param vanillaBpProperties The bound <code>vanillabp.*</code> tree
    * @return The startup hook
    */
   @Bean
-  public SmartInitializingSingleton vanillaBpJdbcTaskDeliveryLogStartup(
+  public TaskDeliveryLogStartup vanillaBpJdbcTaskDeliveryLogStartup(
       final JdbcTaskDeliveryLog deliveryLog,
       final VanillaBpConfigurationProperties vanillaBpProperties) {
 
-    return () -> deliveryLog.start(
+    return new TaskDeliveryLogStartup(() -> deliveryLog.start(
         vanillaBpProperties
             .getOutbox()
-            .isCreateSchema());
+            .isCreateSchema()));
 
   }
 

@@ -16,11 +16,13 @@ import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore
 import io.vanillabp.integration.adapter.migration.delivery.TaskDeliveryRetentionCleanup;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterPropertiesMapper;
+import io.vanillabp.integration.runtime.deployment.VanillaBpDeploymentRunner;
 import io.vanillabp.integration.runtime.processservice.PlatformDefaultStore;
 import io.vanillabp.integration.runtime.processservice.QuarkusPersistenceTechnology;
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 import jakarta.annotation.PreDestroy;
+import jakarta.annotation.Priority;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Instance;
@@ -223,12 +225,15 @@ public class JdbcTaskDeliveryLog implements TaskDeliveryLog, JdbcConnectionAcces
   }
 
   /**
-   * Creates the table (unless disabled) and starts the retention cleanup.
+   * Creates the table (unless disabled) and starts the retention cleanup. It runs before the
+   * startup checks of the process services, because they read the table, see
+   * {@link VanillaBpDeploymentRunner#DELIVERY_LOG_STARTUP_PRIORITY}.
    *
    * @param event The startup event observed
    */
   void onStart(
-      @Observes final StartupEvent event) {
+      @Observes
+      @Priority(VanillaBpDeploymentRunner.DELIVERY_LOG_STARTUP_PRIORITY) final StartupEvent event) {
 
     if (!isAvailable()) {
       log.debug("No datasource available - the JDBC-based task delivery log stays inactive");
