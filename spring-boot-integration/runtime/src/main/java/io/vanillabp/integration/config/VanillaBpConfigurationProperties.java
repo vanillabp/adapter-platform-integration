@@ -20,7 +20,8 @@ import io.vanillabp.integration.adapter.migration.config.MigrationAdapterPropert
  * <code>vanillabp.adapters.&lt;id&gt;.rest-address</code>). For that, an adapter binds an
  * overlay class of its own, annotated with <code>@ConfigurationProperties("vanillabp")</code>.
  * Classes with the same prefix can live side by side. The JavaBean binding ignores keys
- * which this core view does not know.
+ * which this core view does not know. A key which no class knows ends the start, see
+ * {@link UnreadKeysCheck}.
  */
 @ConfigurationProperties(MigrationAdapterProperties.PREFIX)
 public class VanillaBpConfigurationProperties extends MigrationAdapterProperties {

@@ -101,6 +101,26 @@ BPMS adapters add their own keys to the same tree (for example
 side, and the JavaBean binding ignores keys which the core view does not know. The set of adapter
 ids always comes from the core properties (`adapterTypes()`), never from an overlay map.
 
+Each class ignores the keys it does not know, so a key which NO class knows was ignored as well. The
+application booted, and the setting was not there. `UnreadKeysCheck` ends the start for such a key,
+like Quarkus does. While Spring Boot binds, it writes down every key below `vanillabp` which a class
+took over. It is a `ConfigurationPropertiesBindHandlerAdvisor`, so it sees the core model and every
+overlay of an adapter or an extension. When every singleton exists, it creates the classes below
+`vanillabp` which are not created yet, so they are bound. Then it compares the keys of every
+property source with the keys taken over. The startup validation of the process services calls it
+first, so a typo is reported before what it may have caused. The check knows no key of an adapter.
+An adapter takes part by binding each key it reads in its overlay class, at each level where it
+reads the key. A key which an adapter reads only through `Environment#getProperty`, `@Value` or a
+`Binder` of its own ends the start.
+
+The message comes from `UnreadKeys` of the core. For it, the check builds the tree of every key the
+classes CAN read from their types (`ReadableKeys`). With that tree the message names the levels
+where a key is read, when it was written at the wrong one, or the key it most likely is, for a typo.
+An environment variable counts in both spellings of a dash: `TENANTID` and `TENANT_ID`. A list
+element which a stronger source replaced counts as read. `AKeyNobodyReadsEndsTheStartTest` holds a
+wrong key at every level, the keys which are read, environment variables, the keys of version 1 and
+a lazy overlay class. `DECISIONS.pending/2185.md` says why such a key ends the start.
+
 A section written as `{}` needs one more step. Spring Boot reads the empty map of a YAML file as a
 property with an empty value, for example `vanillabp.adapters.saas=`. When Spring Boot binds an
 object, it looks for a value at the object's own name first. It found the empty value and never read

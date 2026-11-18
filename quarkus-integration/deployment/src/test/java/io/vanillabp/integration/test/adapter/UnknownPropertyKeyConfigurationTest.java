@@ -18,8 +18,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * mappings (see the dummy adapter's {@code DummyAdapterOverlayProperties}). So a key which
  * no mapping knows fails the startup. It is not silently ignored.
  * <p>
- * (Quarkus is stricter than Spring Boot here on purpose. The JavaBean binding on Spring has
- * no detection of unknown keys. We accept this difference.)
+ * Spring Boot ends the start for the same typo, see {@code AKeyNobodyReadsEndsTheStartTest}.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class UnknownPropertyKeyConfigurationTest {

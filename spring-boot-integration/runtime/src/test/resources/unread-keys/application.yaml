@@ -1,0 +1,13 @@
+vanillabp:
+  adapters:
+    test:
+      type: dummy
+  workflow-modules:
+    test-module:
+      workflows:
+        TestWorkflow:
+          tasks:
+            someTask:
+              adapters:
+                test:
+                  tenant-id: x

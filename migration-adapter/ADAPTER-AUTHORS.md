@@ -1304,6 +1304,15 @@ value, use a JDK type or an enum, never a class of your own. If you bind a secti
 yourself, pass `EmptySections.bindHandler()` as its third argument (decision 138 in the repository's
 [DECISIONS.md](../DECISIONS.md)).
 
+Every key your adapter reads has to be bound by your overlay class, at each level where you read
+it. On Spring Boot as on Quarkus, a key below `vanillabp` which no class binds ends the start. The
+platform finds such a key by what the bindings took over, so it needs no list of your keys. The
+same holds the other way round. A key which you read with `Environment#getProperty`, `@Value` or a
+`Binder` of your own counts as read by nobody, unless your overlay class binds it as well. The
+message names the levels where a key IS read. It finds them in the types of your overlay class, so
+model a level only where your adapter reads it. A level you model but never read lets a key bind
+there and do nothing. Refuse such a key yourself with `MisplacedSettings.refuse`.
+
 For each id, register one element bean of your `MigratableProcessService` and one of your
 `AdapterDeploymentService`, named after the id. Take the collaborators from
 `AdapterBeanRegistrarSupport.collaborators(supplierContext, adapterId)`.
