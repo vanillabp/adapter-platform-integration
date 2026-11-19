@@ -1,7 +1,7 @@
 package io.vanillabp.integration.runtime.processservice;
 
 import io.quarkus.arc.Unremovable;
-import io.vanillabp.integration.adapter.migration.processservice.TransactionRunnerResolver;
+import io.vanillabp.integration.extension.spi.resolver.TransactionRunnerResolver;
 import io.vanillabp.integration.runtime.workflowtask.QuarkusTransactionRunner;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.TransactionRunner;

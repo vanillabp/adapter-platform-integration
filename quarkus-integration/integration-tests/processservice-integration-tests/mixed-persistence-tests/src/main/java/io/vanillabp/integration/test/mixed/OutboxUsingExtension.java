@@ -1,6 +1,6 @@
 package io.vanillabp.integration.test.mixed;
 
-import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
+import io.vanillabp.integration.extension.spi.resolver.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

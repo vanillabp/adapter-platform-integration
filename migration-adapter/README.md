@@ -2553,7 +2553,8 @@ Its README says so.
 says how an operator finds such an entry, opens it again or deletes it, on the table and on the
 collection. It also says what to check about a younger entry with the same key first. Every ERROR
 which reports a blocked entry ends with that address. It is one constant,
-`PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE`. So the three dispatchers and their tests
+`PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE` of the integration SPI, where an extension can read it
+too. So the three dispatchers and their tests
 (`PermanentPhaseTwoFailureTest` of both platforms, `MongoOutboxBlockedTest` on Quarkus and
 `MongoWaitingForAReadModelUsesNoAttemptsTest` on Spring Boot) name the same page. An extension which
 gave up may log an ERROR of its own next to it. Both lines stay. The extension's line says what to
@@ -3646,9 +3647,11 @@ integrations are the templates:
 **Configuration** belongs to the extension. On Quarkus it is an overlay
 `@ConfigMapping(prefix = "vanillabp")`, if it wants to live under the `vanillabp.*` tree. On
 Spring Boot it is a second `@ConfigurationProperties("vanillabp")` class. VanillaBP's own
-configuration is available as the core object `MigrationAdapterProperties`, which can be injected
-(adapter ids, workflow modules, prioritized adapters). That is usually all an extension needs to
-know about the setup.
+configuration is available as `VanillaBpSettings` of the extension SPI (package `settings`), which
+can be injected: adapter ids and their types, workflow modules, prioritized adapters and the
+extension's own section. That is usually all an extension needs to know about the setup. The
+object behind it is `MigrationAdapterProperties`. Both platforms publish it under both types, and
+the binding, the derivation and the checks stay in the core.
 
 An extension which bridges to a BPMS needs one more answer from it: which adapter ids one adapter
 TYPE serves. It registers one bridge per configured engine, the way an adapter registers one set of
@@ -3657,6 +3660,21 @@ not. An id named in `prioritized-adapters` needs no section of its own. And an a
 configures nothing at all has the id which the classpath derives. A migration setup relies on the
 first rule and an application with a single dependency on the second. Decision 39 in
 `DECISIONS.md` says why they live in one place.
+
+**An extension depends on the extension SPI alone.** Everything an extension reads from VanillaBP
+is a type of `vanillabp-extension-spi`, or of `vanillabp-integration-spi`, which comes with it:
+the wiring service, the handler contracts, the election, `VanillaBpSettings`, and the three
+resolvers of package `resolver`, which answer the outbox store, the transaction runner and the
+delivery log of a workflow aggregate. One interface is still missing from that list:
+`WorkflowTaskWiring#isClaimedByAWorkflowService` lives in the adapter SPI, and an extension which
+asks it takes that artifact as well. The core (`migration-adapter`) and the platform integrations
+are not on its compile path. So a change inside the core cannot break an extension. The sample
+extension of each platform holds the rule. Its POM names the extension SPI alone, and an enforcer
+rule stops its build when the core or a platform integration arrives, even transitively.
+`DECISIONS.pending/2191.md` says why.
+
+When the core gets something new an extension has to read, it goes into the extension SPI as an
+interface, and the core's class implements it. The class of the core is never the answer.
 
 **What holds the matching and the ordering.**
 `DeploymentServiceTest#extensionWiringServicesAreFilteredAndCalled`,
@@ -3894,7 +3912,7 @@ application which migrates from one BPMS to another runs two adapters of one typ
 has to differ between them now has a place.
 
 The positions are merged KEY BY KEY. So a workflow may change one value and keep what the
-application said about the rest. `MigrationAdapterProperties#resolveForExtension` reads one value,
+application said about the rest. `VanillaBpSettings#resolveForExtension` reads one value,
 and `#extensionProperties` reads the whole section. Both take the extension id as a parameter,
 because the properties are one bean of the platform, while an extension is not a bean of the
 platform at all. Both also come in a shape without the adapter id, which reads only the four
@@ -4577,9 +4595,13 @@ does not stay: `oneMeasurementPerWindow`, `concurrentCollectorsShareOneMeasureme
 2. **extension-spi:** (artifact `io.vanillabp:vanillabp-extension-spi`)<br>
    `ExtensionWiringService`, which prepares a BPMN model and wires it with business code. Plus what
    an extension needs beyond the pipeline: the handler contracts for annotations of its own
-   (`handler`), the service per aggregate which it offers (`service`), and the election
-   (`election`). The module has no dependency at all. So an extension can be built against it
-   without pulling in the adapter SPI, which it does not implement.
+   (`handler`), the service per aggregate which it offers (`service`), the election
+   (`election`), what it reads from VanillaBP's configuration (`settings`, `VanillaBpSettings`),
+   and the outbox store, the transaction runner and the delivery log of a workflow aggregate
+   (`resolver`). The platform integrations implement the resolvers and publish the settings. The
+   module depends on `integration-spi` and on nothing else, because the resolvers answer types of
+   that module. So an extension is built against this module alone. It does not pull in the
+   adapter SPI, which it does not implement, and not the core.
 3. **adapter-spi:** (artifact `io.vanillabp:vanillabp-adapter-spi`)<br>
    The SPI which BPMS adapters and platform integrations implement: `AdapterDeploymentService`
    (extends `ExtensionWiringService`) and `MigratableProcessService` (incl. `WorkflowAwareness`).

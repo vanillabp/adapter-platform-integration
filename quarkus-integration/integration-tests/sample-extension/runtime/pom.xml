@@ -14,9 +14,10 @@
   <!-- The Quarkus half of the extension the Spring Boot integration tests also build:
     the same annotation, the same contract, the same per-aggregate service, wired as a
     Quarkus extension instead of an auto-configuration. Its dependencies are the point of
-    it - the two SPI artifacts and the platform-neutral core, and deliberately NOT
-    vanillabp-quarkus-integration, which is what an extension of version 1 had to inherit
-    its base classes from. -->
+    it. It sees the extension SPI, which brings the integration SPI along, and nothing else
+    of VanillaBP: not the platform-neutral core, and not vanillabp-quarkus-integration,
+    which is what an extension of version 1 had to inherit its base classes from. The
+    enforcer rule below stops the build if one of them arrives, even transitively. -->
 
   <dependencies>
     <dependency>
@@ -26,16 +27,6 @@
     <dependency>
       <groupId>io.vanillabp</groupId>
       <artifactId>vanillabp-extension-spi</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.vanillabp</groupId>
-      <artifactId>vanillabp-integration-spi</artifactId>
-      <version>${project.version}</version>
-    </dependency>
-    <dependency>
-      <groupId>io.vanillabp.adapter</groupId>
-      <artifactId>migration-adapter</artifactId>
       <version>${project.version}</version>
     </dependency>
   </dependencies>
@@ -72,6 +63,33 @@
                   <version>${quarkus.version}</version>
                 </path>
               </annotationProcessorPaths>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <!-- the rule which keeps this module honest: an extension needs the extension SPI
+             and nothing of the core or of a platform integration, not even transitively.
+             DECISIONS.pending/2191.md says why. -->
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>an-extension-depends-on-the-extension-spi-alone</id>
+            <goals>
+              <goal>enforce</goal>
+            </goals>
+            <configuration>
+              <rules>
+                <bannedDependencies>
+                  <excludes>
+                    <exclude>io.vanillabp.adapter:migration-adapter</exclude>
+                    <exclude>io.vanillabp:vanillabp-adapter-spi</exclude>
+                    <exclude>io.vanillabp:vanillabp-spring-boot-integration</exclude>
+                    <exclude>io.vanillabp:vanillabp-quarkus-integration</exclude>
+                  </excludes>
+                  <message>An extension depends on io.vanillabp:vanillabp-extension-spi alone. It brings the integration SPI along. Everything an extension reads from VanillaBP is offered there. See migration-adapter/EXTENSION-AUTHORS.md, section 1.</message>
+                </bannedDependencies>
+              </rules>
             </configuration>
           </execution>
         </executions>

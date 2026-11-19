@@ -1090,6 +1090,10 @@ configures itself below `vanillabp.extensions.<extension>`, with an override per
 the plug-in names its own section. `vanillabp.extensions.<id>` is the section of a plug-in which
 names none.*
 
+*Superseded in part by `DECISIONS.pending/2191.md`: the last sentence of the next paragraph. The
+sample extension builds against the extension SPI alone, which brings the integration SPI along.
+The core is not on its compile path.*
+
 What ties them together: each is parameterized BY the extension, not shaped after one. That is the
 annotation type, the service interface and the extension id. Nothing in the core knows what a
 user-task detail is, and an application which does not use an extension sees none of it. The sample
@@ -4051,6 +4055,10 @@ about a blocked entry with the address of the wiki page `Blocked-outbox-entries`
 store, how to find the entry, how to open it again or delete it, and what opening does to the
 idempotency key. The address is one constant, `PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE`. So
 the log lines and the tests which read them cannot name two different pages.
+
+*Superseded in part by `DECISIONS.pending/2191.md`: the constant is
+`PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE` of the integration SPI now, because an extension reads it.
+It is still one constant.*
 
 A blocked entry of an extension leaves two ERROR lines. One comes from the extension and says what
 to check, in the extension's own terms. The other comes from the dispatcher, names the row and

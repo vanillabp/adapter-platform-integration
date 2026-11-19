@@ -2,9 +2,9 @@ package io.vanillabp.extension.sample;
 
 import io.quarkus.arc.Unremovable;
 import io.quarkus.runtime.StartupEvent;
-import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
 import io.vanillabp.integration.extension.spi.service.AggregateServiceFactory;
+import io.vanillabp.integration.extension.spi.settings.VanillaBpSettings;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import jakarta.enterprise.inject.Produces;
@@ -29,7 +29,7 @@ public class SampleExtensionProducer {
   @Singleton
   @Unremovable
   public AggregateServiceFactory<SampleNoteService> sampleNoteServiceFactory(
-      final MigrationAdapterProperties properties) {
+      final VanillaBpSettings properties) {
 
     return new SampleNoteServiceFactory(properties);
 

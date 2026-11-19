@@ -77,14 +77,21 @@ You ship both platforms. An extension which exists only on Spring Boot does not 
 VanillaBP promises the same behaviour on Quarkus and on any platform which comes later. That is why
 this repository has one sample extension per platform.
 
-You depend on the two SPI artifacts and on the core, and on no platform integration. These are:
+You depend on one artifact of VanillaBP: `io.vanillabp:vanillabp-extension-spi`. It brings
+`io.vanillabp:vanillabp-integration-spi` along, which holds the outbox and the transaction types.
+Everything this document names is in one of the two, with one exception. `WorkflowTaskWiring`
+(section 2) is a type of the adapter SPI, `io.vanillabp:vanillabp-adapter-spi`. Only take that
+artifact if you need this one interface. You do not depend on the core
+(`io.vanillabp.adapter:migration-adapter`), and you do not depend on a platform integration. In
+your tests you may use whatever you like.
 
-* `io.vanillabp:vanillabp-extension-spi`, which has no dependencies at all,
-* `io.vanillabp:vanillabp-integration-spi`, if you touch the outbox or the transaction,
-* `io.vanillabp.adapter:migration-adapter`, for `MigrationAdapterProperties`.
+The sample extension of each platform is built exactly this way, and its POM says so. An enforcer
+rule in that POM stops its build when the core or a platform integration arrives, even through
+another dependency. With such a dependency the sample would no longer prove anything. You can copy
+the rule into your own POM.
 
-The sample extension of each platform is built exactly this way, and its POM says so. With a
-dependency on `vanillabp-spring-boot-integration` it would no longer prove anything.
+If you need something from VanillaBP which neither SPI offers, tell us. The answer is a new
+interface in the extension SPI, never a class of the core.
 
 ## 2. The seven calls of the wiring service
 
@@ -216,7 +223,7 @@ context, and nothing else. There are two ways around this.
   Cockpit uses it.
 
 For the second way, the set of ids comes from
-`MigrationAdapterProperties#adapterIdsOfType(adapterType)` and from nowhere else. Three rules decide which ids one type serves. Two of them cover an id which
+`VanillaBpSettings#adapterIdsOfType(adapterType)` and from nowhere else. Three rules decide which ids one type serves. Two of them cover an id which
 is only named in `prioritized-adapters`, and an application which configures nothing at all. Every
 consumer which built the list again on its own missed one of the three (decision 39). This method
 exists so that nobody derives the ids from the sections they can see.
@@ -362,7 +369,8 @@ noticed.
 
 ### Reading them
 
-`MigrationAdapterProperties` is a bean of both platforms, and it reads your settings for you. Your
+`VanillaBpSettings` in `io.vanillabp.integration.extension.spi.settings` is a bean of both
+platforms, and it reads your settings for you. Your
 extension id is a parameter of the call. It is not bound to a view of these properties, because the
 properties are one bean of the platform, and your extension is not a bean of the platform at all.
 You ask with your id, the way an adapter asks with its adapter id.
@@ -377,6 +385,12 @@ You ask with your id, the way an adapter asks with its adapter id.
 
 Any id may be `null`. A level nobody configured is skipped and is no error. So the same method
 answers the question for the whole application, the module, the workflow and the task.
+
+The same bean answers what the application looks like: `adapterTypes()` (each adapter id with its
+type), `adapterIdsOfType(type)`, `getPrioritizedAdapters()` and `workflowModuleIds()`. Its constant
+`PREFIX` is the root `vanillabp`, for an extension which binds a tree of its own below it. It is a
+view for reading. The platform binds, derives and checks the configuration, and you cannot change
+what the core sees.
 
 `SettingsResolutionTest` and `ExtensionSettingsResolutionTest` hold the eight positions and the three
 rules in the core. `ExtensionSettingsPositionsTest` exists once per platform. It holds them against a
@@ -621,12 +635,15 @@ outbox, inside the business transaction. Dispatch goes straight to your handler.
 adapter election which the core's operations run through.
 
 You do not decide which store the entry belongs in. If you picked a `PhaseTwoOutbox` bean yourself,
-it would work until the first application with two persistences.
-`PhaseTwoOutboxResolver#resolveFor(workflowAggregateClass)` answers the store into which the
+it would work until the first application with two persistences. The resolvers of this section are
+in `io.vanillabp.integration.extension.spi.resolver`, and both platforms provide each of them as a
+bean. `PhaseTwoOutboxResolver#resolveFor(workflowAggregateClass)` answers the store into which the
 workflow's own entries go. That is the whole point, because only an entry in the transaction of the
 aggregate is committed together with it. A `null` answer means the application has no outbox at
 all. `#remediesDescription()` then says what to add for the platform in use. So you can end your own
-boot with a message a developer can act on.
+boot with a message a developer can act on. If your own operation gives up and the entry is
+blocked, end your ERROR with `PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE`, the address where an operator
+reads how to open the entry again. The outbox writes a line of its own beside yours.
 
 The transaction follows the same rule. `TransactionRunnerResolver#resolveFor(workflowAggregateClass)`
 answers the runner which the workflow's own writes go through. That may well be a runner the
@@ -726,7 +743,7 @@ Do not address the first-priority adapter. Ask `WorkflowElection#adapterIdOfWork
 workflow. During a migration the answer differs from workflow to workflow. A wrong answer talks to
 a BPMS which does not hold the workflow.
 
-Do not derive the adapter ids yourself. `MigrationAdapterProperties#adapterIdsOfType` is the one
+Do not derive the adapter ids yourself. `VanillaBpSettings#adapterIdsOfType` is the one
 place where the three rules live. A copy which drops one rule leaves the adapter registered and your
 bridge missing (decision 39).
 
@@ -765,25 +782,26 @@ build item of its own.
 
 ## 8. What the core promises you
 
-|                                                          Promise                                                          |                                                                                       What holds it                                                                                       |
-|---------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| The adapter wired a process before you see it, and is started before you are                                              | decision 52, `DeploymentServiceTest#theAdapterIsFirstOnTheWayUp`, `DeploymentPipelineTest#extensionsWiredInOrder`                                                                         |
-| You are stopped before the adapter is                                                                                     | `DeploymentServiceTest#extensionWiringServicesAreStoppedBeforeAdapters`, `ShutdownReverseOrderTest`                                                                                       |
-| An extension whose types do not match is neither wired nor started                                                        | `DeploymentServiceTest#extensionWiringServicesAreFilteredAndCalled`, `#subtypeExtensionIsNeitherWiredNorStarted`, `DeploymentPipelineTest#nonMatchingExtensionUntouched`                  |
-| Extensions are sorted by `getOrder()`, and nothing beyond that is promised                                                | decision 52, `DeploymentServiceTest#wiringServicesAreSortedByOrder`                                                                                                                       |
-| Eight positions, most specific wins, adapter section beats its own level                                                  | decision 7, `SettingsResolutionTest`, `ExtensionSettingsResolutionTest`, `ExtensionSettingsPositionsTest` per platform                                                                    |
-| A value of one adapter never reaches another one                                                                          | `SettingsResolutionTest#anotherAdapterReadsTheGeneralSections`, `ExtensionSettingsPositionsTest#theSecondAdapterReadsItsOwnValues`                                                        |
-| A key below `vanillabp` which no mapping declares ends a Quarkus start, naming the key                                    | `UnknownExtensionSettingsKeyTest`                                                                                                                                                         |
-| A key you refuse at the wrong level reads like a misplaced key of the core                                                | decision 89, `MisplacedSettingsTest`                                                                                                                                                      |
-| Your annotation is run with the mechanics of `@WorkflowTask`                                                              | `ExtensionHandlerRegistryTest`, `ExtensionHandlerTest` (Spring Boot), `ExtensionEnablementTest` (Quarkus)                                                                                 |
-| A contract registered after the scan finds the same methods                                                               | decision 36, `ExtensionHandlerRegistryTest#aContractMayArriveAfterTheScan`                                                                                                                |
-| The first offered key some method serves wins, and the catch-all stays the fallback                                       | decision 51, `ExtensionHandlerRegistryTest#theFirstKeyServedWins`, `#aNamedKeyAlwaysBeatsTheCatchAll`                                                                                     |
-| A contract which never writes is not warned about                                                                         | decision 50, `ExtensionHandlerRegistryTest#aReadingContractDoesNotSaveTheAggregate`                                                                                                       |
-| The boot says which method serves which key, and names a method the scan cannot see                                       | `ExtensionHandlerRegistryTest#theBootSaysWhatWasWired`, `#anInvisibleExtensionHandlerIsReported`, `ExtensionHandlerWiringReportTest` per platform                                         |
-| The election answers which BPMS holds a workflow, and refuses with a guiding message where it cannot                      | `ExtensionElectionAndConfigurationTest`, `ExtensionEnablementTest`                                                                                                                        |
-| An operation of yours reaches your own handler                                                                            | `PhaseOperationRegistryTest`, `ExtensionOperationDispatchTest` per platform                                                                                                               |
-| The log of processed task deliveries is resolvable per workflow aggregate, and holds the tasks the application was handed | decision 54, `ExtensionElectionAndConfigurationTest`, `ExtensionEnablementTest`, `OpenTaskRetentionTest` per platform                                                                     |
-| A workflow an adapter found suspended reaches only the extensions of that adapter, and an exception of yours stays inside | `DeploymentServiceTest$SuspendedWorkflowTests`, `SuspendedWorkflowReachesExtensionsTest` (Spring Boot), `DeploymentPipelineTest#aSuspendedWorkflowReachesTheMatchingExtensions` (Quarkus) |
+|                                                                    Promise                                                                     |                                                                                       What holds it                                                                                       |
+|------------------------------------------------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| The adapter wired a process before you see it, and is started before you are                                                                   | decision 52, `DeploymentServiceTest#theAdapterIsFirstOnTheWayUp`, `DeploymentPipelineTest#extensionsWiredInOrder`                                                                         |
+| You are stopped before the adapter is                                                                                                          | `DeploymentServiceTest#extensionWiringServicesAreStoppedBeforeAdapters`, `ShutdownReverseOrderTest`                                                                                       |
+| An extension whose types do not match is neither wired nor started                                                                             | `DeploymentServiceTest#extensionWiringServicesAreFilteredAndCalled`, `#subtypeExtensionIsNeitherWiredNorStarted`, `DeploymentPipelineTest#nonMatchingExtensionUntouched`                  |
+| Extensions are sorted by `getOrder()`, and nothing beyond that is promised                                                                     | decision 52, `DeploymentServiceTest#wiringServicesAreSortedByOrder`                                                                                                                       |
+| Eight positions, most specific wins, adapter section beats its own level                                                                       | decision 7, `SettingsResolutionTest`, `ExtensionSettingsResolutionTest`, `ExtensionSettingsPositionsTest` per platform                                                                    |
+| A value of one adapter never reaches another one                                                                                               | `SettingsResolutionTest#anotherAdapterReadsTheGeneralSections`, `ExtensionSettingsPositionsTest#theSecondAdapterReadsItsOwnValues`                                                        |
+| A key below `vanillabp` which no mapping declares ends a Quarkus start, naming the key                                                         | `UnknownExtensionSettingsKeyTest`                                                                                                                                                         |
+| A key you refuse at the wrong level reads like a misplaced key of the core                                                                     | decision 89, `MisplacedSettingsTest`                                                                                                                                                      |
+| Your annotation is run with the mechanics of `@WorkflowTask`                                                                                   | `ExtensionHandlerRegistryTest`, `ExtensionHandlerTest` (Spring Boot), `ExtensionEnablementTest` (Quarkus)                                                                                 |
+| A contract registered after the scan finds the same methods                                                                                    | decision 36, `ExtensionHandlerRegistryTest#aContractMayArriveAfterTheScan`                                                                                                                |
+| The first offered key some method serves wins, and the catch-all stays the fallback                                                            | decision 51, `ExtensionHandlerRegistryTest#theFirstKeyServedWins`, `#aNamedKeyAlwaysBeatsTheCatchAll`                                                                                     |
+| A contract which never writes is not warned about                                                                                              | decision 50, `ExtensionHandlerRegistryTest#aReadingContractDoesNotSaveTheAggregate`                                                                                                       |
+| The boot says which method serves which key, and names a method the scan cannot see                                                            | `ExtensionHandlerRegistryTest#theBootSaysWhatWasWired`, `#anInvisibleExtensionHandlerIsReported`, `ExtensionHandlerWiringReportTest` per platform                                         |
+| The election answers which BPMS holds a workflow, and refuses with a guiding message where it cannot                                           | `ExtensionElectionAndConfigurationTest`, `ExtensionEnablementTest`                                                                                                                        |
+| An operation of yours reaches your own handler                                                                                                 | `PhaseOperationRegistryTest`, `ExtensionOperationDispatchTest` per platform                                                                                                               |
+| The log of processed task deliveries is resolvable per workflow aggregate, and holds the tasks the application was handed                      | decision 54, `ExtensionElectionAndConfigurationTest`, `ExtensionEnablementTest`, `OpenTaskRetentionTest` per platform                                                                     |
+| A workflow an adapter found suspended reaches only the extensions of that adapter, and an exception of yours stays inside                      | `DeploymentServiceTest$SuspendedWorkflowTests`, `SuspendedWorkflowReachesExtensionsTest` (Spring Boot), `DeploymentPipelineTest#aSuspendedWorkflowReachesTheMatchingExtensions` (Quarkus) |
+| What this document names is in the extension SPI or the integration SPI (except `WorkflowTaskWiring`), so the core is not on your compile path | `DECISIONS.pending/2191.md`, the enforcer rule of the sample extension of each platform                                                                                                   |
 
 One statement in this document is an assumption, and no test holds it. You can tell two adapters
 apart by the identity of the processing context. This works because the core builds one context per
@@ -808,21 +826,24 @@ certainty, register per id from `adapterIdsOfType` instead.
    operation in your namespace and your own dispatch.
 7. Your messages name the workflow module, the BPMN process and the property key. So when an
    application runs into a broken setup, its own log leads it out.
-8. You ship both platforms, each with its own tests. Your dependency list holds the two SPI
-   artifacts and the core, and no platform integration.
+8. You ship both platforms, each with its own tests. Your dependency list holds
+   `vanillabp-extension-spi` and nothing else of VanillaBP: not the core, and no platform
+   integration.
 
 ## Where to look next
 
 The SPI's own javadoc is the reference. Wherever the two overlap, it has more detail than this
 document. Start with `ExtensionWiringService`, whose type javadoc carries the contract about order.
-For the settings, read `SettingsLevel`, `SettingsResolution` and `MisplacedSettings`.
+For the settings, read `VanillaBpSettings`, `SettingsLevel`, `SettingsResolution` and
+`MisplacedSettings`.
 
 [`README.md`](./README.md) of this module is the contributor documentation of the core. Its section
 [Extensions](./README.md#extensions) covers the subject of this document from the inside. The
 sections around it explain why the SPI looks the way it does.
 
 [`DECISIONS.md`](../DECISIONS.md) of this repository holds the reasoning which several places rely
-on. This document points at entries 7, 9, 35, 36, 39, 50, 51, 52, 54, 56, 119, 120, 126 and 127.
+on. This document points at entries 7, 9, 35, 36, 39, 50, 51, 52, 54, 56, 119, 120, 126 and 127, and
+at the decision which still waits for its number in `DECISIONS.pending/2191.md`.
 
 The wiki page
 [Extensions](https://github.com/vanillabp/adapter-platform-integration/wiki/Extensions) is the half

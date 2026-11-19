@@ -4,9 +4,9 @@ import org.springframework.beans.factory.InitializingBean;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.context.annotation.Bean;
 
-import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
 import io.vanillabp.integration.extension.spi.service.AggregateServiceFactory;
+import io.vanillabp.integration.extension.spi.settings.VanillaBpSettings;
 
 /**
  * How the sample extension joins a Spring Boot application: two beans and one
@@ -46,7 +46,7 @@ public class SampleExtensionConfiguration implements InitializingBean {
    */
   @Bean
   public AggregateServiceFactory<SampleNoteService> sampleNoteServiceFactory(
-      final MigrationAdapterProperties properties) {
+      final VanillaBpSettings properties) {
 
     return new SampleNoteServiceFactory(properties);
 

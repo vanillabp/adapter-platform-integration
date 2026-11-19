@@ -63,7 +63,7 @@ import lombok.extern.slf4j.Slf4j;
  * in the background once <code>vanillabp.outbox.retention</code> passed. After
  * <code>vanillabp.outbox.block-after-attempts</code> failed attempts, an entry is marked
  * {@link PhaseTwoOutboxEntry#STATUS_BLOCKED} and waits for a person, see
- * {@link PhaseTwoOutboxProperties#BLOCKED_ENTRIES_GUIDE}.
+ * {@link PhaseTwoOutbox#BLOCKED_ENTRIES_GUIDE}.
  * <p>
  * <strong>An entry says why its last attempt did not get through.</strong> Every write
  * which ends an attempt sets <code>lastFailure</code>. It holds the reason where the attempt
@@ -573,7 +573,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
               + "failed for a reason repeating cannot fix - the outbox entry '{}' is blocked. How to find "
               + "it, open it again or delete it: "
-              + PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE,
+              + PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE,
           entry.getOperation(),
           entry.getBpmnProcessId(),
           entry.getWorkflowModuleId(),
@@ -600,7 +600,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           "Dispatching phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' "
               + "failed {} times - the outbox entry '{}' is now blocked. How to find it, open it again or "
               + "delete it: "
-              + PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE,
+              + PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE,
           entry.getOperation(),
           entry.getBpmnProcessId(),
           entry.getWorkflowModuleId(),
@@ -705,7 +705,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
             "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' waited {} "
                 + "and passed the deadline {} its adapter named - the outbox entry '{}' is now blocked. "
                 + "How to find it, open it again or delete it: "
-                + PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE
+                + PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE
                 + " - the last answer was: {}",
             entry.getOperation(),
             entry.getBpmnProcessId(),
@@ -721,7 +721,7 @@ public class MongoPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           "Phase two ({}) of BPMN process '{}' of workflow module '{}' for aggregate '{}' waited {} "
               + "for its BPMS to report the workflow, which is longer than '{}' allows - the outbox "
               + "entry '{}' is now blocked. How to find it, open it again or delete it: "
-              + PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE
+              + PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE
               + " - the last answer was: {}",
           entry.getOperation(),
           entry.getBpmnProcessId(),

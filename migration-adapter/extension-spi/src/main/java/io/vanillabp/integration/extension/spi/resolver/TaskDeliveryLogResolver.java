@@ -1,17 +1,17 @@
-package io.vanillabp.integration.adapter.migration.processservice;
+package io.vanillabp.integration.extension.spi.resolver;
 
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.spi.TaskDeliveryLogAware;
 
 /**
  * Resolves the {@link TaskDeliveryLog} which is used for a workflow aggregate. The platform
- * integrations implement it, and the core calls it AT STARTUP (see
- * {@link MigrationProcessService#validateTaskDeliveryLogAtStartup()}). It resolves the same
+ * integrations implement it, and the core calls it AT STARTUP, when it checks the delivery
+ * log of every workflow aggregate. An extension reads it. It resolves the same
  * way as {@link PhaseTwoOutboxResolver}, because a delivery record has to use the aggregate's
  * own transaction just like an outbox entry:
  * <ol>
  * <li>the most specific {@link TaskDeliveryLogAware} bean which covers the aggregate class
- * (picked by {@link AwareSelection}),</li>
+ * (the bean which names the aggregate itself wins over one which names a supertype),</li>
  * <li>the platform's default choice: the single available log bean, or, if there are
  * several, the platform's default log which matches the persistence technology that manages
  * the aggregate,</li>

@@ -14,6 +14,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.Aggregate;
 import io.vanillabp.integration.test.AggregatePersistence;
 import io.vanillabp.integration.test.RecordingPhaseTwoListener;
@@ -160,7 +161,7 @@ public class PermanentPhaseTwoFailureTest {
         errors
             .stream()
             .anyMatch(error -> error.contains(blockedEntry) && error.contains(
-                io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE)),
+                PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE)),
         "the ERROR of a blocked entry does not say where the way back is described: "
             + errors);
 

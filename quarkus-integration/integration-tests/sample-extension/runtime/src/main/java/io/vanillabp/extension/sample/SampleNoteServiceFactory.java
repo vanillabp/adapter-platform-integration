@@ -3,10 +3,10 @@ package io.vanillabp.extension.sample;
 import java.util.List;
 import java.util.Optional;
 
-import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.extension.spi.handler.HandlerCall;
 import io.vanillabp.integration.extension.spi.service.AggregateServiceContext;
 import io.vanillabp.integration.extension.spi.service.AggregateServiceFactory;
+import io.vanillabp.integration.extension.spi.settings.VanillaBpSettings;
 
 /**
  * Builds one {@link SampleNoteService} per workflow-aggregate class. VanillaBP calls it
@@ -19,10 +19,10 @@ public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleN
    */
   public static final String GREETING = "greeting";
 
-  private final MigrationAdapterProperties properties;
+  private final VanillaBpSettings properties;
 
   public SampleNoteServiceFactory(
-      final MigrationAdapterProperties properties) {
+      final VanillaBpSettings properties) {
 
     this.properties = properties;
 

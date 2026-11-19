@@ -90,7 +90,7 @@ public class ApplicationOwnedStoresTest {
    * the runner beans is the platform's own.
    */
   @Inject
-  io.vanillabp.integration.adapter.migration.processservice.TransactionRunnerResolver transactionRunnerResolver;
+  io.vanillabp.integration.extension.spi.resolver.TransactionRunnerResolver transactionRunnerResolver;
 
   private DummyDeploymentService dummyAdapter() {
 

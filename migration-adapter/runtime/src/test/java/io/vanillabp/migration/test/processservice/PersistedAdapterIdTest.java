@@ -17,8 +17,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
-import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.extension.spi.resolver.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
@@ -376,7 +376,7 @@ public class PersistedAdapterIdTest {
 
         })
         .taskDeliveryLogResolver(
-            new io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver() {
+            new io.vanillabp.integration.extension.spi.resolver.TaskDeliveryLogResolver() {
 
               @Override
               public TaskDeliveryLog resolveFor(

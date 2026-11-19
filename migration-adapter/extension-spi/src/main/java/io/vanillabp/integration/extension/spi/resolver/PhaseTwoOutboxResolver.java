@@ -1,4 +1,4 @@
-package io.vanillabp.integration.adapter.migration.processservice;
+package io.vanillabp.integration.extension.spi.resolver;
 
 import java.util.Collection;
 
@@ -7,12 +7,13 @@ import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
 
 /**
  * Resolves the {@link PhaseTwoOutbox} which is used for a workflow aggregate. The platform
- * integrations implement it, and the core calls it AT STARTUP (see
- * {@link MigrationProcessService#validatePhaseTwoOutboxAtStartup()}). The platform resolves
+ * integrations implement it, and the core calls it AT STARTUP, when it checks the outbox of
+ * every workflow aggregate. An extension asks it for the store of its own outbox entries. The
+ * platform resolves
  * in this order:
  * <ol>
  * <li>the most specific {@link PhaseTwoOutboxAware} bean which covers the aggregate class
- * (picked by {@link AwareSelection}),</li>
+ * (the bean which names the aggregate itself wins over one which names a supertype),</li>
  * <li>the platform's default choice: the single available outbox bean, or, if there are
  * several, the platform's default outbox which matches the persistence technology that
  * manages the aggregate,</li>

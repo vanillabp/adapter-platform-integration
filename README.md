@@ -200,8 +200,10 @@ These conventions are not what the code cites. A comment points at an entry of t
 2. **Three SPIs, kept apart on purpose.** Applications implement the *integration SPI*
    (`vanillabp-integration-spi`): aggregate persistence, a custom outbox, the election cache. BPMS
    adapters implement the *adapter SPI* (`vanillabp-adapter-spi`). The *extension SPI*
-   (`vanillabp-extension-spi`) has the one interface an extension needs to take part in deploying a
-   workflow module. A type never lives in more than one of them.
+   (`vanillabp-extension-spi`) has everything an extension uses: the interface to take part in
+   deploying a workflow module, and what it reads from VanillaBP. An extension depends on it alone
+   and gets the integration SPI with it, never the core. A type never lives in more than one of
+   them.
 3. **One adapter instance per configured adapter id**, not per adapter type. Migration is built on
    this. It is also why there are process and deployment services per id.
 4. **Validate at startup, guide in the message.** A configuration error shows up when the
