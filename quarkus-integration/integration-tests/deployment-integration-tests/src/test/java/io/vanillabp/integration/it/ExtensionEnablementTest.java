@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -20,10 +21,13 @@ import io.vanillabp.extension.sample.SampleNote;
 import io.vanillabp.extension.sample.SampleNoteDetails;
 import io.vanillabp.extension.sample.SampleNoteService;
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
+import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskWiring;
 import io.vanillabp.integration.extension.spi.election.WorkflowElection;
 import io.vanillabp.integration.extension.spi.handler.ExtensionHandlers;
 import io.vanillabp.integration.runtime.delivery.JdbcTaskDeliveryLog;
+import io.vanillabp.integration.spi.IdentifierScoping;
+import io.vanillabp.integration.spi.workflowtask.WorkflowTaskClaims;
 import io.vanillabp.integration.test.extension.DeliveryLogUsingExtension;
 import io.vanillabp.integration.test.extension.EveryWorkflowRunsHere;
 import io.vanillabp.integration.test.extension.NoteAggregate;
@@ -76,6 +80,15 @@ public class ExtensionEnablementTest {
 
   @Inject
   WorkflowTaskWiring workflowTaskWiring;
+
+  @Inject
+  WorkflowTaskClaims workflowTaskClaims;
+
+  @Inject
+  NameClashAvoidanceSupport nameClashAvoidance;
+
+  @Inject
+  IdentifierScoping identifierScoping;
 
   @Inject
   WorkflowElection election;
@@ -346,6 +359,25 @@ public class ExtensionEnablementTest {
     // was deployed, are both answered with nothing and not with a guess
     assertEquals(java.util.Optional.empty(), handlers.bpmnTaskNameOf(MODULE, PROCESS, "TheServiceTask"));
     assertEquals(java.util.Optional.empty(), handlers.bpmnTaskNameOf(MODULE, "NobodyDeployedThis", "TheUserTask"));
+
+  }
+
+  @Test
+  @DisplayName("An extension asks the integration SPI which processes are claimed and how a BPMS spells them")
+  public void anExtensionAsksTheIntegrationSpiAboutClaimsAndScoping() {
+
+    // the sample extension names neither WorkflowTaskWiring nor NameClashAvoidanceSupport.
+    // It gets the same objects of the core through the narrow interfaces of the integration
+    // SPI, and not a second object built next to them
+    assertSame(workflowTaskWiring, workflowTaskClaims);
+    assertSame(nameClashAvoidance, identifierScoping);
+
+    assertTrue(noteService.claims(PROCESS));
+    assertFalse(noteService.claims("NobodyDeclaredThis"));
+    assertEquals("id", noteService.workflowAggregateIdName());
+    assertEquals(
+        nameClashAvoidance.scopedProcessId(MODULE, PROCESS, "demo1"),
+        noteService.scopedProcessIdOn("demo1"));
 
   }
 

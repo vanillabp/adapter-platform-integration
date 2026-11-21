@@ -7,6 +7,8 @@ import io.vanillabp.integration.extension.spi.handler.HandlerCall;
 import io.vanillabp.integration.extension.spi.service.AggregateServiceContext;
 import io.vanillabp.integration.extension.spi.service.AggregateServiceFactory;
 import io.vanillabp.integration.extension.spi.settings.VanillaBpSettings;
+import io.vanillabp.integration.spi.IdentifierScoping;
+import io.vanillabp.integration.spi.workflowtask.WorkflowTaskClaims;
 
 /**
  * Builds one {@link SampleNoteService} per workflow-aggregate class. VanillaBP calls it
@@ -21,10 +23,23 @@ public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleN
 
   private final VanillaBpSettings properties;
 
+  private final WorkflowTaskClaims claims;
+
+  private final IdentifierScoping scoping;
+
+  /**
+   * @param properties VanillaBP's configuration, which holds the section of this extension
+   * @param claims What the core knows about the workflow services of the application
+   * @param scoping How the BPMS of an adapter spells the identifiers of the application
+   */
   public SampleNoteServiceFactory(
-      final VanillaBpSettings properties) {
+      final VanillaBpSettings properties,
+      final WorkflowTaskClaims claims,
+      final IdentifierScoping scoping) {
 
     this.properties = properties;
+    this.claims = claims;
+    this.scoping = scoping;
 
   }
 
@@ -122,6 +137,30 @@ public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleN
                 context.getWorkflowModuleId(),
                 context.getBpmnProcessId(),
                 context.getWorkflowAggregateId(workflowAggregate));
+
+      }
+
+      @Override
+      public boolean claims(
+          final String bpmnProcessId) {
+
+        return claims.isClaimedByAWorkflowService(context.getWorkflowModuleId(), bpmnProcessId);
+
+      }
+
+      @Override
+      public String workflowAggregateIdName() {
+
+        return claims.resolveWorkflowAggregateIdName(context.getWorkflowModuleId(), context.getBpmnProcessId());
+
+      }
+
+      @Override
+      public String scopedProcessIdOn(
+          final String adapterId) {
+
+        return IdentifierScoping
+            .scopedProcessId(scoping, context.getWorkflowModuleId(), context.getBpmnProcessId(), adapterId);
 
       }
 

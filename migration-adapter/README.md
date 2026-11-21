@@ -3665,10 +3665,14 @@ first rule and an application with a single dependency on the second. Decision 3
 is a type of `vanillabp-extension-spi`, or of `vanillabp-integration-spi`, which comes with it:
 the wiring service, the handler contracts, the election, `VanillaBpSettings`, and the three
 resolvers of package `resolver`, which answer the outbox store, the transaction runner and the
-delivery log of a workflow aggregate. One interface is still missing from that list:
-`WorkflowTaskWiring#isClaimedByAWorkflowService` lives in the adapter SPI, and an extension which
-asks it takes that artifact as well. The core (`migration-adapter`) and the platform integrations
-are not on its compile path. So a change inside the core cannot break an extension. The sample
+delivery log of a workflow aggregate. What the core answers adapters and extensions alike is a
+narrow interface of the integration SPI, which the type of the adapter SPI extends:
+`WorkflowTaskClaims` (package `workflowtask`) under `WorkflowTaskWiring`, and `IdentifierScoping`
+under `NameClashAvoidanceSupport`. Both platforms publish the core's object under both types,
+because a bean is found by every interface it implements. What an API of a BPMS adapter hands an
+extension is read the same way: `MultiInstanceIteration` is implemented by `MultiInstanceValue`, and
+`BpmnTaskElement` by `BpmnTaskSpec`. The adapter SPI, the core (`migration-adapter`) and the
+platform integrations are not on the compile path of an extension. So a change inside the core cannot break an extension. The sample
 extension of each platform holds the rule. Its POM names the extension SPI alone, and an enforcer
 rule stops its build when the core or a platform integration arrives, even transitively.
 `DECISIONS.pending/2191.md` says why.
