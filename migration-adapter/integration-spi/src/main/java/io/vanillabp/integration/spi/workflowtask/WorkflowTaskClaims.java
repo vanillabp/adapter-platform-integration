@@ -2,15 +2,20 @@ package io.vanillabp.integration.spi.workflowtask;
 
 /**
  * What the core knows about the BPMN processes the <code>&#64;WorkflowService</code> classes
- * of the application declare: whether a class claims a process, and the name of the ID
- * property of its workflow aggregate. The core implements it.
+ * of the application declare: whether a class claims a process, the name of the ID property
+ * of its workflow aggregate, and whether two processes work on the same workflow aggregate.
+ * The core implements it.
  *
  * <h2>Who asks</h2>
  *
- * An extension asks it, and it asks only this interface. A BPMS adapter asks the same two
+ * An extension asks it, and it asks only this interface. A BPMS adapter asks the same
  * methods through <code>WorkflowTaskWiring</code> of the adapter SPI, which extends this
  * interface. An extension never takes <code>WorkflowTaskWiring</code>: that type belongs to
  * the adapter SPI, and an extension depends on the extension SPI alone.
+ * <p>
+ * The question about a call activity,
+ * {@link #workflowsShareTheWorkflowAggregate(String, String, String)}, is asked by adapters
+ * and by extensions which follow a workflow into the processes it calls.
  *
  * <h2>How to get it</h2>
  *
@@ -75,6 +80,37 @@ public interface WorkflowTaskClaims {
     } catch (final UnsupportedOperationException e) {
       return true;
     }
+
+  }
+
+  /**
+   * Whether two BPMN processes of one workflow module work on the SAME workflow aggregate.
+   * The declaration says so: one class declares the process to be started as its
+   * {@code bpmnProcess}, and the others as {@code secondaryBpmnProcesses}.
+   * <p>
+   * Adapters ask this about a call activity. A process called on the same aggregate
+   * continues the same business case and has to reach the same aggregate. But a process
+   * with an aggregate of its own must not get the identity of the caller. Camunda 7 needs
+   * the answer, because it does not pass its business key to a called process by itself.
+   * The business key carries the ID of the aggregate. An extension which follows a workflow
+   * into a called process asks it for the same reason: only a process on the same aggregate
+   * belongs to the same business case.
+   * <p>
+   * The default is <code>false</code>. The core answers this, and a test double of this
+   * interface should not make up an answer which makes an adapter change a model.
+   *
+   * @param workflowModuleId The workflow module ID
+   * @param bpmnProcessId The BPMN process ID
+   * @param otherBpmnProcessId The BPMN process ID to compare with
+   * @return Whether both processes serve the same workflow aggregate.
+   *         <code>false</code> if either of them is unknown
+   */
+  default boolean workflowsShareTheWorkflowAggregate(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String otherBpmnProcessId) {
+
+    return false;
 
   }
 

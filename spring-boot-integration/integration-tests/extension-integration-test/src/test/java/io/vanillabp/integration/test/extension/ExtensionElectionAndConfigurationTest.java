@@ -127,6 +127,8 @@ public class ExtensionElectionAndConfigurationTest {
     final var noteService = workflowService.getNoteService();
     assertTrue(noteService.claims(PROCESS));
     assertFalse(noteService.claims("NoSuchProcess"));
+    assertTrue(noteService.sharesTheWorkflowAggregateWith(PROCESS));
+    assertFalse(noteService.sharesTheWorkflowAggregateWith("NoSuchProcess"));
     assertEquals("id", noteService.workflowAggregateIdName());
     assertEquals(
         nameClashAvoidance.scopedProcessId(MODULE, PROCESS, "the-bpms"),

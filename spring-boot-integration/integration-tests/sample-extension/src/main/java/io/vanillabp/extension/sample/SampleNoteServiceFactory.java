@@ -149,6 +149,17 @@ public class SampleNoteServiceFactory implements AggregateServiceFactory<SampleN
       }
 
       @Override
+      public boolean sharesTheWorkflowAggregateWith(
+          final String otherBpmnProcessId) {
+
+        return claims.workflowsShareTheWorkflowAggregate(
+            context.getWorkflowModuleId(),
+            context.getBpmnProcessId(),
+            otherBpmnProcessId);
+
+      }
+
+      @Override
       public String workflowAggregateIdName() {
 
         return claims.resolveWorkflowAggregateIdName(context.getWorkflowModuleId(), context.getBpmnProcessId());

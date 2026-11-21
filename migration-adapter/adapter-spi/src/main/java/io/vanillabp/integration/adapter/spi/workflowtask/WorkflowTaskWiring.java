@@ -76,9 +76,11 @@ import io.vanillabp.integration.spi.workflowtask.WorkflowTaskClaims;
  * <code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;process&gt;.implemented-externally=true</code>.
  * A process which is not in a deployed file at all is not VanillaBP's business either.
  * <p>
- * {@link #isClaimedByAWorkflowService(String, String)} and
- * {@link #resolveWorkflowAggregateIdName(String, String)} come from {@link WorkflowTaskClaims}
- * of the integration SPI. An extension asks that interface. It never takes this one.
+ * {@link #isClaimedByAWorkflowService(String, String)},
+ * {@link #resolveWorkflowAggregateIdName(String, String)} and
+ * {@link #workflowsShareTheWorkflowAggregate(String, String, String)} come from
+ * {@link WorkflowTaskClaims} of the integration SPI. An extension asks that interface. It
+ * never takes this one.
  * <p>
  * <b>The BPMN process of a task</b> is the process the task belongs to, wherever a method
  * here asks for one. For a task of a called process (a call activity), that is the called
@@ -558,35 +560,6 @@ public interface WorkflowTaskWiring extends WorkflowTaskClaims {
       final String taskDefinitionOrActivityId) {
 
     return java.util.List.of();
-
-  }
-
-  /**
-   * Whether two BPMN processes of one workflow module work on the SAME workflow aggregate.
-   * The declaration says so: one class declares the process to be started as its
-   * {@code bpmnProcess}, and the others as {@code secondaryBpmnProcesses}.
-   * <p>
-   * Adapters ask this about a call activity. A process called on the same aggregate
-   * continues the same business case and has to reach the same aggregate. But a process
-   * with an aggregate of its own must not get the identity of the caller. Camunda 7 needs
-   * the answer, because it does not pass its business key to a called process by itself.
-   * The business key carries the ID of the aggregate.
-   * <p>
-   * The default is <code>false</code>. The core answers this, and a test double of this
-   * SPI should not make up an answer which makes an adapter change a model.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
-   * @param otherBpmnProcessId The BPMN process ID to compare with
-   * @return Whether both processes serve the same workflow aggregate.
-   *         <code>false</code> if either of them is unknown
-   */
-  default boolean workflowsShareTheWorkflowAggregate(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String otherBpmnProcessId) {
-
-    return false;
 
   }
 

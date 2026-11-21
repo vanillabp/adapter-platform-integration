@@ -88,12 +88,12 @@ Some answers of the core are offered to adapters and to extensions alike. An ada
 through a type of the adapter SPI, and that type extends a narrow interface of the integration
 SPI. You take the narrow interface, never the type of the adapter SPI:
 
-|      You take (integration SPI)       |        Never (adapter SPI)        |                                What it answers                                |
-|---------------------------------------|-----------------------------------|-------------------------------------------------------------------------------|
-| `workflowtask.WorkflowTaskClaims`     | `WorkflowTaskWiring`              | whether a workflow service claims a process, the ID property of its aggregate |
-| `IdentifierScoping`                   | `NameClashAvoidanceSupport`       | how a BPMS spells a process id, a task definition or a message name           |
-| `workflowtask.MultiInstanceIteration` | `workflowtask.MultiInstanceValue` | one iteration of a multi-instance element, as an adapter reports it           |
-| `workflowtask.BpmnTaskElement`        | `workflowtask.BpmnTaskSpec`       | the activity id, the task definition and the name of a task element           |
+|      You take (integration SPI)       |        Never (adapter SPI)        |                                                     What it answers                                                      |
+|---------------------------------------|-----------------------------------|--------------------------------------------------------------------------------------------------------------------------|
+| `workflowtask.WorkflowTaskClaims`     | `WorkflowTaskWiring`              | whether a workflow service claims a process, the ID property of its aggregate, whether two processes share one aggregate |
+| `IdentifierScoping`                   | `NameClashAvoidanceSupport`       | how a BPMS spells a process id, a task definition or a message name                                                      |
+| `workflowtask.MultiInstanceIteration` | `workflowtask.MultiInstanceValue` | one iteration of a multi-instance element, as an adapter reports it                                                      |
+| `workflowtask.BpmnTaskElement`        | `workflowtask.BpmnTaskSpec`       | the activity id, the task definition and the name of a task element                                                      |
 
 The first two are beans of both platforms. Ask for them like for any other bean. The last two are
 what an API of a BPMS adapter may hand you. The records of the adapter SPI implement them, so write
@@ -213,6 +213,11 @@ to it. To find out, ask
 integration SPI (package `io.vanillabp.integration.spi.workflowtask`). Your extension gets
 `WorkflowTaskClaims` as a bean on Spring Boot and on Quarkus. Do not take `WorkflowTaskWiring` of
 the adapter SPI for it. That type extends `WorkflowTaskClaims` and adds what only an adapter calls.
+
+If your extension follows a workflow into a process which a call activity starts, ask
+`WorkflowTaskClaims#workflowsShareTheWorkflowAggregate(workflowModuleId, bpmnProcessId,
+otherBpmnProcessId)`. Only a called process on the same workflow aggregate belongs to the same
+business case. A called process with an aggregate of its own is a business case of its own.
 
 If your extension sends queries to a BPMS itself, it has to spell an identifier the way that BPMS
 stores it. Ask `IdentifierScoping` of the integration SPI, which is a bean of both platforms too. Do

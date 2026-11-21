@@ -3,8 +3,9 @@
  * application, for BPMS adapters and extensions alike.
  * <ul>
  * <li>{@link io.vanillabp.integration.spi.workflowtask.WorkflowTaskClaims} answers whether a
- * <code>&#64;WorkflowService</code> class claims a BPMN process, and the name of the ID
- * property of its workflow aggregate. The core implements it, and both platform
+ * <code>&#64;WorkflowService</code> class claims a BPMN process, the name of the ID
+ * property of its workflow aggregate, and whether two processes work on the same workflow
+ * aggregate. The core implements it, and both platform
  * integrations publish it as a bean. A BPMS adapter gets the same methods through
  * <code>WorkflowTaskWiring</code> of the adapter SPI, which extends it.</li>
  * <li>{@link io.vanillabp.integration.spi.workflowtask.MultiInstanceIteration} and

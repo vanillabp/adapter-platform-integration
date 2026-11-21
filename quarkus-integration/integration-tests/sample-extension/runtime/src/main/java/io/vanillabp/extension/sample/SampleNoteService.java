@@ -94,6 +94,18 @@ public interface SampleNoteService<A> {
       String bpmnProcessId);
 
   /**
+   * Whether the given BPMN process of the workflow module of this aggregate works on the
+   * same workflow aggregate as the process of this aggregate. An extension which follows a
+   * workflow into a called process asks <code>WorkflowTaskClaims</code> of the integration
+   * SPI for it.
+   *
+   * @param otherBpmnProcessId The BPMN process ID to compare with
+   * @return Whether both processes work on the same workflow aggregate
+   */
+  boolean sharesTheWorkflowAggregateWith(
+      String otherBpmnProcessId);
+
+  /**
    * The name of the ID property of this workflow aggregate, as <code>WorkflowTaskClaims</code>
    * answers it.
    *

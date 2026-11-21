@@ -374,6 +374,8 @@ public class ExtensionEnablementTest {
 
     assertTrue(noteService.claims(PROCESS));
     assertFalse(noteService.claims("NobodyDeclaredThis"));
+    assertTrue(noteService.sharesTheWorkflowAggregateWith(PROCESS));
+    assertFalse(noteService.sharesTheWorkflowAggregateWith("NobodyDeclaredThis"));
     assertEquals("id", noteService.workflowAggregateIdName());
     assertEquals(
         nameClashAvoidance.scopedProcessId(MODULE, PROCESS, "demo1"),
