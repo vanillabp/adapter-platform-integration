@@ -163,12 +163,14 @@ public final class UnreadKeys {
               places
                   .entrySet()
                   .stream()
-                  .map(place -> "%s%s   at %s"
+                  // the padding carries the gap in front of 'at' as well, so the
+                  // places line up in one column
+                  .map(place -> "%s%s at %s"
                       .formatted(
                           place.getKey(),
                           " ".repeat(width - place
                               .getKey()
-                              .length()),
+                              .length() + 2),
                           place.getValue()))
                   .collect(Collectors.joining("\n  ")));
     }
