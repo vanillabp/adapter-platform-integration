@@ -8,12 +8,12 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
-import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
 import io.vanillabp.integration.adapter.migration.processservice.ProcessServiceBase;
-import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
-import io.vanillabp.integration.adapter.migration.processservice.TransactionRunnerResolver;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
+import io.vanillabp.integration.extension.spi.resolver.PhaseTwoOutboxResolver;
+import io.vanillabp.integration.extension.spi.resolver.TaskDeliveryLogResolver;
+import io.vanillabp.integration.extension.spi.resolver.TransactionRunnerResolver;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.WorkflowAdapterCache;
 import io.vanillabp.spi.process.ProcessDefinition;

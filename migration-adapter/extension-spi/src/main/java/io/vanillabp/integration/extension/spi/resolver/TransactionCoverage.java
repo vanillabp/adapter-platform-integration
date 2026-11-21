@@ -1,10 +1,10 @@
-package io.vanillabp.integration.adapter.migration.processservice;
+package io.vanillabp.integration.extension.spi.resolver;
 
 /**
  * What a platform can tell about the transaction which covers the stores of one workflow
- * aggregate. {@link TransactionRunnerResolver#coverageOf(Class)} reports it, and
- * {@link MigrationProcessService#validateTransactionRunnerAtStartup()} turns it into a
- * startup message.
+ * aggregate. {@link TransactionRunnerResolver#coverageOf(Class)} reports it, and the core
+ * turns it into a startup message when it checks the transaction of every workflow
+ * aggregate.
  * <p>
  * The verdict decides whether the application boots. The message is what the developer
  * reads. Only the platform can judge this. It knows its transaction managers, and it knows

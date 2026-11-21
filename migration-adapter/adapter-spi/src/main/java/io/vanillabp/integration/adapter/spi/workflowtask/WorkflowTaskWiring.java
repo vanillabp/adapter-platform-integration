@@ -3,6 +3,8 @@ package io.vanillabp.integration.adapter.spi.workflowtask;
 import java.util.Collection;
 import java.util.List;
 
+import io.vanillabp.integration.spi.workflowtask.WorkflowTaskClaims;
+
 /**
  * What a BPMS adapter calls in the core of VanillaBP WHILE IT DEPLOYS. The core (the
  * migration adapter) implements it, and the platform integration hands it to adapters.
@@ -74,6 +76,12 @@ import java.util.List;
  * <code>vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;process&gt;.implemented-externally=true</code>.
  * A process which is not in a deployed file at all is not VanillaBP's business either.
  * <p>
+ * {@link #isClaimedByAWorkflowService(String, String)},
+ * {@link #resolveWorkflowAggregateIdName(String, String)} and
+ * {@link #workflowsShareTheWorkflowAggregate(String, String, String)} come from
+ * {@link WorkflowTaskClaims} of the integration SPI. An extension asks that interface. It
+ * never takes this one.
+ * <p>
  * <b>The BPMN process of a task</b> is the process the task belongs to, wherever a method
  * here asks for one. For a task of a called process (a call activity), that is the called
  * process. It is not the process at the top, which the workflow aggregate was started
@@ -84,7 +92,7 @@ import java.util.List;
  * applies the range declared for the process at the top, and that is the wrong one for a
  * task of the called process.
  */
-public interface WorkflowTaskWiring {
+public interface WorkflowTaskWiring extends WorkflowTaskClaims {
 
   /**
    * Checks that every given BPMN task is served by a <code>&#64;WorkflowTask</code> method
@@ -556,35 +564,6 @@ public interface WorkflowTaskWiring {
   }
 
   /**
-   * Whether two BPMN processes of one workflow module work on the SAME workflow aggregate.
-   * The declaration says so: one class declares the process to be started as its
-   * {@code bpmnProcess}, and the others as {@code secondaryBpmnProcesses}.
-   * <p>
-   * Adapters ask this about a call activity. A process called on the same aggregate
-   * continues the same business case and has to reach the same aggregate. But a process
-   * with an aggregate of its own must not get the identity of the caller. Camunda 7 needs
-   * the answer, because it does not pass its business key to a called process by itself.
-   * The business key carries the ID of the aggregate.
-   * <p>
-   * The default is <code>false</code>. The core answers this, and a test double of this
-   * SPI should not make up an answer which makes an adapter change a model.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
-   * @param otherBpmnProcessId The BPMN process ID to compare with
-   * @return Whether both processes serve the same workflow aggregate.
-   *         <code>false</code> if either of them is unknown
-   */
-  default boolean workflowsShareTheWorkflowAggregate(
-      final String workflowModuleId,
-      final String bpmnProcessId,
-      final String otherBpmnProcessId) {
-
-    return false;
-
-  }
-
-  /**
    * Whether the <code>&#64;WorkflowTask</code> method for the given task definition (or
    * BPMN activity ID) completes its task ASYNCHRONOUSLY. A method says so by declaring a
    * <code>&#64;TaskId</code> parameter. The task then stays open until the application
@@ -613,64 +592,6 @@ public interface WorkflowTaskWiring {
     // the core answers this. The default keeps test doubles of this SPI compiling,
     // and it switches such a check off instead of making up an answer
     return false;
-
-  }
-
-  /**
-   * The name of the ID property of the workflow aggregate for the given BPMN process.
-   * Remote BPMS without a business key use it. They store the ID of the aggregate as a
-   * process variable named after the ID property. The start commands write it, and the
-   * task workers read it back.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID
-   * @return The ID property's name
-   * @throws IllegalStateException If no workflow service serves the BPMN process
-   *           (with a message which says what to do)
-   */
-  String resolveWorkflowAggregateIdName(
-      String workflowModuleId,
-      String bpmnProcessId);
-
-  /**
-   * Whether a <code>&#64;WorkflowService</code> class of the application claims the given
-   * BPMN process. The application is responsible for a claimed process. Its tasks need
-   * methods, and a task which nothing serves stops the start. A process nobody claims was
-   * deployed only because it shares a file with a claimed one. Apart from that, VanillaBP
-   * does not touch it (see the type).
-   * <p>
-   * The default answers with {@link #resolveWorkflowAggregateIdName(String, String)}. Only a
-   * claimed process has a workflow aggregate. So a name means claimed, and the exception
-   * means not claimed. The persistence of a claimed process may have no name to give. Its
-   * <code>getAggregateIdName</code> then throws an <code>UnsupportedOperationException</code>,
-   * which an application on a BPMS with a business key is allowed to do. The default answers
-   * <code>true</code> for that exception, because only a claimed process gets as far as its
-   * persistence. The core answers from its registry instead. The reason: the name
-   * comes from the persistence of the application, and an application on a BPMS with a
-   * business key does not have to answer it. Adapters and extensions ask this, instead of
-   * catching the exception themselves. An extension gets this interface the way an adapter
-   * does, as a bean on Spring Boot and on Quarkus. It may ask from the moment the workflow
-   * services are registered, which is before the first <code>wireBpmn</code>.
-   * <p>
-   * A process called by a call activity counts as claimed if a workflow service declares
-   * it, for example as a <code>secondaryBpmnProcesses</code> entry of the workflow service
-   * of the caller.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The BPMN process ID, as the application declares it
-   * @return Whether a workflow service claims the process
-   */
-  default boolean isClaimedByAWorkflowService(
-      final String workflowModuleId,
-      final String bpmnProcessId) {
-
-    try {
-      return resolveWorkflowAggregateIdName(workflowModuleId, bpmnProcessId) != null;
-    } catch (final IllegalStateException e) {
-      return false;
-    } catch (final UnsupportedOperationException e) {
-      return true;
-    }
 
   }
 

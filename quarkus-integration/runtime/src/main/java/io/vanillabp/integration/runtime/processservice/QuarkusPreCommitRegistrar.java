@@ -1,7 +1,7 @@
 package io.vanillabp.integration.runtime.processservice;
 
-import io.vanillabp.integration.adapter.migration.processservice.TransactionRunnerResolver;
 import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
+import io.vanillabp.integration.extension.spi.resolver.TransactionRunnerResolver;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 

@@ -11,7 +11,7 @@ import java.util.stream.Stream;
 import org.springframework.context.ApplicationContext;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
-import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
+import io.vanillabp.integration.extension.spi.resolver.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.outbox.jdbc.JdbcPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutboxAutoConfiguration;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;

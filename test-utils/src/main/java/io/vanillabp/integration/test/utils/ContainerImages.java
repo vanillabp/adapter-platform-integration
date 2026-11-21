@@ -28,6 +28,13 @@ public final class ContainerImages {
    */
   public static final String POSTGRESQL = System.getProperty("postgresql.image", "postgres:16-alpine");
 
+  /**
+   * The Kafka broker the tests run against, overridable with
+   * {@code -Dkafka.image=apache/kafka:4.0.0}. The Business Cockpit starts it in several modules.
+   * One pin keeps them on the same version, where a copy in each module drifted apart.
+   */
+  public static final String KAFKA = System.getProperty("kafka.image", "apache/kafka:3.9.1");
+
   private ContainerImages() {
   }
 

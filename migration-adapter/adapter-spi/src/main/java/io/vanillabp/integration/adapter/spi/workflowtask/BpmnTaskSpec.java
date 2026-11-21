@@ -1,10 +1,13 @@
 package io.vanillabp.integration.adapter.spi.workflowtask;
 
+import io.vanillabp.integration.spi.workflowtask.BpmnTaskElement;
+
 /**
  * Describes one task of an executable BPMN process which is to be wired to a
  * <code>&#64;WorkflowTask</code> method. The BPMS adapter passes it to
  * {@link WorkflowTaskWiring#validateTaskWiring(String, String, java.util.Collection)}
- * during <code>wireBpmn</code>.
+ * during <code>wireBpmn</code>. An extension reads its names as {@link BpmnTaskElement} of
+ * the integration SPI and never names this record.
  * <p>
  * {@link #name()} and {@link #multiInstanceElementsWithoutAnItem()} come LAST, although
  * both belong next to the activity id. Each was added later, to a record which every adapter
@@ -56,7 +59,7 @@ public record BpmnTaskSpec(
                            boolean optional,
                            String name,
                            java.util.List<String> multiInstanceElementsWithoutAnItem,
-                           boolean listener) {
+                           boolean listener) implements BpmnTaskElement {
 
   /**
    * A task spec of an element, not of a listener. Every adapter wrote this before listeners

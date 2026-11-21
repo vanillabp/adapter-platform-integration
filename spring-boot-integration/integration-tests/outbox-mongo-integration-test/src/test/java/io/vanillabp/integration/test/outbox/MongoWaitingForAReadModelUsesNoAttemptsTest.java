@@ -32,8 +32,8 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
-import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.outbox.mongo.MongoPhaseTwoOutboxDispatcher;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.ContainerImages;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.outbox.MongoPhaseTwoOutboxReader;
@@ -230,7 +230,7 @@ public class MongoWaitingForAReadModelUsesNoAttemptsTest {
             .filter(event -> event.getLevel() == Level.ERROR)
             .map(ILoggingEvent::getFormattedMessage)
             .anyMatch(
-                message -> message.contains(entry) && message.contains(PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE)),
+                message -> message.contains(entry) && message.contains(PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE)),
         "the ERROR of a blocked entry does not say where the way back is described");
 
     assertEquals(

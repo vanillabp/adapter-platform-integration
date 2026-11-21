@@ -84,6 +84,48 @@ public interface SampleNoteService<A> {
       A workflowAggregate);
 
   /**
+   * Whether a workflow service of the application claims the given BPMN process of the
+   * workflow module of this aggregate. The extension asks <code>WorkflowTaskClaims</code> of
+   * the integration SPI. It never asks a type of the adapter SPI.
+   *
+   * @param bpmnProcessId The BPMN process ID
+   * @return Whether a workflow service claims it
+   */
+  boolean claims(
+      String bpmnProcessId);
+
+  /**
+   * Whether the given BPMN process of the workflow module of this aggregate works on the
+   * same workflow aggregate as the process of this aggregate. An extension which follows a
+   * workflow into a called process asks <code>WorkflowTaskClaims</code> of the integration
+   * SPI for it.
+   *
+   * @param otherBpmnProcessId The BPMN process ID to compare with
+   * @return Whether both processes work on the same workflow aggregate
+   */
+  boolean sharesTheWorkflowAggregateWith(
+      String otherBpmnProcessId);
+
+  /**
+   * The name of the ID property of this workflow aggregate, as <code>WorkflowTaskClaims</code>
+   * answers it.
+   *
+   * @return The name of the ID property
+   */
+  String workflowAggregateIdName();
+
+  /**
+   * The BPMN process ID of this aggregate, spelled the way the BPMS of the given adapter
+   * stores it. The extension asks <code>IdentifierScoping</code> of the integration SPI. It
+   * never builds the string itself.
+   *
+   * @param adapterId The adapter ID
+   * @return The process ID the BPMS knows
+   */
+  String scopedProcessIdOn(
+      String adapterId);
+
+  /**
    * The configuration of this extension for the workflow module of this aggregate. That
    * is <code>vanillabp.extensions.sample.greeting</code>, and
    * <code>vanillabp.workflow-modules.&lt;id&gt;.extensions.sample.greeting</code> overrides

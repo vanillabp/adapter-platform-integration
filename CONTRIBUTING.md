@@ -86,7 +86,8 @@ version into its own source. MongoDB is `mongo:8.2` there, not 8.0. Version 8.0 
 a Linux kernel 6.19 or newer ([SERVER-121912](https://jira.mongodb.org/browse/SERVER-121912)). The
 container then stops right after it started, and the failing test says nothing about the reason. A
 machine which needs another version passes `-Dmongodb.image=mongo:7.0` and leaves the sources
-alone. The blueprints repository reads its images the same way.
+alone. The same holds for PostgreSQL (`-Dpostgresql.image`) and for the Kafka broker of the Business
+Cockpit (`-Dkafka.image`). The blueprints repository reads its images the same way.
 
 A full build is big, so count the builds a machine runs at once. We measured this on 2026-09-20 in
 the development container, which has 16 GB of memory and 1 GB of swap. One `./mvnw test` over all 73

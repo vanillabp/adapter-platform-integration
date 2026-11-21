@@ -111,7 +111,7 @@ start fails and names the ways to fix it (`QuarkusStoreAttributionTest` for the 
 `OutboxStartupValidationTest` for the start which ends).
 
 The resolver is a CDI bean of the neutral type
-`io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver`
+`io.vanillabp.integration.extension.spi.resolver.PhaseTwoOutboxResolver`
 (`PhaseTwoOutboxResolverProducer`, `@Unremovable`). The process services use that bean and not
 one of their own. An extension which writes its own phase-two entries into the transaction of a
 workflow aggregate has to reach the same store, and it cannot work that out by itself. Which

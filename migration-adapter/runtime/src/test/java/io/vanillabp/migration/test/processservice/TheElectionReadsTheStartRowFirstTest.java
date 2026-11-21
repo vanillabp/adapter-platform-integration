@@ -20,15 +20,15 @@ import io.vanillabp.integration.adapter.migration.config.AdapterConfigProperties
 import io.vanillabp.integration.adapter.migration.config.MigrationAdapterProperties;
 import io.vanillabp.integration.adapter.migration.processservice.ExtensionWorkflowElection;
 import io.vanillabp.integration.adapter.migration.processservice.MigrationProcessService;
-import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
-import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
 import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.adapter.spi.PhaseOperationHandler;
 import io.vanillabp.integration.adapter.spi.WorkflowAwareness;
 import io.vanillabp.integration.adapter.spi.WorkflowScope;
 import io.vanillabp.integration.extension.spi.election.WorkflowElection;
 import io.vanillabp.integration.extension.spi.election.WorkflowLocation;
+import io.vanillabp.integration.extension.spi.resolver.PhaseTwoOutboxResolver;
+import io.vanillabp.integration.extension.spi.resolver.TaskDeliveryLogResolver;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseOperation;
 import io.vanillabp.integration.spi.PhaseTwoCall;

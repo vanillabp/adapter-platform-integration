@@ -3,7 +3,7 @@ package io.vanillabp.integration.runtime.processservice;
 import java.util.List;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
-import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
+import io.vanillabp.integration.extension.spi.resolver.TaskDeliveryLogResolver;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.spi.TaskDeliveryLogAware;
 import jakarta.enterprise.inject.Instance;

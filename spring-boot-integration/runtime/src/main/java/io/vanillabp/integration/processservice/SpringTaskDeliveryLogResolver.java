@@ -8,9 +8,9 @@ import org.springframework.aop.framework.AopProxyUtils;
 import org.springframework.context.ApplicationContext;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
-import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
 import io.vanillabp.integration.delivery.JdbcTaskDeliveryLogAutoConfiguration;
 import io.vanillabp.integration.delivery.MongoTaskDeliveryLogAutoConfiguration;
+import io.vanillabp.integration.extension.spi.resolver.TaskDeliveryLogResolver;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 import io.vanillabp.integration.spi.TaskDeliveryLogAware;
 
