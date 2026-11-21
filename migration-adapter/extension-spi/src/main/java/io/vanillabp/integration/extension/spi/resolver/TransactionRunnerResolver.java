@@ -1,16 +1,17 @@
-package io.vanillabp.integration.adapter.migration.processservice;
+package io.vanillabp.integration.extension.spi.resolver;
 
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.spi.TransactionRunnerAware;
 
 /**
  * Resolves the {@link TransactionRunner} which is used for a workflow aggregate. The
- * platform integrations implement it. The core calls it at startup (see
- * {@link MigrationProcessService#validateTransactionRunnerAtStartup()}), and lazily for every
- * operation which touches that aggregate. The order is:
+ * platform integrations implement it. The core calls it at startup, when it checks the
+ * transaction of every workflow aggregate, and lazily for every operation which touches that
+ * aggregate. An extension asks it for the runner of the aggregate it writes for. The order
+ * is:
  * <ol>
  * <li>the most specific {@link TransactionRunnerAware} bean which covers the aggregate class
- * (picked by {@link AwareSelection}, so interfaces count, and a bean which names the
+ * (interfaces count, and a bean which names the
  * aggregate itself wins over one which names an interface it implements),</li>
  * <li>a plain {@link TransactionRunner} bean of the application, which serves every
  * aggregate that no aware bean covers,</li>

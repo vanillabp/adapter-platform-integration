@@ -34,6 +34,9 @@ import io.vanillabp.integration.adapter.spi.workflowtask.DeliveryOfAnUnknownWork
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskKind;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
+import io.vanillabp.integration.extension.spi.resolver.PhaseTwoOutboxResolver;
+import io.vanillabp.integration.extension.spi.resolver.TaskDeliveryLogResolver;
+import io.vanillabp.integration.extension.spi.resolver.TransactionRunnerResolver;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.Election;
 import io.vanillabp.integration.spi.PhaseOperation;

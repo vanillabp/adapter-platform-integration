@@ -2,7 +2,7 @@ package io.vanillabp.integration.test.extension;
 
 import java.util.List;
 
-import io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver;
+import io.vanillabp.integration.extension.spi.resolver.TaskDeliveryLogResolver;
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.spi.TaskDeliveryLog;
 import jakarta.enterprise.context.ApplicationScoped;

@@ -2,6 +2,8 @@ package io.vanillabp.integration.adapter.spi;
 
 import java.util.Collection;
 
+import io.vanillabp.integration.spi.IdentifierScoping;
+
 /**
  * Builds the identifiers a BPMS sees, following the {@link NameClashAvoidance} mode of
  * the workflow module. The core implements it ONCE, so every adapter scopes the same
@@ -27,17 +29,15 @@ import java.util.Collection;
  * take it as their first argument. For a <code>null</code> one they answer the plain
  * identifier. So nobody has to write that rule again.
  * <p>
+ * The methods which turn one identifier into another, and the separator, come from
+ * {@link IdentifierScoping} of the integration SPI. An extension asks that interface. It
+ * never takes this one. What this interface adds is what only an adapter needs: the mode
+ * itself and the checks while it deploys.
+ * <p>
  * Why scoping happens at the BPMS boundary and nowhere else is decision 9 in the repository's
  * DECISIONS.md.
  */
-public interface NameClashAvoidanceSupport {
-
-  /**
-   * The separator between a prefix and the identifier it scopes. Two underscores are
-   * allowed in an XML {@code NCName}, so BPMN element ids may carry them (unlike e.g.
-   * <code>#</code>). And they are unlikely to appear in an identifier by accident.
-   */
-  String SEPARATOR = "__";
+public interface NameClashAvoidanceSupport extends IdentifierScoping {
 
   /**
    * The mode configured for the given workflow module (and, if given, workflow) of
@@ -57,111 +57,29 @@ public interface NameClashAvoidanceSupport {
       String adapterId);
 
   /**
-   * The BPMN process ID as the BPMS knows it.
+   * Answers from {@link #modeFor(String, String, String)}, so an implementation of this
+   * interface has nothing more to write.
    *
    * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The plain BPMN process ID
+   * @param bpmnProcessId The BPMN process ID or <code>null</code> to ask for the whole
+   *          module
    * @param adapterId The adapter ID
-   * @return The scoped ID, or the plain one if the mode is not
-   *         {@link NameClashAvoidance#USE_PREFIX}
+   * @return Whether the mode is {@link NameClashAvoidance#BY_ADAPTER}
    */
-  String scopedProcessId(
-      String workflowModuleId,
-      String bpmnProcessId,
-      String adapterId);
+  @Override
+  default boolean isolatesByAdapter(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final String adapterId) {
+
+    return modeFor(workflowModuleId, bpmnProcessId, adapterId) == NameClashAvoidance.BY_ADAPTER;
+
+  }
 
   /**
-   * An identifier scoped by the workflow module alone - message names, signal
-   * names, error codes and escalation codes.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param identifier The plain identifier (may be <code>null</code>)
-   * @param adapterId The adapter ID
-   * @return The scoped identifier, or the plain one if the mode is not
-   *         {@link NameClashAvoidance#USE_PREFIX}
-   */
-  String scopedIdentifier(
-      String workflowModuleId,
-      String identifier,
-      String adapterId);
-
-  /**
-   * A task definition, scoped by the workflow module AND by the BPMN process ID. The
-   * application can switch off the second part
-   * (<code>prefix-task-definitions-per-process: false</code>). Using one task
-   * implementation for several processes is an anti-pattern, so scoping per process is
-   * the default.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The plain BPMN process ID
-   * @param taskDefinition The plain task definition (may be <code>null</code>)
-   * @param adapterId The adapter ID
-   * @return The scoped task definition, or the plain one if the mode is not
-   *         {@link NameClashAvoidance#USE_PREFIX}
-   */
-  String scopedTaskDefinition(
-      String workflowModuleId,
-      String bpmnProcessId,
-      String taskDefinition,
-      String adapterId);
-
-  /**
-   * The inverse of {@link #scopedProcessId}: the plain BPMN process ID of what the
-   * BPMS reported. It removes a KNOWN prefix (never "everything up to the first
-   * separator"). So an identifier without the expected prefix is returned unchanged.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param scopedBpmnProcessId The ID as the BPMS knows it
-   * @param adapterId The adapter ID
-   * @return The plain BPMN process ID
-   */
-  String plainProcessId(
-      String workflowModuleId,
-      String scopedBpmnProcessId,
-      String adapterId);
-
-  /**
-   * The inverse of {@link #scopedIdentifier}.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param scopedIdentifier The identifier as the BPMS knows it
-   * @param adapterId The adapter ID
-   * @return The plain identifier
-   */
-  String plainIdentifier(
-      String workflowModuleId,
-      String scopedIdentifier,
-      String adapterId);
-
-  /**
-   * The inverse of {@link #scopedTaskDefinition}. The BPMN process ID is needed,
-   * because task definitions are scoped per process by default. Pass the process the
-   * task belongs to.
-   *
-   * @param workflowModuleId The workflow module ID
-   * @param bpmnProcessId The plain BPMN process ID
-   * @param scopedTaskDefinition The task definition as the BPMS knows it
-   * @param adapterId The adapter ID
-   * @return The plain task definition
-   */
-  String plainTaskDefinition(
-      String workflowModuleId,
-      String bpmnProcessId,
-      String scopedTaskDefinition,
-      String adapterId);
-
-  /**
-   * {@link #scopedProcessId} for the case where the support may be missing. A caller
-   * which holds the support as a field needs this form. It is also the only place where
-   * the rule "no scoping, plain identifier" is written down.
-   * <p>
-   * An adapter has the support for every adapter id the platform registered. So a unit
-   * test hands in <code>null</code>, and so does a component built without a platform
-   * around it. The plain identifier is not a fallback, it is the correct answer. Without
-   * a mode there is nothing to prefix by, and {@link NameClashAvoidance#NONE} and
-   * {@link NameClashAvoidance#BY_ADAPTER} answer the same. If every caller wrote its own
-   * check, two of them would end up disagreeing, and a disagreement here is a query which
-   * finds nothing.
+   * The same as {@link IdentifierScoping#scopedProcessId(IdentifierScoping, String, String, String)}.
+   * It stays here, because a static method of an interface is not inherited, and adapters
+   * call it by this name.
    *
    * @param scoping The core's name-clash-avoidance support, or <code>null</code>
    * @param workflowModuleId The workflow module ID
@@ -175,15 +93,14 @@ public interface NameClashAvoidanceSupport {
       final String bpmnProcessId,
       final String adapterId) {
 
-    return scoping == null
-        ? bpmnProcessId
-        : scoping.scopedProcessId(workflowModuleId, bpmnProcessId, adapterId);
+    return IdentifierScoping.scopedProcessId(scoping, workflowModuleId, bpmnProcessId, adapterId);
 
   }
 
   /**
-   * {@link #scopedIdentifier} for the case where the support may be missing. See
-   * {@link #scopedProcessId(NameClashAvoidanceSupport, String, String, String)}.
+   * The same as {@link IdentifierScoping#scopedIdentifier(IdentifierScoping, String, String, String)}.
+   * It stays here, because a static method of an interface is not inherited, and adapters
+   * call it by this name.
    *
    * @param scoping The core's name-clash-avoidance support, or <code>null</code>
    * @param workflowModuleId The workflow module ID
@@ -197,15 +114,14 @@ public interface NameClashAvoidanceSupport {
       final String identifier,
       final String adapterId) {
 
-    return scoping == null
-        ? identifier
-        : scoping.scopedIdentifier(workflowModuleId, identifier, adapterId);
+    return IdentifierScoping.scopedIdentifier(scoping, workflowModuleId, identifier, adapterId);
 
   }
 
   /**
-   * {@link #scopedTaskDefinition} for the case where the support may be missing. See
-   * {@link #scopedProcessId(NameClashAvoidanceSupport, String, String, String)}.
+   * The same as {@link IdentifierScoping#scopedTaskDefinition(IdentifierScoping, String, String, String, String)}.
+   * It stays here, because a static method of an interface is not inherited, and adapters
+   * call it by this name.
    *
    * @param scoping The core's name-clash-avoidance support, or <code>null</code>
    * @param workflowModuleId The workflow module ID
@@ -221,15 +137,14 @@ public interface NameClashAvoidanceSupport {
       final String taskDefinition,
       final String adapterId) {
 
-    return scoping == null
-        ? taskDefinition
-        : scoping.scopedTaskDefinition(workflowModuleId, bpmnProcessId, taskDefinition, adapterId);
+    return IdentifierScoping.scopedTaskDefinition(scoping, workflowModuleId, bpmnProcessId, taskDefinition, adapterId);
 
   }
 
   /**
-   * {@link #plainProcessId} for the case where the support may be missing. See
-   * {@link #scopedProcessId(NameClashAvoidanceSupport, String, String, String)}.
+   * The same as {@link IdentifierScoping#plainProcessId(IdentifierScoping, String, String, String)}.
+   * It stays here, because a static method of an interface is not inherited, and adapters
+   * call it by this name.
    *
    * @param scoping The core's name-clash-avoidance support, or <code>null</code>
    * @param workflowModuleId The workflow module ID
@@ -243,15 +158,14 @@ public interface NameClashAvoidanceSupport {
       final String scopedBpmnProcessId,
       final String adapterId) {
 
-    return scoping == null
-        ? scopedBpmnProcessId
-        : scoping.plainProcessId(workflowModuleId, scopedBpmnProcessId, adapterId);
+    return IdentifierScoping.plainProcessId(scoping, workflowModuleId, scopedBpmnProcessId, adapterId);
 
   }
 
   /**
-   * {@link #plainIdentifier} for the case where the support may be missing. See
-   * {@link #scopedProcessId(NameClashAvoidanceSupport, String, String, String)}.
+   * The same as {@link IdentifierScoping#plainIdentifier(IdentifierScoping, String, String, String)}.
+   * It stays here, because a static method of an interface is not inherited, and adapters
+   * call it by this name.
    *
    * @param scoping The core's name-clash-avoidance support, or <code>null</code>
    * @param workflowModuleId The workflow module ID
@@ -265,15 +179,14 @@ public interface NameClashAvoidanceSupport {
       final String scopedIdentifier,
       final String adapterId) {
 
-    return scoping == null
-        ? scopedIdentifier
-        : scoping.plainIdentifier(workflowModuleId, scopedIdentifier, adapterId);
+    return IdentifierScoping.plainIdentifier(scoping, workflowModuleId, scopedIdentifier, adapterId);
 
   }
 
   /**
-   * {@link #plainTaskDefinition} for the case where the support may be missing. See
-   * {@link #scopedProcessId(NameClashAvoidanceSupport, String, String, String)}.
+   * The same as {@link IdentifierScoping#plainTaskDefinition(IdentifierScoping, String, String, String, String)}.
+   * It stays here, because a static method of an interface is not inherited, and adapters
+   * call it by this name.
    *
    * @param scoping The core's name-clash-avoidance support, or <code>null</code>
    * @param workflowModuleId The workflow module ID
@@ -289,9 +202,8 @@ public interface NameClashAvoidanceSupport {
       final String scopedTaskDefinition,
       final String adapterId) {
 
-    return scoping == null
-        ? scopedTaskDefinition
-        : scoping.plainTaskDefinition(workflowModuleId, bpmnProcessId, scopedTaskDefinition, adapterId);
+    return IdentifierScoping.plainTaskDefinition(scoping, workflowModuleId, bpmnProcessId, scopedTaskDefinition,
+        adapterId);
 
   }
 

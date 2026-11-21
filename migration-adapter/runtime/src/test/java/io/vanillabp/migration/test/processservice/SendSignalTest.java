@@ -167,9 +167,9 @@ public class SendSignalTest {
       final List<MigratableProcessService<Object>> adapters,
       final PhaseTwoOutbox outbox) {
 
-    io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver resolver = null;
+    io.vanillabp.integration.extension.spi.resolver.PhaseTwoOutboxResolver resolver = null;
     if (outbox != null) {
-      resolver = new io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver() {
+      resolver = new io.vanillabp.integration.extension.spi.resolver.PhaseTwoOutboxResolver() {
 
         @Override
         public PhaseTwoOutbox resolveFor(

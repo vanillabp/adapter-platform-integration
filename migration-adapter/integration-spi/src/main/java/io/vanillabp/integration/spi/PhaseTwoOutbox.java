@@ -136,6 +136,16 @@ import org.slf4j.LoggerFactory;
 public interface PhaseTwoOutbox {
 
   /**
+   * Where an operator reads how to find a blocked entry, open it again or delete it, for
+   * every store which VanillaBP writes itself. Each ERROR which reports a blocked entry ends
+   * with this address, and so does the ERROR of an extension whose own operation blocks an
+   * entry. It is a constant, so that the tests which read those lines name the same page as
+   * the lines. It lives here and not in the core's configuration, because an extension reads
+   * it and depends on the SPI alone. See decision 115 in the repository's DECISIONS.md.
+   */
+  String BLOCKED_ENTRIES_GUIDE = "https://github.com/vanillabp/adapter-platform-integration/wiki/Blocked-outbox-entries";
+
+  /**
    * Schedules the given phase-two call. Call it inside the local transaction which
    * persists the workflow aggregate, while it still runs. The implementation MUST enlist
    * in that transaction (the entry becomes visible if and only if the transaction

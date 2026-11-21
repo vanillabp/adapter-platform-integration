@@ -1,6 +1,7 @@
 package io.vanillabp.integration.adapter.migration.config;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -18,6 +19,7 @@ import java.util.stream.Stream;
 import io.vanillabp.integration.extension.spi.settings.MisplacedSettings;
 import io.vanillabp.integration.extension.spi.settings.SettingsLevel;
 import io.vanillabp.integration.extension.spi.settings.SettingsResolution;
+import io.vanillabp.integration.extension.spi.settings.VanillaBpSettings;
 import io.vanillabp.integration.spi.startup.StartupTopic;
 
 /**
@@ -36,14 +38,7 @@ import io.vanillabp.integration.spi.startup.StartupTopic;
  * walks them with {@link SettingsResolution}, the one implementation which every plug-in
  * uses (decision 7 in the repository's DECISIONS.md).
  */
-public class MigrationAdapterProperties extends AdaptersConfigurationProperties {
-
-  /**
-   * The root of every property which VanillaBP reads: <code>vanillabp</code>. Every message
-   * which names a key builds it from here. So what a developer reads in the log is spelled
-   * the way it has to be written in the configuration.
-   */
-  public static final String PREFIX = "vanillabp";
+public class MigrationAdapterProperties extends AdaptersConfigurationProperties implements VanillaBpSettings {
 
   /**
    * The empty configuration from which a binder starts. Both platforms create this object
@@ -249,6 +244,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    *
    * @return All available adapters (key = adapter ID, value = adapter type)
    */
+  @Override
   public Map<String, String> adapterTypes() {
 
     return adapters
@@ -292,6 +288,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
    * @param adapterType The adapter's type, for example <code>camunda7</code>
    * @return The adapter ids of that type, sorted, possibly none
    */
+  @Override
   public List<String> adapterIdsOfType(
       final String adapterType) {
 
@@ -1058,16 +1055,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   }
 
-  /**
-   * The settings of an extension as they apply to a workflow module. That is what
-   * {@link #extensionProperties(String, String, String, String, String)} answers for the
-   * module alone, without a workflow, a task or an adapter.
-   *
-   * @param workflowModuleId The workflow module, or <code>null</code> for the global
-   *          settings alone
-   * @param extension The extension's id
-   * @return The settings, never <code>null</code>
-   */
+  @Override
   public Map<String, String> extensionProperties(
       final String workflowModuleId,
       final String extension) {
@@ -1076,16 +1064,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   }
 
-  /**
-   * The settings of an extension as they apply to one task of one workflow of one workflow
-   * module, read without naming an adapter.
-   *
-   * @param workflowModuleId The workflow module, or <code>null</code>
-   * @param bpmnProcessId The BPMN process, or <code>null</code>
-   * @param taskId The task ID (task definition), or <code>null</code>
-   * @param extension The extension's id
-   * @return The settings, never <code>null</code>
-   */
+  @Override
   public Map<String, String> extensionProperties(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -1096,37 +1075,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   }
 
-  /**
-   * The settings of an extension as they apply to one task of one workflow of one workflow
-   * module on one adapter: the eight positions which {@link SettingsResolution} walks,
-   * merged KEY BY KEY. So a workflow may change one value without repeating the rest. That is
-   * the same rule and the same levels as for an adapter setting (see decision 7 in the
-   * repository's DECISIONS.md and {@link #resolveForAdapter}).
-   *
-   * <pre>
-   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.tasks.&lt;task&gt;.adapters.&lt;adapter&gt;.extensions.&lt;extension&gt;.&lt;key&gt;  (most specific)
-   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.tasks.&lt;task&gt;.extensions.&lt;extension&gt;.&lt;key&gt;
-   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.adapters.&lt;adapter&gt;.extensions.&lt;extension&gt;.&lt;key&gt;
-   * vanillabp.workflow-modules.&lt;module&gt;.workflows.&lt;workflow&gt;.extensions.&lt;extension&gt;.&lt;key&gt;
-   * vanillabp.workflow-modules.&lt;module&gt;.adapters.&lt;adapter&gt;.extensions.&lt;extension&gt;.&lt;key&gt;
-   * vanillabp.workflow-modules.&lt;module&gt;.extensions.&lt;extension&gt;.&lt;key&gt;
-   * vanillabp.adapters.&lt;adapter&gt;.extensions.&lt;extension&gt;.&lt;key&gt;
-   * vanillabp.extensions.&lt;extension&gt;.&lt;key&gt;                                                                                 (least specific)
-   * </pre>
-   *
-   * A level whose id is <code>null</code>, or which is not configured, is skipped. So the same
-   * method answers the global, the module, the workflow and the task question, with an adapter
-   * and without one. What the keys below an extension MEAN is the extension's own business.
-   * The core owns the location and this resolution.
-   *
-   * @param workflowModuleId The workflow module, or <code>null</code> for the global
-   *          settings alone
-   * @param bpmnProcessId The BPMN process, or <code>null</code>
-   * @param taskId The task ID (task definition), or <code>null</code>
-   * @param adapterId The adapter, or <code>null</code> to read the general sections alone
-   * @param extension The extension's id
-   * @return The settings, never <code>null</code>
-   */
+  @Override
   public Map<String, String> extensionProperties(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -1146,16 +1095,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   }
 
-  /**
-   * One value of an extension's settings, resolved the same way as
-   * {@link #extensionProperties(String, String)} resolves all of them.
-   *
-   * @param workflowModuleId The workflow module, or <code>null</code>
-   * @param extension The extension's id
-   * @param key The key below the extension's section, for example
-   *          <code>rest.base-url</code>
-   * @return The value, or <code>null</code> where nothing is configured there
-   */
+  @Override
   public String extensionProperty(
       final String workflowModuleId,
       final String extension,
@@ -1165,19 +1105,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   }
 
-  /**
-   * One value of an extension's settings, resolved over the positions without an adapter.
-   * This is the counterpart of {@link #resolveForAdapter}, for an extension which asks about
-   * no adapter in particular.
-   *
-   * @param workflowModuleId The workflow module, or <code>null</code>
-   * @param bpmnProcessId The BPMN process, or <code>null</code>
-   * @param taskId The task ID (task definition), or <code>null</code>
-   * @param extension The extension's id
-   * @param key The key below the extension's section, for example
-   *          <code>rest.base-url</code>
-   * @return The most specific value configured, or <code>null</code>
-   */
+  @Override
   public String resolveForExtension(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -1189,24 +1117,7 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
 
   }
 
-  /**
-   * One value of an extension's settings, resolved over the eight positions which
-   * {@link #extensionProperties(String, String, String, String, String)} describes. This is
-   * the counterpart of {@link #resolveForAdapter} for an extension.
-   * <p>
-   * The extension id is a parameter, and not bound to a view of these properties. This object
-   * is one bean of the platform, but an extension is not a bean of the platform at all. It
-   * asks with its own id, the same way as an adapter asks with its adapter id.
-   *
-   * @param workflowModuleId The workflow module, or <code>null</code>
-   * @param bpmnProcessId The BPMN process, or <code>null</code>
-   * @param taskId The task ID (task definition), or <code>null</code>
-   * @param adapterId The adapter, or <code>null</code> to read the general sections alone
-   * @param extension The extension's id
-   * @param key The key below the extension's section, for example
-   *          <code>rest.base-url</code>
-   * @return The most specific value configured, or <code>null</code>
-   */
+  @Override
   public String resolveForExtension(
       final String workflowModuleId,
       final String bpmnProcessId,
@@ -4109,6 +4020,19 @@ public class MigrationAdapterProperties extends AdaptersConfigurationProperties 
   public Map<String, WorkflowModuleAdapterProperties> getWorkflowModules() {
 
     return workflowModules;
+
+  }
+
+  /**
+   * The keys of {@link #getWorkflowModules()}. After {@link #normalize(ClasspathFacts)} that
+   * includes every module found in the classpath without a section of its own.
+   *
+   * @return The workflow module ids, read-only
+   */
+  @Override
+  public Set<String> workflowModuleIds() {
+
+    return Collections.unmodifiableSet(workflowModules.keySet());
 
   }
 

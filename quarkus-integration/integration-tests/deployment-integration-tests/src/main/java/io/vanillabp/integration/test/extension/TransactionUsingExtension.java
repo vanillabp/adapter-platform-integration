@@ -1,6 +1,6 @@
 package io.vanillabp.integration.test.extension;
 
-import io.vanillabp.integration.adapter.migration.processservice.TransactionRunnerResolver;
+import io.vanillabp.integration.extension.spi.resolver.TransactionRunnerResolver;
 import io.vanillabp.integration.spi.TransactionRunner;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;

@@ -4,7 +4,7 @@ import org.eclipse.microprofile.config.ConfigProvider;
 
 import io.quarkus.arc.Unremovable;
 import io.smallrye.config.SmallRyeConfig;
-import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoOutboxResolver;
+import io.vanillabp.integration.extension.spi.resolver.PhaseTwoOutboxResolver;
 import io.vanillabp.integration.runtime.config.QuarkusMigrationAdapterProperties;
 import io.vanillabp.integration.spi.AggregatePersistenceAware;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;

@@ -312,7 +312,7 @@ public class OtherOpenTasksOfAWakeUpTest {
         .aggregatePersistence(persistence)
         .processServices(List.of(adapter))
         .taskDeliveryLogResolver(
-            new io.vanillabp.integration.adapter.migration.processservice.TaskDeliveryLogResolver() {
+            new io.vanillabp.integration.extension.spi.resolver.TaskDeliveryLogResolver() {
 
               @Override
               public TaskDeliveryLog resolveFor(

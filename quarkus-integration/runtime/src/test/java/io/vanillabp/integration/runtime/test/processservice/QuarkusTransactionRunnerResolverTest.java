@@ -13,7 +13,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import io.vanillabp.integration.adapter.migration.processservice.TransactionCoverage;
+import io.vanillabp.integration.extension.spi.resolver.TransactionCoverage;
 import io.vanillabp.integration.runtime.persistence.PanacheMongoActiveRecordAggregatePersistence;
 import io.vanillabp.integration.runtime.processservice.MongoDeploymentProbe;
 import io.vanillabp.integration.runtime.processservice.QuarkusTransactionRunnerResolver;

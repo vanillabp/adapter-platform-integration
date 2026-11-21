@@ -21,11 +21,11 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
-import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.observability.MicrometerVanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.spi.PhaseOperation;
+import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader;
 import io.vanillabp.integration.test.utils.outbox.PhaseTwoOutboxReader.Entry;
@@ -167,7 +167,7 @@ public class PermanentPhaseTwoFailureTest {
             .filter(event -> event.getLevel() == Level.ERROR)
             .map(ILoggingEvent::getFormattedMessage)
             .anyMatch(message -> message.contains(blockedEntry) && message
-                .contains(PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE)),
+                .contains(PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE)),
         "the ERROR of a blocked entry does not say where the way back is described");
 
     assertEquals(

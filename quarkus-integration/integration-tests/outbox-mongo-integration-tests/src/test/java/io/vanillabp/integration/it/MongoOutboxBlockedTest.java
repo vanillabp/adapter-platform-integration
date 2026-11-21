@@ -115,7 +115,7 @@ public class MongoOutboxBlockedTest {
         errors
             .stream()
             .anyMatch(error -> error.contains(blockedEntry) && error.contains(
-                io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE)),
+                io.vanillabp.integration.spi.PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE)),
         "the ERROR of a blocked entry does not say where the way back is described: "
             + errors);
 

@@ -19,6 +19,7 @@ import io.vanillabp.integration.adapter.spi.MigratableProcessService;
 import io.vanillabp.integration.deployment.processservice.VanillaBpMigratableProcessServiceBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.VanillaBpWorkflowModulesBuildItem;
 import io.vanillabp.integration.deployment.workflowmodule.WorkflowModuleSpecificConfigBuilderBuildItem;
+import io.vanillabp.integration.extension.spi.settings.VanillaBpSettings;
 import io.vanillabp.integration.runtime.config.MigrationAdapterPropertiesRecorder;
 import jakarta.enterprise.context.ApplicationScoped;
 
@@ -75,11 +76,15 @@ public class ConfigBuildStepProcessor {
         new HashSet<>(workflowModulesFound.getWorkflowModules()), // pass items to a serializable kind of set
         adapterTypesOfProcessServicesProvidedByAdapters);
 
-    // build properties as a CDI bean for injection into generated ProcessService beans
+    // build properties as a CDI bean for injection into generated ProcessService beans. An
+    // extension injects the same object as the view of the extension SPI, so that it needs
+    // no class of the core.
     syntheticBeanBuildItemBuildProducer
         .produce(
             SyntheticBeanBuildItem
                 .configure(MigrationAdapterProperties.class)
+                .addType(MigrationAdapterProperties.class)
+                .addType(VanillaBpSettings.class)
                 .scope(ApplicationScoped.class)
                 .runtimeValue(migrationAdapterProperties)
                 .setRuntimeInit()

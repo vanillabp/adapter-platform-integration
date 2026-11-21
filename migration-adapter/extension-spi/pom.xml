@@ -29,4 +29,15 @@
       <organizationUrl>https://www.phactum.at</organizationUrl>
     </developer>
   </developers>
+
+  <dependencies>
+    <!-- the resolvers answer the outbox store, the transaction and the delivery log of a
+         workflow aggregate, and those types are the integration SPI's. So an extension
+         which depends on this module alone gets both. -->
+    <dependency>
+      <groupId>io.vanillabp</groupId>
+      <artifactId>vanillabp-integration-spi</artifactId>
+      <version>${project.version}</version>
+    </dependency>
+  </dependencies>
 </project>

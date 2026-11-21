@@ -10,8 +10,8 @@ import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.util.ClassUtils;
 
 import io.vanillabp.integration.adapter.migration.processservice.AwareSelection;
-import io.vanillabp.integration.adapter.migration.processservice.TransactionCoverage;
-import io.vanillabp.integration.adapter.migration.processservice.TransactionRunnerResolver;
+import io.vanillabp.integration.extension.spi.resolver.TransactionCoverage;
+import io.vanillabp.integration.extension.spi.resolver.TransactionRunnerResolver;
 import io.vanillabp.integration.spi.TransactionRunner;
 import io.vanillabp.integration.spi.TransactionRunnerAware;
 import io.vanillabp.integration.workflowtask.SpringTransactionRunner;
