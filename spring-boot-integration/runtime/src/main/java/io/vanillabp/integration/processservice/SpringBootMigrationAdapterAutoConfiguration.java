@@ -49,6 +49,7 @@ import io.vanillabp.integration.adapter.spi.NameClashAvoidanceSupport;
 import io.vanillabp.integration.adapter.spi.PreCommitRegistrar;
 import io.vanillabp.integration.adapter.spi.WorkflowAggregateSync;
 import io.vanillabp.integration.config.EmptySections;
+import io.vanillabp.integration.config.UnreadKeysCheck;
 import io.vanillabp.integration.config.VanillaBpConfigurationProperties;
 import io.vanillabp.integration.delivery.TaskDeliveryLogStartup;
 import io.vanillabp.integration.extension.spi.election.WorkflowElection;
@@ -118,6 +119,28 @@ public class SpringBootMigrationAdapterAutoConfiguration {
   public static ConfigurationPropertiesBindHandlerAdvisor vanillaBpEmptySectionsKeepTheirKeys() {
 
     return EmptySections.advisor();
+
+  }
+
+  /**
+   * Ends the start for a key below <code>vanillabp</code> which nothing reads. It writes down
+   * the keys which the binding of every {@code @ConfigurationProperties} class below
+   * <code>vanillabp</code> takes over: the core properties and the overlay classes of adapters
+   * and extensions. Once every singleton exists, it compares them with the keys of the
+   * configuration. It is static, so Spring Boot can use it before this configuration class
+   * exists.
+   *
+   * @param beanFactory Where the configuration-properties classes are found
+   * @param environment Where the keys of the configuration are found
+   * @return The check, which is also the advisor of the binding
+   * @see UnreadKeysCheck
+   */
+  @Bean
+  public static UnreadKeysCheck vanillaBpUnreadKeysCheck(
+      final ConfigurableListableBeanFactory beanFactory,
+      final Environment environment) {
+
+    return new UnreadKeysCheck(beanFactory, environment);
 
   }
 
@@ -814,7 +837,8 @@ public class SpringBootMigrationAdapterAutoConfiguration {
    * them is reported at startup, not at the first redelivery.
    * <p>
    * The last check reads the delivery logs. So the default delivery logs are made ready
-   * first, see {@link TaskDeliveryLogStartup}.
+   * first, see {@link TaskDeliveryLogStartup}. Before all of this, {@link UnreadKeysCheck}
+   * reports the keys below <code>vanillabp</code> which nothing reads.
    *
    * @param beanFactory Used to iterate all process-service beans
    * @return The startup validation hook
@@ -824,6 +848,11 @@ public class SpringBootMigrationAdapterAutoConfiguration {
       final ConfigurableListableBeanFactory beanFactory) {
 
     return () -> {
+      // a key nobody reads first. A typo in a key may be the cause of what the checks
+      // below find, and then the typo is the message which helps
+      beanFactory
+          .getBeanProvider(UnreadKeysCheck.class)
+          .ifAvailable(UnreadKeysCheck::afterSingletonsInstantiated);
       // Spring calls this hook and the one of a delivery log in the order of their bean
       // definitions. Nothing makes that the right order. A table which was not created yet
       // would end the start

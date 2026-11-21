@@ -169,8 +169,9 @@ Spring Boot uses reflection at runtime. The Quarkus integration does as much as 
    `DummyAdapterOverlayProperties` of the BPMS double). On purpose, there is NO general
    `withMappingIgnore("vanillabp.**")`. SmallRye's check for unknown keys passes if ANY registered
    mapping knows a key. So the platform mapping and the adapter overlays check the tree together,
-   and a typo under `vanillabp.*` fails the startup. Here Quarkus is stricter than Spring Boot,
-   and we accept that. `QuarkusMigrationAdapterPropertiesMapperTest` tests the mapping onto the core
+   and a typo under `vanillabp.*` fails the startup. Spring Boot ends the start in the same case,
+   through `UnreadKeysCheck`. Its message says more than SmallRye's: where the key is read
+   instead, or the key it most likely is. `QuarkusMigrationAdapterPropertiesMapperTest` tests the mapping onto the core
    model, `UnknownPropertyKeyConfigurationTest` tests the typo, and
    `EnvironmentVariableMisbindingTest` tests the environment variable which does not bind.
 8. **Runtime deployment pipeline:** `VanillaBpDeploymentRunner` (runtime module) observes the

@@ -22,8 +22,7 @@ import io.vanillabp.integration.test.utils.SuppressOutputExtension;
  * resolution offers has to be part of a registered mapping. On Quarkus, an application
  * cannot write to a position which is not bound.
  * <p>
- * Spring Boot has no detection of unknown keys, so there is no counterpart there. We
- * accept this difference (see {@code UnknownPropertyKeyConfigurationTest}).
+ * Spring Boot ends the start for the same key, see {@code AKeyNobodyReadsEndsTheStartTest}.
  */
 @ExtendWith(SuppressOutputExtension.class)
 public class UnknownExtensionSettingsKeyTest {

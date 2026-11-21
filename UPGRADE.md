@@ -252,6 +252,11 @@ an adapter section is missing, the application still boots, and a message names 
 a section contradicts itself, the boot ends, and the message names what is missing. Messages name
 property keys and never values, so no credential is ever printed.
 
+A key below `vanillabp` which nothing reads ends the start. Version 1 on Spring Boot ignored such a
+key without a word, so an upgraded application may stop at a key it carried for years: a typo, a
+key at a level where it is not read, or a key of version 1 such as `default-adapter`. The message
+names the key, where it is read instead, or the key it most likely is.
+
 An environment variable cannot add an adapter id or a workflow module id which no configuration file
 declares. Take a `VANILLABP_*` variable whose id segment matches nothing configured. It ends the
 startup with a message, because it looks like an override but is none.
