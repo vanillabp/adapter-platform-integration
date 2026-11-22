@@ -1,0 +1,215 @@
+#!/usr/bin/env -S java --source 21
+//
+// Draws the trend of the weekly load run as an SVG file, from the record of one platform.
+//
+//   bin/render-load-graph <record.csv> <graph.svg>
+//
+// The graph shows the ratio of the candidate's median to the baseline's median, week by
+// week, for the times the run judges (wall.ms and outbox.wait.ms). A band around each line
+// goes from the candidate's smallest to its largest round, divided by the baseline's
+// median. A line marks 1, where the candidate is as fast as the baseline, and a dashed line
+// marks the threshold of the verdict.
+//
+// It draws factors only. Absolute milliseconds stay in the record: they show the weather of
+// the runner, and somebody would read the good weeks as a promise.
+//
+// It needs a JDK 21 or newer and nothing else, so the weekly run and a laptop draw the same
+// picture. A record it cannot read ends it with exit code 1 and writes no graph.
+
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+
+public class RenderLoadGraph {
+
+  static final double THRESHOLD = 1.10;
+
+  static final String[][] SERIES = {
+      { "wall.ms", "time of the whole work", "#1f77b4" },
+      { "outbox.wait.ms", "wait of an outbox entry", "#d62728" } };
+
+  static final int WIDTH = 760;
+
+  static final int HEIGHT = 320;
+
+  static final int LEFT = 56;
+
+  static final int RIGHT = 16;
+
+  static final int TOP = 36;
+
+  static final int BOTTOM = 56;
+
+  public static void main(
+      final String[] args) throws Exception {
+
+    if (args.length != 2) {
+      System.err.println("usage: bin/render-load-graph <record.csv> <graph.svg>");
+      System.exit(1);
+    }
+    final var rows = read(Path.of(args[0]));
+    Files.writeString(Path.of(args[1]), svg(Path.of(args[0]).getFileName().toString(), rows), StandardCharsets.UTF_8);
+
+  }
+
+  static List<Map<String, String>> read(
+      final Path file) throws Exception {
+
+    final var lines = Files.readAllLines(file, StandardCharsets.UTF_8).stream().filter(line -> !line.isBlank()).toList();
+    if (lines.isEmpty()) {
+      return List.of();
+    }
+    final var header = lines.getFirst().split(",", -1);
+    final var rows = new ArrayList<Map<String, String>>();
+    for (var index = 1; index < lines.size(); index++) {
+      final var fields = lines.get(index).split(",", -1);
+      if (fields.length != header.length) {
+        System.err.printf("line %d of %s has %d fields, the header names %d%n", index + 1, file, fields.length,
+            header.length);
+        System.exit(1);
+      }
+      final var row = new HashMap<String, String>();
+      for (var column = 0; column < header.length; column++) {
+        row.put(header[column], fields[column]);
+      }
+      rows.add(row);
+    }
+    return rows;
+
+  }
+
+  static double number(
+      final Map<String, String> row,
+      final String column) {
+
+    final var text = row.get(column);
+    if ((text == null) || text.isBlank()) {
+      return Double.NaN;
+    }
+    return Double.parseDouble(text);
+
+  }
+
+  static String svg(
+      final String title,
+      final List<Map<String, String>> rows) {
+
+    // the scale holds 1, the threshold and every value drawn, with some air
+    var low = 0.8;
+    var high = 1.25;
+    for (final var row : rows) {
+      for (final var series : SERIES) {
+        final var baseline = number(row, series[0] + ".baseline");
+        for (final var value : new double[] { number(row, series[0] + ".ratio"),
+            number(row, series[0] + ".min") / baseline, number(row, series[0] + ".max") / baseline }) {
+          if (Double.isFinite(value)) {
+            low = Math.min(low, value);
+            high = Math.max(high, value);
+          }
+        }
+      }
+    }
+    final var plotWidth = WIDTH - LEFT - RIGHT;
+    final var plotHeight = HEIGHT - TOP - BOTTOM;
+    final var finalLow = low;
+    final var finalHigh = high;
+    final java.util.function.DoubleUnaryOperator y = value -> TOP + plotHeight * (finalHigh - value) / (finalHigh
+        - finalLow);
+    final java.util.function.IntToDoubleFunction x = index -> rows.size() <= 1
+        ? LEFT + plotWidth / 2.0
+        : LEFT + plotWidth * index / (double) (rows.size() - 1);
+
+    final var out = new StringBuilder();
+    out.append(String.format(Locale.ROOT,
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%d\" height=\"%d\" viewBox=\"0 0 %d %d\" "
+            + "font-family=\"sans-serif\" font-size=\"11\">%n",
+        WIDTH, HEIGHT, WIDTH, HEIGHT));
+    out.append("<rect width=\"100%\" height=\"100%\" fill=\"white\"/>\n");
+    out.append(String.format(Locale.ROOT,
+        "<text x=\"%d\" y=\"18\" font-size=\"13\">%s: candidate / baseline, median per week</text>%n", LEFT,
+        escape(title.replaceAll("\\.csv$", ""))));
+    // the line at 1 and the threshold
+    out.append(String.format(Locale.ROOT,
+        "<line x1=\"%d\" x2=\"%d\" y1=\"%.1f\" y2=\"%.1f\" stroke=\"#444\"/>%n", LEFT, WIDTH - RIGHT, y.applyAsDouble(1),
+        y.applyAsDouble(1)));
+    out.append(String.format(Locale.ROOT,
+        "<line x1=\"%d\" x2=\"%d\" y1=\"%.1f\" y2=\"%.1f\" stroke=\"#999\" stroke-dasharray=\"4 4\"/>%n", LEFT,
+        WIDTH - RIGHT, y.applyAsDouble(THRESHOLD), y.applyAsDouble(THRESHOLD)));
+    for (final var tick : new double[] { finalLow, 1, THRESHOLD, finalHigh }) {
+      out.append(String.format(Locale.ROOT, "<text x=\"%d\" y=\"%.1f\" text-anchor=\"end\">%.2f</text>%n", LEFT - 6,
+          y.applyAsDouble(tick) + 4, tick));
+    }
+    if (rows.isEmpty()) {
+      out.append(String.format(Locale.ROOT, "<text x=\"%d\" y=\"%d\">no week recorded yet</text>%n", LEFT + 20,
+          TOP + plotHeight / 2));
+    }
+    for (final var series : SERIES) {
+      final var band = new StringBuilder();
+      final var line = new StringBuilder();
+      final var lower = new ArrayList<String>();
+      for (var index = 0; index < rows.size(); index++) {
+        final var row = rows.get(index);
+        final var ratio = number(row, series[0] + ".ratio");
+        final var baseline = number(row, series[0] + ".baseline");
+        final var min = number(row, series[0] + ".min") / baseline;
+        final var max = number(row, series[0] + ".max") / baseline;
+        if (Double.isFinite(ratio)) {
+          line.append(String.format(Locale.ROOT, "%s%.1f,%.1f ", line.isEmpty()
+              ? "M"
+              : "L", x.applyAsDouble(index), y.applyAsDouble(ratio)));
+        }
+        if (Double.isFinite(min) && Double.isFinite(max)) {
+          band.append(String.format(Locale.ROOT, "%s%.1f,%.1f ", band.isEmpty()
+              ? "M"
+              : "L", x.applyAsDouble(index), y.applyAsDouble(max)));
+          lower.addFirst(String.format(Locale.ROOT, "L%.1f,%.1f ", x.applyAsDouble(index), y.applyAsDouble(min)));
+        }
+        if ("red".equals(row.get("verdict")) && Double.isFinite(ratio)) {
+          out.append(String.format(Locale.ROOT, "<circle cx=\"%.1f\" cy=\"%.1f\" r=\"4\" fill=\"none\" "
+              + "stroke=\"#d62728\"/>%n", x.applyAsDouble(index), y.applyAsDouble(ratio)));
+        }
+      }
+      if (!band.isEmpty()) {
+        lower.forEach(band::append);
+        out.append(String.format(Locale.ROOT, "<path d=\"%sZ\" fill=\"%s\" fill-opacity=\"0.15\"/>%n", band,
+            series[2]));
+      }
+      if (!line.isEmpty()) {
+        out.append(String.format(Locale.ROOT, "<path d=\"%s\" fill=\"none\" stroke=\"%s\" stroke-width=\"2\"/>%n", line,
+            series[2]));
+      }
+    }
+    // dates under the axis, at most eight of them
+    final var step = Math.max(1, (int) Math.ceil(rows.size() / 8.0));
+    for (var index = 0; index < rows.size(); index += step) {
+      out.append(String.format(Locale.ROOT, "<text x=\"%.1f\" y=\"%d\" text-anchor=\"middle\">%s</text>%n",
+          x.applyAsDouble(index), HEIGHT - BOTTOM + 16, escape(rows.get(index).getOrDefault("date", ""))));
+    }
+    var legend = LEFT;
+    for (final var series : SERIES) {
+      out.append(String.format(Locale.ROOT, "<rect x=\"%d\" y=\"%d\" width=\"12\" height=\"3\" fill=\"%s\"/>%n",
+          legend, HEIGHT - 20, series[2]));
+      out.append(String.format(Locale.ROOT, "<text x=\"%d\" y=\"%d\">%s</text>%n", legend + 16, HEIGHT - 15,
+          escape(series[1])));
+      legend += 200;
+    }
+    out.append(String.format(Locale.ROOT, "<text x=\"%d\" y=\"%d\">dashed: threshold %.2f</text>%n", legend,
+        HEIGHT - 15, THRESHOLD));
+    out.append("</svg>\n");
+    return out.toString();
+
+  }
+
+  static String escape(
+      final String text) {
+
+    return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
+
+  }
+
+}

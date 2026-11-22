@@ -1,0 +1,30 @@
+spring:
+  main:
+    banner-mode: "off"
+  datasource:
+    driver-class-name: io.vanillabp.loadharness.CountingDriver
+    url: "${LOAD_JDBC_URL:jdbc:counting:h2:mem:load;DB_CLOSE_DELAY=-1}"
+    username: "${LOAD_JDBC_USER:sa}"
+    password: "${LOAD_JDBC_PASSWORD:}"
+    hikari:
+      maximum-pool-size: 10
+logging:
+  level:
+    io.vanillabp.bpmsdouble: WARN
+    io.vanillabp: WARN
+dummy-adapter:
+  at-least-once-delivery: "${LOAD_AT_LEAST_ONCE:true}"
+vanillabp:
+  adapters:
+    load:
+      type: dummy
+  workflow-modules:
+    load:
+      adapters:
+        load:
+          resources-location: classpath*:load/processes
+      workflows:
+        LoadProcess:
+          allow-full-sync-with-bpms: true
+          declared-aggregate-values:
+            - stepsDone

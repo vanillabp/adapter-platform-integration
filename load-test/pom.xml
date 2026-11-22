@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>io.vanillabp</groupId>
+    <artifactId>adapter-platform-integration</artifactId>
+    <version>2.0.0-SNAPSHOT</version>
+    <relativePath>../pom.xml</relativePath>
+  </parent>
+
+  <artifactId>load-test-parent</artifactId>
+  <packaging>pom</packaging>
+  <name>Load test</name>
+  <description>The applications the weekly load run drives, one per platform. Built only with the profile 'load-test'.</description>
+
+  <modules>
+    <module>spring-boot</module>
+    <module>quarkus</module>
+  </modules>
+
+  <properties>
+    <!-- nothing here is published: the part which other repositories use is
+         'load-harness' -->
+    <maven.deploy.skip>true</maven.deploy.skip>
+    <skip.central.release>true</skip.central.release>
+    <maven.javadoc.skip>true</maven.javadoc.skip>
+    <!-- the smoke test proves the wiring, and no coverage report reads it -->
+    <jacoco.skip>true</jacoco.skip>
+    <jacoco.agent/>
+  </properties>
+
+</project>

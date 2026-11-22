@@ -46,6 +46,9 @@
     <module>bpms-double/core</module>
     <module>bpms-double/spring-boot</module>
     <module>bpms-double/quarkus</module>
+    <!-- published, like the double it drives: the adapter repositories run the same work
+         against their own BPMS -->
+    <module>load-harness</module>
     <module>spring-boot-integration</module>
     <module>quarkus-integration</module>
     <module>test-coverage-report</module>
@@ -370,6 +373,15 @@
     </plugins>
   </build>
   <profiles>
+    <!-- the applications of the weekly load run, one per platform. They are left out of a
+         normal build, so the pull request checks stay as fast as they are, and nothing of
+         them is published. load-test/README.md says how to run them. -->
+    <profile>
+      <id>load-test</id>
+      <modules>
+        <module>load-test</module>
+      </modules>
+    </profile>
     <!-- publishes a snapshot to two places in one build. GitHub Packages is what the builds of
          the other VanillaBP repositories read. The snapshot repository of Maven Central is
          what everybody else reads, because it needs no login. Only a push to main of the
