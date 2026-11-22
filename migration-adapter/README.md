@@ -2329,7 +2329,7 @@ after the check for a permanent failure. It plans the entry again after
 a fifth in both directions, counts no attempt, and writes one WARN line. No time limit applies,
 unlike for `PhaseTwoRetryLater`, because a busy BPMS answers every time. Nothing is repeated inside
 the dispatch, unlike for a collision: a full BPMS needs seconds, and the lane would wait with it. See
-`DECISIONS.pending/2174.md`. `ABusyBpmsUsesNoAttemptsTest` holds the relational store, the MongoDB
+decision 145 in the repository's DECISIONS.md. `ABusyBpmsUsesNoAttemptsTest` holds the relational store, the MongoDB
 store tests of both platforms hold theirs, and `ABusyBpmsCostsNoAttemptTest` holds the effect on an
 entry on both platforms.
 
@@ -3248,8 +3248,10 @@ shared with the scanners of `@WorkflowTask` and `@WorkflowEnded`, and with the
 is NOT among the parameters here, because it does not exist before this method runs. Two things stay
 its own: which start event a method serves, and the check that every start event which the BPMS
 fires by itself has a method. That check works per start event. So a process with a timer and a
-signal cannot serve one of them and fire the other into nothing. A plain or message start event is
-not checked that way. It has the shape of the application's own start, and a foreign start through
+signal cannot serve one of them and fire the other into nothing. A method which names a start
+event next to a method without an id ends the boot as well, where their versions overlap. Both
+would match that start event, and which one ran would depend on the order of the methods of the
+class, which Java does not fix. A plain or message start event is not checked that way. It has the shape of the application's own start, and a foreign start through
 one of them says so when it happens.
 
 An adapter whose BPMS cannot report such a start implements none of this. It fails the deployment
@@ -3675,7 +3677,7 @@ extension is read the same way: `MultiInstanceIteration` is implemented by `Mult
 platform integrations are not on the compile path of an extension. So a change inside the core cannot break an extension. The sample
 extension of each platform holds the rule. Its POM names the extension SPI alone, and an enforcer
 rule stops its build when the core or a platform integration arrives, even transitively.
-`DECISIONS.pending/2191.md` says why.
+See decision 149 in the repository's DECISIONS.md for why.
 
 When the core gets something new an extension has to read, it goes into the extension SPI as an
 interface, and the core's class implements it. The class of the core is never the answer.

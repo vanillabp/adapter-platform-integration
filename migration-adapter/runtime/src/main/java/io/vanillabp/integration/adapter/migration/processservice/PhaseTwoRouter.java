@@ -324,7 +324,8 @@ public final class PhaseTwoRouter {
    * transaction is rollback-only now and can never commit what a repetition would do. See
    * decision 49 in the repository's DECISIONS.md. When the repetitions do not help, the store
    * gets the failure of the adapter, unwrapped, and counts it as an attempt. Why the pauses are
-   * fixed and not configured is said in {@code DECISIONS.pending/2172.md}.
+   * fixed and not configured is said in decision 143 in the repository's
+   * DECISIONS.md.
    *
    * @param dispatch The dispatch of the call's operation
    * @param call The call to dispatch

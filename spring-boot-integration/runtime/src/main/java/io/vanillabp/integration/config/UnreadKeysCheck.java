@@ -64,7 +64,8 @@ import io.vanillabp.integration.adapter.migration.config.UnreadKeys;
  * part reads with {@code Environment#getProperty}, {@code @Value} or a {@code Binder} of its
  * own ends the start. Such a part has to bind the key in its overlay class as well.
  * <p>
- * {@code DECISIONS.pending/2185.md} says why a key nobody reads ends the start.
+ * See decision 148 in the repository's DECISIONS.md for why a key nobody
+ * reads ends the start.
  */
 public final class UnreadKeysCheck implements ConfigurationPropertiesBindHandlerAdvisor, SmartInitializingSingleton {
 

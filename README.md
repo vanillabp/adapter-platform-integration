@@ -25,6 +25,18 @@ These platforms are supported today:
 1. **Spring Boot**<br>[![Coverage](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fvanillabp.github.io%2Fadapter-platform-integration%2Fspring-boot-report%2Findex.html&search=Total.*%3F.([0-9]%2B)[^0-9]*%3F%25&replace=%241%25&flags=m&label=Coverage&color=green&cacheSeconds=60)](https://vanillabp.github.io/adapter-platform-integration/spring-boot-report)
 2. **Quarkus**<br>[![Coverage](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fvanillabp.github.io%2Fadapter-platform-integration%2Fquarkus-report%2Findex.html&search=Total.*%3F.([0-9]%2B)[^0-9]*%3F%25&replace=%241%25&flags=m&label=Coverage&color=green&cacheSeconds=60)](https://vanillabp.github.io/adapter-platform-integration/quarkus-report)
 
+Once a week, both platforms run the same fixed work against the current commit and against a
+baseline: the newest release, or a pinned commit until the first release exists. The graphs show the
+median of the current commit divided by the median of the baseline, week by week. A line near 1.0
+means that a change did not make VanillaBP cost more. It does not say how fast your application will
+be, because the work does nothing besides VanillaBP and its BPMS answers at once. A changed number of
+database statements per start, task or message opens an issue at once. A time opens one when it is
+more than ten percent slower in two weeks in a row. [`load-test/README.md`](./load-test/README.md)
+says what the run measures and how to run it yourself.
+
+![Load run, Spring Boot](https://raw.githubusercontent.com/wiki/vanillabp/adapter-platform-integration/load/spring-boot.svg)
+![Load run, Quarkus](https://raw.githubusercontent.com/wiki/vanillabp/adapter-platform-integration/load/quarkus.svg)
+
 If you want to use VanillaBP, read the [wiki](https://github.com/vanillabp/adapter-platform-integration/wiki).
 It explains the concepts, and it has the details for each platform.
 
@@ -139,6 +151,15 @@ These are the top-level modules, by directory name:
    The BPMS double, a fake BPMS for tests. It is published, so a repository outside this one can
    start a VanillaBP application in a test without a real BPMS. The platform's own tests run against
    this adapter, and that is what proves it for others. [Details...](./bpms-double)
+8. **load-harness:**<br>
+   Drives a fixed amount of work through VanillaBP and the BPMS double, counts the database
+   statements it costs and compares two builds. It is published as `io.vanillabp:load-harness`, so
+   an adapter repository runs the same work against its own BPMS.
+   [The weekly load run...](./load-test)
+9. **load-test:**<br>
+   The two applications of the weekly load run, one per platform. They are built only with the Maven
+   profile `load-test`, so a normal build does not pay for them. `bin/load-run.sh` builds and runs
+   them. [Details...](./load-test)
 
 ### Implementation
 

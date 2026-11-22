@@ -160,6 +160,14 @@
         <version>${project.version}</version>
         <scope>test</scope>
       </dependency>
+      <!-- The load harness: drives a fixed amount of work through VanillaBP and the
+           double, so an adapter repository measures the same work as the platform. -->
+      <dependency>
+        <groupId>io.vanillabp</groupId>
+        <artifactId>load-harness</artifactId>
+        <version>${project.version}</version>
+        <scope>test</scope>
+      </dependency>
     </dependencies>
   </dependencyManagement>
   <profiles>

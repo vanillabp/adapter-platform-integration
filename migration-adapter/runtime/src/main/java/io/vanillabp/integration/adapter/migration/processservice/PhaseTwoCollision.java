@@ -9,7 +9,7 @@ package io.vanillabp.integration.adapter.migration.processservice;
  * It never leaves the core. The {@link PhaseTwoRouter} repeats the dispatch a few times at
  * once. If that does not help, it hands the failure of the adapter to the store, unwrapped.
  * So a store sees the same failure it saw before collisions were told apart, and counts it
- * as an attempt. See {@code DECISIONS.pending/2172.md}.
+ * as an attempt. See decision 143 in the repository's DECISIONS.md.
  */
 public final class PhaseTwoCollision extends RuntimeException {
 

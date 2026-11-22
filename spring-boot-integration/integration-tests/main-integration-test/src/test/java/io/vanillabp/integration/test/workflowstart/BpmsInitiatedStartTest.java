@@ -209,6 +209,15 @@ public class BpmsInitiatedStartTest {
       final SpringBootTestApplication testApp,
       final Class<?>... additionalClasses) {
 
+    return runTestApplicationWith(testApp, WorkflowStartWorkflowService.class, additionalClasses);
+
+  }
+
+  private ConfigurableApplicationContext runTestApplicationWith(
+      final SpringBootTestApplication testApp,
+      final Class<?> workflowServiceClass,
+      final Class<?>... additionalClasses) {
+
     final var classes = new java.util.LinkedList<Class<?>>(
         List
             .of(
@@ -217,7 +226,7 @@ public class BpmsInitiatedStartTest {
                 WorkflowModuleAutoConfiguration.class,
                 SpringBootMigrationAdapterAutoConfiguration.class,
                 TestPersistenceConfiguration.class, TestPhaseTwoOutboxConfiguration.class,
-                WorkflowStartWorkflowService.class,
+                workflowServiceClass,
                 WorkflowModuleConfiguration.class,
                 DeploymentTest.TestConfig.class));
     classes.addAll(List.of(additionalClasses));
@@ -484,6 +493,36 @@ public class BpmsInitiatedStartTest {
       Assertions.assertTrue(message.contains(WorkflowStartWorkflowService.class.getName()), message);
       Assertions.assertTrue(message.contains(PROCESS), message);
       Assertions.assertTrue(message.contains("no adapter reported a start event"), message);
+
+    }
+
+  }
+
+  @Test
+  public void aNamedAndAGeneralMethodForOneStartEventFailTheBoot() throws IOException {
+
+    WorkflowStartConfiguration.AGGREGATES.clear();
+
+    try (var testApp = buildTestApp()) {
+
+      final var failure = Assertions
+          .assertThrows(
+              Exception.class,
+              () -> runTestApplicationWith(
+                  testApp,
+                  NamedAndGeneralStartWorkflowService.class,
+                  WorkflowStartConfiguration.class,
+                  StartEventsConfiguration.class).close());
+
+      // the guiding message names both methods, the start event and the way out
+      final var message = rootCauseMessage(failure);
+      final var service = NamedAndGeneralStartWorkflowService.class.getName();
+      Assertions.assertTrue(message.contains(service
+          + "#aggregateOfTimerStart"), message);
+      Assertions.assertTrue(message.contains(service
+          + "#aggregateOfEveryStart"), message);
+      Assertions.assertTrue(message.contains("start event '%s'".formatted(TIMER_EVENT)), message);
+      Assertions.assertTrue(message.contains("@WorkflowStartedByBpms(id = ...)"), message);
 
     }
 

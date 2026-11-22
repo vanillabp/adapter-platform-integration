@@ -1,0 +1,219 @@
+name: Weekly load run
+# Once a week, the current commit of main and a baseline run the same fixed work, on both
+# platforms, in one job. The run appends one row per platform to the record in the wiki and
+# redraws the graphs there. load-test/README.md says what the run measures, how to run it on
+# a laptop, and what to look at when it turns red.
+#
+# Why the baseline is built in this job: a time measured on a shared runner spreads by about
+# half between two runs of the same work. The ratio of two medians measured side by side
+# holds still. So the job builds both, and bin/load-run.sh alternates their rounds.
+#
+# Where the numbers live: in the wiki of this repository, not on main. A push to main would
+# need a bypass of the ruleset which requires the check 'publish', and such a bypass is
+# granted per actor for the whole repository, not for one file. The wiki has no ruleset, and
+# a push there starts no build. The token of a workflow run cannot write a wiki, not even the
+# one of its own repository (the Camunda 8 adapter found that out for its line table). So the
+# push uses VANILLABP_USER_NAME and VANILLABP_USER_TOKEN, like the wiki workflow there does.
+"on":
+  schedule:
+    # Monday night, when no release is built
+    - cron: "17 2 * * 1"
+  workflow_dispatch:
+    inputs:
+      baseline:
+        description: "The commit or tag to compare with. Empty: the newest release tag, or the pinned commit below while there is none"
+        required: false
+        default: ""
+permissions:
+  contents: read
+env:
+  # The baseline while no release tag exists. It is the main of 2026-11-22: both platforms
+  # dispatch through their own outbox there, and the two meters of the outbox wait exist.
+  # A baseline older than that would compare two different outboxes. Move it by hand, and
+  # say in the commit why, until the first release tag makes it unnecessary.
+  PINNED_BASELINE: 343c9b2de123a652fe1a096545c171d69624c2db
+  WIKI: vanillabp/adapter-platform-integration.wiki.git
+  # see publish-snapshots.yaml for the three settings below
+  VBP_SNAPSHOTS_FROM: "${{ vars.VANILLABP_SNAPSHOTS_FROM == 'github-packages' && 'github-packages' || 'central' }}"
+  VBP_SNAPSHOTS_PROFILE: "${{ vars.VANILLABP_SNAPSHOTS_FROM == 'github-packages' && '-Psnapshots-from-github-packages' || '' }}"
+  VBP_PACKAGES_READ_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+concurrency:
+  # A dispatch while the weekly run is busy waits for it, and is not cancelled. Two runs at
+  # once would share the runner with each other and write two rows for one week.
+  group: load-run
+  cancel-in-progress: false
+jobs:
+  load-run:
+    runs-on: ubuntu-latest
+    # the run asks for fifteen minutes. The rest is room for a slow download, and a run
+    # which takes longer than this is a finding of its own
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+      # one issue per platform while it is red, see the last steps
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # the baseline is a commit or a tag of the history
+          fetch-depth: 0
+      - name: Use Maven 3.9
+        uses: ./.github/actions/use-maven
+      - uses: actions/setup-java@v6
+        with:
+          java-version: 25.0.5+8
+          distribution: temurin
+      # Read only: this job never writes the cache. The run builds into two Maven
+      # repositories of its own, and both start from a copy of this one, so the
+      # third-party artifacts are not fetched from Maven Central twice.
+      - uses: actions/cache/restore@v6
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ hashFiles('**/pom.xml') }}-${{ github.run_id }}
+          restore-keys: |
+            maven-${{ hashFiles('**/pom.xml') }}-
+            maven-
+      - uses: ./.github/actions/forget-cached-snapshots
+      - name: Choose the baseline
+        id: baseline
+        env:
+          REQUESTED: "${{ github.event.inputs.baseline }}"
+        run: |
+          set -euo pipefail
+          if [ -n "${REQUESTED:-}" ]; then
+            baseline="$REQUESTED"
+          else
+            baseline="$(git tag --list '[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1)"
+            baseline="${baseline:-$PINNED_BASELINE}"
+          fi
+          git rev-parse --verify "$baseline^{commit}" >/dev/null
+          echo "ref=$baseline" >> "$GITHUB_OUTPUT"
+      - name: Clone the wiki
+        run: git clone
+          "https://${{ secrets.VANILLABP_USER_NAME }}:${{ secrets.VANILLABP_USER_TOKEN }}@github.com/$WIKI"
+          wiki
+      - name: Run the load run
+        id: run
+        run: |
+          set -uo pipefail
+          status=0
+          bin/load-run.sh --baseline "${{ steps.baseline.outputs.ref }}" \
+            --record-dir wiki/load --work-dir target/load-run \
+            --seed-repository "$HOME/.m2/repository" \
+            --maven-args "-s $GITHUB_WORKSPACE/.github/maven/settings.xml ${VBP_SNAPSHOTS_PROFILE}" \
+            || status=$?
+          # 0 green or a note, 2 red with its row written, 1 a platform wrote nothing
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          echo "The load run ended with $status."
+      # The rows are pushed whatever the verdict was. A missing row would hide the week which
+      # mattered. Somebody may have edited the wiki in the meantime, so the push fetches,
+      # rebases and tries again, five times at most.
+      - name: Push the rows and the graphs to the wiki
+        if: always() && steps.run.outcome == 'success'
+        run: |
+          set -euo pipefail
+          cd wiki
+          if [ ! -f Load-measurement.md ]; then
+            cp ../load-test/wiki/Load-measurement.md Load-measurement.md
+          fi
+          git add Load-measurement.md load
+          if git diff --cached --quiet; then
+            echo "Nothing new for the wiki."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Load run of ${GITHUB_SHA:0:7} against ${{ steps.baseline.outputs.ref }}"
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              exit 0
+            fi
+            echo "Push $attempt was refused, fetching and trying again."
+            sleep $((attempt * 5))
+            git pull --rebase
+          done
+          echo "The wiki refused every push. The rows are in the artifact of this run." >&2
+          exit 1
+      - name: Keep the rounds of this run
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: load-run
+          path: |
+            target/load-run/rounds/**
+            target/load-run/verdict-*.md
+            wiki/load/**
+          retention-days: 30
+          if-no-files-found: ignore
+      # One issue per platform, in the shape of the release-line issues of the Camunda 8
+      # adapter: one issue per subject, a comment and never a second issue while it stays
+      # red, and a label plus a title which only names the platform to find it again. A green
+      # week closes the issue. The release lines keep theirs open, because one green night
+      # proves little there. Here a red week is not one flaky run: a statement count does
+      # not flicker, and a time is red only after two weeks in a row.
+      - name: Open, update or close the issue of each platform
+        if: always() && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+          GH_REPO: "${{ github.repository }}"
+          RUN_URL: "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          COMMIT_URL: "${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }}"
+        run: |
+          set -euo pipefail
+          label=load-run
+          # creating a label which exists is an error, and that error is the normal case
+          gh label create "$label" --color B60205 \
+            --description "The weekly load run found a change" >/dev/null 2>&1 || true
+          for platform in spring-boot quarkus; do
+            title="Load run: $platform is red"
+            number=$(gh issue list --state open --label "$label" --limit 100 --json number,title \
+              | jq -r --arg t "$title" 'map(select(.title == $t)) | .[0].number // empty')
+            verdict="target/load-run/verdict-$platform.md"
+            if [ -f "$verdict" ] && head -1 "$verdict" | grep -q ': red$'; then
+              state=red
+            elif [ -f "$verdict" ]; then
+              state=green
+            else
+              # no verdict: the run broke before it judged this platform. A week which
+              # proved nothing must not look like a week which proved everything
+              state=broken
+            fi
+            body=$(mktemp)
+            case "$state" in
+              red | broken)
+                {
+                  if [ "$state" = red ]; then
+                    cat "$verdict"
+                  else
+                    echo "The load run broke before it judged $platform, and nothing was written for it."
+                  fi
+                  echo
+                  echo "- run: $RUN_URL"
+                  echo "- commit: $COMMIT_URL"
+                  echo "- record: https://github.com/$GH_REPO/wiki/Load-measurement"
+                } > "$body"
+                if [ -n "$number" ]; then
+                  gh issue comment "$number" --body-file "$body"
+                else
+                  gh issue create --title "$title" --label "$label" --body-file "$body"
+                fi
+                ;;
+              green)
+                if [ -n "$number" ]; then
+                  { cat "$verdict"; echo; echo "- run: $RUN_URL"; } > "$body"
+                  gh issue comment "$number" --body-file "$body"
+                  gh issue close "$number" --reason completed
+                fi
+                ;;
+            esac
+          done
+      - name: Fail the job where a platform is red or broke
+        if: always()
+        env:
+          STATUS: "${{ steps.run.outputs.status }}"
+        run: |
+          if [ "${STATUS:-1}" != "0" ]; then
+            echo "The load run ended with ${STATUS:-no status}: 2 is red, 1 is broken." >&2
+            exit 1
+          fi

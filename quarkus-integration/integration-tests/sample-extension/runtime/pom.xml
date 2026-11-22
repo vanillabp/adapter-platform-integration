@@ -70,7 +70,7 @@
       <plugin>
         <!-- the rule which keeps this module honest: an extension needs the extension SPI
              and nothing of the core or of a platform integration, not even transitively.
-             DECISIONS.pending/2191.md says why. -->
+             See decision 149 in the repository's DECISIONS.md for why. -->
         <artifactId>maven-enforcer-plugin</artifactId>
         <executions>
           <execution>

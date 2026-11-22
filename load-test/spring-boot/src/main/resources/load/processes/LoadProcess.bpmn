@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The double reads no model. It names the process after this file, and the harness
+     tells it the tasks (see LoadProcess of load-harness). This file shows the same
+     sequence to a reader: service tasks, a task the application completes later, a
+     message. -->
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" id="Definitions_Load" targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:message id="Message_Proceed" name="Proceed" />
+  <bpmn:process id="LoadProcess" isExecutable="true">
+    <bpmn:startEvent id="StartEvent" />
+    <bpmn:sequenceFlow id="Flow_1" sourceRef="StartEvent" targetRef="Activity_Step_0" />
+    <bpmn:serviceTask id="Activity_Step_0" name="step" />
+    <bpmn:sequenceFlow id="Flow_2" sourceRef="Activity_Step_0" targetRef="Activity_Wait" />
+    <bpmn:serviceTask id="Activity_Wait" name="wait" />
+    <bpmn:sequenceFlow id="Flow_3" sourceRef="Activity_Wait" targetRef="Event_Proceed" />
+    <bpmn:intermediateCatchEvent id="Event_Proceed">
+      <bpmn:messageEventDefinition messageRef="Message_Proceed" />
+    </bpmn:intermediateCatchEvent>
+    <bpmn:sequenceFlow id="Flow_4" sourceRef="Event_Proceed" targetRef="EndEvent" />
+    <bpmn:endEvent id="EndEvent" />
+  </bpmn:process>
+</bpmn:definitions>

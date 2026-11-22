@@ -1090,7 +1090,7 @@ configures itself below `vanillabp.extensions.<extension>`, with an override per
 the plug-in names its own section. `vanillabp.extensions.<id>` is the section of a plug-in which
 names none.*
 
-*Superseded in part by `DECISIONS.pending/2191.md`: the last sentence of the next paragraph. The
+*Superseded in part by decision 149: the last sentence of the next paragraph. The
 sample extension builds against the extension SPI alone, which brings the integration SPI along.
 The core is not on its compile path.*
 
@@ -4056,7 +4056,7 @@ store, how to find the entry, how to open it again or delete it, and what openin
 idempotency key. The address is one constant, `PhaseTwoOutboxProperties.BLOCKED_ENTRIES_GUIDE`. So
 the log lines and the tests which read them cannot name two different pages.
 
-*Superseded in part by `DECISIONS.pending/2191.md`: the constant is
+*Superseded in part by decision 149: the constant is
 `PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE` of the integration SPI now, because an extension reads it.
 It is still one constant.*
 
@@ -5469,4 +5469,498 @@ Where this is referred to:
 - Wiki `Workflow-aggregates` (What VanillaBP does) and `Workflow-modules` (the levels of a
   setting); no citation, they link decision 14 as before
 - Test `migration-adapter/runtime/src/test/java/io/vanillabp/migration/test/transaction/ConcurrentBranchesReviewedTest.java`
+
+### 142. A delivery record of another aggregate is a key collision, not a repeated delivery
+
+Decision 6 answers a redelivery from the record written under its key. The key is built from the
+delivery id of the BPMS, and that id is unique only while the BPMS keeps its own database. A new
+Camunda 8 cluster counts its job keys from the same start value again. A restored backup sets the
+counter back. A Camunda 7 engine whose database was emptied hands out its ids again. The delivery
+log of the application keeps its records through all of that. So a key can find a record which
+another task wrote.
+
+A real repetition is a delivery of the same task, so of the same workflow aggregate. Where the
+record names another aggregate, the core does not answer from it. It logs an ERROR and fails the
+delivery, so the task stays open at the BPMS and turns into an incident. The message names both
+aggregates, the likely cause and the steps to clean up the delivery log.
+
+Running the handler instead would be right for this one delivery. But a delivery log which holds
+the records of another BPMS deduplicates nothing any more, and nobody would notice. The incident
+makes somebody clean it up. The core deletes nothing by itself, because it cannot tell a reset
+BPMS from two BPMS which write into one delivery log by mistake, for example two environments which
+share one database. A record without an aggregate id is answered as before, because nothing can be
+compared.
+
+Referred to by: the javadoc of `DeliveryRecords`, the wiki page `Workflow-tasks`.
+
+### 143. Addendum to decisions 12 and 49: a lost race in phase two is repeated at once inside the dispatch, and uses no attempt
+
+Proposed by story 2172. It is an addendum to decision 12 and decision 49.
+
+The boolean SPI method named below was replaced by `kindOfPhaseTwoFailure` and its enum
+`PhaseTwoFailureKind` before any release, see decision 145. A collision is the
+answer `COLLISION` there, and everything else below still holds.
+
+**Why.** Two operations on one workflow often run at nearly the same time. A message is correlated
+while a user task of the same workflow is completed, and both go through the outbox. Camunda 7 locks
+optimistically. Both commands read the same version of a row, and the one which writes second fails
+with an `OptimisticLockingException`. The engine rolls that command back completely. A moment later
+it goes through. But the outbox treated it like any other failure. It planned the entry again after
+`vanillabp.outbox.attempt-frequency`, thirty seconds by default, and counted an attempt. So a user
+waited thirty seconds for a race which was over in milliseconds.
+
+Lowering the default of `attempt-frequency` is no answer. It is also the length of the lease on an
+entry (`DispatchLease`), and it is the first step of the backoff for a BPMS which is really away.
+
+**What.** The adapter says which failure is such a race, and the core decides what to do with it.
+That is the split of decision 12. `MigratableProcessService.isPhaseTwoFailureACollision(Throwable)`
+answers `false` by default. `MigrationProcessService.runPhaseTwo` wraps a failure for which the
+adapter answers `true` into a `PhaseTwoCollision`, but only where the failure is repeatable at all.
+The `PhaseTwoRouter` repeats such a dispatch at once, up to four times. The pauses before the
+repetitions are 100, 200, 400 and 800 milliseconds. Each pause is spread between half and one and a
+half of its length, so two nodes which lost against each other do not meet again at the same moment.
+All of them together last between 0.75 and 2.25 seconds. When the last repetition loses as well, the
+store gets the failure of the adapter, unwrapped, and treats it as before: one attempt, and the
+backoff. A conflict which lasts that long is no race any more.
+
+**Where.** The repetition lives in `PhaseTwoRouter.dispatch`, inside the attempt of the store.
+
+- Every store VanillaBP ships dispatches through that method: the relational store of the core and
+  the MongoDB store of each platform. So they all behave the same, and none of them needs a change.
+- The store still holds its lease on the entry. Its renewal keeps the lease alive, so no other node
+  takes the entry in between. The repetitions last much less than the shortest sensible lease.
+- The store never hears of a repetition which wins. So no attempt is counted, no due time is
+  written, and no WARN is logged for an event which is expected.
+
+The other place would have been the store, with a short due time and no attempt counted, as
+`PhaseTwoRetryLater` does. That costs a write and a round through the poller per repetition, in every
+store, and the gruelbox store in its own repository would have to follow.
+
+**What decision 49 still says.** A repetition needs a transaction of its own, because the failed
+attempt rolled its transaction back. Decision 49 says why nothing may be repeated inside a
+transaction which the store opened and the dispatch joined: it is rollback-only after the failure.
+So the router repeats only where it opened the transaction itself. It asks
+`TransactionRunner.isTransactionActive()` before the first attempt. Where a transaction is active
+already, as with the gruelbox store, the failure goes to the store at once, as before. A runner which
+cannot tell answers `true` by default, so it gets no repetition either. No thread waits inside a
+transaction, and the JDBC store holds no connection while it dispatches. What a repetition holds is
+the thread of one lane for at most 2.25 seconds. Entries of other aggregates on the same lane wait
+that long. That is accepted, because the alternative was thirty seconds for the entry itself.
+
+**Why the pauses are not configured.** Decision 24 asks what a number decides. These pauses decide
+nothing about correctness. They only decide how soon a lost race is tried again, and the BPMS which
+loses races of this kind is known. A property would have to be bound, validated and described on two
+platforms, and nobody could choose a better value than one which outlasts the race. The backoff for
+outages keeps its properties.
+
+**Who says `true`.** Only an adapter whose BPMS rolls the operation back completely when it loses
+the race. Then a repetition cannot do anything twice, and it passes the same `previouslyAttempted`
+as the attempt before it. On Camunda 7 and its forks it is the `OptimisticLockingException`,
+anywhere in the cause chain. Camunda 8 has no such failure: the broker orders the commands of a
+process instance on its partition, and its answers to a state which changed in between (`NOT_FOUND`,
+`INVALID_STATE`) are no race which a repetition wins. Backpressure (`RESOURCE_EXHAUSTED`, HTTP 503)
+is the answer `BUSY` of decision 145. The Process-Engine-API has no typed exceptions, so its
+adapter cannot tell a race from an outage and keeps the default.
+
+`ACollisionIsRepeatedInsideTheDispatchTest` holds the edges in the core: the bound, the unwrapped
+failure, the transaction of the store, and a node which stops. `ACollisionIsRepeatedAtOnceTest` holds
+the effect on an entry of the relational store, with the BPMS double and its `DummyCollision`.
+
+### 144. Every read of the delivery log by a BPMS id compares the workflow it belongs to
+
+Decision 142, about a delivery record of another aggregate, compares the aggregate where a
+delivery key finds a record. The same reset BPMS hands out its other ids again too: task ids and
+workflow ids. So every read which looks a record up by such an id was checked for what a collision
+does.
+
+- The election of a task operation (`recordOfTask`), closing a task after phase two and closing it
+  on a cancellation from the BPMS (`markTaskClosed`) look the record up by the aggregate AND the
+  task id. A record of another aggregate is never found. What is left is a second workflow of the
+  SAME aggregate, started after the reset, whose task got the id of an old task. An open old record
+  elects the adapter which delivered it, which is the adapter that holds the new task, so nothing
+  goes wrong. A closed old record would answer the completion of the new task as a no-op. The
+  election therefore no longer answers from a closed record which is older than the row about the
+  start of the workflow the aggregate runs now, and which names another workflow. It asks the BPMS
+  instead, which costs one round trip on a path that is rare anyway. Closing records of the old
+  workflow together with the new one does no harm: the old task is gone with the old BPMS.
+- The open tasks of a workflow (`openTasksOfWorkflow`) are found by the workflow id alone. A
+  workflow end or a wake-up can find the open tasks of an old workflow of ANOTHER aggregate there,
+  and would report them to that aggregate as canceled. Records of another aggregate are now left
+  out and named in an ERROR with the steps to clean up. Nothing fails, because the end of a workflow
+  and the job which woke the application up are worth more than the cleanup. The records are not
+  deleted, for the same reason a delivery of another aggregate does not delete them.
+- A repeated delivery now also compares the workflow id, where the record and the delivery both
+  name one. It fails the delivery like a record of another aggregate does. This catches a second
+  workflow of the same aggregate, which the aggregate alone cannot.
+
+What stays open: a new BPMS counts every key from the same start value, so a second workflow of the
+same aggregate may get the very workflow id of the old one. Then neither the start row nor the
+workflow id shows anything. Telling the BPMS apart at startup is the only complete answer, and that
+needs an identity of the BPMS which only some of them offer.
+
+Referred to by: the javadoc of `DeliveryRecords` and of `WorkflowTaskRegistry`, the wiki page
+`Workflow-tasks`.
+
+### 145. Addendum to decisions 12, 49 and 143: a busy BPMS in phase two costs no attempt, and the adapter names the kind of a failure with one enum
+
+Proposed by story 2174. It is an addendum to decision 12, decision 49 and decision 143, whose SPI
+method it replaces.
+
+**Why.** A BPMS under load refuses commands for a while and asks to be asked again later. Camunda 8
+does this with backpressure: the REST gateway answers HTTP 503 with the title `RESOURCE_EXHAUSTED`, the
+gRPC gateway with the status of the same name. The broker refuses before it works on the command, so
+nothing of it happened. The outbox treated such a refusal like any other failure. It counted an
+attempt and doubled the distance each time. Under load which lasts, an entry which was fine ended up
+blocked after `vanillabp.outbox.block-after-attempts`, only because the cluster was full. And nothing
+in the log said that the cluster was the reason.
+
+**What.** The adapter says that a failure means "busy", and the core decides what follows. That is the
+split of decision 12 again.
+
+- The SPI method is `MigratableProcessService.kindOfPhaseTwoFailure(Throwable)`. It returns the enum
+  `PhaseTwoFailureKind` with `COLLISION`, `BUSY` and `OTHER`, and its default is `OTHER`. It replaces
+  the boolean `isPhaseTwoFailureACollision(Throwable)` of decision 143.
+  That method was only on a snapshot of 2.0 and no adapter outside this organisation used it. One
+  method with an enum keeps the kinds apart: a failure can be a collision or busy, never both, and a
+  third kind later is one more constant instead of one more method which every adapter has to know.
+- `MigrationProcessService.runPhaseTwo` wraps a failure of kind `BUSY` into a `PhaseTwoBpmsBusy`, but
+  only where `isPhaseTwoFailureRepeatable` calls it repeatable. The type lives in the integration SPI,
+  next to `PhaseTwoRetryLater` and `PhaseTwoPermanentFailure`, because the gruelbox store in its own
+  repository reads it too. Its message names the adapter, because the entry of most operations does
+  not know it.
+- Every store recognises it through `PhaseTwoBpmsBusy.isBusy(Throwable)`, right after the check for a
+  permanent failure. The entry is due again after `PhaseTwoOutboxProperties.delayForABusyBpms()`: that
+  is `vanillabp.outbox.attempt-frequency`, spread by a fifth in both directions. The attempt counter
+  stays as it was. Neither `block-after-attempts` nor `wait-for-visibility-at-most` ends the wait. Each
+  refusal writes one WARN line with the operation, the BPMN process, the workflow module, the
+  aggregate, the entry, the wait and the message which names the adapter.
+
+**Why no limit.** A busy BPMS is there and answers. It just needs time, and the BPMS decides how long.
+A limit would block entries which are fine at exactly the moment when somebody is busy with the load
+already. The WARN line of each refusal shows that the load lasts, and that is enough for an operator
+to act. An entry which the BPMS refuses for a reason which is not load is the adapter's mistake to
+classify, not the core's to cap.
+
+**Why the wait is `attempt-frequency` and no new property.** Decision 24 asks what a number decides.
+The wait decides how soon an overloaded BPMS is asked again. That is the job `attempt-frequency`
+already does for the first repetition of any failure, and an operator who tuned it for the BPMS does
+not want a second number for the same question. The distance does not double, because doubling exists
+for a BPMS which is away, and an overloaded BPMS is there.
+
+**Why the spread.** A busy BPMS refuses many entries within a short time. With one fixed wait they
+would all come back in the same moment and meet a full BPMS again. A fifth in both directions spreads
+them over 24 to 36 seconds by default, and every refusal is still "about thirty seconds" for whoever
+reads the WARN line.
+
+**Why not repeat inside the dispatch, as for a collision.** A collision of decision 143 is
+over in milliseconds, and the router repeats it while the store holds
+its lease. A full cluster needs seconds to half a minute. Waiting that long inside the dispatch would
+hold the lease and the thread of a lane, and every entry behind it on that lane would wait as well. A
+short repetition does not help either: a full cluster does not recover in milliseconds, and the
+repetition only adds load. So a busy refusal goes to the store at once, and the store gives the entry
+back.
+
+**What decision 49 still says.** Nothing waits inside a transaction, and nothing waits inside the
+dispatch. The store writes the new due time in one update, as it does for `PhaseTwoRetryLater`. The
+difference to that case is the limit: a read model which is behind may stop for good, so
+`wait-for-visibility-at-most` ends the wait there. A busy BPMS answers every time, so it gets no such
+limit.
+
+**A store which does not know the type** counts the refusal as an ordinary attempt. That is what every
+store did before, so an older store loses nothing, it only keeps the old behaviour. The stores
+VanillaBP ships all know it: the relational store of the core, the MongoDB store of each platform and
+the gruelbox store.
+
+**Who says `BUSY`.** Only an adapter whose BPMS refuses with a clear "come back later" before it does
+anything. On Camunda 8 that is backpressure, read from its codes along the cause chain: REST 503 with
+the title `RESOURCE_EXHAUSTED` and gRPC `RESOURCE_EXHAUSTED`. A 503 without that title and the gRPC
+status `UNAVAILABLE` are a gateway or cluster which cannot be reached. That is an outage, and it keeps
+the counted attempts, so an entry for a cluster which never comes back is still blocked in the end.
+Camunda 7 and its forks are embedded and have no backpressure. The Process-Engine-API has no typed
+exceptions, so its adapter cannot tell a busy engine from an outage and keeps the default.
+
+`ABusyBpmsUsesNoAttemptsTest` holds the relational store of the core: no attempts, no time limit, a
+WARN per refusal, and the spread. `ABusyBpmsCostsNoAttemptTest` holds the effect on an entry on both
+platforms with the BPMS double and its `DummyBusy`, and the two MongoDB store tests hold the same for
+their stores.
+
+### 146. A start which meets another installation of a BPMS ends while the delivery log holds records of it
+
+The delivery log is keyed by ids which the BPMS hands out, and those ids are unique only within one
+installation. A new Camunda 8 cluster hands out the job keys of the old one again. The check of each
+delivery catches a collision, but only when it happens: as an incident on some task, long after the
+start. So the core also compares an identity of the BPMS at startup.
+
+- An adapter reports the identity through `MigratableProcessService#identityOfTheBpms`, default
+  `null`. It has to survive a restart and a restored backup of the same installation, and differ for
+  a new one. The value is opaque to the core.
+- The core writes it into the delivery log, one row per adapter, workflow module and BPMN process,
+  of the new record kind `BPMS_IDENTITY`. The startup checks run per BPMN process, the row is read by
+  its key, and the NOT NULL columns of the table get real values. No retention deletes such a row,
+  because it vouches for every record of its adapter. No question about open work counts it.
+- No row yet (the first start with this check, or a new delivery log): the identity met is written
+  down and taken as the right one. A log written before the check existed is taken over this way.
+- Same identity: the start goes on.
+- Another identity while the log holds records of that adapter and process: the start ends with an
+  exception which names both identities and three ways on: correct the address, delete the records,
+  or delete only the identity row to keep the records.
+- Another identity without such records: the new identity replaces the old one, and the start goes
+  on. Nothing can collide.
+
+The check throws where it stands instead of reporting a refusal to the startup findings. On Quarkus
+the process services run their checks in an observer of the startup event, and a refusal noted after
+the box was written would only be logged.
+
+It runs beside the check of each delivery, not instead of it. A BPMS which cannot say who it is, and a
+start which cannot reach the BPMS, leave everything to that check.
+
+Referred to by: the javadoc of `DeliveryRecords#compareTheIdentityOfEachBpms`, of
+`MigratableProcessService#identityOfTheBpms` and of `DeliveryRecordKind#BPMS_IDENTITY`, the guide
+`ADAPTER-AUTHORS.md`, the wiki page `Workflow-tasks`.
+
+### 147. The default delivery logs are ready before the startup checks of the process services read them
+
+The startup checks of the process services read the delivery log. The comparison of the BPMS
+identity reads the identity row and writes it at the first start. On an empty database the table of
+the JDBC delivery log does not exist until its own startup hook has created it. Both hooks ran at the
+same point of the start, and neither platform puts them in an order. On Spring Boot both are a
+`SmartInitializingSingleton`, called in the order of the bean definitions. On Quarkus both observe
+the startup event with the same priority. On Spring Boot with JPA the checks came first, and every
+first start of an application whose adapter reports an identity ended with "table not found".
+
+- Spring Boot: the hook of a default delivery log is a `TaskDeliveryLogStartup`. It does its work
+  once, whoever calls it first. The hook of the startup checks calls all of them before it checks.
+- Quarkus: the observers of the default delivery logs have the priority
+  `VanillaBpDeploymentRunner.DELIVERY_LOG_STARTUP_PRIORITY`. It is lower than the default priority
+  of the startup checks, so they run first.
+
+Both apply to the JDBC and the MongoDB delivery log. MongoDB creates a collection with the first
+document, so there only the indexes come later than they should. A missing table where the
+application manages its schema itself is now reported by the delivery log with its own message, not
+by the identity check as a failed read.
+
+A delivery log which the application brings itself is not covered. The application owns its start.
+
+Referred to by: the javadoc of `TaskDeliveryLogStartup`, of
+`SpringBootMigrationAdapterAutoConfiguration#vanillaBpProcessServiceStartupValidation` and of
+`VanillaBpDeploymentRunner#DELIVERY_LOG_STARTUP_PRIORITY`.
+
+### 148. On Spring Boot, a key below vanillabp which no class binds ends the start
+
+Proposed by story 2185, 2026-11-18.
+
+**Why.** A key which nothing reads changes nothing. The application boots and runs without the
+setting the developer meant, and nobody tells them. Quarkus has always ended the start for such a
+key, because there the mappings of the platform and of the adapters together must cover every key
+below `vanillabp`. Spring Boot binds each `@ConfigurationProperties` class by itself, and each class
+ignores the keys it does not know. So a key which no class knew was ignored as well. Story 2183
+found it: `vanillabp.workflow-modules.<m>.workflows.<w>.tasks.<t>.adapters.camunda7.tenant-id`
+started without a word on Spring Boot and ended the start on Quarkus. The rule that a key nobody
+reads ends the start holds for every key and every level (decision 89 for keys which bind at the
+wrong level). Two platforms which disagree on it are one product which behaves in two ways. The
+comments which accepted the difference are gone.
+
+**What.** `UnreadKeysCheck` of `spring-boot-integration` writes down every key below `vanillabp`
+which a class took over. It is a `ConfigurationPropertiesBindHandlerAdvisor`, so it sees the core
+model and every overlay class of an adapter or an extension. When every singleton exists, it
+creates the classes below `vanillabp` which do not exist yet, and compares the keys of every
+property source with the keys taken over. What is left ends the start, all keys in one message.
+
+**Each part declares its keys by binding them.** The check knows no key of an adapter or an
+extension. A part takes part through the overlay class it binds anyway, at each level where it
+reads a key, as on Quarkus. A key which a part reads only through `Environment#getProperty`,
+`@Value` or a `Binder` of its own ends the start. Such a part has to bind the key in its overlay
+class as well. No list of keys per adapter was built. It would be a second description of what
+the overlay class already says, and the two would drift.
+
+**The message.** `UnreadKeys` of the core writes it, so Quarkus can use the same words later. The
+platform builds the tree of the keys which the classes can read from their types (`ReadableKeys`).
+For each key, the message gives the first answer which fits: the key of version 1 it is
+(`default-adapter`, `resilience`), the levels where the same key IS read, the key it most likely
+is, or the keys which are read where the written key went wrong. A level counts as a place only
+where it is a level: `vanillabp`, or the id of a map such as an adapter or a task. A key of the
+same name in another section means something else and is not offered.
+
+**What counts as read.** A key the binding took over. A key in a section which a class reads as a
+whole, such as the settings of an extension. A section written as `{}`. An element of a list which
+a stronger source replaced. An environment variable in both spellings of a dash, `TENANTID` and
+`TENANT_ID`, because Spring Boot binds both.
+
+**Rejected.** Spring Boot's `ignoreUnknownFields = false` and `NoUnboundElementsBindHandler`: each
+works on one class, and several classes share the prefix `vanillabp`, so every key of an overlay
+would fail the core class. A list of keys contributed per adapter: see above. Checking at the first
+use of a key: too late, and a key nobody reads has no use.
+
+**Where it is cited.**
+
+- javadoc of `UnreadKeys` and of `UnreadKeysCheck` (the citation)
+- `spring-boot-integration/README.md`, section "Configuration binding"
+  (the citation)
+- `migration-adapter/ADAPTER-AUTHORS.md`, section "Spring Boot", describes the rule without citing
+  it
+- `UPGRADE.md`, section "What the startup says about a configuration", describes the rule without
+  citing it
+- `quarkus-integration/README.md`, and the javadoc of `UnknownPropertyKeyConfigurationTest` and
+  `UnknownExtensionSettingsKeyTest`, no longer accept the difference between the platforms
+- tests: `AKeyNobodyReadsEndsTheStartTest` (Spring Boot), `UnreadKeysTest` (core)
+
+### 149. An extension depends on the extension SPI alone, and the core's classes are not part of its contract
+
+Decision 35 gave an extension a contract instead of a base class. But three parts of that contract
+were still classes of the core. The resolvers of the outbox store, the transaction runner and the
+delivery log lived in `migration-adapter`, and so did `MigrationAdapterProperties`, from which every
+extension read the configured adapters. So an extension needed the core on its compile path, and
+the Business Cockpit imported five types from it. Each of them could change with any story in the
+core, and nothing marked them as a promise. That is the situation of version 1 again, one level
+lower.
+
+What holds now:
+
+- `PhaseTwoOutboxResolver`, `TransactionRunnerResolver` (with its `TransactionCoverage`) and
+  `TaskDeliveryLogResolver` are interfaces of the extension SPI, package
+  `io.vanillabp.integration.extension.spi.resolver`. The platform integrations implement them, as
+  before. The core calls them, as before.
+- `VanillaBpSettings` in `io.vanillabp.integration.extension.spi.settings` is what an extension reads
+  from VanillaBP's configuration: the adapter ids and their types, `adapterIdsOfType`, the prioritized
+  adapters, the workflow module ids, the extension's own section over the eight positions of
+  decision 7, and the root `PREFIX`. That is what the Business Cockpit and its five BPMS halves read
+  on 2026-11-19, plus the reading calls which this repository already described for extensions.
+  `MigrationAdapterProperties` implements it, and both platforms publish the one object under both
+  types. Binding, derivation and checks stay in the core. The view has no setter, so an extension
+  cannot change what the core sees.
+- `BLOCKED_ENTRIES_GUIDE`, the address an ERROR about a blocked outbox entry ends with, is a constant
+  of `PhaseTwoOutbox` in the integration SPI. It is still one constant (decision 115). It moved
+  because an extension which blocks its own entry names the same page.
+- The extension SPI depends on the integration SPI, and on nothing else. The resolvers answer
+  `PhaseTwoOutbox`, `TransactionRunner` and `TaskDeliveryLog`, which are types of the integration
+  SPI. An extension used that module anyway, for its outbox operations and for `VanillaBpParts`. So
+  an extension now names one artifact of VanillaBP, `vanillabp-extension-spi`.
+
+Some answers of the core go to adapters and to extensions alike. For them, the integration SPI holds
+a narrow interface with what an extension uses, and the type of the adapter SPI extends it. The core
+still implements one object, and both platforms publish it under both types, because a bean is
+found by every interface it implements:
+
+- `WorkflowTaskClaims` in `io.vanillabp.integration.spi.workflowtask`: `isClaimedByAWorkflowService`,
+  `resolveWorkflowAggregateIdName` and `workflowsShareTheWorkflowAggregate`, with the same
+  signatures and defaults as before. `WorkflowTaskWiring` extends it and declares the three methods
+  no longer itself. The third one is the question about a call activity. Adapters ask it, and so do
+  extensions which follow a workflow into the processes it calls, like the BPMS halves of the
+  Business Cockpit.
+- `IdentifierScoping` in `io.vanillabp.integration.spi`: `SEPARATOR`, the three `scoped*` and the
+  three `plain*` methods, their static forms which accept `null`, and `isolatesByAdapter`, which
+  says whether the mode is `by-adapter`. `NameClashAvoidanceSupport` extends it. It keeps `modeFor`,
+  the checks while deploying, and its own static forms, which call the new ones. A static method of
+  an interface is not inherited, and adapters call them by the old name. `isolatesByAdapter` is a
+  default method there, so the core and every test double of an adapter have nothing to write.
+- `MultiInstanceIteration` and `BpmnTaskElement` in `io.vanillabp.integration.spi.workflowtask`. They
+  read what an API of a BPMS adapter hands an extension: one iteration of a multi-instance element,
+  and the names of a task element. The records `MultiInstanceValue` and `BpmnTaskSpec` of the
+  adapter SPI implement them and stay where they are.
+
+All four interfaces use JDK types only, so the integration SPI gets no new dependency. The
+interfaces live there and not in the extension SPI, because the adapter SPI needs them too.
+
+That covers what the BPMS halves of the Business Cockpit imported from the adapter SPI on
+2026-11-21: `WorkflowTaskWiring` for the three calls above, `NameClashAvoidanceSupport` for
+`SEPARATOR` and the static `scopedProcessId` and `plainTaskDefinition`, `MultiInstanceValue` from
+`Camunda7MultiInstances.of` and its counterparts in the CIB seven and Operaton adapters, and
+`BpmnTaskSpec` from the deployed processes of the Process Engine API adapter. Their imports of
+`MigrationAdapterProperties` and `TaskDeliveryLogResolver` of the core are answered above.
+
+Three ways were weighed for `WorkflowTaskWiring`. Moving it into the extension SPI whole (A) would
+have dragged 13 more types along, about 2,900 lines, because its signatures name
+`AggregateSyncMode`, `WorkflowAggregateSync.PathVerdict`, `ModelExpression`, `ProcessVersionCatalog`,
+`NameClashAvoidance` and more, all of which only an adapter needs. Letting extensions keep the adapter
+SPI for this one interface (C) leaves the next extension a way into everything an adapter calls.
+The narrow interface (B) was chosen, and the other three types follow it. The `NameClashAvoidance`
+enum did not move for the same reason: every BPMS adapter imports it, and none of them would have
+gained anything.
+
+BPMS adapters need no change from this decision: not Camunda 7, Camunda 8, the Process Engine API,
+the forks which take their code by sync, and not the external ZenBPM adapter. Every type they import
+stays in its package with its methods. A type which an adapter implements or mocks only gains
+supertypes. One additive step is open for the Camunda 8 half of the Business Cockpit: it asks
+`Camunda8Scoping.tenantIdFor` of the Camunda 8 adapter, whose parameter is
+`NameClashAvoidanceSupport`. That parameter can become `IdentifierScoping` and ask
+`isolatesByAdapter` instead of `modeFor`, without changing any caller.
+
+When the core gets something new an extension has to read, it becomes an interface of the extension
+SPI, and the class of the core implements it. A class of the core is never the answer, however
+small the step.
+
+Two other ways were weighed. The resolvers could have gone into the integration SPI, next to the
+types they answer. But that module holds what an APPLICATION implements, and no application
+implements a resolver. And the binding classes could have moved into the extension SPI whole. They
+carry the platform's binding, the conventions and every check of the configuration, more than 4000
+lines which change with almost every story. An extension reads a handful of answers from them.
+
+The rule has a guard. The sample extension of each platform names `vanillabp-extension-spi` alone,
+and an enforcer rule in its POM stops the build when the core, the adapter SPI or a platform
+integration arrives, even transitively. A test of an extension may still use the core. Its scope is
+`test`, so nothing of it reaches the extension's users.
+
+BPMS adapters are a different case. Their `core` module takes the adapter SPI alone, and their
+platform modules take the platform integration on purpose, because they register beans per adapter
+id and bind their own keys below it (`ADAPTER-AUTHORS.md`, section 2.0). Their imports of the
+core's configuration classes stay. The Spring Boot modules of the Business Cockpit's BPMS halves
+are in the same place for one call: `AdapterBeanRegistrarSupport#forEachConfiguredAdapterId` of the
+Spring Boot integration. It reads the adapter ids from the environment while beans are registered,
+before `VanillaBpSettings` exists as a bean.
+
+Supersedes in part decision 35 (the sample extension builds against the extension SPI alone, not
+against the two SPI artifacts and the core) and decision 115 (the constant is
+`PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE`).
+
+Referred to by: the POMs of both sample extensions, `migration-adapter/README.md` (section
+Extensions), `migration-adapter/EXTENSION-AUTHORS.md` (sections 1, 2 and 8), the javadoc of `WorkflowTaskClaims`,
+`IdentifierScoping`, `MultiInstanceIteration`, `BpmnTaskElement` and the package
+`io.vanillabp.integration.spi.workflowtask`.
+
+### 150. The platform measures itself once a week, by statement counts and by the ratio of two medians
+
+A weekly run drives the same fixed work through VanillaBP on both platforms, against the current
+commit of `main` and against a baseline. The baseline is the newest release tag. Until one exists it
+is a commit pinned in the workflow, moved by hand. The BPMS is the BPMS double, so the run measures
+what VanillaBP costs and not what a BPMS costs.
+
+What holds:
+
+- **Fixed work, never fixed time.** A run is N workflows of a fixed shape, run to their end. A run
+  which stops after a minute compares with nothing, and it cannot check that the numbers which
+  have to be zero are zero.
+- **Statement counts first.** The database statements of one start, one task delivery, one
+  completion and one message correlation are counted, not timed. A count does not move with the
+  runner. Any change of a count is red at once, with no threshold to argue about.
+- **A time is a ratio of two medians, measured in the same job.** The baseline is built from its
+  ref in the same job, into a Maven repository of its own, and runs the identical harness. The
+  rounds of both sides alternate, five at least per side, each in a fresh JVM. On 2026-09-20 the
+  same work spread by about half between rounds on a loaded machine, while the median of the rounds
+  moved by one to five percent. A reference of a different shape, a CPU loop next to the subject,
+  spread by seven and thirteen percent where the subject spread by ten, so it cancels nothing.
+- **A time is red only in the second week.** A ratio above 1.10 in one week is a note in the
+  record. In two weeks in a row it is red. The noise above reaches one week's threshold on its own.
+- **Zero means zero.** Discarded or blocked outbox entries, concurrent redeliveries, failed
+  deliveries and workflows which did not finish make a run red, however fast it was.
+- **The record lives in the wiki, not on `main`.** One CSV file per platform, one row per week,
+  with the graph next to it. A push to `main` would need a bypass of the ruleset which requires the
+  check `publish`, and that bypass is granted per actor for the whole repository. The wiki has no
+  ruleset, and a push there starts no build. The token of a workflow run cannot write a wiki, so the
+  workflow pushes with a token of a user.
+- **A row is written in every week, red ones included.** A missing row would hide the week which
+  mattered. A record which cannot be read is never replaced by a shorter one: the run then writes
+  nothing.
+- **Factors, not milliseconds.** The graph and the README speak in ratios. Absolute times stay in
+  the record. They show the runner, and somebody would read the good weeks as a promise.
+- **One harness for everybody.** The part which drives the work and reads the numbers is published
+  as `io.vanillabp:load-harness`. An adapter repository runs the same work against its own BPMS. A
+  copy per repository would drift, and then no two runs would be comparable.
+
+Where this is referred to:
+
+- `load-harness` (`Verdict`, `Comparison`, `LoadRecord`, `CompareRuns`, `LoadRound`, `LoadDriver`)
+- `load-test/README.md`, the paragraph about the load run in `README.md`
+- `bin/load-run.sh` and `bin/render-load-graph`
+- the workflow `.github/workflows/load-run.yaml`
+- the wiki page `Load-measurement`, which the workflow writes once
 

@@ -84,8 +84,9 @@ public class BpmsInitiatedStartHandler {
 
   /**
    * What this method serves, in the words of a message: one named start event, or every
-   * start event of the process. Two methods are a defect only where both describe the same
-   * thing. That is why the message quotes this and not the id alone.
+   * start event of the process. The messages about two methods for one start event quote
+   * this and not the id alone, because the id of a method which serves every start event is
+   * empty.
    *
    * @return What this handler is wired to, for guiding messages
    */
