@@ -421,8 +421,9 @@ public final class DeliveryRecords {
    * which names no workflow leaves that case open.
    * <p>
    * The delivery fails instead of running the handler, and the old records are not deleted.
-   * {@code DECISIONS.pending/2169.md} says why. A record without an aggregate or without a
-   * workflow id gives nothing to compare for that value, so it passes that check as before.
+   * See decision 142 in the repository's DECISIONS.md for why. A record without an aggregate or
+   * without a workflow id gives nothing to compare for that value, so it passes that check as
+   * before.
    *
    * @param delivery The record found under the key of this delivery
    * @param context The invocation context of this delivery

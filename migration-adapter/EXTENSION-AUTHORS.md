@@ -828,7 +828,7 @@ build item of its own.
 | The log of processed task deliveries is resolvable per workflow aggregate, and holds the tasks the application was handed                                             | decision 54, `ExtensionElectionAndConfigurationTest`, `ExtensionEnablementTest`, `OpenTaskRetentionTest` per platform                                                                                  |
 | A workflow an adapter found suspended reaches only the extensions of that adapter, and an exception of yours stays inside                                             | `DeploymentServiceTest$SuspendedWorkflowTests`, `SuspendedWorkflowReachesExtensionsTest` (Spring Boot), `DeploymentPipelineTest#aSuspendedWorkflowReachesTheMatchingExtensions` (Quarkus)              |
 | `WorkflowTaskClaims` and `IdentifierScoping` are beans of both platforms, and they are the core's objects behind `WorkflowTaskWiring` and `NameClashAvoidanceSupport` | `ExtensionElectionAndConfigurationTest#anExtensionAsksTheIntegrationSpiAboutClaimsAndScoping` (Spring Boot), `ExtensionEnablementTest#anExtensionAsksTheIntegrationSpiAboutClaimsAndScoping` (Quarkus) |
-| What this document names is in the extension SPI or the integration SPI, so neither the adapter SPI nor the core is on your compile path                              | `DECISIONS.pending/2191.md`, the enforcer rule of the sample extension of each platform                                                                                                                |
+| What this document names is in the extension SPI or the integration SPI, so neither the adapter SPI nor the core is on your compile path                              | decision 149, the enforcer rule of the sample extension of each platform                                                                                                                               |
 
 One statement in this document is an assumption, and no test holds it. You can tell two adapters
 apart by the identity of the processing context. This works because the core builds one context per
@@ -869,8 +869,8 @@ For the settings, read `VanillaBpSettings`, `SettingsLevel`, `SettingsResolution
 sections around it explain why the SPI looks the way it does.
 
 [`DECISIONS.md`](../DECISIONS.md) of this repository holds the reasoning which several places rely
-on. This document points at entries 7, 9, 35, 36, 39, 50, 51, 52, 54, 56, 119, 120, 126 and 127, and
-at the decision which still waits for its number in `DECISIONS.pending/2191.md`.
+on. This document points at entries 7, 9, 35, 36, 39, 50, 51, 52, 54, 56, 119, 120, 126, 127 and
+149.
 
 The wiki page
 [Extensions](https://github.com/vanillabp/adapter-platform-integration/wiki/Extensions) is the half

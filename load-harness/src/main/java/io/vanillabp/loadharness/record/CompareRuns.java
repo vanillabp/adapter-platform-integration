@@ -25,8 +25,8 @@ import java.util.stream.Stream;
  * </pre>
  * <p>
  * The row is written even when the week is red, and marked as such. A missing row would hide
- * the week which mattered (see {@code DECISIONS.pending/384.md}). The exit code says what
- * happened:
+ * the week which mattered (see decision 150 in the repository's DECISIONS.md). The exit code
+ * says what happened:
  * <ul>
  * <li>0: the row is written, and the week is green or has a note,</li>
  * <li>1: nothing was written, because the record or a round could not be read. A run which

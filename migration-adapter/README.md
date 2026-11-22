@@ -2329,7 +2329,7 @@ after the check for a permanent failure. It plans the entry again after
 a fifth in both directions, counts no attempt, and writes one WARN line. No time limit applies,
 unlike for `PhaseTwoRetryLater`, because a busy BPMS answers every time. Nothing is repeated inside
 the dispatch, unlike for a collision: a full BPMS needs seconds, and the lane would wait with it. See
-`DECISIONS.pending/2174.md`. `ABusyBpmsUsesNoAttemptsTest` holds the relational store, the MongoDB
+decision 145 in the repository's DECISIONS.md. `ABusyBpmsUsesNoAttemptsTest` holds the relational store, the MongoDB
 store tests of both platforms hold theirs, and `ABusyBpmsCostsNoAttemptTest` holds the effect on an
 entry on both platforms.
 
@@ -3677,7 +3677,7 @@ extension is read the same way: `MultiInstanceIteration` is implemented by `Mult
 platform integrations are not on the compile path of an extension. So a change inside the core cannot break an extension. The sample
 extension of each platform holds the rule. Its POM names the extension SPI alone, and an enforcer
 rule stops its build when the core or a platform integration arrives, even transitively.
-`DECISIONS.pending/2191.md` says why.
+See decision 149 in the repository's DECISIONS.md for why.
 
 When the core gets something new an extension has to read, it goes into the extension SPI as an
 interface, and the core's class implements it. The class of the core is never the answer.

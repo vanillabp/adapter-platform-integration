@@ -31,7 +31,8 @@ import io.vanillabp.integration.adapter.migration.config.ReadableKeys.Position;
  * </ol>
  * The keys are printed sorted, so the same configuration reads the same way on every boot.
  * <p>
- * {@code DECISIONS.pending/2185.md} says why a key nobody reads ends the start.
+ * See decision 148 in the repository's DECISIONS.md for why a key nobody
+ * reads ends the start.
  */
 public final class UnreadKeys {
 

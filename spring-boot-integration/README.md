@@ -119,7 +119,7 @@ where a key is read, when it was written at the wrong one, or the key it most li
 An environment variable counts in both spellings of a dash: `TENANTID` and `TENANT_ID`. A list
 element which a stronger source replaced counts as read. `AKeyNobodyReadsEndsTheStartTest` holds a
 wrong key at every level, the keys which are read, environment variables, the keys of version 1 and
-a lazy overlay class. `DECISIONS.pending/2185.md` says why such a key ends the start.
+a lazy overlay class. See decision 148 in the repository's DECISIONS.md for why such a key ends the start.
 
 A section written as `{}` needs one more step. Spring Boot reads the empty map of a YAML file as a
 property with an empty value, for example `vanillabp.adapters.saas=`. When Spring Boot binds an

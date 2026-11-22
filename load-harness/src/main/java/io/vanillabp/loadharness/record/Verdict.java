@@ -12,8 +12,8 @@ import java.util.Optional;
  * a change, and there is no threshold to argue about. A number which has to be zero and is
  * not is red as well. A time is red only when the ratio of the medians was above
  * {@link #THRESHOLD} in this week AND in the week before. One week above it is a note, not an
- * alarm, because the noise of a shared runner reaches that far on its own. The rules are a
- * decision of the repository, see {@code DECISIONS.pending/384.md}.
+ * alarm, because the noise of a shared runner reaches that far on its own. The rules are
+ * decision 150 in the repository's DECISIONS.md.
  *
  * @param state Green, a note, or red
  * @param reasons Why, one sentence per finding, empty when green
