@@ -298,9 +298,11 @@ public class BpmsInitiatedStartTest {
 
     /**
      * Serves whatever the deployed model brings. So the check about a start event without
-     * a method stays quiet, and the test reads the one about the kept method.
+     * a method stays quiet, and the test reads the one about the kept method. It leaves out
+     * version 99, because a method without an id next to one with an id must not serve the
+     * same version.
      */
-    @WorkflowStartedByBpms
+    @WorkflowStartedByBpms(version = "<99")
     public Aggregate buildsWhateverStarts() {
 
       return new Aggregate();
@@ -320,6 +322,50 @@ public class BpmsInitiatedStartTest {
 
     @WorkflowStartedByBpms(id = TIMER_EVENT)
     public Aggregate second() {
+
+      return new Aggregate();
+
+    }
+
+  }
+
+  /**
+   * One method names the timer, the other serves every start event. Both match the timer,
+   * and nothing says which of the two should build the aggregate.
+   */
+  static class NamedAndGeneralMethodService {
+
+    @WorkflowStartedByBpms(id = TIMER_EVENT)
+    public Aggregate forTheTimer() {
+
+      return new Aggregate();
+
+    }
+
+    @WorkflowStartedByBpms
+    public Aggregate forEveryStartEvent() {
+
+      return new Aggregate();
+
+    }
+
+  }
+
+  /**
+   * The same pair, but each method serves its own versions of the process. A start of any
+   * version then finds exactly one method.
+   */
+  static class NamedAndGeneralMethodOfOtherVersionsService {
+
+    @WorkflowStartedByBpms(id = TIMER_EVENT, version = "1")
+    public Aggregate forTheTimerOfVersionOne() {
+
+      return new Aggregate();
+
+    }
+
+    @WorkflowStartedByBpms(version = ">1")
+    public Aggregate forEveryStartEventOfLaterVersions() {
 
       return new Aggregate();
 
@@ -906,6 +952,51 @@ public class BpmsInitiatedStartTest {
 
     assertTrue(exception.getMessage().contains(TIMER_EVENT));
     assertTrue(exception.getMessage().contains(TwoMethodsForOneStartEventService.class.getName()));
+
+  }
+
+  @Test
+  @DisplayName("A method naming a start event next to one serving every start event fails at startup")
+  public void aNamedAndAGeneralMethodFail() {
+
+    final var testee = registry(new TransactionRunnerStub());
+
+    final var exception = assertThrows(
+        IllegalStateException.class,
+        () -> testee
+            .registerWorkflowService(
+                MODULE,
+                PROCESS,
+                NamedAndGeneralMethodService.class,
+                NamedAndGeneralMethodService::new,
+                type -> null,
+                processService(stringIdPersistence(), Aggregate.class)));
+
+    // the message names both methods, the start event and the ways out
+    final var message = exception.getMessage();
+    assertTrue(message.contains(NamedAndGeneralMethodService.class.getName()
+        + "#forTheTimer"), message);
+    assertTrue(message.contains(NamedAndGeneralMethodService.class.getName()
+        + "#forEveryStartEvent"), message);
+    assertTrue(message.contains("start event '%s'".formatted(TIMER_EVENT)), message);
+    assertTrue(message.contains("@WorkflowStartedByBpms(id = ...)"), message);
+
+  }
+
+  @Test
+  @DisplayName("A named and a general method of versions which do not overlap are fine")
+  public void aNamedAndAGeneralMethodOfOtherVersionsAreFine() {
+
+    final var testee = registry(new TransactionRunnerStub());
+
+    assertDoesNotThrow(() -> testee
+        .registerWorkflowService(
+            MODULE,
+            PROCESS,
+            NamedAndGeneralMethodOfOtherVersionsService.class,
+            NamedAndGeneralMethodOfOtherVersionsService::new,
+            type -> null,
+            processService(stringIdPersistence(), Aggregate.class)));
 
   }
 

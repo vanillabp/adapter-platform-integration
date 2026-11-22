@@ -207,6 +207,59 @@ public class BpmsInitiatedStarts {
                   workflowModuleId));
     }
 
+    failOnMixedWiring(workflowModuleId, bpmnProcessId, entry, handler, resolver);
+
+  }
+
+  /**
+   * Refuses a method which names a start event next to a method which serves every start
+   * event of the same process, where their versions overlap. Both match that start event.
+   * A start then runs the method which {@link Class#getMethods()} lists first, and Java does
+   * not fix that order. So the same application could build its aggregate with one method
+   * today and with the other after a recompile.
+   */
+  private static void failOnMixedWiring(
+      final String workflowModuleId,
+      final String bpmnProcessId,
+      final RegistryEntry entry,
+      final BpmsInitiatedStartHandler handler,
+      final io.vanillabp.integration.adapter.migration.workflowtask.VersionRange.ProcessVersionResolver resolver) {
+
+    final var mixed = entry.handlers
+        .stream()
+        .filter(existing -> existing != handler)
+        .filter(existing -> (existing.getStartEventId() == null) != (handler.getStartEventId() == null))
+        .filter(existing -> existing.overlapsVersions(handler, resolver))
+        .findFirst();
+    if (mixed.isEmpty()) {
+      return;
+    }
+    final var named = handler.getStartEventId() != null
+        ? handler
+        : mixed.get();
+    final var general = handler.getStartEventId() != null
+        ? mixed.get()
+        : handler;
+    throw new IllegalStateException(
+        """
+            The @WorkflowStartedByBpms method '%s' (version %s) serves start event '%s' of BPMN \
+            process '%s' of workflow module '%s', and the method '%s' (version %s) serves every \
+            start event of that process, so both would build the aggregate when '%s' fires! Which \
+            one runs would depend on the order of the methods of the class, and Java does not fix \
+            that order. Name the start event on every such method by @WorkflowStartedByBpms(id = \
+            ...), remove one of the two methods, or distinguish them by version - on the method by \
+            @WorkflowStartedByBpms(version = ...), or, where a whole class serves one generation \
+            of the model, on the class by @BpmnProcess(version = ...)."""
+            .formatted(
+                named.describe(),
+                named.describeVersionsWithOrigin(),
+                named.getStartEventId(),
+                bpmnProcessId,
+                workflowModuleId,
+                general.describe(),
+                general.describeVersionsWithOrigin(),
+                named.getStartEventId()));
+
   }
 
   /**

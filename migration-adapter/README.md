@@ -3248,8 +3248,10 @@ shared with the scanners of `@WorkflowTask` and `@WorkflowEnded`, and with the
 is NOT among the parameters here, because it does not exist before this method runs. Two things stay
 its own: which start event a method serves, and the check that every start event which the BPMS
 fires by itself has a method. That check works per start event. So a process with a timer and a
-signal cannot serve one of them and fire the other into nothing. A plain or message start event is
-not checked that way. It has the shape of the application's own start, and a foreign start through
+signal cannot serve one of them and fire the other into nothing. A method which names a start
+event next to a method without an id ends the boot as well, where their versions overlap. Both
+would match that start event, and which one ran would depend on the order of the methods of the
+class, which Java does not fix. A plain or message start event is not checked that way. It has the shape of the application's own start, and a foreign start through
 one of them says so when it happens.
 
 An adapter whose BPMS cannot report such a start implements none of this. It fails the deployment
