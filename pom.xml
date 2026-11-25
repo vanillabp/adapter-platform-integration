@@ -300,6 +300,9 @@
               <!-- the workflows carry comments, and the YAML formatter round-trips
                    through Jackson, which drops them -->
               <exclude>**/.github/**/</exclude>
+              <!-- the load run clones the wiki into the working copy, and the wiki is not
+                   formatted by this build -->
+              <exclude>wiki/**/</exclude>
             </excludes>
             <flexmark/>
           </markdown>
