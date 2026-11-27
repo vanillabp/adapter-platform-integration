@@ -84,7 +84,7 @@ public interface PhaseTwoOutboxResolver {
    * the answer is the same for every BPMN process.
    * <p>
    * An extension which never plans such calls does not ask, and the application starts as
-   * before. See {@code DECISIONS.pending/2218.md}.
+   * before. See decision 152 in the repository's DECISIONS.md.
    * <p>
    * Every store of {@link #allStores()} is asked, not only the store of one workflow
    * aggregate. An extension usually plans for every workflow it is wired to, and it learns

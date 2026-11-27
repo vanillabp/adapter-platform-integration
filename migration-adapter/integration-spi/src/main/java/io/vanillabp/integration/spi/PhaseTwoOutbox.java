@@ -232,7 +232,7 @@ public interface PhaseTwoOutbox {
    * and only a warning at runtime says so. The extension SPI has a helper which builds the
    * message for that refusal. An application without such an extension starts as before.
    * The default of {@link #scheduleReplacingWhatIsStillWaiting(PhaseTwoCall)} is still there
-   * for a call which arrives anyway. See {@code DECISIONS.pending/2218.md}.
+   * for a call which arrives anyway. See decision 152 in the repository's DECISIONS.md.
    * <p>
    * The default answers <code>false</code>, because the default of
    * {@link #scheduleReplacingWhatIsStillWaiting(PhaseTwoCall)} does not replace. A store

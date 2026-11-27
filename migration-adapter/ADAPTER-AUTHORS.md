@@ -1199,7 +1199,7 @@ If you write an outbox store yourself, for your adapter's tests or for an applic
 `true`. A store which keeps both defaults drops the younger call and writes a warning. An extension
 which plans such calls asks `canReplaceWhatIsStillWaiting` while the application starts, and it ends
 the start where a store answers `false`. Without such an extension, the store works as before
-(`DECISIONS.pending/2218.md`).
+(decision 152 in the repository's DECISIONS.md).
 
 Phase two of a start may run before or after the first inbound delivery of that workflow arrives,
 maybe on another node.

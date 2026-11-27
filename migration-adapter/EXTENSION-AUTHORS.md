@@ -678,7 +678,7 @@ replace would keep the older state of every such call, and only a warning at run
 Ask in `wireBpmn`, because on Spring Boot the start is over before `startWorkflowProcessing` runs. An
 extension which never plans such calls does not ask, and the application starts with any store.
 `AnExtensionRefusesAStoreWhichCannotReplaceTest` holds it on both platforms
-(`DECISIONS.pending/2218.md`).
+(decision 152 in the repository's DECISIONS.md).
 
 The transaction follows the same rule. `TransactionRunnerResolver#resolveFor(workflowAggregateClass)`
 answers the runner which the workflow's own writes go through. That may well be a runner the

@@ -16,7 +16,7 @@ import java.time.ZoneOffset;
  * <code>datetime(6)</code> on MySQL). Such a column holds a date and a time of day, but no
  * zone. So whoever writes it decides which zone that time of day belongs to, and whoever
  * reads it has to know the same zone. VanillaBP always writes UTC. See
- * {@code DECISIONS.pending/2217.md}.
+ * decision 151 in the repository's DECISIONS.md.
  * <p>
  * The obvious <code>Timestamp.from(instant)</code> does something else. The driver turns
  * it into the time of day in the zone of the JVM. Two nodes in different zones then

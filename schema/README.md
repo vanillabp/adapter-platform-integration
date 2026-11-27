@@ -79,7 +79,7 @@ tables) does the same there.
 
 The columns which hold a moment have no time zone. The stores write and read them in UTC, through
 `UtcTimestamps` in the core, so the zone of a JVM or of a database session never enters them (see
-`DECISIONS.pending/2217.md`). `TheStoresWriteTheirTimestampsInUtcTest` holds it on H2 and on
+decision 151 in the repository's DECISIONS.md). `TheStoresWriteTheirTimestampsInUtcTest` holds it on H2 and on
 PostgreSQL.
 
 ## Which databases
