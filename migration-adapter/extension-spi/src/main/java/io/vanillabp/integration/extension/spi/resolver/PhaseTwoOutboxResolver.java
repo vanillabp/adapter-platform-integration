@@ -1,6 +1,7 @@
 package io.vanillabp.integration.extension.spi.resolver;
 
 import java.util.Collection;
+import java.util.Optional;
 
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import io.vanillabp.integration.spi.PhaseTwoOutboxAware;
@@ -59,6 +60,64 @@ public interface PhaseTwoOutboxResolver {
    * @return The stores, read-only and possibly empty
    */
   Collection<PhaseTwoOutbox> allStores();
+
+  /**
+   * Says why the stores of this application cannot carry an extension which plans calls that
+   * replace the entry still waiting for its dispatch
+   * ({@link io.vanillabp.integration.spi.PhaseTwoCall#replacingWhatIsStillWaiting()}). It is
+   * empty where every store can replace.
+   * <p>
+   * A store which cannot replace keeps the older state and drops the younger call. That is
+   * the one thing such an extension must not run into, and at runtime only a warning would
+   * say it. So the extension asks this while it wires a BPMN process and refuses the start
+   * with the answer:
+   *
+   * <pre>{@code
+   * outboxResolver
+   *     .whyTheStoresCannotReplace(getExtensionName())
+   *     .ifPresent(why -> startupReport.refuse(StartupTopic.CODE, getExtensionName(), why));
+   * }</pre>
+   *
+   * It asks in <code>wireBpmn</code> and not in <code>startWorkflowProcessing</code>. On
+   * Spring Boot the start is over before the workflow processing starts, and a reason not to
+   * start which arrives after that is only written to the log. Asking once is enough, because
+   * the answer is the same for every BPMN process.
+   * <p>
+   * An extension which never plans such calls does not ask, and the application starts as
+   * before. See decision 152 in the repository's DECISIONS.md.
+   * <p>
+   * Every store of {@link #allStores()} is asked, not only the store of one workflow
+   * aggregate. An extension usually plans for every workflow it is wired to, and it learns
+   * which aggregate a call belongs to only when it plans the call.
+   *
+   * @param extensionName How the extension names itself in its messages
+   * @return The whole message for the refusal, ending with what to do, or empty if every
+   *         store can replace
+   */
+  default Optional<String> whyTheStoresCannotReplace(
+      final String extensionName) {
+
+    final var storesWhichCannotReplace = allStores()
+        .stream()
+        .filter(store -> !store.canReplaceWhatIsStillWaiting())
+        .map(store -> store.getClass().getName())
+        .distinct()
+        .toList();
+    if (storesWhichCannotReplace.isEmpty()) {
+      return Optional.empty();
+    }
+    return Optional
+        .of(
+            """
+                Extension '%s' plans phase-two calls which replace the entry still waiting for its \
+                dispatch, and these outbox stores cannot replace: %s. Such a store keeps the older \
+                state and drops the younger one. To solve this either
+                - implement PhaseTwoOutbox#scheduleReplacingWhatIsStillWaiting in that store and let \
+                PhaseTwoOutbox#canReplaceWhatIsStillWaiting answer true, or
+                - use one of the stores VanillaBP ships instead."""
+                .formatted(extensionName, String.join(", ", storesWhichCannotReplace)));
+
+  }
 
   /**
    * Lines with remedies for this platform. They are added to the core's guiding message

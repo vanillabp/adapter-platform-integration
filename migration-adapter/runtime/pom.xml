@@ -39,6 +39,25 @@
       <version>2.5.252</version>
       <scope>test</scope>
     </dependency>
+    <!-- a moment the stores write has to mean the same on PostgreSQL as on H2, whatever the
+         zone of the JVM. H2 alone would not show a driver which turns the value around -->
+    <dependency>
+      <groupId>org.testcontainers</groupId>
+      <artifactId>testcontainers-postgresql</artifactId>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.postgresql</groupId>
+      <artifactId>postgresql</artifactId>
+      <version>42.7.14</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter-params</artifactId>
+      <version>6.1.3</version>
+      <scope>test</scope>
+    </dependency>
     <!-- the tables this module creates at runtime are compared against the changelog of
          the schema artifact, which needs that artifact and Liquibase to read it. Only the
          test scope: the schema artifact stays a leaf nothing ships a dependency on -->

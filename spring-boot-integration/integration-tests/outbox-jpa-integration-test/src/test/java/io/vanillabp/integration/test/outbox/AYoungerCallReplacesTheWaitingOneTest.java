@@ -108,6 +108,16 @@ public class AYoungerCallReplacesTheWaitingOneTest {
   }
 
   @Test
+  @DisplayName("The store says that it replaces, so an extension which plans replacing calls may start")
+  public void theStoreSaysThatItReplaces() {
+
+    assertTrue(
+        outbox.canReplaceWhatIsStillWaiting(),
+        "a store VanillaBP ships replaces a waiting entry, and an extension asks this at startup");
+
+  }
+
+  @Test
   @DisplayName("The younger report replaces the waiting one, and only it is dispatched")
   public void theYoungerReportReplacesTheWaitingOne() throws Exception {
 

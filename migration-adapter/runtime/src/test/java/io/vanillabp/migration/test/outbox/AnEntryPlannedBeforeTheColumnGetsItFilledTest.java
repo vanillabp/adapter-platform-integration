@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import java.nio.charset.StandardCharsets;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -20,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
@@ -94,7 +94,7 @@ public class AnEntryPlannedBeforeTheColumnGetsItFilledTest {
     final var id = UUID
         .randomUUID()
         .toString();
-    final var when = Timestamp.from(Instant.now().minus(Duration.ofDays(30)));
+    final var when = Instant.now().minus(Duration.ofDays(30));
     try (var connection = connections.acquire(); var statement = connection
         .prepareStatement(AN_ENTRY_OF_AN_EARLIER_VERSION)) {
       statement.setString(1, id);
@@ -102,9 +102,9 @@ public class AnEntryPlannedBeforeTheColumnGetsItFilledTest {
       statement.setString(3, PhaseTwoCall.serializeArgs(call.args()));
       statement.setString(4, id);
       statement.setString(5, status);
-      statement.setTimestamp(6, when);
-      statement.setTimestamp(7, when);
-      statement.setTimestamp(8, doneAt == null ? null : Timestamp.from(doneAt));
+      UtcTimestamps.write(statement, 6, when);
+      UtcTimestamps.write(statement, 7, when);
+      UtcTimestamps.write(statement, 8, doneAt);
       statement.executeUpdate();
     }
     return id;

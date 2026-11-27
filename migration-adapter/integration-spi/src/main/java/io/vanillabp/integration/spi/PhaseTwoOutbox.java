@@ -188,6 +188,10 @@ public interface PhaseTwoOutbox {
    * without a word is the one result which must not happen. That is why a store written
    * outside VanillaBP says so, and does not look as if it had replaced. Every store
    * VanillaBP ships overrides it.
+   * <p>
+   * A store which overrides it also answers <code>true</code> to
+   * {@link #canReplaceWhatIsStillWaiting()}. An extension which plans such calls asks that
+   * at startup.
    *
    * @param call The phase-two call to schedule, marked by
    *        {@link PhaseTwoCall#replacingWhatIsStillWaiting()}
@@ -214,6 +218,32 @@ public interface PhaseTwoOutbox {
             call.workflowAggregateId(),
             getClass().getName());
     return schedule(call);
+
+  }
+
+  /**
+   * Whether this store really replaces in
+   * {@link #scheduleReplacingWhatIsStillWaiting(PhaseTwoCall)}, or only discards the call
+   * with the warning of the default.
+   * <p>
+   * An extension which plans calls that replace what is still waiting checks this at
+   * startup, and it refuses to start where a store answers <code>false</code>. Without that
+   * check, such a store loses the younger state of every call which meets a waiting entry,
+   * and only a warning at runtime says so. The extension SPI has a helper which builds the
+   * message for that refusal. An application without such an extension starts as before.
+   * The default of {@link #scheduleReplacingWhatIsStillWaiting(PhaseTwoCall)} is still there
+   * for a call which arrives anyway. See decision 152 in the repository's DECISIONS.md.
+   * <p>
+   * The default answers <code>false</code>, because the default of
+   * {@link #scheduleReplacingWhatIsStillWaiting(PhaseTwoCall)} does not replace. A store
+   * which overrides that method answers <code>true</code> here. Every store VanillaBP ships
+   * does both.
+   *
+   * @return <code>true</code> if this store replaces a waiting entry
+   */
+  default boolean canReplaceWhatIsStillWaiting() {
+
+    return false;
 
   }
 

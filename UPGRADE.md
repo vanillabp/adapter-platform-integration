@@ -807,6 +807,12 @@ the name which the persistence layer reports. And an attribute which version 1 s
 keeps its last version-1 value for good, because version 2 reads getters only. Give such an
 attribute a getter and share it.
 
+A workflow which version 1 started on Camunda 8 gets the row which names its adapter at its first
+`aggregateChanged` without a task id. A workflow which is only correlated, or only pushed into the
+scope of a task, never gets that row. While the exporter of the cluster stands still, it has the gap
+which [When the read model fails](https://github.com/vanillabp/camunda8-adapter/wiki/When-the-read-model-fails#what-does-not-recover-on-its-own-yet)
+describes for a workflow which VanillaBP did not see start.
+
 ### What the upgrade costs under load
 
 An application on version 1 wrote no outbox entry and kept no record of a task delivery. The word

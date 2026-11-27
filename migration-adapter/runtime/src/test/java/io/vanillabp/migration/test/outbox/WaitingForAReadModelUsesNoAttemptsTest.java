@@ -6,7 +6,6 @@ import static org.mockito.Mockito.when;
 
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -24,6 +23,7 @@ import org.mockito.quality.Strictness;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
@@ -239,8 +239,8 @@ public class WaitingForAReadModelUsesNoAttemptsTest {
       statement.setString(1, id);
       statement.setString(2, PhaseOperation.CORRELATE_MESSAGE.name());
       statement.setString(3, id);
-      statement.setTimestamp(4, Timestamp.from(writtenAt));
-      statement.setTimestamp(5, Timestamp.from(Instant.now()));
+      UtcTimestamps.write(statement, 4, writtenAt);
+      UtcTimestamps.write(statement, 5, Instant.now());
       statement.executeUpdate();
     }
     return id;

@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -26,6 +25,7 @@ import org.mockito.quality.Strictness;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
@@ -194,10 +194,10 @@ public class ADispatchWhichOutlastsItsLeaseTest {
       statement.setString(1, id);
       statement.setString(2, PhaseOperation.START_WORKFLOW.name());
       statement.setString(3, id);
-      statement.setTimestamp(4, Timestamp.from(now));
-      statement.setTimestamp(5, Timestamp.from(now));
+      UtcTimestamps.write(statement, 4, now);
+      UtcTimestamps.write(statement, 5, now);
       statement.setString(6, leasedBy);
-      statement.setTimestamp(7, leasedUntil == null ? null : Timestamp.from(leasedUntil));
+      UtcTimestamps.write(statement, 7, leasedUntil);
       statement.executeUpdate();
     }
     return id;

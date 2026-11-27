@@ -120,6 +120,17 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore 
 
   }
 
+  /**
+   * The store behind this bean replaces a waiting entry. The answer does not ask that store,
+   * because asking would create it, and with it the need for a datasource.
+   */
+  @Override
+  public boolean canReplaceWhatIsStillWaiting() {
+
+    return true;
+
+  }
+
   @Override
   public boolean scheduleReplacingWhatIsStillWaiting(
       final PhaseTwoCall call) {

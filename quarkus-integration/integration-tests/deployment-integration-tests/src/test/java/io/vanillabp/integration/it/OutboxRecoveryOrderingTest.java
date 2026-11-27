@@ -8,7 +8,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.UUID;
@@ -19,6 +18,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.extension.RegisterExtension;
 
 import io.quarkus.test.QuarkusExtensionTest;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.test.deployment.Aggregate;
 import io.vanillabp.integration.test.deployment.AggregatePersistence;
@@ -98,8 +98,8 @@ public class OutboxRecoveryOrderingTest {
       }
       try (var statement = connection.prepareStatement(INSERT_ENTRY)) {
         statement.setString(1, UUID.randomUUID().toString());
-        statement.setTimestamp(2, Timestamp.from(Instant.now()));
-        statement.setTimestamp(3, Timestamp.from(Instant.now().minusSeconds(60)));
+        UtcTimestamps.write(statement, 2, Instant.now());
+        UtcTimestamps.write(statement, 3, Instant.now().minusSeconds(60));
         statement.executeUpdate();
       }
     } catch (final SQLException e) {

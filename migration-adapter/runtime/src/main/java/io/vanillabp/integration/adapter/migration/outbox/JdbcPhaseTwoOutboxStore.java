@@ -3,7 +3,6 @@ package io.vanillabp.integration.adapter.migration.outbox;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
@@ -14,6 +13,7 @@ import java.util.UUID;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoOutbox;
 import lombok.extern.slf4j.Slf4j;
@@ -358,13 +358,13 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
           if (!resultSet.next()) {
             return Optional.empty();
           }
-          final var oldest = resultSet.getTimestamp(1);
+          final var oldest = UtcTimestamps.read(resultSet, 1);
           // no row at all means that nothing waits. That zero is a measurement: the
           // outbox owes nothing
           return Optional
               .of(oldest == null
                   ? Duration.ZERO
-                  : PhaseTwoOutbox.waitedSince(oldest.toInstant()));
+                  : PhaseTwoOutbox.waitedSince(oldest));
         }
       }
     } catch (final SQLException e) {
@@ -429,8 +429,8 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
         statement.setString(8, call.payloadReference());
         statement.setString(9, idempotencyKey);
         statement.setString(10, dedupKey);
-        statement.setTimestamp(11, Timestamp.from(now));
-        statement.setTimestamp(12, Timestamp.from(now));
+        UtcTimestamps.write(statement, 11, now);
+        UtcTimestamps.write(statement, 12, now);
         statement.executeUpdate();
       }
     } catch (final SQLException e) {
@@ -454,6 +454,17 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
     }
 
     dispatchAfterCommit();
+
+    return true;
+
+  }
+
+  /**
+   * This store replaces a waiting entry, see
+   * {@link #scheduleReplacingWhatIsStillWaiting(PhaseTwoCall)}.
+   */
+  @Override
+  public boolean canReplaceWhatIsStillWaiting() {
 
     return true;
 
@@ -530,10 +541,10 @@ public class JdbcPhaseTwoOutboxStore implements PhaseTwoOutbox {
       statement.setString(4, PhaseTwoCall.serializeArgs(call.args()));
       // the younger call brings its own payload, so the column follows the arguments
       statement.setString(5, call.payloadReference());
-      statement.setTimestamp(6, Timestamp.from(now));
-      statement.setTimestamp(7, Timestamp.from(now));
+      UtcTimestamps.write(statement, 6, now);
+      UtcTimestamps.write(statement, 7, now);
       statement.setString(8, waiting.id());
-      statement.setTimestamp(9, Timestamp.from(now));
+      UtcTimestamps.write(statement, 9, now);
       replaced = statement.executeUpdate() == 1;
     }
     if (!replaced) {

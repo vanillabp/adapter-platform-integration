@@ -3,7 +3,6 @@ package io.vanillabp.integration.adapter.migration.outbox;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -16,6 +15,7 @@ import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxPropertie
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcDialect;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics.DispatchOutcome;
 import io.vanillabp.integration.adapter.migration.processservice.PhaseTwoRouter;
@@ -725,8 +725,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
           if (!resultSet.next()) {
             return null;
           }
-          final var earliest = resultSet.getTimestamp(1);
-          return earliest == null ? null : earliest.toInstant();
+          return UtcTimestamps.read(resultSet, 1);
         }
       }
     } catch (final SQLException e) {
@@ -1238,7 +1237,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     try {
       connection = connections.acquire();
       try (var statement = connection.prepareStatement(deleteExpiredDoneEntries(connection, maxRows))) {
-        statement.setTimestamp(1, Timestamp.from(threshold));
+        UtcTimestamps.write(statement, 1, threshold);
         return statement.executeUpdate();
       }
     } catch (final SQLException e) {
@@ -1275,7 +1274,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
     try {
       connection = connections.acquire();
       try (var statement = connection.prepareStatement(countExpiredDoneEntries)) {
-        statement.setTimestamp(1, Timestamp.from(threshold));
+        UtcTimestamps.write(statement, 1, threshold);
         try (var resultSet = statement.executeQuery()) {
           return resultSet.next() ? OptionalLong.of(resultSet.getLong(1)) : OptionalLong.empty();
         }
@@ -1323,12 +1322,12 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
   private List<Entry> loadDueEntries(
       final Connection connection) throws SQLException {
 
-    final var now = Timestamp.from(Instant.now());
+    final var now = Instant.now();
     final var entries = new ArrayList<Entry>();
     try (var statement = connection.prepareStatement(selectDueEntries)) {
-      statement.setTimestamp(1, now);
+      UtcTimestamps.write(statement, 1, now);
       statement.setInt(2, properties.getBlockAfterAttempts());
-      statement.setTimestamp(3, now);
+      UtcTimestamps.write(statement, 3, now);
       try (var resultSet = statement.executeQuery()) {
         while (resultSet.next()) {
           entries.add(new Entry(
@@ -1370,10 +1369,10 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       // dispatch and is written there. So a node which dies in the middle of a dispatch does
       // not leave behind the long distance of an attempt which nobody made
       statement.setString(1, lease.owner());
-      statement.setTimestamp(2, Timestamp.from(leaseEnds));
-      statement.setTimestamp(3, Timestamp.from(leaseEnds));
+      UtcTimestamps.write(statement, 2, leaseEnds);
+      UtcTimestamps.write(statement, 3, leaseEnds);
       statement.setString(4, entry.id());
-      statement.setTimestamp(5, Timestamp.from(Instant.now()));
+      UtcTimestamps.write(statement, 5, Instant.now());
       if (statement.executeUpdate() != 1) {
         return null;
       }
@@ -1681,7 +1680,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
 
     final var doneAt = Instant.now();
     final var outcome = update(markEntryDone, statement -> {
-      statement.setTimestamp(1, Timestamp.from(doneAt));
+      UtcTimestamps.write(statement, 1, doneAt);
       statement.setString(2, entry.id());
       statement.setString(3, lease.owner());
     });
@@ -1737,7 +1736,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final String reason) {
 
     final var outcome = update(reschedule, statement -> {
-      statement.setTimestamp(1, Timestamp.from(nextAttempt));
+      UtcTimestamps.write(statement, 1, nextAttempt);
       statement.setString(2, reason);
       statement.setString(3, entry.id());
       statement.setString(4, lease.owner());
@@ -1857,8 +1856,8 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final Instant leaseEnd) {
 
     return update(renewLease, statement -> {
-      statement.setTimestamp(1, Timestamp.from(leaseEnd));
-      statement.setTimestamp(2, Timestamp.from(leaseEnd));
+      UtcTimestamps.write(statement, 1, leaseEnd);
+      UtcTimestamps.write(statement, 2, leaseEnd);
       statement.setString(3, entryId);
       statement.setString(4, lease.owner());
     }) != WriteOutcome.NO_ROW_MATCHED;
@@ -2004,8 +2003,7 @@ public class JdbcPhaseTwoOutboxDispatcher implements OutboxHousekeeping.Store {
       final ResultSet resultSet,
       final int column) throws SQLException {
 
-    final var written = resultSet.getTimestamp(column);
-    return written == null ? null : written.toInstant();
+    return UtcTimestamps.read(resultSet, column);
 
   }
 

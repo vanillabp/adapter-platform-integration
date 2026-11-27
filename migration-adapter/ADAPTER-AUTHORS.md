@@ -342,7 +342,7 @@ does:
 | `workflowVisibilityDelay(workflowId)`    | the one above | the same window, asked for ONE workflow. This is the question the core actually asks. See section 4.2.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `canLocateWorkflows()`                   | `true`        | whether your workflow probe asks your BPMS or guesses. See section 4.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | `openTaskCount(module, process)`         | `null`        | how many tasks of a process your BPMS holds open. The core asks once at startup, so that an upgraded application learns how long its unrecorded deliveries can still surprise it. Answer only if your BPMS counts and you read the number. If you fetch the tasks to count them, the boot grows slower with every year the application runs (decision 19).                                                                                                                                                                                                                                                                                                                                           |
-| `identityOfTheBpms()`                    | `null`        | an identity of your BPMS installation: the same after a restart and after a restored backup, different for a new installation. The core writes it down at the first start and ends a later start which meets another identity while the delivery log still holds records of your adapter, because a new installation hands out the ids of those records again. Ask your BPMS once and keep the answer, and answer `null` where you cannot tell.                                                                                                                                                                                                                                                      |
+| `identityOfTheBpms()`                    | `null`        | an identity of your BPMS installation: the same after a restart and after a restored backup, different for a new installation. The core writes it down at the first start and ends a later start which meets another identity while the delivery log still holds records of your adapter, because a new installation hands out the ids of those records again. Ask your BPMS once and keep the answer, and answer `null` where you cannot tell. Answer within a few seconds: the core asks while the application starts and sets no time limit, so never wait here for a BPMS which is still starting.                                                                                               |
 
 ## 3. What the core hands you, and what you have to hand back
 
@@ -1137,6 +1137,21 @@ running handler holds a database connection.
 policy and write it down in your README. Camunda 8 waits for its handlers and for the cluster to
 release its workers. It reports no job as failed while the shutdown runs.
 
+`stopWorkflowProcessing` has no time budget of its own. The core calls the extensions and then the
+adapters one after another, on the thread which shuts the application down, and it sets no limit. So
+the time you wait adds to the time of every adapter after you. On Spring Boot the call runs inside
+the `stop()` of a `SmartLifecycle` bean in the first shutdown phase. The limit of a phase,
+`spring.lifecycle.timeout-per-shutdown-phase` (30 seconds by default), only ends the wait for a bean
+which stops on a thread of its own. So it cuts you off only if you move your wait to another thread,
+and then Spring closes the beans which your handlers still use. On Quarkus the call runs in a
+`ShutdownEvent` observer. The Quarkus setting `quarkus.shutdown.timeout` limits only the wait for
+running HTTP requests before that event, so Quarkus sets no limit for the observer. On both
+platforms the real limit is outside the JVM: the time your process manager gives a stopping process
+before it kills it, for example `terminationGracePeriodSeconds` in Kubernetes (30 seconds by
+default). Measure your wait against that, and remember that every other adapter and extension of the
+application shares it. This paragraph is an assumption about Spring Boot and Quarkus, not something a
+test holds. A phase timeout which ends a `stop()` that has not returned yet would prove it wrong.
+
 The core may call your probes from any application thread and from the dispatcher at the same time.
 
 ### About deliveries
@@ -1178,6 +1193,13 @@ can ask for it, because it is reserved for the operations an extension registers
 phase two looks exactly as it always did. What changes for you is how often it arrives. The reports
 of one workflow which piled up during an outage now reach the handler as one. Where a dispatch had
 already taken the entry, they reach it as two.
+
+If you write an outbox store yourself, for your adapter's tests or for an application, override
+`PhaseTwoOutbox.scheduleReplacingWhatIsStillWaiting` and let `canReplaceWhatIsStillWaiting` answer
+`true`. A store which keeps both defaults drops the younger call and writes a warning. An extension
+which plans such calls asks `canReplaceWhatIsStillWaiting` while the application starts, and it ends
+the start where a store answers `false`. Without such an extension, the store works as before
+(decision 152 in the repository's DECISIONS.md).
 
 Phase two of a start may run before or after the first inbound delivery of that workflow arrives,
 maybe on another node.

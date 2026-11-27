@@ -19,6 +19,7 @@ import org.junit.jupiter.api.extension.RegisterExtension;
 import io.quarkus.test.QuarkusExtensionTest;
 import io.vanillabp.bpmsdouble.DummyDeploymentService;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.adapter.spi.AdapterDeploymentService;
 import io.vanillabp.integration.adapter.spi.workflowtask.TaskInvocationContext;
 import io.vanillabp.integration.adapter.spi.workflowtask.WorkflowTaskOutcome;
@@ -159,12 +160,12 @@ public class OpenTaskRetentionTest {
   private void backdateEveryRecordBy(
       final Duration age) throws SQLException {
 
-    final var moment = Timestamp.from(Instant.now().minus(age));
+    final var moment = Instant.now().minus(age);
     try (var connection = dataSource.getConnection(); var statement = connection
         .prepareStatement("UPDATE %s SET RECORDED_AT = ?, LAST_SEEN_AT = ?"
             .formatted(JdbcTaskDeliveryStore.DEFAULT_TABLE_NAME))) {
-      statement.setTimestamp(1, moment);
-      statement.setTimestamp(2, moment);
+      UtcTimestamps.write(statement, 1, moment);
+      UtcTimestamps.write(statement, 2, moment);
       statement.executeUpdate();
     }
 

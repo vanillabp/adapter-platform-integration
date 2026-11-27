@@ -5964,3 +5964,114 @@ Where this is referred to:
 - the workflow `.github/workflows/load-run.yaml`
 - the wiki page `Load-measurement`, which the workflow writes once
 
+### 151. VanillaBP writes UTC in columns without a zone
+
+The tables VanillaBP owns keep their moments in columns without a time zone: `TIMESTAMP`, and
+`datetime(6)` on MySQL and MariaDB. Such a column holds a date and a time of day. Which zone that time
+of day belongs to is decided by whoever writes it, and whoever reads it has to know the same zone.
+
+Until now the stores wrote and read with `Timestamp.from(instant)` and `getTimestamp(column)`. The
+driver turns such a value into the time of day in the zone of the JVM. So two nodes in different
+zones disagreed by hours about when an outbox entry was due or when a record expired. One node also
+disagreed with itself in the hour at the end of daylight saving time, because that hour happens
+twice.
+
+**Every JDBC store of VanillaBP writes and reads these columns in UTC.** One class of the core,
+`UtcTimestamps`, does it for all of them. It passes a `LocalDateTime` in UTC, which JDBC 4.2 maps to
+a `TIMESTAMP` without a zone and which a driver passes on unchanged. A `Calendar` in UTC handed to
+`setTimestamp` would mean the same in theory, but some drivers let a setting of the connection
+override it.
+
+The columns keep their types. `TIMESTAMP WITH TIME ZONE` was not chosen, because MySQL and MariaDB do
+not have it. The schema of 2.0 is new, so nobody has rows written in the old way, and no migration is
+owed.
+
+What stays as it is:
+
+- The MongoDB stores write a `Date`, which is a moment in UTC anyway.
+- The gruelbox store writes the columns of the gruelbox library, and the library writes them with
+  `Timestamp.from`, in the zone of the JVM. The code of the gruelbox store which reads or compares
+  those columns has to use the same convention as the library, so it stays as it is.
+- A statement an operator runs by hand has to write UTC as well. So the wiki page "Blocked outbox
+  entries" no longer writes `CURRENT_TIMESTAMP`, which is the time of day of the database session.
+
+`TheStoresWriteTheirTimestampsInUtcTest` holds it on H2 and PostgreSQL, the two databases this
+repository tests. It writes in one zone and reads in another, 22 hours apart, and it checks the raw
+value of the column against UTC.
+
+Cited in: the javadoc of `UtcTimestamps`, `schema/README.md`, and the wiki pages
+`Spring-Boot-integration.md`, `Quarkus-integration.md` and `Blocked-outbox-entries.md` (the wiki says it
+in its own words and does not link the entry).
+
+### 152. An extension refuses a store which cannot replace a waiting entry, and only an extension does
+
+`PhaseTwoOutbox.scheduleReplacingWhatIsStillWaiting` has a default which writes a WARN and discards
+the call against the waiting entry (decision 68). A store of an application which keeps that default
+loses the younger state of every replacing call, and the application only learns it from the log.
+
+Who calls it: only extensions. `PhaseTwoCall.replacingWhatIsStillWaiting()` refuses to build the mark
+for an operation of VanillaBP itself, and nothing in the core or in the two platform integrations
+calls `scheduleReplacingWhatIsStillWaiting`. The platform stores only delegate. The Business Cockpit
+is the one caller today. So the rule below has no core path to cover.
+
+What holds now:
+
+- `PhaseTwoOutbox.canReplaceWhatIsStillWaiting()` says whether a store really replaces. The default
+  answers `false`, because the default of `scheduleReplacingWhatIsStillWaiting` does not replace. Every
+  store VanillaBP ships answers `true`: the JDBC store of the core, the JDBC and MongoDB stores of both
+  platforms, and the gruelbox store in its own repository.
+- An extension depends on the extension SPI alone (decision 149). It reaches the answer through
+  `PhaseTwoOutboxResolver#whyTheStoresCannotReplace(extensionName)`. That method asks every store of
+  `allStores()` and answers the whole message for a refusal: which stores cannot replace, what to
+  implement, and the way out of using a store VanillaBP ships. An extension asks it in `wireBpmn` and
+  hands the answer to `StartupReport#refuse`. `wireBpmn` and not `startWorkflowProcessing`, because on
+  Spring Boot the start is over before the workflow processing starts.
+- The check is the extension's, not the core's. An application without an extension which plans
+  replacing calls starts with any store, because nobody will ever ask that store to replace. The
+  default of `scheduleReplacingWhatIsStillWaiting` stays for a call which arrives anyway.
+- Every store, not the store of one aggregate. An extension learns which aggregate a call belongs to
+  only when it plans the call, and it usually plans for every workflow it is wired to. Asking per
+  aggregate would make the extension find its aggregates at startup for one question.
+
+The SPI freezes with 2.0, and a capability added afterwards would be a breaking change for every
+store written in the meantime. That is why it comes now, before the Business Cockpit uses it.
+
+`TheStoresSayWhetherTheyCanReplaceTest` holds the default, the JDBC store and the message.
+`AnExtensionRefusesAStoreWhichCannotReplaceTest` holds the refusal on Spring Boot and on Quarkus, and on
+Spring Boot also the same store starting without the extension. `AYoungerCallReplacesTheWaitingOneTest`
+and `MongoPhaseTwoPayloadTest` (Spring Boot), `ExtensionOperationDispatchTest` and
+`MongoPhaseTwoPayloadTest` (Quarkus) hold that the platform stores answer `true`.
+
+Cited in: the javadoc of `PhaseTwoOutbox#canReplaceWhatIsStillWaiting` and of
+`PhaseTwoOutboxResolver#whyTheStoresCannotReplace`, `migration-adapter/ADAPTER-AUTHORS.md` (section 5,
+about ordering), `migration-adapter/EXTENSION-AUTHORS.md` (operations of your own in the outbox). The
+wiki pages `Extensions.md`, `Spring-Boot-integration.md` and `Quarkus-integration.md` say it in their own
+words. The gruelbox store says it in its own repository.
+
+### 153. A handler which names an element it never runs in is warned about, never refused
+
+A `@WorkflowTask` method can name a multi-instance element with `@MultiInstanceElement` which its task
+does not run in at all. Then the item of that element never reaches the task, and the parameter is
+`null` at runtime without a word. Today nobody reports it. The adapter reads the chain of
+multi-instance elements of a task, and the core knows the methods and their version ranges, but
+nothing compares the two.
+
+**When the check is built, it writes a warning. It never refuses a model.** That is decided for good,
+not only for the first version of the check. The check comes after 2.0. A
+refusal added in a later release would end the start of an application which started the day before
+on the same code and the same models. VanillaBP promises that an upgrade of the platform does not do
+that to an application which did not change. A warning keeps the finding, and the start goes on.
+
+What the warning has to respect, so that it does not name a method which is right:
+
+- An element of the CALLING process is not part of the model of the called one. A multi-instance
+  chain can cross a call activity, and the core links the chains only once the whole workflow module
+  is wired. So the check runs on the linked chain, or it does not report an element it cannot see.
+- A method may serve several versions of a process, and their models may have different chains. An
+  element counts as reachable when one version the method serves has it in the chain of the task.
+
+The warning goes to the startup report (`StartupReport#warn`), under the topic of the code, and names
+the method, the element, the BPMN process and the version. A version which a BPMS only still holds
+gets the same warning, as `DeployedProcessVersionsCheck` already does for its own findings.
+
+Nothing cites this entry yet. The code which builds the check cites it in the javadoc of the check.

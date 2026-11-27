@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -290,7 +292,8 @@ public class OpenTaskRetentionTest {
       final ConfigurableApplicationContext context,
       final Duration age) {
 
-    final var moment = Timestamp.from(Instant.now().minus(age));
+    // the store writes its moments in UTC, so the backdated one is written the same way
+    final var moment = LocalDateTime.ofInstant(Instant.now().minus(age), ZoneOffset.UTC);
     jdbc(context)
         .update(
             "UPDATE %s SET RECORDED_AT = ?, LAST_SEEN_AT = ?"

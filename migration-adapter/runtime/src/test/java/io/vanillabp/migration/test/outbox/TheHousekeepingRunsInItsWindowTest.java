@@ -10,7 +10,6 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -28,6 +27,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
@@ -128,7 +128,7 @@ public class TheHousekeepingRunsInItsWindowTest {
     final var id = UUID
         .randomUUID()
         .toString();
-    final var longAgo = Timestamp.from(Instant.now().minus(Duration.ofDays(30)));
+    final var longAgo = Instant.now().minus(Duration.ofDays(30));
     Connection connection = null;
     try {
       connection = connections.acquire();
@@ -144,9 +144,9 @@ public class TheHousekeepingRunsInItsWindowTest {
         statement.setString(5, PhaseTwoCall.serializeArgs(call.args()));
         statement.setString(6, id);
         statement.setString(7, JdbcPhaseTwoOutboxDispatcher.STATUS_DONE);
-        statement.setTimestamp(8, longAgo);
-        statement.setTimestamp(9, longAgo);
-        statement.setTimestamp(10, longAgo);
+        UtcTimestamps.write(statement, 8, longAgo);
+        UtcTimestamps.write(statement, 9, longAgo);
+        UtcTimestamps.write(statement, 10, longAgo);
         statement.executeUpdate();
       }
     } finally {
@@ -175,7 +175,7 @@ public class TheHousekeepingRunsInItsWindowTest {
       connection = connections.acquire();
       try (var statement = connection
           .prepareStatement("UPDATE %s SET CREATED_AT = ? WHERE REFERENCE = ?".formatted(PAYLOAD_TABLE))) {
-        statement.setTimestamp(1, Timestamp.from(Instant.now().minus(Duration.ofDays(30))));
+        UtcTimestamps.write(statement, 1, Instant.now().minus(Duration.ofDays(30)));
         statement.setString(2, call.payloadReference());
         statement.executeUpdate();
       }
