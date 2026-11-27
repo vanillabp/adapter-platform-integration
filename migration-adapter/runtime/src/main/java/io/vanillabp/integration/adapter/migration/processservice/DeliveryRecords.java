@@ -1296,7 +1296,9 @@ public final class DeliveryRecords {
       return;
     }
     for (final var adapter : adapterProcessServices) {
-      // asked outside of the transaction: an adapter may wait for its BPMS to answer
+      // asked outside of the transaction, because an adapter may ask its BPMS over the
+      // network. It answers within a few seconds or answers null, see the javadoc of
+      // identityOfTheBpms. Nothing here limits the time
       final var identity = adapter.identityOfTheBpms();
       if ((identity == null) || identity.isBlank()) {
         continue;

@@ -583,6 +583,12 @@ public interface MigratableProcessService<A> {
    * <p>
    * The core asks once per BPMN process at startup, so an adapter which has to ask the BPMS
    * for it asks once and remembers the answer.
+   * <p>
+   * <strong>It answers within a few seconds.</strong> The core asks on the thread which
+   * starts the application, and it sets no time limit. So an adapter never waits here for a
+   * BPMS which is still starting. It answers <code>null</code> if it cannot tell within a few
+   * seconds. An adapter which waited for its cluster to come up made every start without a
+   * reachable cluster take as long as that wait.
    *
    * @return The identity, or <code>null</code> if this BPMS cannot say
    */
