@@ -2,13 +2,13 @@ package io.vanillabp.integration.adapter.migration.outbox;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Instant;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcDialect;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.spi.PhaseTwoCall;
 import io.vanillabp.integration.spi.PhaseTwoPayloadStore;
 import lombok.extern.slf4j.Slf4j;
@@ -198,7 +198,7 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
         statement.setString(3, call.bpmnProcessId());
         statement.setString(4, call.operation());
         statement.setBytes(5, call.payload());
-        statement.setTimestamp(6, Timestamp.from(Instant.now()));
+        UtcTimestamps.write(statement, 6, Instant.now());
         statement.executeUpdate();
       }
     } catch (final SQLException e) {
@@ -284,7 +284,7 @@ public class JdbcPhaseTwoPayloadStore implements PhaseTwoPayloadStore {
     try {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(deleteOrphans(connection, maxEntries))) {
-        statement.setTimestamp(1, Timestamp.from(threshold));
+        UtcTimestamps.write(statement, 1, threshold);
         final var removed = statement.executeUpdate();
         logRemovedOrphans(removed);
         return removed;

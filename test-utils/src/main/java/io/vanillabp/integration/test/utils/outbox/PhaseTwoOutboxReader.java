@@ -3,8 +3,9 @@ package io.vanillabp.integration.test.utils.outbox;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -689,7 +690,7 @@ public final class PhaseTwoOutboxReader {
   public void makeDueNow(
       final String idempotencyKey) {
 
-    execute(outbox.makeDueNow(), Timestamp.from(Instant.now()), idempotencyKey);
+    execute(outbox.makeDueNow(), utc(Instant.now()), idempotencyKey);
 
   }
 
@@ -700,7 +701,7 @@ public final class PhaseTwoOutboxReader {
    */
   public void openEveryEntryAgain() {
 
-    execute(outbox.openEveryEntryAgain(), Timestamp.from(Instant.now().minusSeconds(60)));
+    execute(outbox.openEveryEntryAgain(), utc(Instant.now().minusSeconds(60)));
 
   }
 
@@ -735,8 +736,8 @@ public final class PhaseTwoOutboxReader {
         operation,
         aggregateId,
         id,
-        Timestamp.from(writtenAt),
-        Timestamp.from(dueAt));
+        utc(writtenAt),
+        utc(dueAt));
 
   }
 
@@ -821,6 +822,18 @@ public final class PhaseTwoOutboxReader {
       throw new IllegalStateException(
           "Could not read the phase-two outbox table '%s'!".formatted(outbox.name()), cannotRead);
     }
+
+  }
+
+  /**
+   * A moment the way the outbox of VanillaBP writes it into its columns without a zone: as
+   * the time of day in UTC. Only that table is written here, see
+   * {@link #gruelboxIsWrittenByGruelbox(String)}.
+   */
+  private static LocalDateTime utc(
+      final Instant moment) {
+
+    return LocalDateTime.ofInstant(moment, ZoneOffset.UTC);
 
   }
 

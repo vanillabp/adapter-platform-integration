@@ -6,7 +6,6 @@ import static org.mockito.Mockito.when;
 
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -25,6 +24,7 @@ import org.mockito.quality.Strictness;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
@@ -138,7 +138,7 @@ public class ADoneEntryPlansNoWakeUpTest {
   private String anOpenEntry() throws SQLException {
 
     final var id = UUID.randomUUID().toString();
-    final var now = Timestamp.from(Instant.now());
+    final var now = Instant.now();
     try (var connection = uncountedConnections.acquire(); var statement = connection
         .prepareStatement(
             INSERT_ENTRY
@@ -146,8 +146,8 @@ public class ADoneEntryPlansNoWakeUpTest {
       statement.setString(1, id);
       statement.setString(2, PhaseOperation.CORRELATE_MESSAGE.name());
       statement.setString(3, id);
-      statement.setTimestamp(4, now);
-      statement.setTimestamp(5, now);
+      UtcTimestamps.write(statement, 4, now);
+      UtcTimestamps.write(statement, 5, now);
       statement.executeUpdate();
     }
     return id;

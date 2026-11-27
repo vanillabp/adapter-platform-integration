@@ -16,6 +16,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcTaskDeliveryStore;
 import io.vanillabp.integration.adapter.migration.delivery.OpenTaskTouches;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.spi.TaskDelivery;
 import io.vanillabp.integration.test.utils.SuppressOutputExtension;
 
@@ -121,7 +122,7 @@ public class OpenTaskRecordRetentionTest {
    * The two timestamps of a record, read past the store. The store maps only the one which
    * the core knows about.
    */
-  private java.sql.Timestamp[] timestampsOf(
+  private Instant[] timestampsOf(
       final String deliveryKey) throws SQLException {
 
     try (var connection = connections.acquire(); var statement = connection
@@ -130,8 +131,8 @@ public class OpenTaskRecordRetentionTest {
       statement.setString(1, deliveryKey);
       try (var resultSet = statement.executeQuery()) {
         resultSet.next();
-        return new java.sql.Timestamp[]{
-            resultSet.getTimestamp(1), resultSet.getTimestamp(2)
+        return new Instant[]{
+            UtcTimestamps.read(resultSet, 1), UtcTimestamps.read(resultSet, 2)
         };
       }
     }
@@ -169,10 +170,10 @@ public class OpenTaskRecordRetentionTest {
 
     final var timestamps = timestampsOf("job-open");
     assertTrue(
-        timestamps[1].after(timestamps[0]),
+        timestamps[1].isAfter(timestamps[0]),
         "the moment it was last seen moved, the moment it was recorded did not");
     assertTrue(
-        timestamps[0].toInstant().isBefore(Instant.now().minus(Duration.ofMinutes(90))),
+        timestamps[0].isBefore(Instant.now().minus(Duration.ofMinutes(90))),
         "so the age of the open task is still measured from the moment the handler ran");
 
   }
@@ -208,7 +209,7 @@ public class OpenTaskRecordRetentionTest {
 
     final var timestamps = timestampsOf("job-"
         + (tasks - 1));
-    assertTrue(timestamps[1].after(timestamps[0]), "the last key of the last block was written as well");
+    assertTrue(timestamps[1].isAfter(timestamps[0]), "the last key of the last block was written as well");
 
   }
 

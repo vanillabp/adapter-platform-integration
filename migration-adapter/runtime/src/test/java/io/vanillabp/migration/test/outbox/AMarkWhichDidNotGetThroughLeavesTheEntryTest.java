@@ -8,7 +8,6 @@ import static org.mockito.Mockito.when;
 import java.nio.charset.StandardCharsets;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -33,6 +32,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
@@ -287,9 +287,9 @@ public class AMarkWhichDidNotGetThroughLeavesTheEntryTest {
       statement.setString(3, args);
       statement.setString(4, dedupKey);
       statement.setString(5, status);
-      statement.setTimestamp(6, Timestamp.from(now));
-      statement.setTimestamp(7, Timestamp.from(now));
-      statement.setTimestamp(8, doneAt == null ? null : Timestamp.from(doneAt));
+      UtcTimestamps.write(statement, 6, now);
+      UtcTimestamps.write(statement, 7, now);
+      UtcTimestamps.write(statement, 8, doneAt);
       statement.executeUpdate();
     }
 

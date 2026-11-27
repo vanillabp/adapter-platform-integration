@@ -2,12 +2,12 @@ package io.vanillabp.integration.adapter.migration.outbox;
 
 import java.sql.Connection;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Instant;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -99,9 +99,9 @@ public class JdbcHousekeepingLease {
       connection = connections.acquire();
       try (var statement = connection.prepareStatement(CLAIM.formatted(tableName))) {
         statement.setString(1, owner);
-        statement.setTimestamp(2, Timestamp.from(until));
+        UtcTimestamps.write(statement, 2, until);
         statement.setString(3, store);
-        statement.setTimestamp(4, Timestamp.from(Instant.now()));
+        UtcTimestamps.write(statement, 4, Instant.now());
         if (statement.executeUpdate() > 0) {
           return true;
         }
@@ -137,7 +137,7 @@ public class JdbcHousekeepingLease {
     try (var statement = connection.prepareStatement(CLAIM_FIRST_TIME.formatted(tableName))) {
       statement.setString(1, store);
       statement.setString(2, owner);
-      statement.setTimestamp(3, Timestamp.from(until));
+      UtcTimestamps.write(statement, 3, until);
       return statement.executeUpdate() > 0;
     } catch (final SQLException e) {
       // the row is there. So the update above found it held by somebody else

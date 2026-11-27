@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.charset.StandardCharsets;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
@@ -21,6 +20,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxStore;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoPayloadStore;
@@ -111,9 +111,9 @@ public class ABlockedEntryKeepsItsPayloadTest {
       // their own id here
       statement.setString(5, id);
       statement.setString(6, status);
-      statement.setTimestamp(7, Timestamp.from(LONG_BEFORE_THE_RETENTION));
-      statement.setTimestamp(8, Timestamp.from(LONG_BEFORE_THE_RETENTION));
-      statement.setTimestamp(9, doneAt == null ? null : Timestamp.from(doneAt));
+      UtcTimestamps.write(statement, 7, LONG_BEFORE_THE_RETENTION);
+      UtcTimestamps.write(statement, 8, LONG_BEFORE_THE_RETENTION);
+      UtcTimestamps.write(statement, 9, doneAt);
       statement.executeUpdate();
     }
     return id;
@@ -129,7 +129,7 @@ public class ABlockedEntryKeepsItsPayloadTest {
 
     payloadStore.write(call);
     try (var connection = connections.acquire(); var statement = connection.prepareStatement(AGE_PAYLOAD)) {
-      statement.setTimestamp(1, Timestamp.from(LONG_BEFORE_THE_RETENTION));
+      UtcTimestamps.write(statement, 1, LONG_BEFORE_THE_RETENTION);
       statement.setString(2, call.payloadReference());
       statement.executeUpdate();
     }

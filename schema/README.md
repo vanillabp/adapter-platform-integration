@@ -77,6 +77,11 @@ through a `modifySql` block. The reason is that MySQL's `TIMESTAMP` ends in 2038
 in automatically. The runtime's own DDL (data definition language, the statements which create
 tables) does the same there.
 
+The columns which hold a moment have no time zone. The stores write and read them in UTC, through
+`UtcTimestamps` in the core, so the zone of a JVM or of a database session never enters them (see
+`DECISIONS.pending/2217.md`). `TheStoresWriteTheirTimestampsInUtcTest` holds it on H2 and on
+PostgreSQL.
+
 ## Which databases
 
 |                Database                 | Shipped |                     Tested here                     |

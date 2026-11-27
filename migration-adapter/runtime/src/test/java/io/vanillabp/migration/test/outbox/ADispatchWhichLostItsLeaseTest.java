@@ -6,7 +6,6 @@ import static org.mockito.Mockito.when;
 
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
@@ -32,6 +31,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.delivery.JdbcConnectionAccess;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.adapter.migration.observability.VanillaBpMetrics;
 import io.vanillabp.integration.adapter.migration.outbox.DispatchLease;
 import io.vanillabp.integration.adapter.migration.outbox.JdbcPhaseTwoOutboxDispatcher;
@@ -269,8 +269,8 @@ public class ADispatchWhichLostItsLeaseTest {
       statement.setString(1, id);
       statement.setString(2, PhaseOperation.START_WORKFLOW.name());
       statement.setString(3, id);
-      statement.setTimestamp(4, Timestamp.from(now));
-      statement.setTimestamp(5, Timestamp.from(now));
+      UtcTimestamps.write(statement, 4, now);
+      UtcTimestamps.write(statement, 5, now);
       statement.executeUpdate();
     }
     return id;
@@ -287,7 +287,7 @@ public class ADispatchWhichLostItsLeaseTest {
 
     try (var connection = connections.acquire(); var statement = connection
         .prepareStatement(FREE_THE_LEASE.formatted(table))) {
-      statement.setTimestamp(1, Timestamp.from(Instant.now()));
+      UtcTimestamps.write(statement, 1, Instant.now());
       statement.setString(2, id);
       assertEquals(1, statement.executeUpdate(), "the entry whose lease was to be freed is gone");
     }
@@ -304,8 +304,7 @@ public class ADispatchWhichLostItsLeaseTest {
       statement.setString(1, id);
       try (var resultSet = statement.executeQuery()) {
         assertTrue(resultSet.next(), "the entry is gone");
-        final var doneAt = resultSet.getTimestamp(3);
-        return new Entry(resultSet.getString(1), resultSet.getInt(2), doneAt == null ? null : doneAt.toInstant());
+        return new Entry(resultSet.getString(1), resultSet.getInt(2), UtcTimestamps.read(resultSet, 3));
       }
     }
 

@@ -3,7 +3,6 @@ package io.vanillabp.integration.adapter.migration.delivery;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.SQLIntegrityConstraintViolationException;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -11,6 +10,7 @@ import java.util.Optional;
 
 import io.vanillabp.integration.adapter.migration.config.PhaseTwoOutboxProperties;
 import io.vanillabp.integration.adapter.migration.jdbc.JdbcSchema;
+import io.vanillabp.integration.adapter.migration.jdbc.UtcTimestamps;
 import io.vanillabp.integration.spi.TaskDelivery;
 import lombok.extern.slf4j.Slf4j;
 
@@ -692,7 +692,7 @@ public class JdbcTaskDeliveryStore {
     try {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(closeTask)) {
-        statement.setTimestamp(1, Timestamp.from(Instant.now()));
+        UtcTimestamps.write(statement, 1, Instant.now());
         statement.setString(2, taskId);
         statement.setString(3, workflowModuleId);
         statement.setString(4, bpmnProcessId);
@@ -722,19 +722,15 @@ public class JdbcTaskDeliveryStore {
   private static TaskDelivery readRecord(
       final java.sql.ResultSet resultSet) throws SQLException {
 
-    final var recordedAt = resultSet.getTimestamp(13);
-    final var taskClosedAt = resultSet.getTimestamp(14);
+    final var recordedAt = UtcTimestamps.read(resultSet, 13);
+    final var taskClosedAt = UtcTimestamps.read(resultSet, 14);
     return new TaskDelivery(
         resultSet.getString(1), resultSet.getString(2), resultSet.getString(3), resultSet
             .getString(4), resultSet.getString(5), resultSet.getString(6), resultSet
                 .getString(7), resultSet.getString(8), resultSet.getString(9), resultSet
                     .getString(10), resultSet.getString(11), resultSet
-                        .getString(12), recordedAt == null
-                            ? null
-                            : recordedAt.toInstant(), taskClosedAt == null
-                                ? null
-                                : taskClosedAt.toInstant(), resultSet.getString(15), resultSet
-                                    .getString(16), resultSet.getString(17));
+                        .getString(12), recordedAt, taskClosedAt, resultSet.getString(15), resultSet
+                            .getString(16), resultSet.getString(17));
 
   }
 
@@ -825,13 +821,13 @@ public class JdbcTaskDeliveryStore {
         statement.setString(10, delivery.outcome());
         statement.setString(11, delivery.bpmnErrorCode());
         statement.setString(12, delivery.bpmnErrorName());
-        final var recordedAt = Timestamp.from(delivery.recordedAt() == null
+        final var recordedAt = delivery.recordedAt() == null
             ? Instant.now()
-            : delivery.recordedAt());
-        statement.setTimestamp(13, recordedAt);
+            : delivery.recordedAt();
+        UtcTimestamps.write(statement, 13, recordedAt);
         // the record was seen at the moment it was written. A redelivery of a task which
         // stays open moves this one, and leaves RECORDED_AT where it is
-        statement.setTimestamp(14, recordedAt);
+        UtcTimestamps.write(statement, 14, recordedAt);
         statement.setString(15, delivery.taskKind());
         statement.setString(16, kindOfTheRow(delivery));
         statement.setString(17, delivery.processVersion());
@@ -945,13 +941,13 @@ public class JdbcTaskDeliveryStore {
     try {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(replaceWorkflowStart)) {
-        final var startedAt = Timestamp.from(workflowStart.recordedAt() == null
+        final var startedAt = workflowStart.recordedAt() == null
             ? Instant.now()
-            : workflowStart.recordedAt());
+            : workflowStart.recordedAt();
         statement.setString(1, workflowStart.workflowId());
         statement.setString(2, workflowStart.adapterId());
-        statement.setTimestamp(3, startedAt);
-        statement.setTimestamp(4, startedAt);
+        UtcTimestamps.write(statement, 3, startedAt);
+        UtcTimestamps.write(statement, 4, startedAt);
         statement.setString(5, workflowStart.processVersion());
         statement.setString(6, workflowStart.deliveryKey());
         statement.setString(7, WORKFLOW_START);
@@ -1018,9 +1014,9 @@ public class JdbcTaskDeliveryStore {
     try {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(touchDelivery)) {
-        final var now = Timestamp.from(Instant.now());
+        final var now = Instant.now();
         for (final var deliveryKey : deliveryKeys) {
-          statement.setTimestamp(1, now);
+          UtcTimestamps.write(statement, 1, now);
           statement.setString(2, deliveryKey);
           statement.addBatch();
         }
@@ -1059,7 +1055,7 @@ public class JdbcTaskDeliveryStore {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(deleteExpiredDeliveries)) {
         statement.setString(1, TASK_DELIVERY);
-        statement.setTimestamp(2, Timestamp.from(Instant.now().minus(retention)));
+        UtcTimestamps.write(statement, 2, Instant.now().minus(retention));
         return statement.executeUpdate();
       }
     } catch (final SQLException e) {
@@ -1095,14 +1091,14 @@ public class JdbcTaskDeliveryStore {
       final Duration retention,
       final io.vanillabp.integration.spi.WorkflowStartSieve sieve) {
 
-    final var expiredBefore = Timestamp.from(Instant.now().minus(retention));
+    final var expiredBefore = Instant.now().minus(retention);
     Connection connection = null;
     try {
       connection = connectionAccess.acquire();
       if (sieve == null) {
         try (var statement = connection.prepareStatement(deleteExpiredWorkflowStarts)) {
           statement.setString(1, WORKFLOW_START);
-          statement.setTimestamp(2, expiredBefore);
+          UtcTimestamps.write(statement, 2, expiredBefore);
           return statement.executeUpdate();
         }
       }
@@ -1131,14 +1127,14 @@ public class JdbcTaskDeliveryStore {
    */
   private int deleteWhatTheSieveLetsGo(
       final Connection connection,
-      final Timestamp expiredBefore,
+      final Instant expiredBefore,
       final io.vanillabp.integration.spi.WorkflowStartSieve sieve) throws SQLException {
 
     final var expired = new java.util.ArrayList<TaskDelivery>();
     try (var statement = connection.prepareStatement(selectExpiredWorkflowStarts)) {
       statement.setMaxRows(WORKFLOW_STARTS_SIEVED_PER_RUN);
       statement.setString(1, WORKFLOW_START);
-      statement.setTimestamp(2, expiredBefore);
+      UtcTimestamps.write(statement, 2, expiredBefore);
       try (var resultSet = statement.executeQuery()) {
         while (resultSet.next()) {
           expired.add(readRecord(resultSet));
@@ -1202,7 +1198,7 @@ public class JdbcTaskDeliveryStore {
         statement.setString(2, workflowModuleId);
         statement.setString(3, bpmnProcessId);
         statement.setString(4, workflowAggregateId);
-        statement.setTimestamp(5, Timestamp.from(recordedBefore));
+        UtcTimestamps.write(statement, 5, recordedBefore);
         return statement.executeUpdate();
       }
     } catch (final SQLException e) {
@@ -1698,12 +1694,12 @@ public class JdbcTaskDeliveryStore {
     try {
       connection = connectionAccess.acquire();
       try (var statement = connection.prepareStatement(replaceBpmsIdentity)) {
-        final var recordedAt = Timestamp.from(identity.recordedAt() == null
+        final var recordedAt = identity.recordedAt() == null
             ? Instant.now()
-            : identity.recordedAt());
+            : identity.recordedAt();
         statement.setString(1, identity.workflowId());
-        statement.setTimestamp(2, recordedAt);
-        statement.setTimestamp(3, recordedAt);
+        UtcTimestamps.write(statement, 2, recordedAt);
+        UtcTimestamps.write(statement, 3, recordedAt);
         statement.setString(4, identity.deliveryKey());
         statement.setString(5, io.vanillabp.integration.spi.DeliveryRecordKind.BPMS_IDENTITY.name());
         return statement.executeUpdate() > 0;

@@ -12,9 +12,10 @@ import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -400,7 +401,7 @@ public class JdbcPhaseTwoPayloadStoreTest {
     execute(
         h2(database),
         "UPDATE %s SET CREATED_AT = '%s' WHERE REFERENCE = '%s'"
-            .formatted(TABLE_NAME, Timestamp.from(writtenAt), reference));
+            .formatted(TABLE_NAME, LocalDateTime.ofInstant(writtenAt, ZoneOffset.UTC), reference));
 
   }
 
