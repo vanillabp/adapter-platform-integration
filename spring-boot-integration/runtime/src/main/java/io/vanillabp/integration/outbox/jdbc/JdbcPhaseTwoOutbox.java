@@ -127,6 +127,13 @@ public class JdbcPhaseTwoOutbox implements PhaseTwoOutbox {
   }
 
   @Override
+  public boolean canReplaceWhatIsStillWaiting() {
+
+    return store.canReplaceWhatIsStillWaiting();
+
+  }
+
+  @Override
   public boolean scheduleReplacingWhatIsStillWaiting(
       final PhaseTwoCall call) {
 

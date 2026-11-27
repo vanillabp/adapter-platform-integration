@@ -1194,6 +1194,13 @@ phase two looks exactly as it always did. What changes for you is how often it a
 of one workflow which piled up during an outage now reach the handler as one. Where a dispatch had
 already taken the entry, they reach it as two.
 
+If you write an outbox store yourself, for your adapter's tests or for an application, override
+`PhaseTwoOutbox.scheduleReplacingWhatIsStillWaiting` and let `canReplaceWhatIsStillWaiting` answer
+`true`. A store which keeps both defaults drops the younger call and writes a warning. An extension
+which plans such calls asks `canReplaceWhatIsStillWaiting` while the application starts, and it ends
+the start where a store answers `false`. Without such an extension, the store works as before
+(`DECISIONS.pending/2218.md`).
+
 Phase two of a start may run before or after the first inbound delivery of that workflow arrives,
 maybe on another node.
 

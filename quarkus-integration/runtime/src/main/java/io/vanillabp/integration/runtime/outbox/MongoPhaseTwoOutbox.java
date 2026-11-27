@@ -316,6 +316,17 @@ public class MongoPhaseTwoOutbox implements PhaseTwoOutbox, PlatformDefaultStore
   }
 
   /**
+   * This store replaces a waiting entry, see
+   * {@link #scheduleReplacingWhatIsStillWaiting(PhaseTwoCall)}.
+   */
+  @Override
+  public boolean canReplaceWhatIsStillWaiting() {
+
+    return true;
+
+  }
+
+  /**
    * A call which replaces goes the same way as any other. This is the one method which says
    * so. The mark travels in the call, so {@link #schedule(PhaseTwoCall)} reads it where the
    * entry is written.

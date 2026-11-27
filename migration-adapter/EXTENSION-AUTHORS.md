@@ -671,6 +671,15 @@ boot with a message a developer can act on. If your own operation gives up and t
 blocked, end your ERROR with `PhaseTwoOutbox.BLOCKED_ENTRIES_GUIDE`, the address where an operator
 reads how to open the entry again. The outbox writes a line of its own beside yours.
 
+If you plan calls which replace the entry still waiting (`PhaseTwoCall.replacingWhatIsStillWaiting()`),
+ask `PhaseTwoOutboxResolver#whyTheStoresCannotReplace(name)` in `wireBpmn`. Where it answers, refuse
+the start with that answer through the `StartupReport` bean. A store of the application which cannot
+replace would keep the older state of every such call, and only a warning at runtime would say so.
+Ask in `wireBpmn`, because on Spring Boot the start is over before `startWorkflowProcessing` runs. An
+extension which never plans such calls does not ask, and the application starts with any store.
+`AnExtensionRefusesAStoreWhichCannotReplaceTest` holds it on both platforms
+(`DECISIONS.pending/2218.md`).
+
 The transaction follows the same rule. `TransactionRunnerResolver#resolveFor(workflowAggregateClass)`
 answers the runner which the workflow's own writes go through. That may well be a runner the
 application contributed. If you open a transaction of your own, you lose three things of that
