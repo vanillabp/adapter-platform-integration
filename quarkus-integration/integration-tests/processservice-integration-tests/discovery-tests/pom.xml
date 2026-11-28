@@ -5,7 +5,7 @@
   <parent>
     <groupId>io.vanillabp.quarkus</groupId>
     <artifactId>processservice-integration-tests</artifactId>
-    <version>2.0.0</version>
+    <version>2.0.1-SNAPSHOT</version>
   </parent>
 
   <artifactId>discovery-tests</artifactId>

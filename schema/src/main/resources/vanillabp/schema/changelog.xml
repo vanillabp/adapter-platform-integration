@@ -38,4 +38,7 @@
        one -->
   <include file="vanillabp/schema/2.0.0.xml"/>
 
+  <!-- the version under development -->
+  <include file="vanillabp/schema/latest.xml"/>
+
 </databaseChangeLog>

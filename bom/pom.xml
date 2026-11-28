@@ -18,7 +18,7 @@
 
   <groupId>io.vanillabp</groupId>
   <artifactId>vanillabp-bom</artifactId>
-  <version>2.0.0</version>
+  <version>2.0.1-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>VanillaBP BOM</name>
   <description>Aligned versions of all VanillaBP artifacts an application uses. BPMS adapters are NOT part of this BOM - they are released independently and are added as explicit dependencies.</description>
